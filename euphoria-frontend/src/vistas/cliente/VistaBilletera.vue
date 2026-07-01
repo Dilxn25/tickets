@@ -1136,6 +1136,21 @@ onUnmounted(() => {
   border-color: var(--morado-brillante);
 }
 
+/* Ajuste de inputs de PIN en pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .modal-cambiar-pin,
+  .modal-recarga {
+    padding: 1.25rem;
+    width: 94%;
+  }
+  .input-pin {
+    font-size: 1.25rem;
+    letter-spacing: 3px;
+    padding: 0.85rem;
+    padding-right: 2.75rem;
+  }
+}
+
 /* RECARGA */
 .subseccion-qr-predeterminado {
   background: var(--fondo-principal);
@@ -1732,6 +1747,32 @@ onUnmounted(() => {
   letter-spacing: 2px;
   margin: 0;
   font-weight: 700;
+  max-width: 100%;
+  text-align: center;
+  word-break: break-all;
+  box-sizing: border-box;
+}
+
+/* RESPONSIVIDAD MODAL QR AMPLIADO */
+@media (max-width: 480px) {
+  .modal-qr-ampliado {
+    max-width: 94vw;
+    width: 94vw;
+  }
+  .contenedor-qr-identificador {
+    gap: 0.75rem;
+    width: 100%;
+  }
+  .qr-modal-imagen {
+    width: 100%;
+    max-width: min(300px, 80vw);
+    padding: 8px;
+  }
+  .qr-identificador {
+    font-size: clamp(0.95rem, 4.5vw, 1.25rem);
+    letter-spacing: 1px;
+    padding: 0.7rem 1rem;
+  }
 }
 
 /* Nuevos Ajustes Diseño */

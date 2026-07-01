@@ -304,6 +304,7 @@ async function restablecerPassword() {
 <style scoped>
 .login-pagina {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -505,4 +506,52 @@ async function restablecerPassword() {
 }
 .mb-3 { margin-bottom: 1rem; }
 .mt-3 { margin-top: 1rem; }
+
+/* ===== RESPONSIVIDAD ===== */
+
+/* Tablet: 481px - 1024px */
+@media (max-width: 1024px) {
+  .login-contenedor {
+    max-width: 440px;
+    padding: 2.2rem 1.8rem;
+  }
+  .orbe-1 { width: min(400px, 60vw); height: min(400px, 60vw); }
+  .orbe-2 { width: min(320px, 50vw); height: min(320px, 50vw); }
+  .orbe-3 { width: min(260px, 45vw); height: min(260px, 45vw); }
+}
+
+/* Celular: <= 480px */
+@media (max-width: 480px) {
+  /* Evita saltos en iOS con fondo fijo */
+  .login-pagina {
+    background-attachment: scroll;
+    padding: 1rem;
+    align-items: flex-start;
+  }
+
+  .login-contenedor {
+    max-width: 100%;
+    padding: 1.75rem 1.25rem;
+    border-radius: var(--radio-lg, 16px);
+  }
+
+  .login-cabecera { margin-bottom: 1.5rem; }
+  .logo { max-width: 240px; }
+
+  /* Orbes decorativos relativos para no desbordar */
+  .orbe {
+    filter: blur(60px);
+  }
+  .orbe-1 { width: min(300px, 70vw); height: min(300px, 70vw); top: -60px; left: -60px; }
+  .orbe-2 { width: min(240px, 60vw); height: min(240px, 60vw); bottom: -50px; right: -50px; }
+  .orbe-3 { width: min(200px, 55vw); height: min(200px, 55vw); }
+
+  /* Toques cómodos */
+  .tab-btn { padding: 0.9rem 0.5rem; font-size: 0.88rem; }
+  .ojo { padding: 6px 10px; }
+
+  /* Modal a pantalla más ajustada con padding reducido */
+  .modal-overlay { padding: 1rem; align-items: flex-start; padding-top: 2rem; }
+  .modal-recuperar { padding: 1.5rem 1.25rem; max-width: 100%; }
+}
 </style>

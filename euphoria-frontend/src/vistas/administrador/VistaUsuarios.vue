@@ -302,7 +302,7 @@ async function eliminarRol(rol) {
 .texto-sec      { color:var(--texto-secundario); font-size:.85rem; }
 .acciones       { display:flex; gap:6px; }
 .modal-fondo    { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; padding:1rem; }
-.modal          { background:var(--fondo-tarjeta); border:1px solid var(--borde-sutil); border-radius:var(--radio-xl); width:100%; max-width:520px; box-shadow:var(--sombra-modal); }
+.modal          { background:var(--fondo-tarjeta); border:1px solid var(--borde-sutil); border-radius:var(--radio-xl); width:100%; max-width:520px; box-shadow:var(--sombra-modal); max-height:90dvh; overflow-y:auto; }
 .modal-cabecera { display:flex; justify-content:space-between; align-items:center; padding:1.2rem 1.5rem; border-bottom:1px solid var(--borde-sutil); }
 .modal-cabecera h3 { font-size:1.1rem; }
 .btn-x          { background:none; border:none; color:var(--texto-secundario); font-size:1.1rem; cursor:pointer; }
@@ -311,6 +311,28 @@ async function eliminarRol(rol) {
 .form-fila      { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 .grupo-campo    { display:flex; flex-direction:column; gap:6px; }
 .etiqueta       { font-size:.8rem; color:var(--texto-secundario); font-weight:500; }
-.modal-footer   { display:flex; justify-content:flex-end; gap:.75rem; padding-top:.5rem; }
+.modal-footer   { display:flex; justify-content:flex-end; gap:.75rem; padding-top:.5rem; flex-wrap:wrap; }
+
+/* Tablet: 481px - 1024px */
+@media(max-width:1024px) {
+  .modal { max-width:min(520px, 92vw); }
+}
+
+/* Celular: <=480px */
+@media(max-width:480px) {
+  .form-fila { grid-template-columns:1fr; }
+  .vista-cabecera > div[style] { width:100%; }
+  .filtros-barra .campo { max-width:none !important; flex:1 1 100%; }
+  .modal { max-width:100%; border-radius:var(--radio-lg); }
+  .modal-cabecera { padding:1rem 1.1rem; }
+  .modal-form { padding:1.1rem; }
+  .modal-footer { flex-direction:column-reverse; align-items:stretch; justify-content:flex-start !important; }
+  .modal-footer > div[style] { display:flex; gap:.75rem; }
+  .modal-footer > div[style] .btn { flex:1; }
+  .modal-footer .btn { width:100%; }
+  .acciones { flex-wrap:wrap; }
+}
+
+/* Se mantiene el breakpoint original para no romper diseños intermedios */
 @media(max-width:500px) { .form-fila { grid-template-columns:1fr; } }
 </style>

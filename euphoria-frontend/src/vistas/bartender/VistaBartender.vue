@@ -293,6 +293,7 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - 60px);
 }
 
 .bartender-header {
@@ -392,7 +393,7 @@ onUnmounted(() => {
 
 .comandas-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -592,20 +593,98 @@ onUnmounted(() => {
 }
 
 /* Responsive */
+
+/* Tablet y pantallas medianas (481px - 1024px) */
+@media (max-width: 1024px) {
+  .header-titulo {
+    font-size: clamp(1.4rem, 4vw, 2rem);
+  }
+}
+
+@media (min-width: 481px) and (max-width: 1024px) {
+  .bartender-container {
+    padding: 16px;
+  }
+
+  .bartender-header {
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .comandas-grid,
+  .historial-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+    gap: 16px;
+  }
+}
+
 @media (max-width: 768px) {
   .bartender-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
-  
+
   .stats-panel {
     width: 100%;
     justify-content: space-between;
   }
-  
+
   .comandas-grid {
     grid-template-columns: 1fr;
+  }
+
+  .filtros-historial {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .date-picker-container {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* Celular (<=480px) */
+@media (max-width: 480px) {
+  .bartender-container {
+    padding: 14px;
+  }
+
+  .header-titulo {
+    font-size: 1.4rem;
+  }
+
+  .bartender-tabs button,
+  .btn-filtro {
+    flex: 1;
+    text-align: center;
+    padding: 10px 12px;
+  }
+
+  .filtros-historial .btn-filtro {
+    min-width: 0;
+  }
+
+  .hist-info {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .comanda-card,
+  .historial-card {
+    padding: 16px;
+  }
+
+  .btn-preparar,
+  .btn-completar {
+    padding: 14px;
+    font-size: 1.05rem;
   }
 }
 
@@ -701,7 +780,7 @@ onUnmounted(() => {
 /* Historial Modernizado */
 .historial-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 20px;
 }
 

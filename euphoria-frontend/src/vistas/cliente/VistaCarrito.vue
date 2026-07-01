@@ -663,6 +663,19 @@ onMounted(async () => {
 }
 
 /* RESPONSIVE */
+
+/* TABLET: 481px - 1024px */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .carrito-contenido {
+    flex-direction: column;
+  }
+  .resumen-mini {
+    width: 100%;
+    position: static;
+  }
+}
+
+/* TABLET / MÓVIL: apila el resumen y da espacio a los controles */
 @media (max-width: 768px) {
   .carrito-contenido {
     flex-direction: column;
@@ -677,6 +690,65 @@ onMounted(async () => {
   }
   .cantidad-control {
     margin-right: auto;
+  }
+}
+
+/* MÓVIL: <=480px — evita que cantidad y subtotal queden apretados */
+@media (max-width: 480px) {
+  .contenedor-carrito {
+    padding: 1rem 0.75rem;
+    padding-bottom: 100px;
+  }
+
+  .item-carrito {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  /* Nombre + precio ocupan el ancho junto a la imagen */
+  .info-item {
+    flex: 1 1 calc(100% - 66px);
+    margin-bottom: 0;
+  }
+
+  /* Fila inferior: controles a la izquierda, subtotal a la derecha, sin apretarse */
+  .cantidad-control {
+    order: 2;
+    margin-right: 0;
+    padding: 0.35rem;
+    gap: 0.75rem;
+  }
+
+  .btn-cantidad {
+    width: 34px;
+    height: 34px;
+  }
+
+  .subtotal {
+    order: 3;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+  }
+
+  .subtotal .label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--texto-secundario);
+    margin: 0 0 0.15rem 0;
+  }
+
+  .subtotal .valor {
+    font-size: 1.05rem;
+  }
+
+  /* Botón eliminar cómodo para tocar, arriba a la derecha */
+  .btn-eliminar {
+    order: 1;
+    align-self: flex-start;
+    padding: 0.4rem;
+    min-width: 34px;
+    min-height: 34px;
   }
 }
 </style>

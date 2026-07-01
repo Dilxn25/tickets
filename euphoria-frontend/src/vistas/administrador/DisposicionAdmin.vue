@@ -143,6 +143,7 @@ function cerrar() {
 .layout-admin-raiz {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--fondo-app);
   position: relative;
 }
@@ -158,7 +159,7 @@ function cerrar() {
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar-euphoria {
-  width: 240px;
+  width: var(--ancho-sidebar);
   background: var(--fondo-sidebar);
   border-right: 1px solid var(--borde-sutil);
   display: flex;
@@ -167,6 +168,7 @@ function cerrar() {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   z-index: 50;
   overflow: hidden;
   flex-shrink: 0;
@@ -174,13 +176,21 @@ function cerrar() {
 
 .sidebar-angosto { width: 72px; }
 
+/* Tablet: sidebar como drawer flotante, ancho acotado */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar-euphoria {
+    width: min(var(--ancho-sidebar), 240px);
+  }
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .sidebar-euphoria {
     position: fixed;
     left: 0; top: 0;
     height: 100vh;
-    width: 240px;
+    height: 100dvh;
+    width: min(var(--ancho-sidebar), 82vw);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .sidebar-movil-oculto  { transform: translateX(-100%); }
@@ -330,7 +340,7 @@ function cerrar() {
 
 /* ─── Navbar ────────────────────────────────────────────────────────────── */
 .navbar-admin {
-  height: 68px;
+  height: var(--alto-navbar);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -343,7 +353,7 @@ function cerrar() {
   z-index: 10;
   flex-shrink: 0;
 }
-.navbar-izq { display: flex; align-items: center; gap: 1rem; }
+.navbar-izq { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .btn-hamburger {
   display: flex;
   align-items: center;
@@ -355,6 +365,7 @@ function cerrar() {
   cursor: pointer;
   border-radius: 8px;
   transition: var(--trans-rapida);
+  flex-shrink: 0;
 }
 .btn-hamburger:hover { background: var(--fondo-tarjeta-alt); }
 .navbar-titulo {
@@ -363,6 +374,10 @@ function cerrar() {
   color: var(--texto-principal);
   margin: 0;
   font-family: var(--fuente-titulo);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .navbar-der { display: flex; align-items: center; }
 .badge-online {
@@ -392,7 +407,28 @@ function cerrar() {
   padding: 1.5rem;
   overflow-y: auto;
 }
+
+/* ─── Responsivo tablet ─────────────────────────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .navbar-admin { padding: 0 1.25rem; }
+  .vista-admin  { padding: 1.25rem; }
+}
+
+/* ─── Responsivo móvil ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .navbar-admin { padding: 0 1rem; }
+  .navbar-titulo { font-size: 1.05rem; }
+  .btn-hamburger { padding: 8px; }
   .vista-admin { padding: 1rem; }
+  /* targets táctiles más cómodos */
+  .nav-link { padding: 13px 12px; }
+}
+
+@media (max-width: 480px) {
+  .navbar-admin { padding: 0 0.75rem; }
+  .navbar-titulo { font-size: 1rem; }
+  .vista-admin { padding: 0.75rem; }
+  /* ocultar la etiqueta "En línea" en pantallas muy chicas, dejar el punto */
+  .badge-online { padding: 4px 8px; font-size: 0.7rem; }
 }
 </style>

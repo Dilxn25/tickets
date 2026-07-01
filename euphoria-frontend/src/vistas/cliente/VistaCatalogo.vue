@@ -387,7 +387,8 @@ function agregarAlCarrito(producto) {
   position: fixed;
   bottom: 80px;
   right: 20px;
-  width: 320px;
+  width: min(320px, calc(100vw - 40px));
+  max-width: 320px;
   background: var(--fondo-tarjeta);
   border: 1px solid var(--morado-brillante);
   border-radius: 16px;
@@ -480,11 +481,50 @@ function agregarAlCarrito(producto) {
 }
 .btn-reabrir-carrito:active { transform: scale(0.95); }
 
+/* Tablet: mantiene la retícula fluida y evita que las tarjetas queden demasiado anchas */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .grid-productos {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+/* Celular: panel de carrito a ancho seguro sin desbordar ni tapar la navegación inferior */
 @media (max-width: 600px) {
   .panel-carrito-flotante {
-    width: 90%;
-    right: 5%;
-    left: 5%;
+    width: auto;
+    max-width: none;
+    right: 12px;
+    left: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+  .btn-reabrir-carrito {
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 24px);
+  }
+  /* Limita la altura de la lista para que el pie y el total siempre sean visibles */
+  .lista-items-panel {
+    max-height: min(200px, 35vh);
+  }
+}
+
+/* Celular pequeño: retícula de una sola columna cómoda y padding reducido */
+@media (max-width: 480px) {
+  .vista-catalogo {
+    padding: 1.25rem 0.85rem;
+  }
+  .grid-productos {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .modal-contenido {
+    padding: 1.5rem;
+  }
+}
+
+/* Pantalla muy angosta: una columna para evitar tarjetas apretadas */
+@media (max-width: 360px) {
+  .grid-productos {
+    grid-template-columns: 1fr;
   }
 }
 </style>

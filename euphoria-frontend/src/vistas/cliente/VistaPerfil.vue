@@ -287,6 +287,10 @@ async function guardarSeguridad() {
 <style scoped>
 .vista-perfil {
   padding: 1rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 .header-perfil {
   margin-bottom: 1rem;
@@ -401,6 +405,9 @@ async function guardarSeguridad() {
   color: #fff;
   font-size: 0.9rem;
   transition: 0.3s;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 /* Estilo para las opciones del select en navegadores que lo permitan */
 .campo option {
@@ -520,4 +527,49 @@ async function guardarSeguridad() {
 }
 .exito { background: rgba(46,204,113,0.1); color: var(--color-exito); }
 .error { background: rgba(231,76,60,0.1); color: var(--color-error); }
+
+/* ===== Responsividad ===== */
+
+/* Tablet: 481px - 1024px */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .vista-perfil {
+    max-width: 560px;
+    padding: 1.25rem;
+  }
+}
+
+/* Escritorio: >1024px (mantiene el diseño centrado sin estirarse) */
+@media (min-width: 1025px) {
+  .vista-perfil {
+    max-width: 640px;
+  }
+}
+
+/* Celular: <=480px */
+@media (max-width: 480px) {
+  .vista-perfil {
+    padding: 0.75rem;
+  }
+  .formulario-perfil {
+    padding: 1.25rem 1rem;
+  }
+  /* Targets tactiles mas comodos en movil */
+  .btn-lapiz {
+    padding: 8px;
+    font-size: 1.2rem;
+  }
+  .btn-editar-foto {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+  /* Evitar que las acciones se aprieten en pantallas muy chicas */
+  .acciones-form {
+    flex-wrap: wrap;
+  }
+  .btn-cancelar,
+  .btn-guardar-inline {
+    min-width: 120px;
+  }
+}
 </style>

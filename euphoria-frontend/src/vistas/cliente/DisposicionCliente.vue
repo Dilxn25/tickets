@@ -13,7 +13,9 @@
 
     <!-- Contenido Principal -->
     <main class="contenido-scroll">
-      <RouterView />
+      <div class="contenedor-vista">
+        <RouterView />
+      </div>
     </main>
 
     <!-- Navbar Inferior (Bottom Tabs) -->
@@ -93,7 +95,10 @@ function confirmarCerrarSesion() {
 .layout-cliente {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100vh; /* fallback */
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--fondo-app);
   color: var(--texto-principal);
 }
@@ -158,6 +163,12 @@ function confirmarCerrarSesion() {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Columna de contenido: en celular ocupa todo; en tablet/PC se centra y limita su ancho */
+.contenedor-vista {
+  width: 100%;
+  margin: 0 auto;
+}
+
 /* Bottom Tabs */
 .navbar-bottom {
   position: fixed;
@@ -186,13 +197,18 @@ function confirmarCerrarSesion() {
   text-decoration: none;
   gap: 4px;
   transition: var(--trans-rapida);
-  width: 20%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
 }
 
 .tab-item span {
   font-size: 0.7rem;
   font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icono {
@@ -239,6 +255,82 @@ function confirmarCerrarSesion() {
     margin: 0;
     border: none;
     box-shadow: none;
+  }
+}
+
+/* Celular (<=480px) */
+@media (max-width: 480px) {
+  .navbar-top {
+    height: 60px;
+    padding: 0 1rem;
+  }
+  .logo-img {
+    height: 32px;
+  }
+  .tab-item span {
+    font-size: 0.62rem;
+  }
+  .tab-item {
+    gap: 3px;
+  }
+  .icono {
+    width: 22px;
+    height: 22px;
+  }
+  .modal-logout {
+    padding: 1.5rem;
+    max-width: 100%;
+  }
+}
+
+/* Tablet (481px - 1024px): el contenido se centra en una columna cómoda */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .navbar-top {
+    padding: 0 2rem;
+  }
+  .contenedor-vista {
+    max-width: 820px;
+  }
+  .tab-item span {
+    font-size: 0.8rem;
+  }
+}
+
+/* Escritorio (>1024px): interfaz centrada tipo "app", NO estirada de borde a borde.
+   - El contenido se limita a una columna ancha centrada.
+   - La barra inferior se convierte en una píldora flotante centrada. */
+@media (min-width: 1025px) {
+  .navbar-top {
+    padding: 0 max(2rem, calc((100% - 1100px) / 2));
+  }
+  .contenido-scroll {
+    padding-bottom: 110px;
+  }
+  .contenedor-vista {
+    max-width: 1100px;
+    padding: 0 1rem;
+  }
+  .navbar-bottom {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: 640px;
+    bottom: 18px;
+    height: 66px;
+    padding: 0 1rem;
+    gap: 0.5rem;
+    border-radius: var(--radio-xl, 24px);
+    border: 1px solid var(--borde-sutil);
+  }
+  .tab-item {
+    flex: 1 1 auto;
+    min-width: 74px;
+    max-width: 110px;
+    border-radius: var(--radio-md, 10px);
+  }
+  .tab-item span {
+    font-size: 0.75rem;
   }
 }
 </style>

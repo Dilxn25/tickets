@@ -38,6 +38,7 @@ function cerrar() {
 <style scoped>
 .layout-simple {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--fondo-app);
@@ -94,6 +95,42 @@ function cerrar() {
   flex-direction: column;
   align-items: stretch;
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
+}
+
+/* ===== Tablet: 481px - 1024px ===== */
+@media (max-width: 1024px) {
+  .navbar-simple {
+    padding: 0 1rem;
+  }
+  .nav-der {
+    gap: 0.75rem;
+  }
+}
+
+/* ===== Celular: <= 480px ===== */
+@media (max-width: 480px) {
+  .navbar-simple {
+    padding: 0 0.75rem;
+  }
+  .nav-logo {
+    height: 32px;
+  }
+  .nav-der {
+    gap: 0.5rem;
+  }
+  .nav-rol {
+    font-size: 0.72rem;
+    max-width: 30vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .btn-salir {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    min-height: 40px;
+  }
 }
 </style>

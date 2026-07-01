@@ -1049,6 +1049,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   background: var(--fondo-principal);
 }
 
@@ -1247,7 +1248,7 @@ onUnmounted(() => {
 .btn-activar-camara:active { transform: scale(0.97); }
 .camara-zona { display: flex; flex-direction: column; gap: 12px; }
 .btn-stop-camara { display: flex; align-items: center; gap: 8px; background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3); color: var(--color-error); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; align-self: center; }
-.input-qr { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #fff; font-size: 1rem; outline: none; text-align: center; }
+.input-qr { width: 100%; box-sizing: border-box; min-width: 0; padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #fff; font-size: 1rem; outline: none; text-align: center; }
 .input-qr:focus { border-color: var(--morado-brillante); }
 
 /* === QR SCANNER OVERLAY === */
@@ -1278,13 +1279,13 @@ onUnmounted(() => {
 .pin-zone { display: flex; flex-direction: column; align-items: center; padding: 20px 0; text-align: center; }
 .pin-titulo { font-weight: 700; font-size: 1.1rem; margin: 12px 0 4px; }
 .pin-sub { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 16px; }
-.input-pin { width: 200px; text-align: center; font-size: 2.5rem; letter-spacing: 15px; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; outline: none; }
+.input-pin { width: 200px; max-width: 100%; box-sizing: border-box; text-align: center; font-size: 2.5rem; letter-spacing: 15px; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; outline: none; }
 .input-pin:focus { border-bottom-color: var(--rosa-acento); }
 
 /* Efectivo */
 .efectivo-display { text-align: center; margin-bottom: 20px; }
 .efectivo-label { font-size: 0.7rem; color: var(--texto-secundario); letter-spacing: 2px; font-weight: 700; }
-.efectivo-input { width: 100%; text-align: center; font-size: 3rem; font-weight: 800; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; margin-top: 10px; outline: none; }
+.efectivo-input { width: 100%; box-sizing: border-box; text-align: center; font-size: clamp(2rem, 10vw, 3rem); font-weight: 800; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; margin-top: 10px; outline: none; }
 .efectivo-input:focus { border-bottom-color: var(--rosa-acento); }
 .cambio-display { background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.3); padding: 18px 20px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; }
 .cambio-label { font-size: 0.75rem; color: var(--texto-secundario); font-weight: 700; letter-spacing: 1px; }
@@ -1312,7 +1313,7 @@ onUnmounted(() => {
 /* Efectivo Gigante */
 .input-efectivo-grande { text-align: center; margin-bottom: 20px; }
 .input-efectivo-grande label { font-weight: 800; color: var(--texto-secundario); letter-spacing: 2px; font-size: 0.8rem; }
-.input-monto-gigante { width: 100%; text-align: center; font-size: 3.5rem; font-weight: 800; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; margin-top: 10px; outline: none; }
+.input-monto-gigante { width: 100%; box-sizing: border-box; text-align: center; font-size: clamp(2.2rem, 11vw, 3.5rem); font-weight: 800; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: #fff; padding: 10px 0; margin-top: 10px; outline: none; }
 .input-monto-gigante:focus { border-bottom-color: var(--rosa-acento); }
 .cambio-mostrar { background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.3); padding: 20px; border-radius: 12px; text-align: center; }
 .cambio-mostrar h2 { color: var(--color-exito); margin-top: 5px; font-size: 2.5rem; }
@@ -1599,6 +1600,7 @@ onUnmounted(() => {
   .pos-layout {
     position: relative;
     height: calc(100vh - 60px);
+    height: calc(100dvh - 60px);
     overflow: hidden;
   }
   
@@ -1686,6 +1688,66 @@ onUnmounted(() => {
   }
   .btn-cobrar {
     margin-bottom: 20px;
+  }
+}
+
+/* Tablet: aprovechar mejor el ancho del carrito lateral */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .panel-carrito {
+    width: min(340px, 40vw);
+  }
+}
+
+/* Celular angosto: evitar desbordes de inputs grandes y modales */
+@media (max-width: 480px) {
+  .pos-header {
+    padding: 0 12px;
+  }
+  .usuario-area {
+    gap: 8px;
+    font-size: 0.8rem;
+  }
+  .btn-campana {
+    margin: 0 8px;
+  }
+  .cobro-panel {
+    padding: 20px 16px;
+  }
+  .cobro-header {
+    padding: 16px 16px 12px;
+  }
+  .cobro-total {
+    font-size: 1.6rem;
+  }
+  .cobro-pie {
+    padding: 14px 16px;
+  }
+  /* PIN: reducir tracking para que quepan los 4 digitos sin cortar */
+  .input-pin {
+    font-size: 2rem;
+    letter-spacing: 10px;
+    width: 100%;
+  }
+  .qr-row {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .qr-mini {
+    align-self: center;
+  }
+  .modal-nuevo-body {
+    padding: 20px 16px;
+  }
+  .modal-cabecera,
+  .modal-nuevo-pie {
+    padding: 16px;
+  }
+  .exito-card-detallado {
+    padding: 24px 18px;
+  }
+  .grid-productos {
+    gap: 10px;
   }
 }
 

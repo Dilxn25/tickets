@@ -271,5 +271,25 @@ async function eliminarCategoria(cat) {
 .etiqueta{font-size:.8rem;color:var(--texto-secundario);font-weight:500}
 .toggles-fila{display:flex;gap:1.5rem;flex-wrap:wrap}
 .modal-footer{display:flex;justify-content:flex-end;gap:.75rem;padding-top:.5rem}
-@media(max-width:500px){.form-fila{grid-template-columns:1fr}}
+
+/* Tablet: 481-1024px */
+@media(max-width:1024px){
+  .productos-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .producto-imagen img{max-width:100%}
+}
+
+/* Celular: <=480px */
+@media(max-width:480px){
+  .vista-cabecera{flex-direction:column;align-items:stretch}
+  .vista-cabecera > div[style]{flex-wrap:wrap}
+  .filtros-barra .campo{max-width:100%!important;width:100%}
+  .productos-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem}
+  .producto-imagen{height:120px}
+  .modal-fondo{padding:.5rem}
+  .modal-cabecera{padding:1rem}
+  .modal-form{padding:1rem}
+  .form-fila{grid-template-columns:1fr}
+  .modal-footer{flex-direction:column-reverse}
+  .modal-footer .btn{width:100%}
+}
 </style>

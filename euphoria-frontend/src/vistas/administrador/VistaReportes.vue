@@ -15,6 +15,26 @@
       </div>
     </div>
 
+    <!-- FILTRO DE PERIODO GLOBAL (afecta a todo el reporte) -->
+    <div class="barra-filtro-periodo">
+      <span class="filtro-periodo-titulo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Periodo
+      </span>
+      <div class="filtro-presets">
+        <button class="btn-preset" :class="{ activo: presetActivo === 'hoy' }" @click="presetFecha('hoy')">Hoy</button>
+        <button class="btn-preset" :class="{ activo: presetActivo === 'semana' }" @click="presetFecha('semana')">7 días</button>
+        <button class="btn-preset" :class="{ activo: presetActivo === 'mes' }" @click="presetFecha('mes')">Este mes</button>
+        <button class="btn-preset" :class="{ activo: presetActivo === 'todo' }" @click="presetFecha('todo')">Todo</button>
+      </div>
+      <div class="filtro-rango-personalizado">
+        <label class="etiqueta-filtro">Desde</label>
+        <input type="date" class="input-filtro" v-model="filtroDesde" @change="cambioFechaManual" />
+        <label class="etiqueta-filtro">Hasta</label>
+        <input type="date" class="input-filtro" v-model="filtroHasta" @change="cambioFechaManual" />
+      </div>
+    </div>
+
     <!-- 1. SECCIÓN DE GRÁFICOS PREMIUM (AHORA PRIMERO) -->
     <div class="grid-graficos fade-in">
       <!-- 1. Tendencia de Ventas (Gráfico 2D vectorizado en neon) -->
@@ -420,9 +440,9 @@
           <h2>Detalle General de Ventas (Comandas)</h2>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
             <label class="etiqueta-filtro">Desde</label>
-            <input type="date" class="input-filtro" v-model="filtroDesde" @change="aplicarFiltros" />
+            <input type="date" class="input-filtro" v-model="filtroDesde" @change="cambioFechaManual" />
             <label class="etiqueta-filtro">Hasta</label>
-            <input type="date" class="input-filtro" v-model="filtroHasta" @change="aplicarFiltros" />
+            <input type="date" class="input-filtro" v-model="filtroHasta" @change="cambioFechaManual" />
             <button v-if="filtroDesde || filtroHasta" class="btn-limpiar-filtro" @click="limpiarFiltroFechas">Limpiar</button>
             <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
           </div>
@@ -732,6 +752,8 @@ const ventas = ref([])
 // Filtro por rango de fechas para el reporte de ventas/recargas
 const filtroDesde = ref('')
 const filtroHasta = ref('')
+const presetActivo = ref('todo')
+
 function aplicarFiltros() {
   // Si el rango está invertido, se corrige automáticamente
   if (filtroDesde.value && filtroHasta.value && filtroDesde.value > filtroHasta.value) {
@@ -740,10 +762,41 @@ function aplicarFiltros() {
   cargarReportes()
   cargarReporteBilletera()
 }
-function limpiarFiltroFechas() {
-  filtroDesde.value = ''
-  filtroHasta.value = ''
+
+function presetFecha(tipo) {
+  const hoy = new Date()
+  const fmt = (d) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dd}`
+  }
+  presetActivo.value = tipo
+  if (tipo === 'todo') {
+    filtroDesde.value = ''
+    filtroHasta.value = ''
+  } else if (tipo === 'hoy') {
+    filtroDesde.value = fmt(hoy)
+    filtroHasta.value = fmt(hoy)
+  } else if (tipo === 'semana') {
+    const d = new Date(hoy); d.setDate(d.getDate() - 6)
+    filtroDesde.value = fmt(d)
+    filtroHasta.value = fmt(hoy)
+  } else if (tipo === 'mes') {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+    filtroDesde.value = fmt(d)
+    filtroHasta.value = fmt(hoy)
+  }
   aplicarFiltros()
+}
+
+function cambioFechaManual() {
+  presetActivo.value = ''
+  aplicarFiltros()
+}
+
+function limpiarFiltroFechas() {
+  presetFecha('todo')
 }
 const cargando = ref(false)
 let intervaloSync = null
@@ -1618,6 +1671,63 @@ function formatearFecha(isoStr) {
   background: radial-gradient(circle at top left, var(--fondo-tarjeta) 0%, var(--fondo-app) 100%);
 }
 
+/* BARRA DE FILTRO DE PERIODO GLOBAL */
+.barra-filtro-periodo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  border-radius: 16px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+}
+.filtro-periodo-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--texto-principal);
+  font-size: 0.95rem;
+}
+.filtro-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-preset {
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-sutil);
+  color: var(--texto-secundario);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-preset:hover {
+  border-color: var(--borde-activo);
+  color: var(--texto-principal);
+}
+.btn-preset.activo {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  border-color: transparent;
+  color: #fff;
+}
+.filtro-rango-personalizado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+@media (max-width: 768px) {
+  .filtro-rango-personalizado { margin-left: 0; width: 100%; }
+  .barra-filtro-periodo { gap: 12px; }
+}
+
 /* FILTRO DE FECHAS */
 .etiqueta-filtro {
   color: var(--texto-secundario);
@@ -2460,6 +2570,90 @@ function formatearFecha(isoStr) {
   color: white;
   font-size: 1.05rem;
   font-weight: 800;
+}
+
+/* ============================================
+   AJUSTES RESPONSIVOS ADICIONALES
+   (tablet 481-1024px y celular <=480px)
+   Solo padding/anchos/overflow; sin tocar diseño de escritorio.
+============================================ */
+
+/* TABLET: reducir el padding fijo de la sección billetera para que
+   no desborde en anchos medianos manteniendo el look de escritorio. */
+@media (max-width: 1024px) {
+  .seccion-billetera {
+    padding: 24px;
+  }
+  .modal-fs-header {
+    padding: 20px 28px;
+  }
+  .modal-fs-body {
+    padding: 28px;
+  }
+}
+
+/* CELULAR (<=480px): padding compacto en modales a pantalla completa,
+   controles de filtro a ancho completo para toques cómodos y
+   secciones con padding reducido para evitar desbordes horizontales. */
+@media (max-width: 480px) {
+  .modal-fs-header {
+    padding: 14px 14px;
+  }
+  .modal-fs-header h2 {
+    font-size: 1.05rem;
+  }
+  /* El contenedor de filtros de fecha ocupa toda la fila y se apila */
+  .modal-fs-header > div {
+    width: 100%;
+  }
+  .input-filtro {
+    flex: 1 1 45%;
+    min-width: 0;
+    width: 100%;
+    padding: 10px 12px;
+  }
+  .btn-cerrar-fs,
+  .btn-limpiar-filtro {
+    min-height: 40px;
+  }
+  .modal-fs-body {
+    /* Padding lateral mínimo: la tabla ya scrollea con .tabla-contenedor */
+    padding: 14px 10px;
+  }
+
+  /* Tablas: apretar aún más celdas para reducir scroll horizontal */
+  .tabla-admin th {
+    padding: 10px 12px;
+    font-size: 0.68rem;
+  }
+  .tabla-admin td {
+    padding: 12px 12px;
+    font-size: 0.82rem;
+  }
+
+  /* Sección Billetera y panel de historial: padding reducido */
+  .seccion-billetera {
+    padding: 18px 14px;
+    margin-top: 28px;
+  }
+  .sb-titulo-area h3 {
+    font-size: 1.15rem;
+  }
+  .btn-ver-historial {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+  }
+  .historial-recargas-panel {
+    padding: 14px 12px;
+  }
+
+  /* Alerta de stock: apilar icono y contenido para no desbordar */
+  .alerta-stock-bajo {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
 }
 </style>
 
