@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("URL_BASE_DATOS")
+}
+
+model billetera {
+  id_billetera         Int                 @id @default(autoincrement())
+  id_usuario           Int                 @unique(map: "BILLETERA_id_usuario_key")
+  saldo_actual         Decimal             @default(0.00) @db.Decimal(10, 2)
+  qr_publico           String              @unique(map: "BILLETERA_qr_publico_key") @db.VarChar(255)
+  pin_transaccional    String?             @db.VarChar(60)
+  ultima_actualizacion DateTime
+  usuario              usuario             @relation(fields: [id_usuario], references: [id_usuario], map: "BILLETERA_id_usuario_fkey")
+  transaccion          transaccion[]
+  recarga_billetera    recarga_billetera[]
+}
+
+model qr_recarga {
+  id_qr_recarga     Int               @id @default(autoincrement())
+  id_recarga        Int
+  id_unico_numerico Int               @unique
+  tipo              String            @db.VarChar(20)
+  contenido_qr      String            @db.LongText
+  imagen_qr_base64  String?           @db.LongText
+  fecha_generacion  DateTime
+  recarga_billetera recarga_billetera @relation(fields: [id_recarga], references: [id_recarga], map: "QR_RECARGA_id_recarga_fkey")
+
+  @@index([id_recarga], map: "QR_RECARGA_id_recarga_fkey")
+}
+
+model recarga_billetera {
+  id_recarga         Int          @id @default(autoincrement())
+  id_usuario         Int
+  id_billetera       Int
+  monto_recarga      Decimal      @db.Decimal(10, 2)
+  estado             String       @db.VarChar(30)
+  comprobante_url    String?      @db.VarChar(255)
+  numero_transaccion String?      @db.VarChar(100)
+  fecha_solicitud    DateTime     @default(now())
+  fecha_confirmacion DateTime?
+  usuario            usuario      @relation(fields: [id_usuario], references: [id_usuario], map: "RECARGA_BILLETERA_id_usuario_fkey")
+  billetera          billetera    @relation(fields: [id_billetera], references: [id_billetera], map: "RECARGA_BILLETERA_id_billetera_fkey")
+  qr_recarga         qr_recarga[]
+
+  @@index([id_usuario], map: "RECARGA_BILLETERA_id_usuario_fkey")
+  @@index([id_billetera], map: "RECARGA_BILLETERA_id_billetera_fkey")
+}
+
+model categoria {
+  id_categoria     Int        @id @default(autoincrement())
+  nombre_categoria String     @db.VarChar(100)
+  url_icono        String?    @db.VarChar(255)
+  producto         producto[]
+}
+
+model comanda {
+  id_comanda                          Int               @id @default(autoincrement())
+  id_cliente                          Int?
+  id_mesero                           Int
+  id_mesa                             Int?
+  estado_despacho                     String            @db.VarChar(30)
+  fecha_registro                      DateTime
+  metodo_pago                         String            @default("Efectivo") @db.VarChar(50)
+  monto_recibido                      Decimal?          @db.Decimal(10, 2)
+  cambio_dado                         Decimal?          @db.Decimal(10, 2)
+  comprobante_url                     String?           @db.VarChar(255)
+  usuario_comanda_id_clienteTousuario usuario?          @relation("comanda_id_clienteTousuario", fields: [id_cliente], references: [id_usuario], map: "COMANDA_id_cliente_fkey")
+  mesa_espacio                        mesa_espacio?     @relation(fields: [id_mesa], references: [id_mesa], map: "COMANDA_id_mesa_fkey")
+  usuario_comanda_id_meseroTousuario  usuario           @relation("comanda_id_meseroTousuario", fields: [id_mesero], references: [id_usuario], map: "COMANDA_id_mesero_fkey")
+  detalle_comanda                     detalle_comanda[]
+  transaccion                         transaccion[]
+
+  @@index([id_cliente], map: "COMANDA_id_cliente_fkey")
+  @@index([id_mesa], map: "COMANDA_id_mesa_fkey")
+  @@index([id_mesero], map: "COMANDA_id_mesero_fkey")
+}
+
+model combo_detalle {
+  id_detalle_combo                                   Int      @id @default(autoincrement())
+  id_producto_padre                                  Int
+  id_producto_hijo                                   Int
+  cantidad                                           Int
+  producto_combo_detalle_id_producto_hijoToproducto  producto @relation("combo_detalle_id_producto_hijoToproducto", fields: [id_producto_hijo], references: [id_producto], map: "COMBO_DETALLE_id_producto_hijo_fkey")
+  producto_combo_detalle_id_producto_padreToproducto producto @relation("combo_detalle_id_producto_padreToproducto", fields: [id_producto_padre], references: [id_producto], map: "COMBO_DETALLE_id_producto_padre_fkey")
+
+  @@index([id_producto_hijo], map: "COMBO_DETALLE_id_producto_hijo_fkey")
+  @@index([id_producto_padre], map: "COMBO_DETALLE_id_producto_padre_fkey")
+}
+
+model detalle_comanda {
+  id_detalle     Int      @id @default(autoincrement())
+  id_comanda     Int
+  id_producto    Int
+  cantidad       Int
+  precio_cobrado Decimal  @db.Decimal(10, 2)
+  subtotal       Decimal  @db.Decimal(10, 2)
+  comanda        comanda  @relation(fields: [id_comanda], references: [id_comanda], map: "DETALLE_COMANDA_id_comanda_fkey")
+  producto       producto @relation(fields: [id_producto], references: [id_producto], map: "DETALLE_COMANDA_id_producto_fkey")
+
+  @@index([id_comanda], map: "DETALLE_COMANDA_id_comanda_fkey")
+  @@index([id_producto], map: "DETALLE_COMANDA_id_producto_fkey")
+}
+
+model entrada {
+  id_entrada        Int              @id @default(autoincrement())
+  id_usuario        Int
+  id_zona           Int
+  qr_acceso         String           @unique(map: "ENTRADA_qr_acceso_key") @db.VarChar(255)
+  codigo_ingreso    String?          @unique @db.VarChar(50)
+  cantidad_personas Int              @default(1)
+  estado_validacion Boolean          @default(false)
+  usuario           usuario          @relation(fields: [id_usuario], references: [id_usuario], map: "ENTRADA_id_usuario_fkey")
+  zona              zona             @relation(fields: [id_zona], references: [id_zona], map: "ENTRADA_id_zona_fkey")
+  registro_aforo    registro_aforo[]
+
+  @@index([id_usuario], map: "ENTRADA_id_usuario_fkey")
+  @@index([id_zona], map: "ENTRADA_id_zona_fkey")
+}
+
+model evento {
+  id_evento         Int       @id @default(autoincrement())
+  nombre_evento     String    @db.VarChar(150)
+  descripcion       String?   @db.Text
+  url_portada       String?   @db.VarChar(255)
+  fecha_hora_inicio DateTime
+  fecha_hora_fin    DateTime?
+  estado            String    @db.VarChar(20)
+  zona              zona[]
+}
+
+model mesa_espacio {
+  id_mesa          Int       @id @default(autoincrement())
+  id_zona          Int
+  numero_nombre    String    @db.VarChar(50)
+  posicion_x       Float
+  posicion_y       Float
+  capacidad_sillas Int
+  estado_ocupacion String    @db.VarChar(20)
+  tipo_elemento    String    @db.VarChar(20)
+  es_seleccionable Boolean   @default(true)
+  comanda          comanda[]
+  zona             zona      @relation(fields: [id_zona], references: [id_zona], map: "MESA_ESPACIO_id_zona_fkey")
+
+  @@index([id_zona], map: "MESA_ESPACIO_id_zona_fkey")
+}
+
+model prediccion_ia {
+  id_prediccion      Int      @id @default(autoincrement())
+  id_cliente         Int
+  id_producto        Int
+  probabilidad_exito Decimal  @db.Decimal(5, 4)
+  fecha_generacion   DateTime
+  usuario            usuario  @relation(fields: [id_cliente], references: [id_usuario], map: "PREDICCION_IA_id_cliente_fkey")
+  producto           producto @relation(fields: [id_producto], references: [id_producto], map: "PREDICCION_IA_id_producto_fkey")
+
+  @@index([id_cliente], map: "PREDICCION_IA_id_cliente_fkey")
+  @@index([id_producto], map: "PREDICCION_IA_id_producto_fkey")
+}
+
+model producto {
+  id_producto                                             Int               @id @default(autoincrement())
+  id_categoria                                            Int
+  nombre_producto                                         String            @db.VarChar(150)
+  descripcion                                             String?           @db.Text
+  url_imagen                                              String?           @db.VarChar(255)
+  precio_base                                             Decimal           @db.Decimal(10, 2)
+  precio_promocion                                        Decimal?          @db.Decimal(10, 2)
+  estado_promocion                                        Boolean           @default(false)
+  stock_actual                                            Int
+  es_combo                                                Boolean           @default(false)
+  combo_detalle_combo_detalle_id_producto_hijoToproducto  combo_detalle[]   @relation("combo_detalle_id_producto_hijoToproducto")
+  combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]   @relation("combo_detalle_id_producto_padreToproducto")
+  detalle_comanda                                         detalle_comanda[]
+  prediccion_ia                                           prediccion_ia[]
+  categoria                                               categoria         @relation(fields: [id_categoria], references: [id_categoria], map: "PRODUCTO_id_categoria_fkey")
+
+  @@index([id_categoria], map: "PRODUCTO_id_categoria_fkey")
+}
+
+model registro_aforo {
+  id_registro_aforo Int      @id @default(autoincrement())
+  id_zona           Int
+  id_entrada        Int?
+  id_recepcionista  Int
+  tipo_movimiento   String   @db.VarChar(10)
+  fecha_hora        DateTime
+  entrada           entrada? @relation(fields: [id_entrada], references: [id_entrada], map: "REGISTRO_AFORO_id_entrada_fkey")
+  usuario           usuario  @relation(fields: [id_recepcionista], references: [id_usuario], map: "REGISTRO_AFORO_id_recepcionista_fkey")
+  zona              zona     @relation(fields: [id_zona], references: [id_zona], map: "REGISTRO_AFORO_id_zona_fkey")
+
+  @@index([id_entrada], map: "REGISTRO_AFORO_id_entrada_fkey")
+  @@index([id_recepcionista], map: "REGISTRO_AFORO_id_recepcionista_fkey")
+  @@index([id_zona], map: "REGISTRO_AFORO_id_zona_fkey")
+}
+
+model rol {
+  id_rol     Int       @id @default(autoincrement())
+  nombre_rol String    @db.VarChar(50)
+  usuario    usuario[]
+}
+
+model transaccion {
+  id_transaccion Int       @id @default(autoincrement())
+  id_billetera   Int
+  id_comanda     Int?
+  id_responsable Int
+  tipo_operacion String    @db.VarChar(30)
+  monto          Decimal   @db.Decimal(10, 2)
+  fecha_hora     DateTime
+  billetera      billetera @relation(fields: [id_billetera], references: [id_billetera], map: "TRANSACCION_id_billetera_fkey")
+  comanda        comanda?  @relation(fields: [id_comanda], references: [id_comanda], map: "TRANSACCION_id_comanda_fkey")
+  usuario        usuario   @relation(fields: [id_responsable], references: [id_usuario], map: "TRANSACCION_id_responsable_fkey")
+
+  @@index([id_billetera], map: "TRANSACCION_id_billetera_fkey")
+  @@index([id_comanda], map: "TRANSACCION_id_comanda_fkey")
+  @@index([id_responsable], map: "TRANSACCION_id_responsable_fkey")
+}
+
+model usuario {
+  id_usuario                          Int                 @id @default(autoincrement())
+  id_rol                              Int
+  nombres                             String              @db.VarChar(100)
+  apellidos                           String              @db.VarChar(100)
+  ci_carnet                           String?             @db.VarChar(20)
+  telefono                            String?             @db.VarChar(15)
+  correo                              String              @unique(map: "USUARIO_correo_key") @db.VarChar(100)
+  password_hash                       String              @db.VarChar(255)
+  pregunta_seguridad                  String?             @db.VarChar(150)
+  respuesta_seguridad                 String?             @db.VarChar(255)
+  url_foto_perfil                     String?             @db.VarChar(255)
+  estado_cuenta                       String              @db.VarChar(20)
+  billetera                           billetera?
+  recarga_billetera                   recarga_billetera[]
+  comanda_comanda_id_clienteTousuario comanda[]           @relation("comanda_id_clienteTousuario")
+  comanda_comanda_id_meseroTousuario  comanda[]           @relation("comanda_id_meseroTousuario")
+  entrada                             entrada[]
+  prediccion_ia                       prediccion_ia[]
+  registro_aforo                      registro_aforo[]
+  transaccion                         transaccion[]
+  rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
+
+  @@index([id_rol], map: "USUARIO_id_rol_fkey")
+}
+
+model zona {
+  id_zona             Int              @id @default(autoincrement())
+  id_evento           Int
+  nombre_zona         String           @db.VarChar(50)
+  capacidad_maxima    Int
+  precio_entrada_base Decimal          @db.Decimal(10, 2)
+  entrada             entrada[]
+  mesa_espacio        mesa_espacio[]
+  registro_aforo      registro_aforo[]
+  evento              evento           @relation(fields: [id_evento], references: [id_evento], map: "ZONA_id_evento_fkey")
+
+  @@index([id_evento], map: "ZONA_id_evento_fkey")
+}

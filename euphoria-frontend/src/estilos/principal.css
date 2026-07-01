@@ -1,0 +1,128 @@
+/* ============================================
+   EUPHORIA — Estilos Globales
+   ============================================ */
+@import './variables.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--fuente-principal);
+  background-color: var(--fondo-app);
+  color: var(--texto-principal);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Scrollbar personalizado ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--fondo-app); }
+::-webkit-scrollbar-thumb { background: var(--morado-medio); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--morado-claro); }
+
+/* ---- Utilidades de texto ---- */
+h1, h2, h3, h4, h5 { font-family: var(--fuente-titulo); font-weight: 700; }
+a { color: var(--morado-brillante); text-decoration: none; transition: var(--trans-rapida); }
+a:hover { color: var(--morado-hover); }
+
+/* ---- Botones base ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: var(--radio-full);
+  font-family: var(--fuente-principal);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--trans-normal);
+  white-space: nowrap;
+}
+
+.btn-primario {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(155, 89, 182, 0.35);
+}
+.btn-primario:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(155, 89, 182, 0.5);
+}
+
+.btn-secundario {
+  background: transparent;
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-brillante);
+}
+.btn-secundario:hover {
+  background: var(--morado-medio);
+  color: var(--texto-principal);
+}
+
+.btn-peligro {
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  color: var(--color-error);
+}
+.btn-peligro:hover { background: var(--color-error); color: #fff; }
+
+.btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+.btn-lg { padding: 14px 32px; font-size: 1rem; font-weight: 600; }
+
+/* ---- Inputs ---- */
+.campo {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
+  color: var(--texto-principal);
+  font-family: var(--fuente-principal);
+  font-size: 0.9rem;
+  transition: var(--trans-rapida);
+  outline: none;
+}
+.campo:focus {
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.15);
+}
+.campo::placeholder { color: var(--texto-desactivado); }
+
+/* ---- Tarjetas ---- */
+.tarjeta {
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: 1.5rem;
+  box-shadow: var(--sombra-tarjeta);
+}
+
+/* ---- Badges ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radio-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-exito  { background: rgba(46,204,113,0.15); color: var(--color-exito); border: 1px solid rgba(46,204,113,0.3); }
+.badge-error  { background: rgba(231,76,60,0.15);  color: var(--color-error);  border: 1px solid rgba(231,76,60,0.3); }
+.badge-alerta { background: rgba(243,156,18,0.15); color: var(--color-alerta); border: 1px solid rgba(243,156,18,0.3); }
+.badge-info   { background: rgba(52,152,219,0.15); color: var(--color-info);   border: 1px solid rgba(52,152,219,0.3); }
+
+/* ---- Animaciones ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+@keyframes pulsar { 0%,100%{opacity:1} 50%{opacity:0.5} }

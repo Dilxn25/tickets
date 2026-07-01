@@ -1,0 +1,66 @@
+/* ============================================
+   EUPHORIA — Variables y Paleta de Colores
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  /* PALETA EUPHORIA */
+  --morado-oscuro:     #1E1040;
+  --morado-profundo:   #2D1B69;
+  --morado-medio:      #4A2C8F;
+  --morado-claro:      #7B5EA7;
+  --morado-brillante:  #9B59B6;
+  --morado-hover:      #B07CC8;
+  --rosa-acento:       #C2185B;
+  --rosa-suave:        #E91E8C;
+
+  /* TEXTO */
+  --texto-principal:   #F0EAF8;
+  --texto-secundario:  #B8A9CC;
+  --texto-desactivado: #6B5B8A;
+
+  /* FONDOS */
+  --fondo-app:         #120B2E;
+  --fondo-tarjeta:     #1E1040;
+  --fondo-tarjeta-alt: #251555;
+  --fondo-input:       rgba(45, 27, 105, 0.6);
+  --fondo-sidebar:     #160D38;
+  --fondo-navbar:      rgba(18, 11, 46, 0.95);
+
+  /* ESTADOS */
+  --color-exito:       #2ECC71;
+  --color-alerta:      #F39C12;
+  --color-error:       #E74C3C;
+  --color-info:        #3498DB;
+
+  /* BORDES */
+  --borde-sutil:       rgba(123, 94, 167, 0.25);
+  --borde-activo:      rgba(155, 89, 182, 0.7);
+
+  /* SOMBRAS */
+  --sombra-tarjeta:    0 4px 24px rgba(0, 0, 0, 0.4);
+  --sombra-modal:      0 8px 48px rgba(0, 0, 0, 0.7);
+  --sombra-glow:       0 0 20px rgba(155, 89, 182, 0.3);
+
+  /* GLASSMORPHISM */
+  --glass-fondo:       rgba(45, 27, 105, 0.35);
+  --glass-borde:       rgba(155, 89, 182, 0.2);
+
+  /* TIPOGRAFÍA */
+  --fuente-principal:  'Inter', sans-serif;
+  --fuente-titulo:     'Outfit', sans-serif;
+
+  /* LAYOUT */
+  --radio-sm:    6px;
+  --radio-md:    10px;
+  --radio-lg:    16px;
+  --radio-xl:    24px;
+  --radio-full:  9999px;
+  --ancho-sidebar: 255px;
+  --alto-navbar:   64px;
+
+  /* TRANSICIONES */
+  --trans-rapida:  all 0.15s ease;
+  --trans-normal:  all 0.25s ease;
+  --trans-lenta:   all 0.4s ease;
+}

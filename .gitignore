@@ -1,0 +1,42 @@
+# ---- Dependencias ----
+node_modules/
+**/node_modules/
+
+# ---- Variables de entorno / secretos ----
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# ---- Compilados / builds ----
+dist/
+**/dist/
+build/
+**/build/
+*.tsbuildinfo
+
+# ---- Python ----
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ---- Logs y temporales ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.cache/
+scratch/
+**/scratch/
+
+# ---- Sistema operativo / editores ----
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/*
+!.vscode/extensions.json
