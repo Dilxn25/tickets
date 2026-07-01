@@ -5,8 +5,8 @@ import { useTiendaAutenticacion } from '../tiendas/tienda-autenticacion.js'
 import VistaLogin from '../vistas/publica/VistaLogin.vue'
 
 // ---- Layouts ----
-import LayoutAdmin from '../vistas/administrador/LayoutAdmin.vue'
-import LayoutSimple from '../vistas/LayoutSimple.vue'
+import DisposicionAdmin from '../vistas/administrador/DisposicionAdmin.vue'
+import DisposicionSimple from '../vistas/DisposicionSimple.vue'
 
 // ---- Admin: módulos activos ----
 import VistaUsuarios from '../vistas/administrador/VistaUsuarios.vue'
@@ -19,7 +19,7 @@ import VistaVentas from '../vistas/administrador/VistaVentas.vue'
 import VistaEnConstruccion from '../vistas/VistaEnConstruccion.vue'
 import VistaCajero from '../vistas/cajero/VistaCajero.vue'
 
-import LayoutCliente from '../vistas/cliente/LayoutCliente.vue'
+import DisposicionCliente from '../vistas/cliente/DisposicionCliente.vue'
 import VistaInicioCliente from '../vistas/cliente/VistaInicioCliente.vue'
 import VistaCatalogo from '../vistas/cliente/VistaCatalogo.vue'
 import VistaEventosCliente from '../vistas/cliente/VistaEventosCliente.vue'
@@ -42,7 +42,7 @@ const rutas = [
   // Administrador (layout completo con sidebar)
   {
     path: '/administrador',
-    component: LayoutAdmin,
+    component: DisposicionAdmin,
     meta: { requiereAuth: true, rolPermitido: 'administrador' },
     children: [
       { path: '', redirect: '/administrador/usuarios' },
@@ -60,7 +60,7 @@ const rutas = [
   // Otros roles (layout con navbar)
   {
     path: '/cajero',
-    component: LayoutSimple,
+    component: DisposicionSimple,
     meta: { requiereAuth: true, rolPermitido: 'cajero' },
     children: [{ path: '', name: 'Cajero', component: VistaCajero }],
   },
@@ -72,13 +72,13 @@ const rutas = [
   },
   {
     path: '/recepcionista',
-    component: LayoutSimple,
+    component: DisposicionSimple,
     meta: { requiereAuth: true, rolPermitido: 'recepcionista' },
     children: [{ path: '', name: 'Recepcionista', component: VistaEnConstruccion }],
   },
   {
     path: '/bartender',
-    component: LayoutSimple,
+    component: DisposicionSimple,
     meta: { requiereAuth: true, rolPermitido: 'bartender' },
     children: [{ path: '', name: 'Bartender', component: VistaBartender }],
   },
@@ -86,7 +86,7 @@ const rutas = [
   // Cliente (Mobile-First UI)
   {
     path: '/cliente',
-    component: LayoutCliente,
+    component: DisposicionCliente,
     meta: { requiereAuth: true, rolPermitido: 'cliente' },
     children: [
       { path: '', redirect: '/cliente/inicio' },

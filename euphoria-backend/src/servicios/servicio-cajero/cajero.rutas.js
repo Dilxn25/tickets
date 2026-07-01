@@ -4,7 +4,7 @@ const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const { generarIDUnico } = require('../servicio-billetera/qr-utils')
+const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
