@@ -198,6 +198,27 @@
           </div>
         </div>
 
+        <!-- Sugerencias del motor de recomendación (IA) -->
+        <div v-if="carrito.length > 0 && sugerencias.length > 0" class="seccion-sugerencias">
+          <div class="sugerencias-titulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21l2.3-7.4-6-4.6h7.6z"></path></svg>
+            <span>La mesa también suele pedir</span>
+          </div>
+          <div class="sugerencias-lista">
+            <button
+              v-for="s in sugerencias"
+              :key="s.id_producto"
+              class="chip-sugerencia"
+              @click="agregarSugerencia(s)"
+              type="button"
+              :title="`Confianza ${(s.probabilidad * 100).toFixed(0)}%`"
+            >
+              <span class="chip-nombre">{{ s.nombre }}</span>
+              <span class="chip-mas">+</span>
+            </button>
+          </div>
+        </div>
+
         <div class="total-carrito">
           <span>Total a cobrar</span>
           <h2>Bs. {{ totalCarrito.toFixed(2) }}</h2>
@@ -510,7 +531,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { io } from 'socket.io-client'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
@@ -531,6 +552,9 @@ const cargandoProductos = ref(true)
 
 const carrito = ref([])
 const verCarritoMovil = ref(false)
+
+// Sugerencias del motor de recomendación (IA)
+const sugerencias = ref([])
 const totalItemsCarrito = computed(() => {
   return carrito.value.reduce((acc, item) => acc + item.cantidad, 0)
 })
@@ -663,6 +687,37 @@ function agregarAlCarrito(prod) {
     carrito.value.push({ producto: prod, cantidad: 1 })
   }
 }
+
+// ---- Recomendaciones (IA) ----
+// Pide al backend las sugerencias según lo que ya hay en la orden y las muestra.
+async function cargarSugerencias() {
+  if (carrito.value.length === 0) {
+    sugerencias.value = []
+    return
+  }
+  try {
+    const ids = carrito.value.map(c => c.producto.id_producto)
+    const res = await clienteHttp.post('/recomendaciones', { productos_en_mesa: ids, k: 4 })
+    const enOrden = new Set(ids)
+    sugerencias.value = (res.recomendaciones || [])
+      .filter(r => !enOrden.has(r.id_producto))
+      .slice(0, 3)
+  } catch (e) {
+    sugerencias.value = [] // degradación elegante: si la IA no está, no se muestran
+  }
+}
+
+function agregarSugerencia(s) {
+  const prod = productos.value.find(p => p.id_producto === s.id_producto)
+  if (prod) agregarAlCarrito(prod)
+}
+
+// Recalcular sugerencias cuando cambia la orden (con pequeño debounce)
+let temporizadorSugerencias = null
+watch(carrito, () => {
+  clearTimeout(temporizadorSugerencias)
+  temporizadorSugerencias = setTimeout(cargarSugerencias, 400)
+}, { deep: true })
 
 function sumar(idx) {
   carrito.value[idx].cantidad++
@@ -1161,6 +1216,54 @@ onUnmounted(() => {
 .item-controles { display: flex; align-items: center; background: rgba(255,255,255,0.1); border-radius: 20px; flex-shrink: 0; }
 .item-controles button { background: transparent; border: none; color: #fff; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
 .item-controles .cantidad { width: 25px; text-align: center; font-weight: bold; font-size: 0.9rem; }
+
+/* Sugerencias IA */
+.seccion-sugerencias {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--borde-sutil);
+}
+.sugerencias-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--rosa-acento);
+  margin-bottom: 10px;
+}
+.sugerencias-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip-sugerencia {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-activo);
+  color: var(--texto-principal);
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.chip-sugerencia:hover {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  border-color: transparent;
+  transform: translateY(-1px);
+}
+.chip-mas {
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.85;
+}
 
 .total-carrito {
   margin-top: 20px;

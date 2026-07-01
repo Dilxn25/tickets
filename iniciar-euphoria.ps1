@@ -13,17 +13,23 @@ Write-Host ""
 $raiz = "c:\Users\arauc\Desktop\Tickets"
 
 Write-Host "Limpiando conexiones de ejecuciones anteriores..." -ForegroundColor Yellow
-Get-NetTCPConnection -LocalPort 3000, 5173 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+Get-NetTCPConnection -LocalPort 3000, 5173, 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 1
 
+# Iniciar SERVICIO IA (Recomendaciones) en nueva ventana
+Write-Host "[1] Iniciando Servicio IA / Recomendaciones (puerto 8000)..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\modelo_entrenado'; Write-Host '=== EUPHORIA IA (Recomendaciones) ===' -ForegroundColor Magenta; Write-Host 'http://localhost:8000/docs' -ForegroundColor Green; uvicorn api:app --port 8000"
+
+Start-Sleep -Seconds 2
+
 # Iniciar BACKEND en nueva ventana
-Write-Host "[1] Iniciando Backend (puerto 3000)..." -ForegroundColor Cyan
+Write-Host "[2] Iniciando Backend (puerto 3000)..." -ForegroundColor Cyan
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\euphoria-backend'; Write-Host '=== EUPHORIA BACKEND ===' -ForegroundColor Magenta; Write-Host 'http://localhost:3000' -ForegroundColor Green; npm run dev"
 
 Start-Sleep -Seconds 2
 
 # Iniciar FRONTEND en nueva ventana
-Write-Host "[2] Iniciando Frontend (puerto 5173, accesible en red)..." -ForegroundColor Cyan
+Write-Host "[3] Iniciando Frontend (puerto 5173, accesible en red)..." -ForegroundColor Cyan
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\euphoria-frontend'; Write-Host '=== EUPHORIA FRONTEND ===' -ForegroundColor Magenta; Write-Host 'http://localhost:5173' -ForegroundColor Green; npm run dev -- --host"
 
 Start-Sleep -Seconds 3

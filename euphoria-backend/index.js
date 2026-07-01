@@ -49,6 +49,7 @@ const rutasMesas     = require('./src/servicios/servicio-eventos/mesas.rutas')
 const rutasComandas  = require('./src/servicios/servicio-comandas/comandas.rutas')
 const rutasBilletera = require('./src/servicios/servicio-billetera/billetera.rutas')
 const rutasCajero    = require('./src/servicios/servicio-cajero/cajero.rutas')
+const rutasRecomendaciones = require('./src/servicios/servicio-recomendaciones/recomendaciones.rutas')
 
 // 4. Registro de rutas activas
 app.use('/api/auth',       rutasAuth)
@@ -60,6 +61,7 @@ app.use('/api/mesas',      rutasMesas)
 app.use('/api/comandas',   rutasComandas)
 app.use('/api/billetera',  rutasBilletera)
 app.use('/api/cajero',     rutasCajero)
+app.use('/api/recomendaciones', rutasRecomendaciones)
 
 // ---- 404 y Error global ----
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
