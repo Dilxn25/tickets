@@ -265,14 +265,28 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     for (const item of productosJSON) {
       const prodBD = await prisma.producto.findUnique({ where: { id_producto: item.id_producto } })
       if (!prodBD) return res.status(400).json({ error: `Producto ID ${item.id_producto} no encontrado` })
-      
-      const sub = Number(prodBD.precio_base) * Number(item.cantidad)
+
+      const cantidad = Number(item.cantidad)
+      if (!Number.isInteger(cantidad) || cantidad <= 0) {
+        return res.status(400).json({ error: `Cantidad inválida para ${prodBD.nombre_producto}` })
+      }
+
+      // Validar stock disponible (evita dejar el stock en negativo)
+      if (prodBD.stock_actual < cantidad) {
+        return res.status(400).json({ error: `Stock insuficiente de ${prodBD.nombre_producto} (disponible: ${prodBD.stock_actual})` })
+      }
+
+      // Usar el precio de promoción si el producto está en promoción (si no, el precio base)
+      const enPromocion = prodBD.estado_promocion && prodBD.precio_promocion != null
+      const precioUnitario = enPromocion ? Number(prodBD.precio_promocion) : Number(prodBD.precio_base)
+
+      const sub = precioUnitario * cantidad
       total_calculado += sub
-      
+
       detalles_crear.push({
         id_producto: item.id_producto,
-        cantidad: item.cantidad,
-        precio_cobrado: prodBD.precio_base,
+        cantidad: cantidad,
+        precio_cobrado: precioUnitario,
         subtotal: sub
       })
     }
@@ -365,12 +379,13 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
             }
           })
 
-          // Descontar stock
+          // Descontar stock de forma condicional (solo si sigue habiendo existencias)
           for (const item of detalles_crear) {
-            await tx.producto.update({
-              where: { id_producto: item.id_producto },
-              data: { stock_actual: { decrement: Number(item.cantidad) } }
+            const bajaStock = await tx.producto.updateMany({
+              where: { id_producto: item.id_producto, stock_actual: { gte: item.cantidad } },
+              data: { stock_actual: { decrement: item.cantidad } }
             })
+            if (bajaStock.count === 0) throw new Error('SIN_STOCK')
           }
 
           // Leer el saldo real ya actualizado dentro de la transacción
@@ -383,6 +398,9 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       } catch (e) {
         if (e.message === 'SALDO_INSUFICIENTE') {
           return res.status(400).json({ error: 'Saldo insuficiente en la billetera' })
+        }
+        if (e.message === 'SIN_STOCK') {
+          return res.status(400).json({ error: 'Un producto se quedó sin stock durante el cobro. Revisa la orden.' })
         }
         throw e
       }
@@ -422,20 +440,24 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         }
       })
       
-      // Descontar stock
+      // Descontar stock de forma condicional (evita stock negativo)
       for (const item of detalles_crear) {
-        await tx.producto.update({
-          where: { id_producto: item.id_producto },
-          data: { stock_actual: { decrement: Number(item.cantidad) } }
+        const bajaStock = await tx.producto.updateMany({
+          where: { id_producto: item.id_producto, stock_actual: { gte: item.cantidad } },
+          data: { stock_actual: { decrement: item.cantidad } }
         })
+        if (bajaStock.count === 0) throw new Error('SIN_STOCK')
       }
-      
+
       return comanda
     })
-    
+
     res.status(201).json({ mensaje: 'Orden creada exitosamente', id_comanda: nuevaComanda.id_comanda })
 
   } catch (error) {
+    if (error.message === 'SIN_STOCK') {
+      return res.status(400).json({ error: 'Un producto se quedó sin stock. Revisa la orden e intenta de nuevo.' })
+    }
     console.error('Error al procesar cobro:', error)
     res.status(500).json({ error: 'Error interno del servidor al procesar el pago' })
   }

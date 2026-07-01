@@ -158,7 +158,12 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
         ...(nombre_producto && { nombre_producto }),
         ...(descripcion     !== undefined && { descripcion }),
         ...(precio_base     && { precio_base:     parseFloat(precio_base) }),
-        ...(precio_promocion && { precio_promocion: parseFloat(precio_promocion) }),
+        // Permite fijar la promoción o QUITARLA (enviando vacío/null -> se guarda null)
+        ...(precio_promocion !== undefined && {
+          precio_promocion: (precio_promocion === '' || precio_promocion === null)
+            ? null
+            : parseFloat(precio_promocion)
+        }),
         ...(estado_promocion !== undefined && { estado_promocion: estado_promocion === 'true' }),
         ...(stock_actual    && { stock_actual: parseInt(stock_actual) }),
         ...(es_combo        !== undefined && { es_combo: es_combo === 'true' }),
