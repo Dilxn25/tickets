@@ -418,7 +418,7 @@
                   <td style="font-weight: 700; color: var(--texto-principal);">{{ prod.nombre_producto }}</td>
                   <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
                   <td>
-                    <span :class="['stock-indicador', prod.stock_actual < 10 ? 'bajo' : 'normal']">
+                    <span :class="['stock-indicador', prod.stock_actual < UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">
                       {{ prod.stock_actual }} uds.
                     </span>
                   </td>
@@ -719,6 +719,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
+// Umbral único de stock bajo para reposición, usado tanto en la alerta de
+// Inventario Crítico como en el indicador de la tabla de ranking (evita
+// inconsistencias donde un producto aparecía crítico en la alerta pero normal en la tabla)
+const UMBRAL_STOCK_BAJO = 20
+
 const stats = ref({
   clientes: 0,
   personal: 0,
@@ -836,6 +841,17 @@ function abrirModal(tipo) {
 }
 
 function exportarPDF() {
+  // Validar que existan datos antes de exportar (evita PDFs con gráficos en blanco
+  // cuando el usuario exporta antes de que cargarReportes termine o sin ventas)
+  const hayDatos = trendComandas.value.length > 0
+    || datosMeseros.value.length > 0
+    || listadoProductosRanking.value.some(p => p.vecesVendido > 0)
+    || (conteoEfectivo.value + conteoQR.value + conteoBilletera.value) > 0
+  if (!hayDatos) {
+    alert('Aún no hay datos suficientes para generar el reporte PDF. Espere a que se carguen los reportes o ajuste el periodo seleccionado.')
+    return
+  }
+
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
@@ -848,13 +864,39 @@ function exportarPDF() {
   const fechaGen = new Date().toLocaleString();
   const logoUrl = `${window.location.origin}/src/activos/imagenes/logo-euphoria.png`;
 
-  // Obtener los markups SVGs compilados reales directamente desde el DOM para mantener el look interactivo neón
-  const svgTendenciaMarkup = document.querySelector('.svg-tendencia-2d')
-    ? document.querySelector('.svg-tendencia-2d').outerHTML
-    : '';
-  const svgAnillosMarkup = document.querySelector('.svg-torta')
-    ? document.querySelector('.svg-torta').outerHTML
-    : '';
+  // Rango de fechas cubierto por el reporte (para rotular el encabezado)
+  const rangoFechas = (filtroDesde.value || filtroHasta.value)
+    ? `Periodo: ${filtroDesde.value ? formatearFecha(filtroDesde.value) : 'Inicio'} — ${filtroHasta.value ? formatearFecha(filtroHasta.value) : 'Hoy'}`
+    : 'Periodo: Todo el histórico';
+
+  // Construir el SVG de tendencia a partir de los datos reactivos (no del DOM),
+  // así el PDF nunca sale en blanco por desincronización con el render
+  const svgTendenciaMarkup = trendComandas.value.length > 0
+    ? `<svg viewBox="0 0 360 160" class="svg-tendencia-2d" xmlns="http://www.w3.org/2000/svg">
+        <line x1="20" y1="20" x2="340" y2="20" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="20" y1="65" x2="340" y2="65" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="20" y1="110" x2="340" y2="110" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="20" y1="130" x2="340" y2="130" stroke="rgba(0,0,0,0.12)" stroke-width="1" />
+        ${salesTrendFillPoints.value ? `<path d="${salesTrendFillPoints.value}" fill="rgba(170,59,255,0.15)" />` : ''}
+        ${salesTrendPoints.value ? `<path d="${salesTrendPoints.value}" fill="none" stroke="#aa3bff" stroke-width="3" stroke-linecap="round" />` : ''}
+        ${trendComandas.value.map(pt => `
+          <circle cx="${pt.x}" cy="${pt.y}" r="5" fill="#ffffff" stroke="#aa3bff" stroke-width="2.5" />
+          <text x="${pt.x}" y="${pt.y - 12}" fill="#1a202c" font-size="10.5" font-weight="800" text-anchor="middle">Bs. ${pt.subtotal.toFixed(0)}</text>
+        `).join('')}
+      </svg>`
+    : '<div style="padding:30px 0; color:#718096; text-align:center;">Sin comandas para graficar la tendencia en este periodo.</div>';
+
+  // Construir la torta de Métodos de Pago desde los porcentajes reactivos
+  // (antes se raspaba el PRIMER .svg-torta del DOM, frágil ante cambios de orden)
+  const dashE = (porcentajeEfectivo.value * 3.14159).toFixed(3);
+  const dashQR = (porcentajeQR.value * 3.14159).toFixed(3);
+  const dashB = (porcentajeBilletera.value * 3.14159).toFixed(3);
+  const svgAnillosMarkup = `
+    <svg viewBox="0 0 200 200" class="svg-torta" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="100" r="50" fill="transparent" stroke="#2ecc71" stroke-width="100" stroke-dasharray="${dashE} 314.159" stroke-dashoffset="0" />
+      <circle cx="100" cy="100" r="50" fill="transparent" stroke="#3498db" stroke-width="100" stroke-dasharray="${dashQR} 314.159" stroke-dashoffset="-${dashE}" />
+      <circle cx="100" cy="100" r="50" fill="transparent" stroke="#aa3bff" stroke-width="100" stroke-dasharray="${dashB} 314.159" stroke-dashoffset="-${(porcentajeEfectivo.value + porcentajeQR.value) * 3.14159}" />
+    </svg>`;
 
   // Columna 1: Métodos de Pago más Usados
   const colMetodos = `
@@ -1110,6 +1152,7 @@ function exportarPDF() {
         </div>
         <div class="titulo-reporte">
           <h1>REPORTE DE RENDIMIENTO GENERAL</h1>
+          <p>${rangoFechas}</p>
           <p>Generado el: ${fechaGen}</p>
         </div>
       </div>
@@ -1209,8 +1252,8 @@ async function cargarReportes(silencioso = false) {
       resProductosRaw = await clienteHttp.get('/productos')
       stats.value.productos = resProductosRaw.length || (resProductosRaw.productos ? resProductosRaw.productos.length : 0)
       
-      // Filtrar y guardar los productos con stock crítico menor a 20 unidades para las alertas del Dashboard
-      productosBajoStock.value = resProductosRaw.filter(p => p.stock_actual < 20)
+      // Filtrar y guardar los productos con stock crítico bajo el umbral único para las alertas del Dashboard
+      productosBajoStock.value = resProductosRaw.filter(p => p.stock_actual < UMBRAL_STOCK_BAJO)
 
       resProductosRaw.forEach(p => {
         productosMap[p.id_producto] = p.nombre_categoria || 'Otros'

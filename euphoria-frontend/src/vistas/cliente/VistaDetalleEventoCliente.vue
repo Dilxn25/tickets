@@ -21,10 +21,10 @@
         <img v-if="evento.url_portada" :src="evento.url_portada" class="poster-img" alt="Poster del Evento" />
         <div v-else class="poster-placeholder">EUPHORIA</div>
         
-        <!-- Etiqueta ACTIVO sobre la imagen -->
-        <div class="badge-activo-flotante">
+        <!-- Etiqueta de estado sobre la imagen -->
+        <div v-if="evento.estado" class="badge-activo-flotante">
           <span class="punto-vivo"></span>
-          ACTIVO
+          {{ evento.estado.toUpperCase() }}
         </div>
 
         <div class="overlay-gradiente-full"></div>
@@ -49,75 +49,94 @@
         </div>
 
         <!-- Selección de Espacio y Mesa -->
-        <div class="seccion-espacios fade-in">
+        <div v-if="zonas.length" class="seccion-espacios fade-in">
           <h3>1. Selecciona tu Zona</h3>
           <p class="subtexto-espacios">Elige dónde quieres estar esta noche.</p>
-          
+
           <div class="opciones-espacio">
-            <div 
-              class="opcion-tarjeta opcion-desactivada" 
-              @click="mostrarAlertaMapaFaltante"
+            <div
+              v-for="zona in zonas"
+              :key="zona.id_zona"
+              class="opcion-tarjeta"
+              :class="{ seleccionado: zonaSeleccionada && zonaSeleccionada.id_zona === zona.id_zona }"
+              @click="seleccionarZona(zona)"
             >
               <div class="opcion-info">
                 <h4 style="display:flex; align-items:center; gap: 6px;">
                   <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  Entrada General
+                  {{ zona.nombre_zona }}
                 </h4>
-                <p>Acceso a pista principal (Sin mesa asignada)</p>
+                <p v-if="zona.mesa_espacio && zona.mesa_espacio.length">Mesas exclusivas y atención preferencial</p>
+                <p v-else>Acceso a pista principal (Sin mesa asignada)</p>
               </div>
-              <div class="opcion-precio" style="font-size:0.8rem; color:var(--texto-desactivado);">Bloqueado por seguridad</div>
+              <div class="opcion-precio">Bs. {{ formatearMonto(zona.precio_entrada_base) }}</div>
             </div>
-            
-            <div 
-              class="opcion-tarjeta opcion-desactivada" 
-              @click="mostrarAlertaMapaFaltante"
-            >
-              <div class="opcion-info">
-                <h4 style="display:flex; align-items:center; gap: 6px;">
-                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  Zona VIP
-                </h4>
-                <p>Mesas exclusivas y atención preferencial</p>
+          </div>
+
+          <!-- Mapa de Mesas de la zona seleccionada -->
+          <div v-if="mesasDisponibles.length" class="seccion-mapa fade-in">
+            <h3 style="margin-top: 1.5rem;">2. Elige tu Mesa</h3>
+            <div class="mapa-mesas">
+              <div
+                v-for="mesa in mesasDisponibles"
+                :key="mesa.id_mesa"
+                class="mesa-item"
+                :class="{
+                  'mesa-ocupada': mesa.estado_ocupacion !== 'libre',
+                  'mesa-seleccionada': mesaSeleccionada && mesaSeleccionada.id_mesa === mesa.id_mesa
+                }"
+                @click="seleccionarMesa(mesa)"
+              >
+                <span class="mesa-nombre">{{ mesa.numero_nombre }}</span>
+                <span class="mesa-capacidad">{{ mesa.capacidad_sillas }} sillas</span>
               </div>
-              <div class="opcion-precio" style="font-size:0.8rem; color:var(--texto-desactivado);">Bloqueado por seguridad</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Barra Flotante de Reserva (Siempre desactivada por falta de mapa) -->
-      <div class="barra-reserva fade-in">
+      <!-- Barra Flotante de Reserva -->
+      <div v-if="zonas.length" class="barra-reserva fade-in">
         <div class="reserva-info">
-          <span class="reserva-texto">Elige un espacio en el mapa</span>
-          <span class="reserva-precio">Total: Bs. 0.00</span>
+          <span class="reserva-texto">{{ textoReserva }}</span>
+          <span class="reserva-precio">Total: Bs. {{ formatearMonto(totalReserva) }}</span>
         </div>
-        <button 
-          class="btn-reservar-final btn-desactivado" 
-          disabled
+        <button
+          class="btn-reservar-final"
+          :class="{ 'btn-desactivado': !puedeReservar || reservando }"
+          :disabled="!puedeReservar || reservando"
+          @click="confirmarReserva"
         >
-          Ir a Pagar
+          {{ reservando ? 'Procesando...' : 'Ir a Pagar' }}
         </button>
       </div>
 
 
     </div>
 
-    <!-- Modal de Alerta de Mapa Faltante -->
+    <!-- Modal de Resultado de la Reserva -->
     <Teleport to="body">
-      <div v-if="modalMapa" class="modal-fondo" @click.self="modalMapa=false">
-        <div class="modal fade-in" style="max-width: 400px; text-align: center; border-left: 4px solid var(--color-error);">
+      <div v-if="modalResultado" class="modal-fondo" @click.self="modalResultado=false">
+        <div class="modal fade-in" style="max-width: 400px; text-align: center;" :style="{ borderLeft: '4px solid ' + (reservaExitosa ? 'var(--color-exito)' : 'var(--color-error)') }">
           <div class="modal-cabecera" style="justify-content: center; border: none; padding-bottom: 0;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 10px;">
+            <svg v-if="reservaExitosa" viewBox="0 0 24 24" fill="none" stroke="var(--color-exito)" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 10px;">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 10px;">
               <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
           </div>
           <div style="padding: 1rem 1.5rem 1.5rem 1.5rem;">
-            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">Mapa No Vinculado</h3>
+            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">{{ reservaExitosa ? 'Reserva Confirmada' : 'No se pudo reservar' }}</h3>
             <p style="color: var(--texto-secundario); font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem;">
-              Actualmente no hay un mapa interactivo vinculado para seleccionar un espacio específico (Mesa o Barra). 
-              <br><br>No puedes confirmar ninguna reserva sin asignar un espacio primero.
+              {{ mensajeResultado }}
             </p>
-            <button class="btn btn-primario" style="width: 100%; background: var(--color-error); color: #fff;" @click="modalMapa=false">Entendido</button>
+            <button
+              class="btn btn-primario"
+              style="width: 100%; color: #fff;"
+              :style="{ background: reservaExitosa ? 'var(--color-exito)' : 'var(--color-error)' }"
+              @click="modalResultado=false"
+            >Entendido</button>
           </div>
         </div>
       </div>
@@ -126,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 
@@ -134,7 +153,42 @@ const route = useRoute()
 const router = useRouter()
 const evento = ref(null)
 const cargando = ref(true)
-const modalMapa = ref(false)
+
+// Estado de la reserva
+const zonaSeleccionada = ref(null)
+const mesaSeleccionada = ref(null)
+const reservando = ref(false)
+const modalResultado = ref(false)
+const reservaExitosa = ref(false)
+const mensajeResultado = ref('')
+
+// Zonas provenientes del backend (evento.zona[] con mesa_espacio[])
+const zonas = computed(() => (evento.value && evento.value.zona) ? evento.value.zona : [])
+
+// Mesas de la zona seleccionada (si la zona tiene mapa de mesas)
+const mesasDisponibles = computed(() => {
+  if (!zonaSeleccionada.value || !zonaSeleccionada.value.mesa_espacio) return []
+  return zonaSeleccionada.value.mesa_espacio.filter(m => m.es_seleccionable !== false)
+})
+
+// Total a pagar segun la zona elegida
+const totalReserva = computed(() => {
+  if (!zonaSeleccionada.value) return 0
+  return Number(zonaSeleccionada.value.precio_entrada_base) || 0
+})
+
+// Solo puede reservar si eligio zona y, cuando la zona tiene mesas, tambien una mesa
+const puedeReservar = computed(() => {
+  if (!zonaSeleccionada.value) return false
+  if (mesasDisponibles.value.length > 0 && !mesaSeleccionada.value) return false
+  return true
+})
+
+const textoReserva = computed(() => {
+  if (!zonaSeleccionada.value) return 'Elige una zona para continuar'
+  if (mesasDisponibles.value.length > 0 && !mesaSeleccionada.value) return 'Elige una mesa disponible'
+  return zonaSeleccionada.value.nombre_zona
+})
 
 async function cargarDetalle() {
   cargando.value = true
@@ -159,8 +213,48 @@ function formatearFecha(fechaStr) {
   return new Date(fechaStr).toLocaleDateString('es-ES', opciones)
 }
 
-function mostrarAlertaMapaFaltante() {
-  modalMapa.value = true;
+function formatearMonto(monto) {
+  return (Number(monto) || 0).toFixed(2)
+}
+
+function seleccionarZona(zona) {
+  zonaSeleccionada.value = zona
+  mesaSeleccionada.value = null
+}
+
+function seleccionarMesa(mesa) {
+  if (mesa.estado_ocupacion !== 'libre') return
+  mesaSeleccionada.value = mesa
+}
+
+async function confirmarReserva() {
+  if (!puedeReservar.value || reservando.value) return
+  reservando.value = true
+  try {
+    const tieneMesas = mesasDisponibles.value.length > 0
+    const datos = {
+      id_evento: evento.value.id_evento,
+      id_zona: zonaSeleccionada.value.id_zona,
+      id_mesa: mesaSeleccionada.value ? mesaSeleccionada.value.id_mesa : null,
+      tipo: tieneMesas ? 'vip' : 'general'
+    }
+    const respuesta = await servicioEventos.reservarEspacio(datos)
+    reservaExitosa.value = true
+    mensajeResultado.value = (respuesta && respuesta.mensaje) || 'Reserva confirmada exitosamente.'
+    // Marcar la mesa como reservada localmente para reflejar el cambio
+    if (mesaSeleccionada.value) {
+      mesaSeleccionada.value.estado_ocupacion = 'reservada'
+      mesaSeleccionada.value = null
+    }
+  } catch (error) {
+    reservaExitosa.value = false
+    // El interceptor http rechaza con response.data directamente
+    mensajeResultado.value = (error && error.error)
+      || 'No se pudo procesar la reserva. Intenta nuevamente.'
+  } finally {
+    reservando.value = false
+    modalResultado.value = true
+  }
 }
 </script>
 

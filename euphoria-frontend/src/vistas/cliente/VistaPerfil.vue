@@ -170,7 +170,7 @@ const hayCambios = computed(() => {
 })
 
 function toggleEditar(campo) {
-  editando.value[campo] = true
+  editando.value[campo] = !editando.value[campo]
 }
 
 function cancelarEdicion() {
@@ -206,10 +206,28 @@ function triggerFileInput() {
   fileInput.value.click()
 }
 
+const TIPOS_IMAGEN_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const TAMANO_MAXIMO_IMAGEN = 5 * 1024 * 1024 // 5MB
+
 function manejarArchivo(e) {
-  if (e.target.files.length > 0) {
-    archivoImagen.value = e.target.files[0]
+  if (e.target.files.length === 0) return
+
+  const archivo = e.target.files[0]
+  errorDatos.value = ''
+
+  if (!TIPOS_IMAGEN_PERMITIDOS.includes(archivo.type)) {
+    errorDatos.value = 'Formato no válido. Usa una imagen JPG, PNG, WEBP o GIF.'
+    if (fileInput.value) fileInput.value.value = ''
+    return
   }
+
+  if (archivo.size > TAMANO_MAXIMO_IMAGEN) {
+    errorDatos.value = 'La imagen es demasiado grande. El tamaño máximo es 5MB.'
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+
+  archivoImagen.value = archivo
 }
 
 async function guardarDatos() {
@@ -220,8 +238,9 @@ async function guardarDatos() {
     const formData = new FormData()
     formData.append('nombres', form.value.nombres)
     formData.append('apellidos', form.value.apellidos)
-    if (form.value.ci_carnet) formData.append('ci_carnet', form.value.ci_carnet)
-    if (form.value.telefono) formData.append('telefono', form.value.telefono)
+    // Enviamos siempre el campo (incluso vacio) para permitir limpiarlo
+    formData.append('ci_carnet', form.value.ci_carnet)
+    formData.append('telefono', form.value.telefono)
     if (archivoImagen.value) formData.append('imagen', archivoImagen.value)
 
     const res = await clienteHttp.put('/usuarios/perfil', formData)
@@ -239,7 +258,7 @@ async function guardarDatos() {
     archivoImagen.value = null
     if (fileInput.value) fileInput.value.value = ''
   } catch (error) {
-    errorDatos.value = error.response?.data?.error || 'Error al actualizar'
+    errorDatos.value = error?.error || 'Error al actualizar'
   } finally {
     cargandoDatos.value = false
   }
@@ -256,7 +275,7 @@ async function cambiarPassword() {
     formPass.value.actual = ''
     formPass.value.nueva = ''
   } catch (error) {
-    errorPass.value = error.response?.data?.error || 'Error al cambiar contraseña'
+    errorPass.value = error?.error || 'Error al cambiar contraseña'
   } finally {
     cargandoPass.value = false
   }
@@ -277,7 +296,7 @@ async function guardarSeguridad() {
     }
     formSeguridad.value.respuesta = '' // Limpiar campo
   } catch (error) {
-    errorSeguridad.value = error.response?.data?.error || 'Error al guardar pregunta'
+    errorSeguridad.value = error?.error || 'Error al guardar pregunta'
   } finally {
     cargandoSeguridad.value = false
   }

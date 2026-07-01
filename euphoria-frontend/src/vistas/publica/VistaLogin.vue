@@ -146,7 +146,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { servicioAuth } from '@/servicios-api/servicio-autenticacion.js'
 
@@ -208,6 +208,10 @@ async function manejarRegistro() {
       mensajeExito.value = ''
       formulario.nombres = ''
       formulario.apellidos = ''
+      formulario.correo = ''
+      formulario.password = ''
+      formulario.pregunta_seguridad = ''
+      formulario.respuesta_seguridad = ''
     }, 2000)
   } catch (err) {
     error.value = err.error || 'Error al registrar'
@@ -232,7 +236,17 @@ async function manejarLogin() {
     localStorage.setItem('euphoria_refresh', respuesta.refresh)
     
     const navResult = await router.push(`/${tienda.rolRuta}`)
-    if (navResult) {
+    // Las navegaciones redundantes/abortadas/canceladas devuelven un NavigationFailure
+    // truthy pero NO son errores reales; solo tratamos como fallo el resto.
+    if (
+      isNavigationFailure(navResult) &&
+      !isNavigationFailure(
+        navResult,
+        NavigationFailureType.duplicated |
+          NavigationFailureType.aborted |
+          NavigationFailureType.cancelled
+      )
+    ) {
       console.error('Error de navegación Vue Router:', navResult)
       error.value = 'Error interno al redirigir: ' + navResult.message
     }
@@ -270,7 +284,7 @@ async function buscarPregunta() {
     preguntaRecuperacion.value = res.pregunta
     pasoRecuperacion.value = 2
   } catch (error) {
-    errorRecuperacion.value = error.response?.data?.error || 'Error al buscar cuenta'
+    errorRecuperacion.value = error.error || 'Error al buscar cuenta'
   } finally {
     cargandoRec.value = false
   }
@@ -294,7 +308,7 @@ async function restablecerPassword() {
       cerrarRecuperacion()
     }, 3000)
   } catch (error) {
-    errorRecuperacion.value = error.response?.data?.error || 'Error al restablecer'
+    errorRecuperacion.value = error.error || 'Error al restablecer'
   } finally {
     cargandoRec.value = false
   }

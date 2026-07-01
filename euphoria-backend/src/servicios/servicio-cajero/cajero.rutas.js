@@ -18,11 +18,12 @@ router.get('/buscar-cliente', async (req, res) => {
 
     const usuarios = await prisma.usuario.findMany({
       where: {
-        id_rol: { not: { in: [] } },
+        rol: { nombre_rol: 'Cliente' }, // Solo se buscan clientes (antes el filtro era un no-op)
         OR: [
           { telefono: { startsWith: q } },
           { ci_carnet: { startsWith: q } },
-          { nombres: { contains: q } }
+          { nombres: { contains: q } },
+          { apellidos: { contains: q } }
         ]
       },
       select: {

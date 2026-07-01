@@ -46,7 +46,7 @@
             <div class="clf-header">
               <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
               <span class="clf-destino" v-if="ped.mesa_espacio">
-                Mesa {{ ped.mesa_espacio.nombre_mesa }}
+                Mesa {{ ped.mesa_espacio.numero_nombre }}
               </span>
               <span class="clf-destino vip" v-else>
                 Barra/VIP
@@ -794,7 +794,7 @@ async function procesarCobro() {
         ? `${clienteSeleccionado.value.nombres} ${clienteSeleccionado.value.apellidos || ''}`.trim()
         : 'Sin registro / Barra'),
       metodo: metodoPago.value,
-      transaccionId: `TR-${Math.floor(100000 + Math.random() * 900000)}`,
+      transaccionId: res.id_transaccion || (res.id_comanda ? `TR-${res.id_comanda}` : 'N/D'),
       saldo_restante: res.saldo_restante
     }
     

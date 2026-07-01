@@ -217,11 +217,18 @@ router.put('/:id', subirImagenEvento.single('imagen'), async (req, res) => {
     const id = Number(req.params.id)
     const { nombre_evento, descripcion, fecha_hora_inicio, fecha_hora_fin } = req.body
 
+    // Validar que la fecha de fin sea posterior a la de inicio (cuando ambas se envían)
+    if (fecha_hora_inicio && fecha_hora_fin && new Date(fecha_hora_fin) <= new Date(fecha_hora_inicio)) {
+      return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio' })
+    }
+
     const datosAct = {
       ...(nombre_evento && { nombre_evento }),
-      ...(descripcion && { descripcion }),
+      // Permite BORRAR la descripción (enviar '' la vacía); solo se ignora si no se envía
+      ...(descripcion !== undefined && { descripcion: descripcion || null }),
       ...(fecha_hora_inicio && { fecha_hora_inicio: new Date(fecha_hora_inicio) }),
-      ...(fecha_hora_fin && { fecha_hora_fin: new Date(fecha_hora_fin) }),
+      // Permite BORRAR la fecha de fin (enviar '' la pone en null)
+      ...(fecha_hora_fin !== undefined && { fecha_hora_fin: fecha_hora_fin ? new Date(fecha_hora_fin) : null }),
     }
 
     if (req.file) {

@@ -465,7 +465,7 @@
             </label>
             <div :class="['input-con-icono', { 'input-valido': montoRecarga >= 10, 'input-error': montoRecarga > 0 && montoRecarga < 10 }]">
               <span class="prefijo">Bs.</span>
-              <input v-model.number="montoRecarga" type="number" min="1" step="0.5" placeholder="0.00" required />
+              <input v-model.number="montoRecarga" type="number" min="10" step="1" placeholder="0.00" required />
               <svg v-if="montoRecarga >= 10" class="icono-check" width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
@@ -633,7 +633,7 @@
           <button
             type="submit"
             class="btn-accion-principal"
-            :disabled="cargando || !clienteSeleccionado || !montoRecarga || montoRecarga < 10 || (metodoPago === 'qr' && !ocrExitoso)"
+            :disabled="cargando || !clienteSeleccionado || !montoRecarga || montoRecarga < 10 || (metodoPago === 'qr' && !ocrExitoso) || (metodoPago === 'efectivo' && vuelto < 0)"
           >
             {{ cargando ? 'Procesando...' : 'Recargar' }}
           </button>
@@ -869,14 +869,14 @@
                 <div>
                   <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">Método de Pago</div>
                   <strong style="color: white; display: flex; align-items: center; gap: 4px;">
-                    <svg v-if="trx.comprobante_url" width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    <svg v-if="esTrxQr(trx)" width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                     <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                    {{ trx.comprobante_url ? 'Transferencia QR' : 'Efectivo en Caja' }}
+                    {{ esTrxQr(trx) ? 'Transferencia QR' : 'Efectivo en Caja' }}
                   </strong>
                 </div>
                 <div>
                   <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">Realizado por</div>
-                  <strong style="color: white;">{{ trx.comprobante_url ? 'Cliente (App Móvil)' : 'Cajero en Turno' }}</strong>
+                  <strong style="color: white;">{{ esTrxQr(trx) ? 'Cliente (App Móvil)' : 'Cajero en Turno' }}</strong>
                 </div>
               </div>
 
@@ -943,7 +943,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
@@ -1017,9 +1017,19 @@ const errorRecargar = ref('')
 const montoActual = computed(() => tabActiva.value === 'recargar' ? montoRecarga.value : nuevoMonto.value)
 
 const vuelto = computed(() => {
-  if (!efectivoRecibido.value || !montoActual.value) return 0
-  return efectivoRecibido.value - montoActual.value
+  const recibido = Number(efectivoRecibido.value) || 0
+  const monto = Number(montoActual.value) || 0
+  return recibido - monto
 })
+
+// Determina si una transacción del historial fue por QR usando el método real
+// (persistido en la transacción) en lugar de inferirlo de comprobante_url.
+function esTrxQr(trx) {
+  const metodo = (trx.metodo || trx.metodo_pago || trx.tipo_operacion || '').toString().toLowerCase()
+  if (metodo) return metodo.includes('qr') || metodo.includes('transferencia')
+  // Fallback legado: si no viene el método, inferir por presencia de comprobante.
+  return !!trx.comprobante_url
+}
 
 function formatoFecha(fechaIso) {
   if (!fechaIso) return ''
@@ -1161,6 +1171,23 @@ function quitarArchivoRecarga() {
 }
 
 const transaccionIdOCR = ref('')
+
+// Limpia el estado OCR/comprobante que se comparte entre los flujos
+// 'Nueva Billetera' y 'Recargar' para evitar arrastrar una validación de un
+// flujo/monto a otro al cambiar de pestaña.
+function limpiarEstadoOCR() {
+  archivoRecarga.value = null
+  previewArchivoRecarga.value = null
+  ocrExitoso.value = null
+  transaccionIdOCR.value = ''
+  errorOCRRecarga.value = ''
+  validandoOCR.value = false
+  efectivoRecibido.value = ''
+}
+
+watch(tabActiva, () => {
+  limpiarEstadoOCR()
+})
 
 async function validarOCRCajero(file) {
   validandoOCR.value = true
@@ -1465,13 +1492,31 @@ async function resolverTransaccion(id, estado) {
 
 async function recargarCliente() {
   if (!clienteSeleccionado.value || !montoRecarga.value || montoRecarga.value < 10) return
+  // En efectivo, exigir que el efectivo recibido cubra el monto (vuelto no negativo)
+  if (metodoPago.value === 'efectivo' && vuelto.value < 0) return
   cargando.value = true
   try {
-    const res = await clienteHttp.post('/cajero/recargar', {
-      identificador: clienteSeleccionado.value.telefono || clienteSeleccionado.value.ci_carnet || clienteSeleccionado.value.correo,
-      monto: montoRecarga.value,
-      metodo: metodoPago.value
-    })
+    const identificador = clienteSeleccionado.value.telefono || clienteSeleccionado.value.ci_carnet || clienteSeleccionado.value.correo
+    let res
+    if (metodoPago.value === 'qr') {
+      // Enviar el comprobante y el nº de transacción del OCR para que el backend
+      // valide/persista del lado del servidor y rechace transaccionId ya usados.
+      const formData = new FormData()
+      formData.append('identificador', identificador)
+      formData.append('monto', montoRecarga.value)
+      formData.append('metodo', metodoPago.value)
+      if (transaccionIdOCR.value) formData.append('transaccionId', transaccionIdOCR.value)
+      if (archivoRecarga.value) formData.append('comprobante', archivoRecarga.value)
+      res = await clienteHttp.post('/cajero/recargar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    } else {
+      res = await clienteHttp.post('/cajero/recargar', {
+        identificador,
+        monto: montoRecarga.value,
+        metodo: metodoPago.value
+      })
+    }
     clienteSeleccionado.value = null
     busquedaCliente.value = ''
     montoRecarga.value = ''
@@ -1495,6 +1540,8 @@ async function recargarCliente() {
 
 async function abrirBilletera() {
   if (!nuevoId.value || errorIdExiste.value) return
+  // En efectivo, exigir que el efectivo recibido cubra el saldo inicial.
+  if (nuevoMetodo.value === 'efectivo' && vuelto.value < 0) return
   cargandoAbrir.value = true
   credencialesGeneradas.value = null
   qrBase64.value = null

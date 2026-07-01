@@ -86,7 +86,40 @@
           <button class="btn-entendido" @click="alertaActiva = false">Entendido</button>
         </div>
       </div>
-      
+
+      <!-- Modal de Detalle de Producto -->
+      <div v-if="detalleProducto" class="modal-detalle fade-in" @click.self="cerrarDetalle">
+        <div class="detalle-contenido">
+          <button class="btn-cerrar-detalle" @click="cerrarDetalle">✕</button>
+          <div class="detalle-imagen">
+            <img v-if="detalleProducto.url_imagen" :src="detalleProducto.url_imagen" :alt="detalleProducto.nombre_producto" />
+            <div v-else class="placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            </div>
+          </div>
+          <div class="detalle-cuerpo">
+            <h3 class="detalle-nombre">{{ detalleProducto.nombre_producto }}</h3>
+            <p class="detalle-categoria">{{ detalleProducto.nombre_categoria }}</p>
+            <p v-if="detalleProducto.descripcion" class="detalle-descripcion">{{ detalleProducto.descripcion }}</p>
+            <div v-if="detalleProducto.combos_como_padre && detalleProducto.combos_como_padre.length" class="detalle-combo">
+              <span class="detalle-combo-titulo">Incluye:</span>
+              <ul>
+                <li v-for="c in detalleProducto.combos_como_padre" :key="c.id_producto_hijo || c.nombre_producto">
+                  {{ c.cantidad ? c.cantidad + 'x ' : '' }}{{ c.nombre_producto }}
+                </li>
+              </ul>
+            </div>
+            <div class="detalle-precio-fila">
+              <div class="precios">
+                <span v-if="detalleProducto.estado_promocion" class="precio-tachado">Bs.{{ detalleProducto.precio_base }}</span>
+                <span class="precio-final">Bs.{{ detalleProducto.estado_promocion ? detalleProducto.precio_promocion : detalleProducto.precio_base }}</span>
+              </div>
+              <button class="btn-entendido detalle-agregar" :disabled="cargandoDetalle" @click="agregarAlCarrito(detalleProducto)">Agregar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Panel Flotante de Carrito Detallado -->
       <div v-if="tiendaCarrito.totalItems > 0 && mostrarMiniCarrito" class="panel-carrito-flotante">
         <div class="cabecera-panel">
@@ -137,8 +170,13 @@ const alertaActiva = ref(false)
 
 const mostrarMiniCarrito = ref(true)
 
-// Simulación de estado de evento (si no hay, por defecto lo forzamos a activo para testeo)
-const eventoActivoId = computed(() => tiendaCarrito.eventoActivoId || 1)
+// Estado real del evento activo del cliente (proviene de la tienda/backend).
+// Si es null, el cliente no está en ningún evento y no puede pedir.
+const eventoActivoId = computed(() => tiendaCarrito.eventoActivoId || null)
+
+// Detalle de producto
+const detalleProducto = ref(null)
+const cargandoDetalle = ref(false)
 
 async function cargarDatos() {
   cargando.value = true
@@ -169,13 +207,56 @@ const productosFiltrados = computed(() => {
   })
 })
 
-function abrirDetalle(producto) {
-  // Reservado para abrir el detalle/modal del producto
+async function abrirDetalle(producto) {
+  // Mostramos primero lo que ya tenemos y luego refrescamos desde el backend
+  detalleProducto.value = producto
+  cargandoDetalle.value = true
+  try {
+    const data = await servicioProductos.obtener(producto.id_producto)
+    if (data) detalleProducto.value = data
+  } catch (error) {
+    console.error('Error cargando detalle de producto:', error)
+  } finally {
+    cargandoDetalle.value = false
+  }
 }
 
-function agregarAlCarrito(producto) {
+function cerrarDetalle() {
+  detalleProducto.value = null
+}
+
+async function agregarAlCarrito(producto) {
+  // Para pedir hay que estar en un evento; si no, mostramos la alerta.
+  if (!eventoActivoId.value) {
+    alertaActiva.value = true
+    return
+  }
+
+  // Re-validamos stock y precio contra el backend antes de agregar,
+  // porque el catálogo se carga una sola vez y puede quedar desactualizado.
+  let productoActual = producto
+  try {
+    const data = await servicioProductos.obtener(producto.id_producto)
+    if (data) productoActual = data
+  } catch (error) {
+    console.error('Error validando producto contra backend:', error)
+  }
+
+  if (!productoActual || productoActual.stock_actual <= 0) {
+    // Reflejamos el stock real en el catálogo para no mostrar datos obsoletos.
+    if (productoActual) {
+      const idx = productos.value.findIndex(p => p.id_producto === productoActual.id_producto)
+      if (idx !== -1) productos.value[idx] = { ...productos.value[idx], ...productoActual }
+    }
+    return
+  }
+
+  // Sincronizamos el ítem del catálogo con los datos frescos (precio/stock).
+  const idx = productos.value.findIndex(p => p.id_producto === productoActual.id_producto)
+  if (idx !== -1) productos.value[idx] = { ...productos.value[idx], ...productoActual }
+
   tiendaCarrito.setEventoActivo(eventoActivoId.value)
-  tiendaCarrito.agregarItem(producto)
+  tiendaCarrito.agregarItem(productoActual)
   mostrarMiniCarrito.value = true
 }
 </script>
@@ -381,6 +462,42 @@ function agregarAlCarrito(producto) {
   border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s; width: 100%;
 }
 .btn-entendido:active { transform: scale(0.95); }
+
+/* Modal Detalle Producto */
+.modal-detalle {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+  z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+}
+.detalle-contenido {
+  position: relative;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
+  border-radius: 20px; overflow: hidden; max-width: 360px; width: 100%;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  max-height: 85vh; display: flex; flex-direction: column;
+}
+.btn-cerrar-detalle {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  background: rgba(0,0,0,0.5); border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem;
+}
+.detalle-imagen {
+  height: 200px; background: rgba(0,0,0,0.2);
+  display: flex; align-items: center; justify-content: center;
+}
+.detalle-imagen img { width: 100%; height: 100%; object-fit: cover; }
+.detalle-cuerpo { padding: 1.2rem; overflow-y: auto; }
+.detalle-nombre { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.2rem; }
+.detalle-categoria { font-size: 0.8rem; color: var(--morado-brillante); margin-bottom: 0.8rem; }
+.detalle-descripcion { font-size: 0.9rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
+.detalle-combo { margin-bottom: 1rem; }
+.detalle-combo-titulo { font-size: 0.85rem; font-weight: 700; color: var(--texto-principal); }
+.detalle-combo ul { margin: 0.4rem 0 0 1rem; padding: 0; }
+.detalle-combo li { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 2px; }
+.detalle-precio-fila {
+  display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;
+}
+.detalle-agregar { width: auto; padding: 10px 20px; }
+.detalle-agregar:disabled { opacity: 0.6; cursor: default; }
 
 /* Panel Flotante Carrito */
 .panel-carrito-flotante {

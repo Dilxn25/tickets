@@ -58,7 +58,7 @@
           </div>
           
           <div class="botones-mini">
-            <button class="btn-pago-mini" @click="irAPagar" :disabled="!puedeComprar" :title="getRazonDeshabilitado" type="button">
+            <button class="btn-pago-mini" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
               {{ textoBotonPago }}
             </button>
             <RouterLink to="/cliente/catalogo" class="btn-volver-mini" type="button">
@@ -66,10 +66,14 @@
             </RouterLink>
           </div>
 
-        <div v-if="saldoInsuficiente" class="alerta alerta-error">
+        <div v-if="errorCargaSaldo" class="alerta alerta-error">
+          {{ errorCargaSaldo }}
+        </div>
+
+        <div v-else-if="!cargandoSaldo && saldoInsuficiente" class="alerta alerta-error">
           Tu saldo de Bs. {{ saldo.toFixed(2) }} es insuficiente. Te falta Bs. {{ (total - saldo).toFixed(2) }}
         </div>
-        
+
         <div v-if="mensajeExito" class="alerta alerta-exito">
           {{ mensajeExito }}
         </div>
@@ -98,6 +102,9 @@ const tiendaCarrito = useTiendaCarrito()
 const { items, subtotal, total, totalItems } = storeToRefs(tiendaCarrito)
 
 const saldo = ref(0)
+const qrPublico = ref('')
+const cargandoSaldo = ref(true)
+const errorCargaSaldo = ref('')
 const cargandoPago = ref(false)
 const mensajeExito = ref('')
 const errorPago = ref('')
@@ -105,19 +112,25 @@ const errorPago = ref('')
 // Subtotal y total se manejan en el store directamente
 
 const saldoInsuficiente = computed(() => {
+  // No consideramos insuficiente el saldo hasta tenerlo cargado
+  if (cargandoSaldo.value || errorCargaSaldo.value) return false
   return saldo.value < total.value
 })
 
 const puedeComprar = computed(() => {
-  return !saldoInsuficiente.value && items.value.length > 0
+  return !cargandoSaldo.value && !errorCargaSaldo.value && !saldoInsuficiente.value && items.value.length > 0
 })
 
 const textoBotonPago = computed(() => {
+  if (cargandoSaldo.value) return 'Cargando...'
+  if (cargandoPago.value) return 'Procesando pago...'
   if (saldoInsuficiente.value) return 'Saldo Insuficiente'
   return 'Pagar con Billetera'
 })
 
 const getRazonDeshabilitado = computed(() => {
+  if (cargandoSaldo.value) return 'Cargando saldo...'
+  if (errorCargaSaldo.value) return errorCargaSaldo.value
   if (items.value.length === 0) return 'Carrito vacío'
   if (saldoInsuficiente.value) return 'Tu saldo es insuficiente'
   return ''
@@ -140,14 +153,14 @@ async function irAPagar() {
   cargandoPago.value = true
 
   try {
-    const resBilletera = await servicioBilletera.obtenerSaldo()
-    if (!resBilletera.qr_publico) throw new Error('No se pudo obtener el identificador de la billetera')
+    // Reutilizamos el qr_publico obtenido al cargar el saldo para evitar una segunda petición
+    if (!qrPublico.value) throw new Error('No se pudo obtener el identificador de la billetera')
 
     const formData = new FormData()
     formData.append('metodo_pago', 'Billetera')
-    formData.append('qr_billetera', resBilletera.qr_publico)
+    formData.append('qr_billetera', qrPublico.value)
     formData.append('id_cliente', tienda.usuario.id)
-    
+
     // Preparar el array de productos esperado por el backend
     const productosParaBackend = items.value.map(i => ({
       id_producto: i.id,
@@ -155,8 +168,13 @@ async function irAPagar() {
     }))
     formData.append('productos', JSON.stringify(productosParaBackend))
 
-    await clienteHttp.post('/comandas/crear', formData)
-    
+    const resPago = await clienteHttp.post('/comandas/crear', formData)
+
+    // Actualizamos el saldo local con el saldo_restante que responde el backend
+    if (resPago && resPago.saldo_restante !== undefined && resPago.saldo_restante !== null) {
+      saldo.value = resPago.saldo_restante
+    }
+
     tiendaCarrito.vaciarCarrito()
     mensajeExito.value = '¡Pedido pagado exitosamente! Pasando a preparación.'
     setTimeout(() => {
@@ -172,11 +190,17 @@ async function irAPagar() {
 }
 
 async function cargarSaldo() {
+  cargandoSaldo.value = true
+  errorCargaSaldo.value = ''
   try {
     const res = await servicioBilletera.obtenerSaldo()
     saldo.value = res.saldo_actual || 0
+    qrPublico.value = res.qr_publico || ''
   } catch (error) {
     console.error('Error cargando saldo:', error)
+    errorCargaSaldo.value = 'No se pudo cargar tu saldo. Intenta recargar la página.'
+  } finally {
+    cargandoSaldo.value = false
   }
 }
 

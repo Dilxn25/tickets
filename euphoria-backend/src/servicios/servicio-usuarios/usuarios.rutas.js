@@ -155,7 +155,8 @@ router.get('/', async (req, res) => {
       },
       include: { rol: { select: { nombre_rol: true } } },
       orderBy: { id_usuario: 'desc' },
-      take: 20 // Limitar resultados para búsquedas de meseros
+      // El Administrador ve el catálogo completo; Mesero/Bartender solo un tope para el POS
+      take: rolUsuario === 'Administrador' ? 200 : 20
     })
 
     // El Administrador ve datos completos (sin hashes); Mesero/Bartender solo lo mínimo
@@ -310,8 +311,9 @@ router.put('/:id', async (req, res) => {
       data: {
         ...(nombres   && { nombres }),
         ...(apellidos && { apellidos }),
-        ...(telefono  && { telefono }),
-        ...(ci_carnet && { ci_carnet }),
+        // Permite vaciar teléfono/CI (enviar '' los borra); solo se ignora si no se envía el campo
+        ...(telefono  !== undefined && { telefono }),
+        ...(ci_carnet !== undefined && { ci_carnet }),
         ...(correo    && { correo }),
         ...(id_rol    && { id_rol: Number(id_rol) }),
       },
@@ -322,6 +324,7 @@ router.put('/:id', async (req, res) => {
     res.json({ mensaje: 'Usuario actualizado', usuario: { ...datos, rol: datos.rol.nombre_rol } })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Usuario no encontrado' })
+    if (error.code === 'P2002') return res.status(409).json({ error: 'El correo ya está registrado por otro usuario' })
     res.status(500).json({ error: 'Error al actualizar usuario' })
   }
 })
@@ -335,6 +338,11 @@ router.patch('/:id/estado', async (req, res) => {
       return res.status(400).json({ error: validacion.error.errors[0].message })
     }
     const { estado_cuenta } = validacion.data
+
+    // Un administrador no puede desactivar su propia cuenta (evita auto-bloqueo)
+    if (id === req.usuario.id && estado_cuenta === 'inactivo') {
+      return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta.' })
+    }
 
     await prisma.usuario.update({
       where: { id_usuario: id },

@@ -336,6 +336,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       }
 
       let saldo_nuevo
+      let idComandaBilletera = null
       try {
         // Transacción atómica: descontar saldo SOLO si sigue habiendo saldo suficiente.
         // updateMany con filtro saldo_actual >= total evita el doble gasto y el saldo negativo
@@ -366,6 +367,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
               detalle_comanda: { create: detalles_crear }
             }
           })
+          idComandaBilletera = nuevaComanda.id_comanda
 
           // Registrar movimiento
           await tx.transaccion.create({
@@ -405,12 +407,13 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         throw e
       }
 
-      // Sincronización en tiempo real del saldo del cliente
+      // Sincronización en tiempo real: saldo del cliente + aviso de nueva comanda a la barra
       if (global.io) {
         global.io.emit('billetera_actualizada', {
           id_usuario: billetera.id_usuario,
           saldo_nuevo
         })
+        global.io.emit('nueva_comanda', { id_comanda: idComandaBilletera })
       }
 
       return res.status(201).json({
@@ -452,6 +455,9 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       return comanda
     })
 
+    if (global.io) {
+      global.io.emit('nueva_comanda', { id_comanda: nuevaComanda.id_comanda })
+    }
     res.status(201).json({ mensaje: 'Orden creada exitosamente', id_comanda: nuevaComanda.id_comanda })
 
   } catch (error) {

@@ -10,6 +10,19 @@
       <p>Cargando cartelera...</p>
     </div>
 
+    <div v-else-if="error" class="estado-error">
+      <div class="icono-error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <h3>No se pudo cargar la cartelera</h3>
+      <p>Ocurrió un problema de conexión. Revisa tu internet e inténtalo de nuevo.</p>
+      <button class="btn-reintentar" @click="cargarEventos">Reintentar</button>
+    </div>
+
     <div v-else-if="eventos.length === 0" class="estado-vacio">
       <div class="icono-vacio">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -39,6 +52,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             Inicia a las {{ obtenerHora(evento.fecha_hora_inicio) }}
           </p>
+          <p v-if="evento.fecha_hora_fin" class="hora hora-fin">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Finaliza el {{ obtenerDia(evento.fecha_hora_fin) }} {{ obtenerMes(evento.fecha_hora_fin) }} a las {{ obtenerHora(evento.fecha_hora_fin) }}
+          </p>
           <p class="descripcion">{{ evento.descripcion || 'Vive la mejor experiencia en EUPHORIA.' }}</p>
 
           <!-- Si el evento tiene zonas, mostramos info, si no, es reserva general -->
@@ -59,14 +76,19 @@ import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 const router = useRouter()
 const eventos = ref([])
 const cargando = ref(true)
+const error = ref(false)
 
 async function cargarEventos() {
+  cargando.value = true
+  error.value = false
   try {
     // Para el cliente solo traemos los activos o disponibles
     const data = await servicioEventos.listarDisponibles()
     eventos.value = data
-  } catch (error) {
-    console.error('Error al cargar la cartelera:', error)
+  } catch (err) {
+    console.error('Error al cargar la cartelera:', err)
+    error.value = true
+    eventos.value = []
   } finally {
     cargando.value = false
   }
@@ -116,6 +138,24 @@ function verDetalles(evento) {
 .icono-vacio { width: 64px; height: 64px; margin: 0 auto 1rem; color: var(--texto-desactivado); }
 .estado-vacio h3 { margin-bottom: 0.5rem; color: var(--texto-principal); }
 .estado-vacio p { font-size: 0.85rem; color: var(--texto-secundario); }
+
+/* Error de carga */
+.estado-error { text-align: center; padding: 4rem 2rem; background: var(--fondo-tarjeta); border-radius: 20px; border: 1px dashed var(--borde-sutil); margin-top: 2rem; }
+.icono-error { width: 64px; height: 64px; margin: 0 auto 1rem; color: var(--rosa-acento); }
+.estado-error h3 { margin-bottom: 0.5rem; color: var(--texto-principal); }
+.estado-error p { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.2rem; }
+.btn-reintentar {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(219,39,119,0.3);
+  transition: transform 0.2s;
+}
+.btn-reintentar:active { transform: scale(0.98); }
 
 /* Lista de Eventos */
 .lista-eventos { display: flex; flex-direction: column; gap: 1.5rem; }
@@ -184,6 +224,7 @@ function verDetalles(evento) {
 
 .nombre { font-size: 1.2rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 0.4rem; }
 .hora { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--morado-brillante); font-weight: 600; margin-bottom: 0.8rem; }
+.hora-fin { color: var(--texto-secundario); margin-top: -0.4rem; }
 .icono { width: 14px; height: 14px; }
 .descripcion { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.2rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 

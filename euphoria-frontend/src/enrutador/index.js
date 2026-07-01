@@ -110,6 +110,54 @@ const enrutador = createRouter({
   routes: rutas,
 })
 
+// Toast "sin permiso": reutiliza un único elemento para evitar que se apilen
+// múltiples avisos idénticos al navegar rápido a rutas no permitidas.
+const ID_TOAST_SIN_PERMISO = 'toast-sin-permiso'
+let temporizadorToastSinPermiso = null
+
+function mostrarToastSinPermiso() {
+  // Si ya existe un toast, reinicia su temporizador en lugar de crear otro.
+  let div = document.getElementById(ID_TOAST_SIN_PERMISO)
+  if (!div) {
+    div = document.createElement('div')
+    div.id = ID_TOAST_SIN_PERMISO
+    div.style.position = 'fixed'
+    div.style.top = '20px'
+    div.style.left = '50%'
+    div.style.transform = 'translateX(-50%)'
+    div.style.background = 'rgba(239, 71, 111, 0.95)'
+    div.style.color = '#FFF'
+    div.style.padding = '12px 24px'
+    div.style.borderRadius = '10px'
+    div.style.display = 'flex'
+    div.style.alignItems = 'center'
+    div.style.gap = '10px'
+    div.style.zIndex = '9999'
+    div.style.fontFamily = 'system-ui, -apple-system, sans-serif'
+    div.style.fontWeight = '600'
+    div.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4), 0 0 10px rgba(239,71,111,0.2)'
+    div.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span>No tienes permiso para acceder a esta área.</span>
+    `
+    document.body.appendChild(div)
+  }
+
+  // Reinicia visibilidad y temporizador (evita apilado y reaparece si estaba desvaneciéndose).
+  div.style.transition = ''
+  div.style.opacity = '1'
+  if (temporizadorToastSinPermiso) clearTimeout(temporizadorToastSinPermiso)
+  temporizadorToastSinPermiso = setTimeout(() => {
+    div.style.transition = 'opacity 0.4s ease'
+    div.style.opacity = '0'
+    setTimeout(() => div.remove(), 400)
+  }, 3000)
+}
+
 // Control de acceso de navegación global
 enrutador.beforeEach((to, from, next) => {
   const tienda = useTiendaAutenticacion()
@@ -125,37 +173,7 @@ enrutador.beforeEach((to, from, next) => {
   // Verificación de rol para rutas protegidas
   if (to.meta.rolPermitido && tienda.estaAutenticado) {
     if (to.meta.rolPermitido !== tienda.rolRuta) {
-      const div = document.createElement('div')
-      div.style.position = 'fixed'
-      div.style.top = '20px'
-      div.style.left = '50%'
-      div.style.transform = 'translateX(-50%)'
-      div.style.background = 'rgba(239, 71, 111, 0.95)'
-      div.style.color = '#FFF'
-      div.style.padding = '12px 24px'
-      div.style.borderRadius = '10px'
-      div.style.display = 'flex'
-      div.style.alignItems = 'center'
-      div.style.gap = '10px'
-      div.style.zIndex = '9999'
-      div.style.fontFamily = 'system-ui, -apple-system, sans-serif'
-      div.style.fontWeight = '600'
-      div.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4), 0 0 10px rgba(239,71,111,0.2)'
-      div.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-        </svg>
-        <span>No tienes permiso para acceder a esta área.</span>
-      `
-      document.body.appendChild(div)
-      setTimeout(() => {
-        div.style.transition = 'opacity 0.4s ease'
-        div.style.opacity = '0'
-        setTimeout(() => div.remove(), 400)
-      }, 3000)
-
+      mostrarToastSinPermiso()
       return next(`/${tienda.rolRuta}`)
     }
   }

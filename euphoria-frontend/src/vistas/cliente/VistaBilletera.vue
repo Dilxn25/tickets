@@ -25,18 +25,8 @@
             <div class="columna-pin">
               <p class="etiqueta-pequena">PIN</p>
               <div class="pin-display-flex">
-                <span v-if="mostrarPin" class="pin-valor">{{ pin || '0000' }}</span>
-                <span v-else class="pin-oculto-nuevo">••••</span>
-                <button class="btn-ojo-nuevo" @click="mostrarPin = !mostrarPin" type="button" title="Mostrar/ocultar PIN">
-                  <svg v-if="mostrarPin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                  <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                  </svg>
-                </button>
+                <span class="pin-oculto-nuevo">••••</span>
+                <span class="pin-estado">{{ tienePin ? 'Configurado' : 'Sin configurar' }}</span>
               </div>
             </div>
 
@@ -99,7 +89,7 @@
           <div class="columna-acciones">Acciones</div>
         </div>
         <div v-for="recarga in historial" :key="recarga.id_recarga" class="fila-historial">
-          <div class="columna-monto">Bs. {{ recarga.monto.toFixed(2) }}</div>
+          <div class="columna-monto">Bs. {{ Number(recarga.monto || 0).toFixed(2) }}</div>
           <div class="columna-transaccion">{{ recarga.numero_transaccion }}</div>
           <div class="columna-fecha">{{ formatoFecha(recarga.fecha_solicitud) }}</div>
           <div class="columna-estado">
@@ -338,7 +328,7 @@
         </div>
         <div class="modal-body">
           <div class="detalle-fila"><strong>Estado:</strong> <span :class="['badge', `badge-${recargaSeleccionada.estado}`]">{{ recargaSeleccionada.estado }}</span></div>
-          <div class="detalle-fila"><strong>Monto:</strong> Bs. {{ recargaSeleccionada.monto.toFixed(2) }}</div>
+          <div class="detalle-fila"><strong>Monto:</strong> Bs. {{ Number(recargaSeleccionada.monto || 0).toFixed(2) }}</div>
           <div class="detalle-fila"><strong>ID Transacción OCR:</strong> <span class="texto-resaltado">{{ recargaSeleccionada.numero_transaccion }}</span></div>
           <div class="detalle-fila"><strong>Fecha Solicitud:</strong> {{ formatoFecha(recargaSeleccionada.fecha_solicitud) }}</div>
           <div class="detalle-fila"><strong>Fecha Confirmación:</strong> {{ recargaSeleccionada.fecha_confirmacion ? formatoFecha(recargaSeleccionada.fecha_confirmacion) : 'No confirmada' }}</div>
@@ -378,8 +368,8 @@ const usuario = computed(() => tienda.usuario?.nombre || 'Cliente')
 
 // Estado billetera
 const saldo = ref(0)
-const pin = ref('0000')
-const mostrarPin = ref(false)
+// Nunca guardamos ni mostramos el PIN en claro. Solo reflejamos si existe.
+const tienePin = ref(false)
 const historial = ref([])
 const modalExito = ref(false)
 const mensajeExito = ref('')
@@ -466,8 +456,9 @@ function validarMonto() {
     return
   }
 
-  monto = Math.floor(monto * 100) / 100
-  montoIngresado.value = monto.toFixed(2)
+  // Mantener montoIngresado siempre como número (v-model.number). El formateo con
+  // dos decimales es solo para presentación, no se reasigna al modelo.
+  montoIngresado.value = Math.floor(monto * 100) / 100
 }
 
 // Validar entrada de PIN (solo números)
@@ -505,7 +496,8 @@ async function guardarPin() {
   
   try {
     await servicioBilletera.actualizarPin(nuevoPin.value)
-    pin.value = nuevoPin.value
+    // No persistimos el PIN en claro; solo marcamos que ya existe uno configurado.
+    tienePin.value = true
     abrirModalCambiarPin()
     
     // Mostrar modal de éxito
@@ -526,6 +518,9 @@ function cargarComprobante(event) {
     errorOCR.value = 'Solo se aceptan imágenes'
     return
   }
+
+  // Forzar la validación del monto aunque el usuario no haya salido del input (@blur)
+  validarMonto()
 
   if(!montoIngresado.value || errorMonto.value) {
     errorOCR.value = 'Ingresa un monto válido primero'
@@ -567,9 +562,14 @@ async function procesarOCR(file) {
       comprobanteProcesado.value = true
       urlComprobanteGenerado.value = res.url_comprobante
       procesandoOCR.value = false // Liberar flag antes de llamar a completar
-      
+
       // Llamar a completar recarga automáticamente tras validación exitosa
       await completarRecarga()
+    } else {
+      // El backend respondió 200 pero el comprobante no es válido (ilegible o monto no coincide).
+      // limpiarArchivo() resetea errorOCR, por eso se asigna el mensaje después.
+      limpiarArchivo()
+      errorOCR.value = res.mensaje || res.error || 'El comprobante no pudo validarse. Verifica el monto e inténtalo de nuevo.'
     }
   } catch (error) {
     console.error('Error en OCR:', error)
@@ -613,27 +613,9 @@ async function completarRecarga() {
 async function mostrarQRRapido(tipo) {
   try {
     const res = await servicioBilletera.generarQRsPago()
-    
-    // Acortar el identificador para que sea fácil de escribir manualmente
-    const acortar = (id, esPrivado) => {
-      if (!id) return ''
-      const partes = id.split('_')
-      if (partes.length >= 3) {
-        let sufijo = partes[2].slice(-4)
-        // El usuario pidió que varíen en un dígito para poder diferenciarlos al cobrar
-        if (esPrivado) {
-          // Si el sufijo es por ej 5932, lo volvemos 5933
-          let num = parseInt(sufijo, 10) + 1
-          sufijo = num.toString().padStart(4, '0')
-        }
-        return `U${partes[1]}-${sufijo}`
-      }
-      return id.slice(-6) + (esPrivado ? 'P' : '')
-    }
 
-    res.qr_sin_pin.identificador = acortar(res.qr_sin_pin.identificador, false)
-    res.qr_con_pin.identificador = acortar(res.qr_con_pin.identificador, true)
-
+    // Mostrar el identificador real (qr_publico) sin acortarlo ni alterarlo:
+    // es el valor exacto que el cajero busca en la BD, cualquier transformación rompe el match.
     datosQR.value = res
     qrAmpliado.value = tipo
   } catch (error) {
@@ -655,6 +637,10 @@ async function cargarSaldo() {
   try {
     const res = await servicioBilletera.obtenerSaldo()
     saldo.value = res.saldo_actual || 0
+    // Requiere que el backend exponga el flag booleano tiene_pin en GET /saldo.
+    if (res.tiene_pin !== undefined) {
+      tienePin.value = !!res.tiene_pin
+    }
   } catch (error) {
     console.error('Error cargando saldo:', error)
   }
@@ -680,7 +666,10 @@ function formatoMoneda(valor) {
 
 // Formato fecha
 function formatoFecha(fecha) {
-  return new Date(fecha).toLocaleDateString('es-BO')
+  if (!fecha) return '-'
+  const d = new Date(fecha)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('es-BO')
 }
 
 onMounted(async () => {
@@ -833,6 +822,13 @@ onUnmounted(() => {
 .pin-oculto-nuevo {
   letter-spacing: 6px;
   margin-top: 5px;
+}
+
+.pin-estado {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  letter-spacing: 0;
 }
 
 .btn-ojo-nuevo {

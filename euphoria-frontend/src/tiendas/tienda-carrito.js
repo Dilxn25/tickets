@@ -12,7 +12,8 @@ export const useTiendaCarrito = defineStore('carrito', () => {
         carritoInicial = parsed.map(item => ({
           ...item,
           precio: parseFloat(item.precio) || 0,
-          cantidad: parseInt(item.cantidad) || 1
+          cantidad: parseInt(item.cantidad) || 1,
+          stock: Number.isFinite(parseInt(item.stock)) ? parseInt(item.stock) : null
         }))
       } else {
         localStorage.removeItem('euphoria_carrito')
@@ -46,10 +47,23 @@ export const useTiendaCarrito = defineStore('carrito', () => {
 
   function agregarItem(producto) {
     const itemExistente = items.value.find(i => i.id === producto.id_producto)
-    
+    const stockActual = Number.isFinite(parseInt(producto.stock_actual))
+      ? parseInt(producto.stock_actual)
+      : null
+
     if (itemExistente) {
+      // Mantener el stock más reciente conocido
+      if (stockActual !== null) {
+        itemExistente.stock = stockActual
+      }
+      if (itemExistente.stock !== null && itemExistente.cantidad >= itemExistente.stock) {
+        return { ok: false, mensaje: `Máximo disponible: ${itemExistente.stock}` }
+      }
       itemExistente.cantidad++
     } else {
+      if (stockActual !== null && stockActual < 1) {
+        return { ok: false, mensaje: 'Sin stock disponible' }
+      }
       const precioBase = parseFloat(producto.precio_base) || 0
       const precioPromo = parseFloat(producto.precio_promocion) || 0
       items.value.push({
@@ -57,18 +71,25 @@ export const useTiendaCarrito = defineStore('carrito', () => {
         nombre: producto.nombre_producto,
         precio: producto.estado_promocion ? precioPromo : precioBase,
         cantidad: 1,
+        stock: stockActual,
         imagen: producto.url_imagen || ''
       })
     }
     guardarCarrito()
+    return { ok: true }
   }
 
   function aumentarCantidad(id) {
     const item = items.value.find(i => i.id === id)
     if (item) {
+      if (item.stock !== null && item.stock !== undefined && item.cantidad >= item.stock) {
+        return { ok: false, mensaje: `Máximo disponible: ${item.stock}` }
+      }
       item.cantidad++
       guardarCarrito()
+      return { ok: true }
     }
+    return { ok: false }
   }
 
   function disminuirCantidad(id) {

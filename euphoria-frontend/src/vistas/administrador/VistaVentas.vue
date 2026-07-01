@@ -17,8 +17,10 @@
         <input v-model="busqueda" class="campo" placeholder="Buscar por cliente, comanda..." style="max-width:300px" />
         <select v-model="filtroEstado" class="campo" style="max-width:180px">
           <option value="">Todos los estados</option>
-          <option value="Completada">Completadas</option>
           <option value="Pendiente">Pendientes</option>
+          <option value="Preparando">Preparando</option>
+          <option value="Listo">Listos</option>
+          <option value="Completada">Completadas</option>
           <option value="Cancelada">Canceladas</option>
         </select>
         <input v-model="filtroFecha" type="date" class="campo" style="max-width:180px" />
@@ -350,6 +352,8 @@ function getBadgeClaseEstado(estado) {
   const clases = {
     'Completada': 'badge-exito',
     'Pendiente': 'badge-advertencia',
+    'Preparando': 'badge-info',
+    'Listo': 'badge-primaria',
     'Cancelada': 'badge-error'
   }
   return clases[estado] || 'badge-info'

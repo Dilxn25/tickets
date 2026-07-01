@@ -16,6 +16,11 @@
         <option value="">Todos los roles</option>
         <option v-for="r in rolesDb" :key="r.id_rol" :value="r.nombre_rol">{{ r.nombre_rol }}</option>
       </select>
+      <select v-model="filtroEstado" class="campo" style="max-width:180px">
+        <option value="">Todos los estados</option>
+        <option value="activo">activo</option>
+        <option value="inactivo">inactivo</option>
+      </select>
     </div>
     <div class="tarjeta tabla-wrapper">
       <table class="tabla">
@@ -40,7 +45,11 @@
             <td>
               <div class="acciones">
                 <button class="btn btn-sm btn-secundario" @click="abrirModal(u)">Editar</button>
-                <button class="btn btn-sm btn-peligro" @click="alternarEstado(u)">
+                <button
+                  v-if="!esUsuarioActual(u)"
+                  class="btn btn-sm btn-peligro"
+                  @click="alternarEstado(u)"
+                >
                   {{ u.estado_cuenta === 'activo' ? 'Bloquear' : 'Desbloquear' }}
                 </button>
               </div>
@@ -148,7 +157,7 @@
           <div style="padding:0 1.5rem 1.5rem 1.5rem;">
             <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¿Resetear Contraseña?</h3>
             <p style="color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
-              La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a <strong>123456</strong>. ¿Estás seguro?
+              La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a una contraseña temporal que el usuario deberá cambiar en su primer inicio de sesión. ¿Estás seguro?
             </p>
             <div style="display:flex; gap:10px; justify-content:center;">
               <button class="btn btn-secundario" style="flex:1;" @click="modalAlertaReset=false">Cancelar</button>
@@ -162,9 +171,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { servicioUsuarios } from '@/servicios-api/servicio-usuarios.js'
 import { servicioRoles }    from '@/servicios-api/servicio-roles.js'
+import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+
+const tiendaAuth = useTiendaAutenticacion()
 
 const busqueda     = ref(''); const filtroRol = ref(''); const filtroEstado = ref(''); const cargando = ref(false)
 const usuarios     = ref([])
@@ -195,6 +207,12 @@ const usuariosFiltrados = computed(() => {
     const matchEstado   = filtroEstado.value ? u.estado_cuenta === filtroEstado.value : true
     return matchBusqueda && matchRol && matchEstado
   })
+})
+
+let debounceFiltros = null
+watch([busqueda, filtroRol, filtroEstado], () => {
+  clearTimeout(debounceFiltros)
+  debounceFiltros = setTimeout(() => { cargarUsuarios() }, 350)
 })
 
 onMounted(() => { cargarUsuarios() })
@@ -231,7 +249,12 @@ async function guardarUsuario() {
   } catch (error) { alert(error.error || 'Error al guardar usuario') }
 }
 
+const esUsuarioActual = (user) => tiendaAuth.usuario?.id != null && user.id_usuario === tiendaAuth.usuario.id
+
 async function alternarEstado(user) {
+  if (esUsuarioActual(user) && user.estado_cuenta === 'activo') {
+    alert('No puedes bloquear tu propia cuenta.'); return
+  }
   if (user.rol === 'Administrador' && user.estado_cuenta === 'activo') {
     adminABanear.value = user; modalAlertaAdmin.value = true; return
   }
@@ -248,7 +271,10 @@ async function ejecutarCambioEstado(user) {
   try {
     await servicioUsuarios.cambiarEstado(user.id_usuario, user.estado_cuenta === 'activo' ? 'inactivo' : 'activo')
     cargarUsuarios()
-  } catch (error) { console.error('Error al cambiar estado:', error) }
+  } catch (error) {
+    console.error('Error al cambiar estado:', error)
+    alert(error.error || 'Error al cambiar el estado del usuario')
+  }
 }
 
 function iniciarReseteo()    { modalAlertaReset.value = true }

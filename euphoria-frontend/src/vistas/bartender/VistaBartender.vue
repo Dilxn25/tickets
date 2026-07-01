@@ -13,8 +13,12 @@
 
       <div class="stats-panel" v-if="pestana === 'pendientes'">
         <div class="stat-card">
-          <span class="stat-numero">{{ comandas.length }}</span>
-          <span class="stat-etiq">En Cola</span>
+          <span class="stat-numero">{{ comandasSinIniciar }}</span>
+          <span class="stat-etiq">Sin iniciar</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-numero">{{ comandasEnPreparacion }}</span>
+          <span class="stat-etiq">En preparación</span>
         </div>
         <button class="btn-refresh" @click="cargarComandas(true)" :class="{'girar': cargando}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -25,6 +29,10 @@
     <div class="contenido-barra">
       <!-- Vista EN COLA -->
       <div v-if="pestana === 'pendientes'">
+        <div v-if="errorCarga" class="aviso-error fade-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          {{ errorCarga }}
+        </div>
         <div v-if="cargando && primerCarga && comandas.length === 0" class="mensaje-vacio">
           Cargando pedidos...
         </div>
@@ -53,7 +61,7 @@
                 <div class="destino-row">
                   <span class="destino-etiq">Entrega a:</span>
                   <strong class="destino-val">
-                    <span v-if="comanda.usuario_comanda_id_meseroTousuario?.id_rol === 4">
+                    <span v-if="esPedidoDeCliente(comanda)">
                       Cliente (Recoger en Barra)
                     </span>
                     <span v-else>
@@ -141,8 +149,9 @@
                 </div>
                 <div class="hist-estado" :class="'est-' + comanda.estado_despacho.toLowerCase()">
                   <svg v-if="comanda.estado_despacho === 'Completada'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  <svg v-else-if="comanda.estado_despacho === 'Cancelada'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
                   <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  {{ comanda.estado_despacho === 'Completada' ? 'Entregado' : 'Esperando Recojo' }}
+                  {{ etiquetaEstadoHistorial(comanda.estado_despacho) }}
                 </div>
               </div>
 
@@ -183,7 +192,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const pestana = ref('pendientes')
@@ -194,19 +204,48 @@ const cargando = ref(false)
 const cargandoHistorial = ref(false)
 const procesandoId = ref(null)
 const primerCarga = ref(true)
+const errorCarga = ref('')
 
 const filtroFecha = ref('hoy')
 const fechaPersonalizada = ref('')
 
 let intervalo = null
+let socket = null
+
+// Separar la cola real: las que aún no se han empezado a preparar vs. las ya en curso
+const comandasSinIniciar = computed(
+  () => comandas.value.filter(c => c.estado_despacho === 'Pendiente').length
+)
+const comandasEnPreparacion = computed(
+  () => comandas.value.filter(c => c.estado_despacho === 'Preparando').length
+)
+
+// Detecta si el pedido va directo al cliente (recojo en barra).
+// Se prioriza el nombre del rol; se mantiene el id 4 como respaldo legacy.
+function esPedidoDeCliente(comanda) {
+  const usuario = comanda.usuario_comanda_id_meseroTousuario
+  if (!usuario) return false
+  if (usuario.nombre_rol) return usuario.nombre_rol === 'Cliente'
+  return usuario.id_rol === 4
+}
+
+// Mapea cada estado del historial a una etiqueta clara y no engañosa
+function etiquetaEstadoHistorial(estado) {
+  if (estado === 'Completada') return 'Entregado'
+  if (estado === 'Cancelada') return 'Cancelada'
+  if (estado === 'Listo') return 'Esperando Recojo'
+  return estado
+}
 
 async function cargarComandas(fuerzaVisual = false) {
   if (primerCarga.value || fuerzaVisual) cargando.value = true
   try {
     const res = await clienteHttp.get('/comandas/pendientes')
     comandas.value = res
+    errorCarga.value = ''
   } catch (err) {
     console.error('Error al cargar comandas:', err)
+    errorCarga.value = 'No se pudo actualizar la lista de pedidos. Reintentando...'
   } finally {
     cargando.value = false
     primerCarga.value = false
@@ -255,6 +294,8 @@ async function cambiarEstado(id, nuevoEstado) {
     if (nuevoEstado === 'Listo') {
       // Remover de la vista si ya está listo (se va para el mesero)
       comandas.value = comandas.value.filter(c => c.id_comanda !== id)
+      // Re-sincronizar con la BD para evitar divergencias entre bartenders
+      cargarComandas()
     } else {
       // Actualizar estado localmente
       const cmd = comandas.value.find(c => c.id_comanda === id)
@@ -278,12 +319,19 @@ function minutosTranscurridos(fechaUtc) {
 
 onMounted(() => {
   cargarComandas()
-  // Recarga automática cada 10 segundos
+  // Recarga automática cada 10 segundos (respaldo del socket)
   intervalo = setInterval(cargarComandas, 10000)
+
+  // Websocket para refresco inmediato de la barra en tiempo real
+  const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
+  socket = io(urlBackend)
+  socket.on('nueva_comanda', () => cargarComandas())
+  socket.on('pedido_listo', () => cargarComandas())
 })
 
 onUnmounted(() => {
   if (intervalo) clearInterval(intervalo)
+  if (socket) socket.disconnect()
 })
 </script>
 
@@ -389,6 +437,20 @@ onUnmounted(() => {
   color: white;
   font-size: 1.5rem;
   margin-bottom: 10px;
+}
+
+.aviso-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-error);
+  background: rgba(239, 71, 111, 0.1);
+  border: 1px solid rgba(239, 71, 111, 0.25);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .comandas-grid {
@@ -840,6 +902,11 @@ onUnmounted(() => {
   background: rgba(247, 37, 133, 0.1);
   color: var(--rosa-acento);
   border: 1px solid rgba(247, 37, 133, 0.2);
+}
+.est-cancelada {
+  background: rgba(239, 71, 111, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 71, 111, 0.2);
 }
 
 .hist-info {

@@ -134,10 +134,14 @@
             </p>
             
             <select v-model="nuevoEstadoSeleccionado" class="campo" style="margin-bottom: 1.5rem; text-align: center;">
-              <option value="planificado">Planificado</option>
-              <option value="activo">Activo</option>
-              <option value="finalizado">Finalizado</option>
+              <option value="planificado" :disabled="estadoDeshabilitado('planificado')">Planificado</option>
+              <option value="activo" :disabled="estadoDeshabilitado('activo')">Activo</option>
+              <option value="finalizado" :disabled="estadoDeshabilitado('finalizado')">Finalizado</option>
             </select>
+
+            <p v-if="eventoExpirado" style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 1.5rem;">
+              La fecha de este evento ya pasó: no puede reactivarse ni volver a planificarse.
+            </p>
 
             <div style="display: flex; gap: 10px; justify-content: center;">
               <button class="btn btn-secundario" style="flex: 1;" @click="modalEstado=false">Cancelar</button>
@@ -221,7 +225,12 @@ function formatearFecha(fechaStr) {
 function formatearFechaParaInput(fechaStr) {
   if (!fechaStr) return ''
   const date = new Date(fechaStr)
-  return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16)
+  if (isNaN(date.getTime())) return ''
+  // Construir el string local (YYYY-MM-DDTHH:mm) a partir de los componentes
+  // de hora local, sin restar el offset manualmente (frágil ante servidor UTC).
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 // Funciones del Modal
@@ -297,9 +306,39 @@ function iniciarCambioEstado(evento) {
   modalEstado.value = true
 }
 
+// Indica si el evento ya expiró segun su fecha de fin (o inicio si no hay fin).
+const eventoExpirado = computed(() => {
+  const ev = eventoParaEstado.value
+  if (!ev) return false
+  const fechaRef = ev.fecha_hora_fin || ev.fecha_hora_inicio
+  if (!fechaRef) return false
+  const fecha = new Date(fechaRef)
+  if (isNaN(fecha.getTime())) return false
+  return fecha.getTime() < Date.now()
+})
+
+// Determina si una transicion hacia `destino` es coherente para el evento actual.
+function estadoDeshabilitado(destino) {
+  const ev = eventoParaEstado.value
+  if (!ev) return false
+  // Siempre se permite conservar el estado actual.
+  if (destino === ev.estado) return false
+  // No reactivar/replanificar un evento cuya fecha ya paso.
+  if (eventoExpirado.value && (destino === 'activo' || destino === 'planificado')) return true
+  // Un evento finalizado no debe volver a planificado/activo (cierre definitivo).
+  if (ev.estado === 'finalizado' && (destino === 'activo' || destino === 'planificado')) return true
+  return false
+}
+
 async function confirmarCambioEstado() {
   if (!eventoParaEstado.value || !nuevoEstadoSeleccionado.value) return
-  
+
+  // Bloquear transiciones incoherentes tambien a nivel de accion.
+  if (estadoDeshabilitado(nuevoEstadoSeleccionado.value)) {
+    alert('Esa transición de estado no es válida para este evento.')
+    return
+  }
+
   try {
     await servicioEventos.cambiarEstado(eventoParaEstado.value.id_evento, nuevoEstadoSeleccionado.value)
     modalEstado.value = false

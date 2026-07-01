@@ -162,7 +162,14 @@ async function cargarDatos() {
 
 onMounted(() => { cargarDatos() })
 
-const productosFiltrados=computed(()=>productos.value) // El filtrado ya se hace en el backend, pero mantenemos computed por si acaso
+const productosFiltrados=computed(()=>{
+  const q = busqueda.value.trim().toLowerCase()
+  if(!q) return productos.value
+  return productos.value.filter(p =>
+    (p.nombre_producto || '').toLowerCase().includes(q) ||
+    (p.descripcion || '').toLowerCase().includes(q)
+  )
+}) // Categoría y promo se filtran en el backend; la búsqueda de texto se filtra localmente
 
 function manejarArchivo(e) {
   archivoImagen.value = e.target.files[0]
@@ -171,7 +178,7 @@ function manejarArchivo(e) {
 function abrirModal(p=null){
   productoEditando.value=p;
   archivoImagen.value=null;
-  if(p) Object.assign(form,{...p});
+  if(p) Object.assign(form,{nombre_producto:p.nombre_producto,id_categoria:p.id_categoria,precio_base:p.precio_base,precio_promocion:p.precio_promocion ?? '',descripcion:p.descripcion ?? '',stock_actual:p.stock_actual,estado_promocion:!!p.estado_promocion,es_combo:!!p.es_combo});
   else Object.assign(form,{nombre_producto:'',id_categoria:categorias.value[0]?.id_categoria || '',precio_base:0,precio_promocion:'',descripcion:'',stock_actual:0,estado_promocion:false,es_combo:false});
   modalAbierto.value=true
 }
