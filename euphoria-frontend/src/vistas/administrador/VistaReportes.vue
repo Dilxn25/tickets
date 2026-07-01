@@ -419,7 +419,11 @@
         <div class="modal-fs-header">
           <h2>Detalle General de Ventas (Comandas)</h2>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-            <input type="date" class="input-filtro" v-model="filtroFecha" @change="cargarReportes" />
+            <label class="etiqueta-filtro">Desde</label>
+            <input type="date" class="input-filtro" v-model="filtroDesde" @change="aplicarFiltros" />
+            <label class="etiqueta-filtro">Hasta</label>
+            <input type="date" class="input-filtro" v-model="filtroHasta" @change="aplicarFiltros" />
+            <button v-if="filtroDesde || filtroHasta" class="btn-limpiar-filtro" @click="limpiarFiltroFechas">Limpiar</button>
             <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
           </div>
         </div>
@@ -725,7 +729,22 @@ const maxRecargasCajero = computed(() => {
 })
 
 const ventas = ref([])
-const filtroFecha = ref('')
+// Filtro por rango de fechas para el reporte de ventas/recargas
+const filtroDesde = ref('')
+const filtroHasta = ref('')
+function aplicarFiltros() {
+  // Si el rango está invertido, se corrige automáticamente
+  if (filtroDesde.value && filtroHasta.value && filtroDesde.value > filtroHasta.value) {
+    [filtroDesde.value, filtroHasta.value] = [filtroHasta.value, filtroDesde.value]
+  }
+  cargarReportes()
+  cargarReporteBilletera()
+}
+function limpiarFiltroFechas() {
+  filtroDesde.value = ''
+  filtroHasta.value = ''
+  aplicarFiltros()
+}
 const cargando = ref(false)
 let intervaloSync = null
 
@@ -1172,9 +1191,14 @@ async function cargarReportes(silencioso = false) {
 
     // 4. Comandas/Ventas
     try {
-      const query = filtroFecha.value ? `?fecha=${filtroFecha.value}` : ''
-      const resComandas = await clienteHttp.get(`/comandas${query}`)
-      
+      const params = new URLSearchParams()
+      if (filtroDesde.value) params.append('desde', filtroDesde.value)
+      if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+      const query = params.toString() ? `?${params.toString()}` : ''
+      const respComandas = await clienteHttp.get(`/comandas${query}`)
+      // Las comandas Canceladas NO cuentan como ventas ni en los totales
+      const resComandas = respComandas.filter(c => c.estado_despacho !== 'Cancelada')
+
       let ingresos = 0
       const listado = resComandas.map(c => {
         const subtotal = c.detalle_comanda.reduce((acc, d) => acc + parseFloat(d.subtotal), 0)
@@ -1362,7 +1386,11 @@ async function cargarReportes(silencioso = false) {
 
 async function cargarReporteBilletera() {
   try {
-    const res = await clienteHttp.get('/billetera/admin/reporte-completo')
+    const params = new URLSearchParams()
+    if (filtroDesde.value) params.append('desde', filtroDesde.value)
+    if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    const res = await clienteHttp.get(`/billetera/admin/reporte-completo${query}`)
     reporteBilletera.value = res
   } catch (e) {
     console.warn('Error cargando reporte billetera:', e)
@@ -1591,6 +1619,28 @@ function formatearFecha(isoStr) {
 }
 
 /* FILTRO DE FECHAS */
+.etiqueta-filtro {
+  color: var(--texto-secundario);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.btn-limpiar-filtro {
+  background: transparent;
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-hover);
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-limpiar-filtro:hover {
+  background: var(--morado-medio);
+  color: #fff;
+}
 .input-filtro {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);

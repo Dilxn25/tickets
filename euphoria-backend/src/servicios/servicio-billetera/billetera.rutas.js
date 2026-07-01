@@ -294,6 +294,26 @@ router.post('/pin', verificarToken, async (req, res) => {
 // Reporte completo de billetera para el Admin
 router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   try {
+    // ---- Filtro opcional por rango de fechas (aplica a los FLUJOS: recargas y ventas) ----
+    // Sin parámetros = histórico completo (compatibilidad hacia atrás).
+    const { desde, hasta } = req.query
+    let rangoFecha = null
+    if (desde || hasta) {
+      rangoFecha = {}
+      if (desde) rangoFecha.gte = new Date(desde)
+      if (hasta) {
+        // Si viene solo la fecha (YYYY-MM-DD), incluir todo el día hasta las 23:59:59.
+        rangoFecha.lte = hasta.length === 10 ? new Date(hasta + 'T23:59:59.999') : new Date(hasta)
+      }
+    }
+    const filtroRecarga = rangoFecha ? { fecha_solicitud: rangoFecha } : {}
+    // Las ventas nunca cuentan comandas Canceladas; y opcionalmente se filtran por fecha.
+    const filtroComandaVenta = {
+      metodo_pago: 'Billetera',
+      estado_despacho: { not: 'Cancelada' },
+      ...(rangoFecha ? { fecha_registro: rangoFecha } : {})
+    }
+
     // 1. Total de billeteras activas (con saldo > 0)
     const billeterasActivas = await prisma.billetera.count({
       where: { saldo_actual: { gt: 0 } }
@@ -309,12 +329,14 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
 
     // 4. Recargas: cantidad y monto total
     const recargasTotal = await prisma.recarga_billetera.aggregate({
+      where: filtroRecarga,
       _count: { id_recarga: true },
       _sum: { monto_recarga: true }
     })
 
     // 5. Desglose de recargas por método (quién hizo la recarga: usuario o cajero)
     const recargas = await prisma.recarga_billetera.findMany({
+      where: filtroRecarga,
       include: {
         usuario: { select: { id_rol: true, nombres: true, apellidos: true } }
       },
@@ -324,22 +346,21 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
     const recargasPropia = recargas.filter(r => r.numero_transaccion?.startsWith('RECARGA-') || !r.numero_transaccion?.startsWith('CAJ-')).length
     const recargasCajero = recargas.filter(r => r.numero_transaccion?.startsWith('CAJ-')).length
 
-    // 6. Pedidos pagados con billetera
+    // 6. Pedidos pagados con billetera (excluye Canceladas; opcionalmente por fecha)
     const pedidosBilletera = await prisma.comanda.count({
-      where: { metodo_pago: 'Billetera' }
+      where: filtroComandaVenta
     })
 
     const montoPedidosBilletera = await prisma.detalle_comanda.aggregate({
       where: {
-        comanda: {
-          metodo_pago: 'Billetera'
-        }
+        comanda: filtroComandaVenta
       },
       _sum: { subtotal: true }
     })
 
     // 7. Top 5 recargas más grandes
     const topRecargas = await prisma.recarga_billetera.findMany({
+      where: filtroRecarga,
       orderBy: { monto_recarga: 'desc' },
       take: 5,
       include: {
@@ -349,6 +370,7 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
 
     // 8. Historial de recargas recientes (últimas 20)
     const recargasRecientes = await prisma.recarga_billetera.findMany({
+      where: filtroRecarga,
       orderBy: { fecha_solicitud: 'desc' },
       take: 20,
       include: {

@@ -467,14 +467,24 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
 router.get('/', verificarToken, async (req, res) => {
   try {
     let whereClause = {}
-    if (req.query.fecha) {
-      const dateParts = req.query.fecha.split('-')
-      const y = Number(dateParts[0])
-      const m = Number(dateParts[1]) - 1
-      const d = Number(dateParts[2])
-      const fechaInicio = new Date(y, m, d, 0, 0, 0, 0)
-      const fechaFin = new Date(y, m, d, 23, 59, 59, 999)
-      whereClause.fecha_registro = { gte: fechaInicio, lte: fechaFin }
+    // Filtro por RANGO de fechas (desde/hasta) o por un solo día (fecha, compatibilidad)
+    if (req.query.desde || req.query.hasta) {
+      const rango = {}
+      if (req.query.desde) {
+        const [y, m, d] = req.query.desde.split('-').map(Number)
+        rango.gte = new Date(y, m - 1, d, 0, 0, 0, 0)
+      }
+      if (req.query.hasta) {
+        const [y, m, d] = req.query.hasta.split('-').map(Number)
+        rango.lte = new Date(y, m - 1, d, 23, 59, 59, 999)
+      }
+      whereClause.fecha_registro = rango
+    } else if (req.query.fecha) {
+      const [y, m, d] = req.query.fecha.split('-').map(Number)
+      whereClause.fecha_registro = {
+        gte: new Date(y, m - 1, d, 0, 0, 0, 0),
+        lte: new Date(y, m - 1, d, 23, 59, 59, 999)
+      }
     }
 
     const comandas = await prisma.comanda.findMany({
