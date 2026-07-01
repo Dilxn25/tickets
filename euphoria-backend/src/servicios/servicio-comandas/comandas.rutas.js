@@ -492,25 +492,107 @@ router.get('/', verificarToken, async (req, res) => {
         lte: new Date(y, m - 1, d, 23, 59, 59, 999)
       }
     }
+    if (req.query.estado) whereClause.estado_despacho = req.query.estado
+
+    const incluir = {
+      detalle_comanda: {
+        include: {
+          producto: { select: { nombre_producto: true, precio_base: true } }
+        }
+      },
+      usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true } },
+      usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true, id_rol: true } },
+      mesa_espacio: true
+    }
+
+    // Paginación: si viene ?limite (o ?pagina), se devuelve un objeto paginado.
+    // Sin esos parámetros, se mantiene el comportamiento anterior (array) por compatibilidad.
+    if (req.query.limite || req.query.pagina) {
+      const limite = Math.min(Math.max(parseInt(req.query.limite) || 20, 1), 500)
+      const pagina = Math.max(parseInt(req.query.pagina) || 1, 1)
+      const [datos, total] = await Promise.all([
+        prisma.comanda.findMany({
+          where: whereClause,
+          include: incluir,
+          orderBy: { fecha_registro: 'desc' },
+          skip: (pagina - 1) * limite,
+          take: limite
+        }),
+        prisma.comanda.count({ where: whereClause })
+      ])
+      return res.json({ datos, total, pagina, limite, paginas: Math.ceil(total / limite) })
+    }
 
     const comandas = await prisma.comanda.findMany({
       where: whereClause,
-      include: {
-        detalle_comanda: { 
-          include: { 
-            producto: { select: { nombre_producto: true, precio_base: true } }
-          }
-        },
-        usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true } },
-        usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true, id_rol: true } },
-        mesa_espacio: true
-      },
+      include: incluir,
       orderBy: { fecha_registro: 'desc' }
     })
     res.json(comandas)
   } catch (error) {
     console.error('Error obteniendo comandas:', error)
     res.status(500).json({ error: 'Error al obtener comandas' })
+  }
+})
+
+// GET /api/comandas/resumen-ventas — Agregados para el dashboard (rápido, en SQL)
+// Reemplaza el traer TODAS las comandas al cliente. Excluye Canceladas. Filtro opcional desde/hasta.
+router.get('/resumen-ventas', verificarToken, async (req, res) => {
+  try {
+    const cond = ["c.estado_despacho <> 'Cancelada'"]
+    const params = []
+    if (req.query.desde) {
+      const [y, m, d] = req.query.desde.split('-').map(Number)
+      cond.push('c.fecha_registro >= ?'); params.push(new Date(y, m - 1, d, 0, 0, 0))
+    }
+    if (req.query.hasta) {
+      const [y, m, d] = req.query.hasta.split('-').map(Number)
+      cond.push('c.fecha_registro <= ?'); params.push(new Date(y, m - 1, d, 23, 59, 59, 999))
+    }
+    const W = 'WHERE ' + cond.join(' AND ')
+
+    const [totales, porMetodo, porCategoria, ranking, porMesero, tendencia] = await Promise.all([
+      prisma.$queryRawUnsafe(
+        `SELECT COUNT(DISTINCT c.id_comanda) num, COALESCE(SUM(d.subtotal),0) ingresos
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT c.metodo_pago metodo, COUNT(DISTINCT c.id_comanda) cantidad, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W} GROUP BY c.metodo_pago`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT cat.nombre_categoria categoria, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda
+         JOIN producto p ON p.id_producto=d.id_producto
+         JOIN categoria cat ON cat.id_categoria=p.id_categoria ${W}
+         GROUP BY cat.nombre_categoria ORDER BY total DESC`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT p.id_producto, p.nombre_producto, SUM(d.cantidad) veces, COALESCE(SUM(d.subtotal),0) ingresos
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda
+         JOIN producto p ON p.id_producto=d.id_producto ${W}
+         GROUP BY p.id_producto, p.nombre_producto ORDER BY veces DESC LIMIT 20`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT CONCAT(u.nombres,' ',COALESCE(u.apellidos,'')) nombre, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda
+         JOIN usuario u ON u.id_usuario=c.id_mesero ${W}
+         GROUP BY c.id_mesero, nombre ORDER BY total DESC LIMIT 10`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT c.id_comanda, c.fecha_registro, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}
+         GROUP BY c.id_comanda, c.fecha_registro ORDER BY c.fecha_registro DESC LIMIT 7`, ...params),
+    ])
+
+    // Los BigInt/Decimal de MySQL se normalizan a Number
+    const num = (v) => v == null ? 0 : Number(v)
+    res.json({
+      totales: { ingresos: num(totales[0]?.ingresos), num_comandas: num(totales[0]?.num) },
+      por_metodo:   porMetodo.map(r => ({ metodo: r.metodo, cantidad: num(r.cantidad), total: num(r.total) })),
+      por_categoria: porCategoria.map(r => ({ categoria: r.categoria, total: num(r.total) })),
+      ranking_productos: ranking.map(r => ({ id_producto: num(r.id_producto), nombre: r.nombre_producto, veces: num(r.veces), ingresos: num(r.ingresos) })),
+      por_mesero:   porMesero.map(r => ({ nombre: r.nombre, total: num(r.total) })),
+      tendencia:    tendencia.map(r => ({ id_comanda: num(r.id_comanda), total: num(r.total), fecha: r.fecha_registro })),
+    })
+  } catch (error) {
+    console.error('Error en resumen de ventas:', error)
+    res.status(500).json({ error: 'Error al generar el resumen de ventas' })
   }
 })
 

@@ -10,13 +10,22 @@
 
     <!-- Filtros -->
     <div class="filtros-barra">
-      <input v-model="filtroBusqueda" class="campo" placeholder="🔍 Buscar por nombre..." style="max-width: 300px" />
+      <input v-model="filtroBusqueda" class="campo" placeholder="Buscar por nombre..." style="max-width: 300px" />
       <select v-model="filtroEstado" class="campo" style="max-width: 180px">
         <option value="">Todos los estados</option>
         <option value="activo">Activos</option>
         <option value="planificado">Planificados</option>
-        <option value="finalizado">Finalizados</option>
       </select>
+    </div>
+
+    <!-- Pestañas: eventos actuales vs pasados (finalizados) -->
+    <div class="tabs-eventos">
+      <button class="tab-evento" :class="{ activo: pestana === 'actuales' }" @click="cambiarPestana('actuales')" type="button">
+        Actuales <span class="tab-contador">{{ eventosActuales.length }}</span>
+      </button>
+      <button class="tab-evento" :class="{ activo: pestana === 'pasados' }" @click="cambiarPestana('pasados')" type="button">
+        Pasados <span class="tab-contador">{{ eventosPasados.length }}</span>
+      </button>
     </div>
 
     <!-- Notificacion Sistema Automatico -->
@@ -37,11 +46,12 @@
 
     <!-- Lista de Eventos -->
     <div class="grid-eventos" v-if="!cargando">
-      <div v-if="!eventosFiltrados.length" class="estado-vacio">
-        <p>No se encontraron eventos.</p>
+      <div v-if="!listaActiva.length" class="estado-vacio">
+        <p v-if="pestana === 'pasados'">No hay eventos pasados.</p>
+        <p v-else>No hay eventos actuales.</p>
       </div>
-      
-      <div v-for="evento in eventosFiltrados" :key="evento.id_evento" class="tarjeta tarjeta-evento fade-in">
+
+      <div v-for="evento in eventosPaginados" :key="evento.id_evento" class="tarjeta tarjeta-evento fade-in">
         <div class="portada-contenedor">
           <img v-if="evento.url_portada" :src="evento.url_portada" class="portada-img" alt="Portada Evento" />
           <div v-else class="portada-placeholder">Sin Portada</div>
@@ -67,6 +77,13 @@
     <div v-else class="cargando">
       <p>Cargando eventos...</p>
     </div>
+
+    <Paginacion
+      v-if="!cargando && listaActiva.length"
+      :total="listaActiva.length" :pagina="pagina" :limite="limite"
+      @update:pagina="pagina = $event"
+      @update:limite="l => { limite = l; pagina = 1 }"
+    />
 
     <!-- Modal Formulario -->
     <Teleport to="body">
@@ -155,7 +172,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 
 // Estado
@@ -214,6 +232,25 @@ const eventosFiltrados = computed(() => {
     return matchNombre && matchEstado
   })
 })
+
+// Pestañas Actuales / Pasados (finalizados) + paginación
+const pestana = ref('actuales')
+const pagina = ref(1)
+const limite = ref(12)
+
+const eventosActuales = computed(() => eventosFiltrados.value.filter(e => e.estado !== 'finalizado'))
+const eventosPasados  = computed(() => eventosFiltrados.value.filter(e => e.estado === 'finalizado'))
+const listaActiva = computed(() => pestana.value === 'pasados' ? eventosPasados.value : eventosActuales.value)
+const eventosPaginados = computed(() => {
+  const ini = (pagina.value - 1) * limite.value
+  return listaActiva.value.slice(ini, ini + limite.value)
+})
+
+function cambiarPestana(p) {
+  pestana.value = p
+  pagina.value = 1
+}
+watch([filtroBusqueda, filtroEstado], () => { pagina.value = 1 })
 
 // Utilidades
 function formatearFecha(fechaStr) {
@@ -366,6 +403,47 @@ async function confirmarCambioEstado() {
 .vista-titulo { font-size: 1.4rem; margin-bottom: 0.2rem; }
 .vista-subtitulo { color: var(--texto-secundario); font-size: 0.85rem; }
 .filtros-barra { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+
+/* Pestañas Actuales / Pasados */
+.tabs-eventos {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--borde-sutil);
+  padding-bottom: 2px;
+}
+.tab-evento {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--texto-secundario);
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-evento:hover { color: var(--texto-principal); }
+.tab-evento.activo {
+  color: var(--rosa-acento);
+  border-bottom-color: var(--rosa-acento);
+}
+.tab-contador {
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--fondo-tarjeta-alt);
+  color: var(--texto-secundario);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.tab-evento.activo .tab-contador {
+  background: var(--rosa-acento);
+  color: #fff;
+}
 
 /* Grid de Eventos */
 .grid-eventos {

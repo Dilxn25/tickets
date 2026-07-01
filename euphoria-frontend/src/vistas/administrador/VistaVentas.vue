@@ -62,6 +62,12 @@
           </tbody>
         </table>
       </div>
+
+      <Paginacion
+        :total="ventasTotal" :pagina="pagina" :limite="limite"
+        @update:pagina="irPagina"
+        @update:limite="cambiarLimite"
+      />
     </template>
 
     <!-- Detalle de venta -->
@@ -216,8 +222,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
+import Paginacion from '@/componentes/comunes/Paginacion.vue'
 
 const ventas = ref([])
 const ventaSeleccionada = ref(null)
@@ -227,121 +235,100 @@ const filtroFecha = ref('')
 const cargando = ref(false)
 const actualizando = ref(false)
 const cambiandoEstado = ref(false)
+
+// Paginación en servidor
+const pagina = ref(1)
+const limite = ref(20)
+const ventasTotal = ref(0)
 let intervaloActualizacion = null
 
 onMounted(() => {
   cargarVentas()
-  // Polling cada 5 segundos para actualización en tiempo real
+  // Refresco en vivo (endpoint paginado y ligero)
   intervaloActualizacion = setInterval(() => {
     actualizarVentas()
-  }, 5000)
+  }, 15000)
 })
 
 onUnmounted(() => {
   if (intervaloActualizacion) clearInterval(intervaloActualizacion)
 })
 
-async function cargarVentas() {
-  cargando.value = true
-  try {
-    const res = await servicioComandas.listarTodas()
-    const comandas = Array.isArray(res) ? res : (Array.isArray(res.data) ? res.data : res || [])
-    
-    // Mapear comandas al formato de ventas con todos los detalles
-    ventas.value = comandas.map(cmd => ({
-      id_comanda: cmd.id_comanda,
-      cliente_nombre: cmd.usuario_comanda_id_clienteTousuario ? 
-        `${cmd.usuario_comanda_id_clienteTousuario.nombres} ${cmd.usuario_comanda_id_clienteTousuario.apellidos}`.trim() : 
-        'Cliente Anónimo',
-      cliente_id: cmd.id_cliente,
-      mesero_nombre: cmd.usuario_comanda_id_meseroTousuario?.nombres || 'No asignado',
-      mesero_id: cmd.id_mesero,
-      monto_total: cmd.detalle_comanda.reduce((sum, d) => sum + parseFloat(d.subtotal || 0), 0),
-      metodo_pago: cmd.metodo_pago || 'Efectivo',
-      estado: cmd.estado_despacho || 'Pendiente',
-      fecha_comanda: cmd.fecha_registro,
-      monto_recibido: cmd.monto_recibido ? parseFloat(cmd.monto_recibido) : null,
-      cambio_dado: cmd.cambio_dado ? parseFloat(cmd.cambio_dado) : null,
-      url_comprobante: cmd.comprobante_url,
-      qr_billetera: cmd.qr_billetera,
-      bancarizacion: cmd.comprobante_url?.split('|TX:')?.[1]?.split('|')?.[0],
-      productos_detalles: cmd.detalle_comanda.map(det => ({
-        id_producto_comanda: det.id_detalle,
-        nombre_producto: det.producto?.nombre_producto || 'Producto desconocido',
-        cantidad: det.cantidad,
-        precio_unitario: parseFloat(det.precio_cobrado),
-        subtotal: parseFloat(det.subtotal)
-      }))
+function mapearComanda(cmd) {
+  return {
+    id_comanda: cmd.id_comanda,
+    cliente_nombre: cmd.usuario_comanda_id_clienteTousuario
+      ? `${cmd.usuario_comanda_id_clienteTousuario.nombres} ${cmd.usuario_comanda_id_clienteTousuario.apellidos}`.trim()
+      : 'Cliente Anónimo',
+    cliente_id: cmd.id_cliente,
+    mesero_nombre: cmd.usuario_comanda_id_meseroTousuario?.nombres || 'No asignado',
+    mesero_id: cmd.id_mesero,
+    monto_total: cmd.detalle_comanda.reduce((sum, d) => sum + parseFloat(d.subtotal || 0), 0),
+    metodo_pago: cmd.metodo_pago || 'Efectivo',
+    estado: cmd.estado_despacho || 'Pendiente',
+    fecha_comanda: cmd.fecha_registro,
+    monto_recibido: cmd.monto_recibido ? parseFloat(cmd.monto_recibido) : null,
+    cambio_dado: cmd.cambio_dado ? parseFloat(cmd.cambio_dado) : null,
+    url_comprobante: cmd.comprobante_url,
+    qr_billetera: cmd.qr_billetera,
+    bancarizacion: cmd.comprobante_url?.split('|TX:')?.[1]?.split('|')?.[0],
+    productos_detalles: cmd.detalle_comanda.map(det => ({
+      id_producto_comanda: det.id_detalle,
+      nombre_producto: det.producto?.nombre_producto || 'Producto desconocido',
+      cantidad: det.cantidad,
+      precio_unitario: parseFloat(det.precio_cobrado),
+      subtotal: parseFloat(det.subtotal)
     }))
+  }
+}
+
+function construirParams() {
+  const params = new URLSearchParams()
+  params.append('pagina', pagina.value)
+  params.append('limite', limite.value)
+  if (filtroEstado.value) params.append('estado', filtroEstado.value)
+  if (filtroFecha.value) params.append('fecha', filtroFecha.value)
+  return params.toString()
+}
+
+async function cargarVentas(silencioso = false) {
+  if (silencioso) actualizando.value = true
+  else cargando.value = true
+  try {
+    const res = await clienteHttp.get(`/comandas?${construirParams()}`)
+    ventas.value = (res.datos || []).map(mapearComanda)
+    ventasTotal.value = res.total || 0
+    if (ventaSeleccionada.value) {
+      const act = ventas.value.find(v => v.id_comanda === ventaSeleccionada.value.id_comanda)
+      if (act) ventaSeleccionada.value = act
+    }
   } catch (error) {
     console.error('Error cargando ventas:', error)
   } finally {
     cargando.value = false
-  }
-}
-
-async function actualizarVentas() {
-  if (cargando.value) return
-  
-  actualizando.value = true
-  try {
-    const res = await servicioComandas.listarTodas()
-    const comandas = Array.isArray(res) ? res : (Array.isArray(res.data) ? res.data : res || [])
-    
-    // Mapear comandas nuevamente
-    const nuevasVentas = comandas.map(cmd => ({
-      id_comanda: cmd.id_comanda,
-      cliente_nombre: cmd.usuario_comanda_id_clienteTousuario ? 
-        `${cmd.usuario_comanda_id_clienteTousuario.nombres} ${cmd.usuario_comanda_id_clienteTousuario.apellidos}`.trim() : 
-        'Cliente Anónimo',
-      cliente_id: cmd.id_cliente,
-      mesero_nombre: cmd.usuario_comanda_id_meseroTousuario?.nombres || 'No asignado',
-      mesero_id: cmd.id_mesero,
-      monto_total: cmd.detalle_comanda.reduce((sum, d) => sum + parseFloat(d.subtotal || 0), 0),
-      metodo_pago: cmd.metodo_pago || 'Efectivo',
-      estado: cmd.estado_despacho || 'Pendiente',
-      fecha_comanda: cmd.fecha_registro,
-      monto_recibido: cmd.monto_recibido ? parseFloat(cmd.monto_recibido) : null,
-      cambio_dado: cmd.cambio_dado ? parseFloat(cmd.cambio_dado) : null,
-      url_comprobante: cmd.comprobante_url,
-      qr_billetera: cmd.qr_billetera,
-      bancarizacion: cmd.comprobante_url?.split('|TX:')?.[1]?.split('|')?.[0],
-      productos_detalles: cmd.detalle_comanda.map(det => ({
-        id_producto_comanda: det.id_detalle,
-        nombre_producto: det.producto?.nombre_producto || 'Producto desconocido',
-        cantidad: det.cantidad,
-        precio_unitario: parseFloat(det.precio_cobrado),
-        subtotal: parseFloat(det.subtotal)
-      }))
-    }))
-    
-    ventas.value = nuevasVentas
-    
-    // Actualizar si hay venta seleccionada
-    if (ventaSeleccionada.value) {
-      const ventaActualizada = nuevasVentas.find(v => v.id_comanda === ventaSeleccionada.value.id_comanda)
-      if (ventaActualizada) ventaSeleccionada.value = ventaActualizada
-    }
-  } catch (error) {
-    console.error('Error actualizando ventas:', error)
-  } finally {
     actualizando.value = false
   }
 }
 
+function irPagina(n) { pagina.value = n; cargarVentas() }
+function cambiarLimite(l) { limite.value = l; pagina.value = 1; cargarVentas() }
+
+// Al cambiar filtros de servidor, volver a la página 1 y recargar
+watch([filtroEstado, filtroFecha], () => { pagina.value = 1; cargarVentas() })
+
+async function actualizarVentas() {
+  if (cargando.value) return
+  await cargarVentas(true)
+}
+
 const ventasFiltradas = computed(() => {
-  return ventas.value.filter(venta => {
-    const coincideBusqueda = !busqueda.value || 
-      venta.id_comanda.toString().includes(busqueda.value) ||
-      (venta.cliente_nombre?.toLowerCase() || '').includes(busqueda.value.toLowerCase())
-    
-    const coincideEstado = !filtroEstado.value || venta.estado === filtroEstado.value
-    
-    const coincideFecha = !filtroFecha.value || 
-      new Date(venta.fecha_comanda).toISOString().split('T')[0] === filtroFecha.value
-    
-    return coincideBusqueda && coincideEstado && coincideFecha
-  })
+  // estado y fecha se filtran en el servidor; aquí solo la búsqueda por texto de la página actual
+  if (!busqueda.value) return ventas.value
+  const q = busqueda.value.toLowerCase()
+  return ventas.value.filter(venta =>
+    venta.id_comanda.toString().includes(busqueda.value) ||
+    (venta.cliente_nombre?.toLowerCase() || '').includes(q)
+  )
 })
 
 function abrirDetalle(venta) {

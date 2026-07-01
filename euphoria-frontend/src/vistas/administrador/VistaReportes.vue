@@ -444,7 +444,7 @@
             <label class="etiqueta-filtro">Hasta</label>
             <input type="date" class="input-filtro" v-model="filtroHasta" @change="cambioFechaManual" />
             <button v-if="filtroDesde || filtroHasta" class="btn-limpiar-filtro" @click="limpiarFiltroFechas">Limpiar</button>
-            <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
+            <button class="btn-cerrar-fs" @click="modalActivo = null">Cerrar</button>
           </div>
         </div>
         <div class="modal-fs-body">
@@ -484,6 +484,11 @@
               </tbody>
             </table>
           </div>
+          <Paginacion
+            :total="ventasTotal" :pagina="ventasPagina" :limite="ventasLimite"
+            @update:pagina="irPaginaVentas"
+            @update:limite="l => { ventasLimite = l; cambiarLimiteVentas() }"
+          />
         </div>
       </div>
     </Teleport>
@@ -718,6 +723,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import Paginacion from '@/componentes/comunes/Paginacion.vue'
 
 // Umbral único de stock bajo para reposición, usado tanto en la alerta de
 // Inventario Crítico como en el indicador de la tabla de ranking (evita
@@ -758,6 +764,12 @@ const ventas = ref([])
 const filtroDesde = ref('')
 const filtroHasta = ref('')
 const presetActivo = ref('todo')
+
+// Paginación de la tabla de ventas
+const ventasPagina = ref(1)
+const ventasLimite = ref(20)
+const ventasTotal = ref(0)
+const ventasPaginas = ref(1)
 
 function aplicarFiltros() {
   // Si el rango está invertido, se corrige automáticamente
@@ -1230,10 +1242,10 @@ function exportarPDF() {
 onMounted(() => {
   cargarReportes()
   cargarReporteBilletera()
-  // Sincronización automática enriquecida y en vivo cada 4 segundos
+  // Sincronización automática en vivo (endpoints ligeros/agregados)
   intervaloSync = setInterval(() => {
     cargarReportes(true) // modo silencioso para no parpadear la pantalla
-  }, 4000)
+  }, 15000)
 })
 
 onUnmounted(() => {
@@ -1285,182 +1297,80 @@ async function cargarReportes(silencioso = false) {
       }
     } catch (e) { console.warn(e) }
 
-    // 4. Comandas/Ventas
+    // 4. Ventas: agregados en SQL (rapido) + lista paginada
     try {
       const params = new URLSearchParams()
       if (filtroDesde.value) params.append('desde', filtroDesde.value)
       if (filtroHasta.value) params.append('hasta', filtroHasta.value)
-      const query = params.toString() ? `?${params.toString()}` : ''
-      const respComandas = await clienteHttp.get(`/comandas${query}`)
-      // Las comandas Canceladas NO cuentan como ventas ni en los totales
-      const resComandas = respComandas.filter(c => c.estado_despacho !== 'Cancelada')
+      const qs = params.toString() ? `?${params.toString()}` : ''
 
-      let ingresos = 0
-      const listado = resComandas.map(c => {
-        const subtotal = c.detalle_comanda.reduce((acc, d) => acc + parseFloat(d.subtotal), 0)
-        ingresos += subtotal
-        return { ...c, subtotal }
+      const resumen = await clienteHttp.get(`/comandas/resumen-ventas${qs}`)
+
+      stats.value.ingresosTotales = resumen.totales.ingresos
+
+      // Metodos de pago
+      const met = { 'Efectivo': 0, 'Transferencia QR': 0, 'Billetera': 0 }
+      conteoEfectivo.value = 0; conteoQR.value = 0; conteoBilletera.value = 0
+      resumen.por_metodo.forEach(m => {
+        met[m.metodo] = m.total
+        if (m.metodo === 'Efectivo') conteoEfectivo.value = m.cantidad
+        else if (m.metodo === 'Transferencia QR') conteoQR.value = m.cantidad
+        else if (m.metodo === 'Billetera') conteoBilletera.value = m.cantidad
       })
-      
-      ventas.value = listado.sort((a,b) => new Date(b.fecha_registro) - new Date(a.fecha_registro))
-      stats.value.ingresosTotales = ingresos
+      montoEfectivo.value = met['Efectivo'] || 0
+      montoQR.value = met['Transferencia QR'] || 0
+      montoBilletera.value = met['Billetera'] || 0
+      const totalMet = (montoEfectivo.value + montoQR.value + montoBilletera.value) || 1
+      porcentajeEfectivo.value = Math.round(montoEfectivo.value / totalMet * 100)
+      porcentajeQR.value = Math.round(montoQR.value / totalMet * 100)
+      porcentajeBilletera.value = Math.round(montoBilletera.value / totalMet * 100)
+      const coloresMetodos = { 'Efectivo': 'var(--color-exito)', 'Transferencia QR': 'var(--color-info)', 'Billetera': 'var(--morado-brillante)' }
+      datosMetodos.value = Object.keys(met).map(n => ({ nombre: n, total: met[n] }))
+        .map(m => ({ ...m, porcentaje: Math.round(m.total / totalMet * 100), color: coloresMetodos[m.nombre] || 'var(--rosa-acento)' }))
+        .sort((a, b) => b.total - a.total)
 
-      // ---- CÓMPUTO DE GRÁFICOS PREMIUM EN TIEMPO REAL ----
-      const categoriaTotales = {}
-      const metodosTotales = {
-        'Efectivo': 0,
-        'Transferencia QR': 0,
-        'Billetera': 0
-      }
-      let granTotalCobrado = 0
-      conteoEfectivo.value = 0
-      conteoQR.value = 0
-      conteoBilletera.value = 0
+      // Categorias
+      const coloresCategorias = ['var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-info)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-error)']
+      const maxCat = Math.max(...resumen.por_categoria.map(c => c.total), 1)
+      datosCategorias.value = resumen.por_categoria.map((c, idx) => ({
+        nombre: c.categoria || 'Otros', total: c.total,
+        porcentaje: Math.round(c.total / maxCat * 100),
+        color: coloresCategorias[idx % coloresCategorias.length]
+      }))
 
-      ventas.value.forEach(v => {
-        const montoComanda = Number(v.subtotal) || 0
-        granTotalCobrado += montoComanda
-
-        // Agrupar por métodos de pago y contar transacciones
-        const metodo = v.metodo_pago || 'Efectivo'
-        if (metodosTotales[metodo] !== undefined) {
-          metodosTotales[metodo] += montoComanda
-        } else {
-          metodosTotales[metodo] = montoComanda
-        }
-
-        if (metodo === 'Efectivo') {
-          conteoEfectivo.value++
-        } else if (metodo === 'Transferencia QR') {
-          conteoQR.value++
-        } else if (metodo === 'Billetera') {
-          conteoBilletera.value++
-        }
-
-        // Agrupar por categorías y sumar cantidades vendidas e ingresos de productos
-        v.detalle_comanda.forEach(det => {
-          const cat = productosMap[det.id_producto] || 'Otros'
-          const sub = Number(det.subtotal) || 0
-          const cant = Number(det.cantidad) || 0
-          
-          categoriaTotales[cat] = (categoriaTotales[cat] || 0) + sub
-          
-          if (productosVentasCount[det.id_producto] !== undefined) {
-            productosVentasCount[det.id_producto] += cant
-            productosIngresos[det.id_producto] += sub
-          } else {
-            productosVentasCount[det.id_producto] = cant
-            productosIngresos[det.id_producto] = sub
-          }
-        })
-      })
-
-      // Generar ranking de productos ordenados de más vendidos a menos vendidos
+      // Ranking de productos (catalogo + ventas)
+      const vProd = {}, iProd = {}
+      resumen.ranking_productos.forEach(r => { vProd[r.id_producto] = r.veces; iProd[r.id_producto] = r.ingresos })
       listadoProductosRanking.value = resProductosRaw.map(p => ({
         ...p,
-        vecesVendido: productosVentasCount[p.id_producto] || 0,
-        ingresosGenerados: productosIngresos[p.id_producto] || 0
+        vecesVendido: vProd[p.id_producto] || 0,
+        ingresosGenerados: iProd[p.id_producto] || 0
       })).sort((a, b) => b.vecesVendido - a.vecesVendido)
 
-      // Formatear y calcular porcentajes de Ventas por Categoría
-      const catArray = Object.keys(categoriaTotales).map(catName => ({
-        nombre: catName,
-        total: categoriaTotales[catName]
-      }))
-      const maxCatVal = Math.max(...catArray.map(c => c.total), 1)
-      const coloresCategorias = ['var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-info)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-alerta)', 'var(--color-error)']
-      
-      datosCategorias.value = catArray.map((c, idx) => ({
-        ...c,
-        porcentaje: Math.round((c.total / maxCatVal) * 100),
-        color: coloresCategorias[idx % coloresCategorias.length]
-      })).sort((a, b) => b.total - a.total)
-
-      // ---- CÓMPUTO DE VENTAS POR MESERO REAL EN TIEMPO REAL ----
-      const meserosVentas = {}
-      ventas.value.forEach(v => {
-        const nombreMesero = v.usuario_comanda_id_meseroTousuario 
-          ? `${v.usuario_comanda_id_meseroTousuario.nombres} ${v.usuario_comanda_id_meseroTousuario.apellidos || ''}`.trim()
-          : 'Desconocido'
-        const monto = Number(v.subtotal) || 0
-        meserosVentas[nombreMesero] = (meserosVentas[nombreMesero] || 0) + monto
-      })
-
-      const meserosArray = Object.keys(meserosVentas).map(nombre => ({
-        nombre,
-        total: meserosVentas[nombre]
-      })).sort((a, b) => b.total - a.total)
-
-      const maxMeseroVal = Math.max(...meserosArray.map(m => m.total), 1)
-      const coloresMeseros = ['var(--color-info)', 'var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-alerta)', 'var(--color-error)']
-      
-      datosMeseros.value = meserosArray.map((m, idx) => ({
-        ...m,
-        porcentaje: Math.round((m.total / maxMeseroVal) * 100),
+      // Meseros
+      const coloresMeseros = ['var(--color-info)', 'var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-error)']
+      const maxMes = Math.max(...resumen.por_mesero.map(m => m.total), 1)
+      datosMeseros.value = resumen.por_mesero.map((m, idx) => ({
+        nombre: m.nombre, total: m.total,
+        porcentaje: Math.round(m.total / maxMes * 100),
         color: coloresMeseros[idx % coloresMeseros.length]
       }))
 
-      // Rellenar datos exactos para los anillos concéntricos circulares premium
-      montoEfectivo.value = metodosTotales['Efectivo'] || 0
-      montoQR.value = metodosTotales['Transferencia QR'] || 0
-      montoBilletera.value = metodosTotales['Billetera'] || 0
-      
-      const totalMetodos = granTotalCobrado || 1
-      porcentajeEfectivo.value = Math.round((montoEfectivo.value / totalMetodos) * 100)
-      porcentajeQR.value = Math.round((montoQR.value / totalMetodos) * 100)
-      porcentajeBilletera.value = Math.round((montoBilletera.value / totalMetodos) * 100)
-
-      // Formatear y calcular porcentajes de Distribución de Métodos de Pago tradicional
-      const metArray = Object.keys(metodosTotales).map(metName => ({
-        nombre: metName,
-        total: metodosTotales[metName]
-      }))
-      const coloresMetodos = {
-        'Efectivo': 'var(--color-exito)',
-        'Transferencia QR': 'var(--color-info)',
-        'Billetera': 'var(--morado-brillante)'
-      }
-
-      datosMetodos.value = metArray.map(m => ({
-        ...m,
-        porcentaje: Math.round((m.total / totalMetodos) * 100),
-        color: coloresMetodos[m.nombre] || 'var(--rosa-acento)'
-      })).sort((a, b) => b.total - a.total)
-
-      // Generar puntos vectoriales SVG para el gráfico bidimensional de tendencia de ventas (últimas 7 comandas)
-      const ultimasComandas = [...ventas.value].slice(0, 7).reverse()
-      if (ultimasComandas.length > 0) {
-        const maxSub = Math.max(...ultimasComandas.map(c => c.subtotal), 1)
-        const width = 360
-        const height = 150
-        const padding = 20
-        
-        let pathD = ''
-        let fillD = ''
-        
-        const listadoConCoords = ultimasComandas.map((c, idx) => {
-          const x = padding + (idx * (width - 2 * padding)) / Math.max(ultimasComandas.length - 1, 1)
+      // Tendencia (grafico 2D)
+      const ultimas = [...resumen.tendencia].reverse().map(t => ({ id_comanda: t.id_comanda, subtotal: t.total, fecha_registro: t.fecha }))
+      if (ultimas.length > 0) {
+        const maxSub = Math.max(...ultimas.map(c => c.subtotal), 1)
+        const width = 360, height = 150, padding = 20
+        let pathD = '', fillD = ''
+        const coords = ultimas.map((c, idx) => {
+          const x = padding + (idx * (width - 2 * padding)) / Math.max(ultimas.length - 1, 1)
           const y = height - padding - (c.subtotal / maxSub) * (height - 2 * padding)
-          
-          if (idx === 0) {
-            pathD = `M ${x} ${y}`
-            fillD = `M ${x} ${height - padding} L ${x} ${y}`
-          } else {
-            pathD += ` L ${x} ${y}`
-            fillD += ` L ${x} ${y}`
-          }
-          if (idx === ultimasComandas.length - 1) {
-            fillD += ` L ${x} ${height - padding} Z`
-          }
-          
-          return {
-            ...c,
-            x,
-            y
-          }
+          if (idx === 0) { pathD = `M ${x} ${y}`; fillD = `M ${x} ${height - padding} L ${x} ${y}` }
+          else { pathD += ` L ${x} ${y}`; fillD += ` L ${x} ${y}` }
+          if (idx === ultimas.length - 1) fillD += ` L ${x} ${height - padding} Z`
+          return { ...c, x, y }
         })
-        
-        trendComandas.value = listadoConCoords
+        trendComandas.value = coords
         salesTrendPoints.value = pathD
         salesTrendFillPoints.value = fillD
       } else {
@@ -1469,8 +1379,10 @@ async function cargarReportes(silencioso = false) {
         salesTrendFillPoints.value = ''
       }
 
-    } catch (e) { 
-      console.warn('Error al calcular comandas y gráficos:', e) 
+      // Lista de ventas (paginada)
+      await cargarVentasPagina()
+    } catch (e) {
+      console.warn('Error al cargar resumen/graficos:', e)
     }
 
   } catch (error) {
@@ -1478,6 +1390,38 @@ async function cargarReportes(silencioso = false) {
   } finally {
     cargando.value = false
   }
+}
+
+// Carga UNA página de la tabla de ventas (no trae todo)
+async function cargarVentasPagina() {
+  try {
+    const params = new URLSearchParams()
+    if (filtroDesde.value) params.append('desde', filtroDesde.value)
+    if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    params.append('pagina', ventasPagina.value)
+    params.append('limite', ventasLimite.value)
+    const res = await clienteHttp.get(`/comandas?${params.toString()}`)
+    const datos = res.datos || []
+    ventas.value = datos.map(c => ({
+      ...c,
+      subtotal: (c.detalle_comanda || []).reduce((a, d) => a + parseFloat(d.subtotal), 0)
+    }))
+    ventasTotal.value = res.total || 0
+    ventasPaginas.value = res.paginas || 1
+  } catch (e) {
+    console.warn('Error cargando página de ventas:', e)
+  }
+}
+
+function irPaginaVentas(n) {
+  if (n < 1 || n > ventasPaginas.value) return
+  ventasPagina.value = n
+  cargarVentasPagina()
+}
+
+function cambiarLimiteVentas() {
+  ventasPagina.value = 1
+  cargarVentasPagina()
 }
 
 async function cargarReporteBilletera() {
@@ -1765,6 +1709,45 @@ function formatearFecha(isoStr) {
   gap: 8px;
   flex-wrap: wrap;
   margin-left: auto;
+}
+
+/* Paginación */
+.paginacion-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 4px;
+}
+.paginacion-info {
+  color: var(--texto-secundario);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.paginacion-controles {
+  display: flex;
+  gap: 8px;
+}
+.btn-pagina {
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-sutil);
+  color: var(--texto-principal);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-pagina:hover:not(:disabled) {
+  border-color: var(--borde-activo);
+  background: var(--morado-medio);
+}
+.btn-pagina:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 @media (max-width: 768px) {
   .filtro-rango-personalizado { margin-left: 0; width: 100%; }

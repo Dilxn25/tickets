@@ -31,7 +31,7 @@
           <tr v-if="!usuariosFiltrados.length">
             <td colspan="6" class="celda-vacia">Sin resultados</td>
           </tr>
-          <tr v-for="u in usuariosFiltrados" :key="u.id_usuario" class="fila-tabla">
+          <tr v-for="u in listaPaginada" :key="u.id_usuario" class="fila-tabla">
             <td>
               <div class="usuario-celda">
                 <div class="avatar-tabla">{{ iniciales(u) }}</div>
@@ -58,6 +58,14 @@
         </tbody>
       </table>
     </div>
+
+    <Paginacion
+      :total="usuariosFiltrados.length"
+      :pagina="pagina"
+      :limite="limite"
+      @update:pagina="pagina = $event"
+      @update:limite="l => { limite = l; pagina = 1 }"
+    />
 
     <!-- Modal Crear / Editar -->
     <Teleport to="body">
@@ -175,10 +183,12 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { servicioUsuarios } from '@/servicios-api/servicio-usuarios.js'
 import { servicioRoles }    from '@/servicios-api/servicio-roles.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+import Paginacion from '@/componentes/comunes/Paginacion.vue'
 
 const tiendaAuth = useTiendaAutenticacion()
 
 const busqueda     = ref(''); const filtroRol = ref(''); const filtroEstado = ref(''); const cargando = ref(false)
+const pagina       = ref(1);  const limite = ref(20)
 const usuarios     = ref([])
 const rolesDb      = ref([])
 const modalAbierto = ref(false); const usuarioEditando  = ref(null)
@@ -209,8 +219,14 @@ const usuariosFiltrados = computed(() => {
   })
 })
 
+const listaPaginada = computed(() => {
+  const ini = (pagina.value - 1) * limite.value
+  return usuariosFiltrados.value.slice(ini, ini + limite.value)
+})
+
 let debounceFiltros = null
 watch([busqueda, filtroRol, filtroEstado], () => {
+  pagina.value = 1
   clearTimeout(debounceFiltros)
   debounceFiltros = setTimeout(() => { cargarUsuarios() }, 350)
 })

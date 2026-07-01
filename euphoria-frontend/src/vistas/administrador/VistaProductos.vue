@@ -26,7 +26,7 @@
     <!-- Cuadrícula -->
     <div class="productos-grid">
       <div v-if="!productosFiltrados.length" class="vacio">No hay productos que coincidan</div>
-      <div v-for="p in productosFiltrados" :key="p.id_producto" class="tarjeta-producto">
+      <div v-for="p in listaPaginada" :key="p.id_producto" class="tarjeta-producto">
         <div class="producto-imagen">
           <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
           <div v-else class="imagen-placeholder">IMG</div>
@@ -52,6 +52,10 @@
         </div>
       </div>
     </div>
+
+    <Paginacion :total="productosFiltrados.length" :pagina="pagina" :limite="limite"
+       @update:pagina="pagina = $event"
+       @update:limite="l => { limite = l; pagina = 1 }" />
 
     <!-- Modal -->
     <Teleport to="body">
@@ -135,8 +139,9 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
+import Paginacion from '@/componentes/comunes/Paginacion.vue'
 
 const busqueda=ref('');const filtroCategoria=ref('');const soloPromos=ref(false);const cargando=ref(false)
 const modalAbierto=ref(false);const productoEditando=ref(null)
@@ -170,6 +175,16 @@ const productosFiltrados=computed(()=>{
     (p.descripcion || '').toLowerCase().includes(q)
   )
 }) // Categoría y promo se filtran en el backend; la búsqueda de texto se filtra localmente
+
+const pagina = ref(1)
+const limite = ref(20)
+
+const listaPaginada = computed(() => {
+  const ini = (pagina.value - 1) * limite.value
+  return productosFiltrados.value.slice(ini, ini + limite.value)
+})
+
+watch([busqueda, filtroCategoria, soloPromos], () => { pagina.value = 1 })
 
 function manejarArchivo(e) {
   archivoImagen.value = e.target.files[0]
