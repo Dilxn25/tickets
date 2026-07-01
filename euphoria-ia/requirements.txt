@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+lightgbm
+joblib
+fastapi
+uvicorn
+pydantic
+# Solo si entrenas con la BD nueva (MySQL/Prisma):
+sqlalchemy
+pymysql

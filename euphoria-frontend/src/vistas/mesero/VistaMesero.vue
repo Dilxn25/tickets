@@ -188,7 +188,10 @@
           <div v-for="(item, index) in carrito" :key="index" class="item-carrito">
             <div class="item-info">
               <span class="item-nombre">{{ item.producto.nombre_producto }}</span>
-              <span class="item-precio">Bs. {{ item.producto.precio_base }}</span>
+              <span class="item-precio">
+                Bs. {{ precioItem(item).toFixed(2) }}
+                <span v-if="item.precio != null" class="etiqueta-ia" title="Precio sugerido por IA">IA</span>
+              </span>
             </div>
             <div class="item-controles">
               <button @click="restar(index)">-</button>
@@ -211,9 +214,13 @@
               class="chip-sugerencia"
               @click="agregarSugerencia(s)"
               type="button"
-              :title="`Confianza ${(s.probabilidad * 100).toFixed(0)}%`"
+              :title="`${(s.probabilidad * 100).toFixed(0)}% de probabilidad de que la acepten a este precio`"
             >
               <span class="chip-nombre">{{ s.nombre }}</span>
+              <span class="chip-meta">
+                <span class="chip-prob">{{ (s.probabilidad * 100).toFixed(0) }}%</span>
+                <span class="chip-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
+              </span>
               <span class="chip-mas">+</span>
             </button>
           </div>
@@ -676,8 +683,37 @@ const productosFiltrados = computed(() => {
 })
 
 const totalCarrito = computed(() => {
-  return carrito.value.reduce((acc, item) => acc + (item.producto.precio_base * item.cantidad), 0)
+  return carrito.value.reduce((acc, item) => acc + (precioItem(item) * item.cantidad), 0)
 })
+
+// Precio efectivo de un item (dinámico si se fijó; si no, el precio base)
+function precioItem(item) {
+  return item.precio != null ? item.precio : Number(item.producto.precio_base)
+}
+
+// Redondea a un precio "atractivo": termina en .90 / .40 / .50 / .60 / .00 (un decimal).
+// Ej: 13.45 -> 13.50, 12.87 -> 12.90, 12.34 -> 12.40.
+function precioAtractivo(p) {
+  const entero = Math.floor(p)
+  const dec = p - entero
+  const opciones = [0, 0.4, 0.5, 0.6, 0.9]
+  let mejor = 0, dmin = Infinity
+  for (const o of opciones) {
+    const d = Math.abs(dec - o)
+    if (d < dmin) { dmin = d; mejor = o }
+  }
+  return Math.round((entero + mejor) * 100) / 100
+}
+
+// Precio dinámico sugerido para una recomendación, dentro de un rango automático (±) del base.
+// Más probabilidad de aceptación -> se sugiere cobrar más cerca del máximo; menos -> pequeño descuento.
+function precioSugerido(s) {
+  const prod = productos.value.find(p => p.id_producto === s.id_producto)
+  if (!prod) return 0
+  const base = Number(prod.precio_base)
+  const min = base * 0.85, max = base * 1.20
+  return precioAtractivo(min + (max - min) * (s.probabilidad || 0))
+}
 
 function agregarAlCarrito(prod) {
   const ex = carrito.value.find(c => c.producto.id_producto === prod.id_producto)
@@ -709,7 +745,14 @@ async function cargarSugerencias() {
 
 function agregarSugerencia(s) {
   const prod = productos.value.find(p => p.id_producto === s.id_producto)
-  if (prod) agregarAlCarrito(prod)
+  if (!prod) return
+  const ex = carrito.value.find(c => c.producto.id_producto === prod.id_producto)
+  if (ex) {
+    ex.cantidad++
+  } else {
+    // Se agrega al precio dinámico sugerido por la IA
+    carrito.value.push({ producto: prod, cantidad: 1, precio: precioSugerido(s) })
+  }
 }
 
 // Recalcular sugerencias cuando cambia la orden (con pequeño debounce)
@@ -833,7 +876,9 @@ async function procesarCobro() {
     const productosOrden = carrito.value.map(c => ({
       id_producto: c.producto.id_producto,
       cantidad: c.cantidad,
-      subtotal: c.producto.precio_base * c.cantidad
+      // precio dinámico (si se fijó desde una sugerencia); el backend lo valida dentro del rango
+      ...(c.precio != null ? { precio_unitario: c.precio } : {}),
+      subtotal: precioItem(c) * c.cantidad
     }))
     
     const res = await servicioComandas.crear({
@@ -1263,6 +1308,36 @@ onUnmounted(() => {
   font-size: 1rem;
   line-height: 1;
   opacity: 0.85;
+}
+.chip-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip-prob {
+  background: rgba(34, 197, 94, 0.18);
+  color: var(--color-exito);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.chip-precio {
+  color: var(--texto-secundario);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.chip-sugerencia:hover .chip-prob { background: rgba(255,255,255,0.25); color: #fff; }
+.chip-sugerencia:hover .chip-precio { color: #fff; }
+.etiqueta-ia {
+  font-size: 0.6rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 .total-carrito {

@@ -278,7 +278,17 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
 
       // Usar el precio de promoción si el producto está en promoción (si no, el precio base)
       const enPromocion = prodBD.estado_promocion && prodBD.precio_promocion != null
-      const precioUnitario = enPromocion ? Number(prodBD.precio_promocion) : Number(prodBD.precio_base)
+      let precioUnitario = enPromocion ? Number(prodBD.precio_promocion) : Number(prodBD.precio_base)
+
+      // Precio dinámico: si el mesero envía un precio ajustado, se acepta SOLO dentro de un
+      // rango seguro (±) del precio base. Fuera de rango se ignora (evita manipulación).
+      if (item.precio_unitario != null) {
+        const base = Number(prodBD.precio_base)
+        const min = base * 0.85
+        const max = base * 1.20
+        const pu = Number(item.precio_unitario)
+        if (!Number.isNaN(pu) && pu >= min && pu <= max) precioUnitario = pu
+      }
 
       const sub = precioUnitario * cantidad
       total_calculado += sub

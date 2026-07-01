@@ -42,6 +42,28 @@
       </div>
     </div>
 
+    <!-- Combos / Promociones recomendadas -->
+    <div v-if="combos.length > 0" class="seccion-combos">
+      <div class="combos-encabezado">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        <div>
+          <h3 class="combos-titulo">Aprovecha con tu billetera</h3>
+          <p class="combos-sub">Combos que suelen pedir juntos, con descuento</p>
+        </div>
+      </div>
+      <div class="combos-scroll">
+        <div v-for="(combo, i) in combos" :key="i" class="tarjeta-combo" @click="agregarCombo(combo)">
+          <div class="combo-badge">-{{ combo.descuento_pct }}%</div>
+          <div class="combo-nombre">{{ combo.nombre }}</div>
+          <div class="combo-precios">
+            <span class="combo-normal">Bs {{ combo.precio_normal.toFixed(2) }}</span>
+            <span class="combo-final">Bs {{ combo.precio_combo.toFixed(2) }}</span>
+          </div>
+          <button class="btn-combo" type="button">Agregar combo</button>
+        </div>
+      </div>
+    </div>
+
     <!-- HERO CAROUSEL: Promociona eventos al estilo E-commerce -->
     <div class="hero-carrusel" v-if="!cargandoEventos && eventos.length > 0">
       <div 
@@ -169,13 +191,20 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const router = useRouter()
 const tienda = useTiendaAutenticacion()
+const tiendaCarrito = useTiendaCarrito()
 const nombreCorto = computed(() => tienda.usuario?.nombres?.split(' ')[0] || 'Invitado')
+
+// Combos / promociones para el inicio
+const combos = ref([])
+const productosCompletos = ref([])
 const eventoActual = ref(null)
 const modalCancelado = ref(false)
 
@@ -210,6 +239,7 @@ async function cargarDatosInicio() {
   // Cargar productos para recomendacion
   try {
     const dataP = await servicioProductos.listar()
+    productosCompletos.value = dataP
     // Si hay muchos, tomamos los primeros 6 para el marquee
     productos.value = dataP.slice(0, 6)
   } catch (error) {
@@ -228,6 +258,23 @@ async function cargarDatosInicio() {
   } finally {
     cargandoBilletera.value = false
   }
+
+  // Cargar combos / promociones (motor de recomendación)
+  try {
+    const res = await clienteHttp.get('/recomendaciones/combos')
+    combos.value = (res.combos || []).slice(0, 4)
+  } catch (e) {
+    combos.value = []
+  }
+}
+
+// Agrega ambos productos del combo al carrito y lleva al carrito
+function agregarCombo(combo) {
+  combo.productos.forEach(p => {
+    const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
+    if (prod) tiendaCarrito.agregarItem(prod)
+  })
+  router.push('/cliente/carrito')
 }
 
 function iniciarCarrusel() {
@@ -306,6 +353,104 @@ onUnmounted(() => {
 .subtitulo { color: rgba(255,255,255,0.5); font-size: 0.95rem; font-weight: 500; }
 
 /* HERO CARRUSEL ESTILO E-COMMERCE */
+/* Combos / Promociones */
+.seccion-combos { margin-bottom: 1.75rem; }
+.combos-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0.9rem;
+  color: var(--rosa-acento);
+}
+.combos-titulo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--texto-principal);
+  margin: 0;
+}
+.combos-sub {
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
+  margin: 2px 0 0 0;
+}
+.combos-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.tarjeta-combo {
+  position: relative;
+  flex: 0 0 190px;
+  scroll-snap-align: start;
+  background: linear-gradient(160deg, var(--fondo-tarjeta-alt), var(--fondo-tarjeta));
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg, 16px);
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tarjeta-combo:hover {
+  transform: translateY(-3px);
+  border-color: var(--borde-activo);
+}
+.combo-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.combo-nombre {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--texto-principal);
+  line-height: 1.3;
+  padding-right: 40px;
+  min-height: 2.4em;
+}
+.combo-precios {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.combo-normal {
+  color: var(--texto-desactivado);
+  text-decoration: line-through;
+  font-size: 0.8rem;
+}
+.combo-final {
+  color: var(--color-exito);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.btn-combo {
+  margin-top: auto;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-hover);
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tarjeta-combo:hover .btn-combo {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  border-color: transparent;
+  color: #fff;
+}
+
 .hero-carrusel {
   position: relative;
   width: 100%;

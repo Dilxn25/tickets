@@ -18,7 +18,7 @@ Start-Sleep -Seconds 1
 
 # Iniciar SERVICIO IA (Recomendaciones) en nueva ventana
 Write-Host "[1] Iniciando Servicio IA / Recomendaciones (puerto 8000)..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\modelo_entrenado'; Write-Host '=== EUPHORIA IA (Recomendaciones) ===' -ForegroundColor Magenta; Write-Host 'http://localhost:8000/docs' -ForegroundColor Green; uvicorn api:app --port 8000"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\euphoria-ia'; Write-Host '=== EUPHORIA IA (Recomendaciones) ===' -ForegroundColor Magenta; Write-Host 'http://localhost:8000/docs' -ForegroundColor Green; uvicorn api:app --port 8000"
 
 Start-Sleep -Seconds 2
 

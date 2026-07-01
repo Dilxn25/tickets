@@ -1,0 +1,16 @@
+{
+  "stock":    { "activa": true },
+  "margen":   { "activa": true, "peso": 0.6 },
+  "temporal": {
+    "activa": true,
+    "boosts": [
+      [3, 23, 4, 1.30],
+      [4, 23, 4, 1.15],
+      [1, 20, 23, 1.20],
+      [2, 20, 23, 1.10]
+    ]
+  },
+  "promo":    { "activa": true, "boost": 1.30 },
+
+  "_comentario": "boosts = [categoria, hora_min, hora_max, factor]. categorias: 1=Cerveza 2=Coctel 3=Botella 4=Mezclador 5=Vino. Editable sin reentrenar."
+}
