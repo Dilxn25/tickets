@@ -5,9 +5,11 @@ node_modules/
 # ---- Variables de entorno / secretos ----
 .env
 .env.*
-!.env.example
 **/.env
 **/.env.*
+# ...pero SÍ subimos las plantillas de ejemplo (sin secretos)
+!.env.example
+!**/.env.example
 
 # ---- Compilados / builds ----
 dist/
@@ -24,6 +26,9 @@ __pycache__/
 venv/
 env/
 .ipynb_checkpoints/
+
+# ---- Backups de base de datos (datos sensibles, NO subir) ----
+generados/backups/
 
 # ---- Logs y temporales ----
 *.log

@@ -5,7 +5,7 @@
 const express = require('express')
 const router = express.Router()
 const prisma = require('../../config/base-de-datos')
-const { verificarToken } = require('../../middlewares/autenticacion')
+const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { generarQRRecarga, generarIDUnico } = require('./qr-utils')
 const QRCode = require('qrcode')
 const bcrypt = require('bcryptjs')
@@ -232,7 +232,7 @@ router.get('/qrs-pago', verificarToken, async (req, res) => {
     }
 
     // Asegurar los datos del QR usando JWT para que no puedan ser modificados por un malware
-    const firmaSecreta = process.env.JWT_SECRET || 'euphoria_secret_qr_key'
+    const firmaSecreta = process.env.JWT_SECRETO_QR
     const tokenSinPin = jwt.sign(datosQRSinPin, firmaSecreta)
     const tokenConPin = jwt.sign(datosQRConPin, firmaSecreta)
 
@@ -292,7 +292,7 @@ router.post('/pin', verificarToken, async (req, res) => {
 
 // ============ GET /api/billetera/admin/reporte-completo ============
 // Reporte completo de billetera para el Admin
-router.get('/admin/reporte-completo', verificarToken, async (req, res) => {
+router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   try {
     // 1. Total de billeteras activas (con saldo > 0)
     const billeterasActivas = await prisma.billetera.count({

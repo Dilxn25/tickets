@@ -32,16 +32,21 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
     console.log(`[OCR] Procesando comprobante con Tesseract.js. URL del archivo: ${req.file.path}`)
     console.log(`[OCR] Monto esperado a validar: Bs. ${montoEsperado}`)
 
-    // 1. Ejecutar OCR usando Tesseract.js (ing/spa)
-    const { data: { text } } = await Tesseract.recognize(req.file.path, 'eng')
+    // 1. Ejecutar OCR usando Tesseract.js en español + inglés
+    //    (los comprobantes bancarios bolivianos están en español; usar 'spa+eng'
+    //    mejora mucho la precisión frente a solo 'eng').
+    const { data: { text } } = await Tesseract.recognize(req.file.path, 'spa+eng')
 
     const cleanedText = text.replace(/\s+/g, ' ')
     console.log(`[OCR] Texto extraído:`, cleanedText)
 
-    // Escribir el texto a un archivo temporal para el análisis del usuario
-    const fs = require('fs')
-    const path = require('path')
-    fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
+    // Guardar el texto del OCR a un archivo solo en modo depuración (DEBUG_OCR=true en .env).
+    // Evita choques entre peticiones simultáneas y no deja archivos sueltos en producción.
+    if (process.env.DEBUG_OCR === 'true') {
+      const fs = require('fs')
+      const path = require('path')
+      fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
+    }
 
     // 2. Buscar monto esperado en el texto
     const montoEsperadoStr = String(montoEsperado)
@@ -205,7 +210,7 @@ router.post('/verificar-billetera', verificarToken, async (req, res) => {
     let esPrivado = false
     try {
       const jwt = require('jsonwebtoken')
-      const payload = jwt.verify(qr_billetera, process.env.JWT_SECRET || 'euphoria_secret_qr_key')
+      const payload = jwt.verify(qr_billetera, process.env.JWT_SECRETO_QR)
       identBusqueda = payload.identificador || payload.qr_publico || qr_billetera
       if (payload.tipo === 'pago_con_pin') {
         esPrivado = true
@@ -280,7 +285,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       let esPrivado = false
       try {
         const jwt = require('jsonwebtoken')
-        const payload = jwt.verify(qr_billetera, process.env.JWT_SECRET || 'euphoria_secret_qr_key')
+        const payload = jwt.verify(qr_billetera, process.env.JWT_SECRETO_QR)
         identBusqueda = payload.identificador || payload.qr_publico || qr_billetera
         if (payload.tipo === 'pago_con_pin') {
           esPrivado = true
@@ -311,55 +316,86 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
       }
       
+      // Chequeo rápido (mejora la experiencia); la garantía real es el descuento condicional atómico de abajo.
       if (Number(billetera.saldo_actual) < total_calculado) {
         return res.status(400).json({ error: 'Saldo insuficiente en la billetera' })
       }
 
-      // Transacción atómica
-      await prisma.$transaction(async (tx) => {
-        // Descontar saldo
-        await tx.billetera.update({
-          where: { id_billetera: billetera.id_billetera },
-          data: { saldo_actual: { decrement: total_calculado } }
-        })
-        
-        // Crear comanda
-        const nuevaComanda = await tx.comanda.create({
-          data: {
-            id_cliente: id_cliente ? Number(id_cliente) : null,
-            id_mesero: req.usuario.id,
-            id_mesa: id_mesa ? Number(id_mesa) : null,
-            estado_despacho: 'Pendiente',
-            fecha_registro: new Date(),
-            metodo_pago: 'Billetera',
-            detalle_comanda: { create: detalles_crear }
-          }
-        })
-        
-        // Registrar movimiento
-        await tx.transaccion.create({
-          data: {
-            id_billetera: billetera.id_billetera,
-            id_comanda: nuevaComanda.id_comanda,
-            id_responsable: req.usuario.id,
-            tipo_operacion: 'Consumo',
-            monto: total_calculado,
-            fecha_hora: new Date()
-          }
-        })
-        
-        // Descontar stock
-        for (const item of detalles_crear) {
-          await tx.producto.update({
-            where: { id_producto: item.id_producto },
-            data: { stock_actual: { decrement: Number(item.cantidad) } }
+      let saldo_nuevo
+      try {
+        // Transacción atómica: descontar saldo SOLO si sigue habiendo saldo suficiente.
+        // updateMany con filtro saldo_actual >= total evita el doble gasto y el saldo negativo
+        // aunque lleguen dos cobros al mismo tiempo.
+        saldo_nuevo = await prisma.$transaction(async (tx) => {
+          const descuento = await tx.billetera.updateMany({
+            where: {
+              id_billetera: billetera.id_billetera,
+              saldo_actual: { gte: total_calculado }
+            },
+            data: { saldo_actual: { decrement: total_calculado } }
           })
+
+          // Si count === 0, otro cobro simultáneo dejó el saldo insuficiente: abortamos todo.
+          if (descuento.count === 0) {
+            throw new Error('SALDO_INSUFICIENTE')
+          }
+
+          // Crear comanda
+          const nuevaComanda = await tx.comanda.create({
+            data: {
+              id_cliente: id_cliente ? Number(id_cliente) : null,
+              id_mesero: req.usuario.id,
+              id_mesa: id_mesa ? Number(id_mesa) : null,
+              estado_despacho: 'Pendiente',
+              fecha_registro: new Date(),
+              metodo_pago: 'Billetera',
+              detalle_comanda: { create: detalles_crear }
+            }
+          })
+
+          // Registrar movimiento
+          await tx.transaccion.create({
+            data: {
+              id_billetera: billetera.id_billetera,
+              id_comanda: nuevaComanda.id_comanda,
+              id_responsable: req.usuario.id,
+              tipo_operacion: 'Consumo',
+              monto: total_calculado,
+              fecha_hora: new Date()
+            }
+          })
+
+          // Descontar stock
+          for (const item of detalles_crear) {
+            await tx.producto.update({
+              where: { id_producto: item.id_producto },
+              data: { stock_actual: { decrement: Number(item.cantidad) } }
+            })
+          }
+
+          // Leer el saldo real ya actualizado dentro de la transacción
+          const actualizada = await tx.billetera.findUnique({
+            where: { id_billetera: billetera.id_billetera },
+            select: { saldo_actual: true }
+          })
+          return Number(actualizada.saldo_actual)
+        })
+      } catch (e) {
+        if (e.message === 'SALDO_INSUFICIENTE') {
+          return res.status(400).json({ error: 'Saldo insuficiente en la billetera' })
         }
-      })
-      
-      const saldo_nuevo = Number(billetera.saldo_actual) - total_calculado
-      
-      return res.status(201).json({ 
+        throw e
+      }
+
+      // Sincronización en tiempo real del saldo del cliente
+      if (global.io) {
+        global.io.emit('billetera_actualizada', {
+          id_usuario: billetera.id_usuario,
+          saldo_nuevo
+        })
+      }
+
+      return res.status(201).json({
         mensaje: 'Cobro de billetera exitoso',
         saldo_restante: saldo_nuevo,
         nombres_cliente: billetera.usuario.nombres

@@ -1,12 +1,14 @@
 const express = require('express')
 const router = express.Router()
 const prisma = require('../../config/base-de-datos')
-const { verificarToken } = require('../../middlewares/autenticacion')
+const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { generarIDUnico } = require('../servicio-billetera/qr-utils')
 
+// Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
+router.use(soloRoles('Cajero', 'Administrador'))
 
 // GET /api/cajero/buscar-cliente?q=87 - Autocompletado por teléfono o CI
 router.get('/buscar-cliente', async (req, res) => {
@@ -106,7 +108,7 @@ router.get('/consultar-billetera/:identificador', async (req, res) => {
       requiere_pin: true,
       usuario: usuario.correo
     }
-    const tokenQR = jwt.sign(datosQR, process.env.JWT_SECRET || 'euphoria_secret_qr_key')
+    const tokenQR = jwt.sign(datosQR, process.env.JWT_SECRETO_QR)
 
     res.json({
       nombres: usuario.nombres,
@@ -162,34 +164,41 @@ router.post('/resolver', async (req, res) => {
     if (!recarga) return res.status(404).json({ error: 'Recarga no encontrada' })
     if (recarga.estado !== 'pendiente') return res.status(400).json({ error: 'La recarga ya fue procesada' })
 
-    const recargaActualizada = await prisma.recarga_billetera.update({
-      where: { id_recarga },
-      data: { 
-        estado, 
-        fecha_confirmacion: new Date() 
-      }
-    })
-
-    // Si es aprobada, sumar el saldo a la billetera
-    if (estado === 'completada') {
-      const billetera = await prisma.billetera.update({
-        where: { id_usuario: recarga.id_usuario },
-        data: {
-          saldo_actual: { increment: recarga.monto_recarga },
-          ultima_actualizacion: new Date()
-        }
+    // Se procesa de forma ATOMICA: solo se acredita si la recarga SIGUE pendiente.
+    // updateMany con filtro de estado garantiza que dos aprobaciones simultaneas no dupliquen el saldo.
+    const resultado = await prisma.$transaction(async (tx) => {
+      const marcada = await tx.recarga_billetera.updateMany({
+        where: { id_recarga, estado: 'pendiente' },
+        data: { estado, fecha_confirmacion: new Date() }
       })
+      if (marcada.count === 0) return { yaProcesada: true, billetera: null }
 
-      // Sincronización en tiempo real
-      if (global.io) {
-        global.io.emit('billetera_actualizada', {
-          id_usuario: recarga.id_usuario,
-          saldo_nuevo: parseFloat(billetera.saldo_actual)
+      let billetera = null
+      if (estado === 'completada') {
+        billetera = await tx.billetera.update({
+          where: { id_usuario: recarga.id_usuario },
+          data: {
+            saldo_actual: { increment: recarga.monto_recarga },
+            ultima_actualizacion: new Date()
+          }
         })
       }
+      return { yaProcesada: false, billetera }
+    })
+
+    if (resultado.yaProcesada) {
+      return res.status(400).json({ error: 'La recarga ya fue procesada' })
     }
 
-    res.json({ mensaje: `Recarga ${estado} exitosamente`, recarga: recargaActualizada })
+    // Sincronización en tiempo real (fuera de la transacción)
+    if (estado === 'completada' && resultado.billetera && global.io) {
+      global.io.emit('billetera_actualizada', {
+        id_usuario: recarga.id_usuario,
+        saldo_nuevo: parseFloat(resultado.billetera.saldo_actual)
+      })
+    }
+
+    res.json({ mensaje: `Recarga ${estado} exitosamente` })
   } catch (error) {
     console.error('Error resolviendo recarga:', error)
     res.status(500).json({ error: 'Error al resolver recarga' })
@@ -205,6 +214,12 @@ router.post('/recargar', async (req, res) => {
 
     if (!identificador || !montoFloat || montoFloat <= 0) {
       return res.status(400).json({ error: 'Datos inválidos para recargar' })
+    }
+
+    // Limite maximo de recarga por operacion
+    const MONTO_MAXIMO_RECARGA = 9999
+    if (montoFloat > MONTO_MAXIMO_RECARGA) {
+      return res.status(400).json({ error: `El monto maximo por recarga es Bs. ${MONTO_MAXIMO_RECARGA}` })
     }
 
     // Buscar billetera por qr_publico, correo, teléfono o CI
@@ -225,25 +240,25 @@ router.post('/recargar', async (req, res) => {
     const numTransaccion = `CAJ-${Date.now()}`
     const ahora = new Date()
 
-    // 1. Crear registro de recarga
-    await prisma.recarga_billetera.create({
-      data: {
-        id_usuario: billetera.id_usuario,
-        id_billetera: billetera.id_billetera,
-        monto_recarga: montoFloat,
-        estado: 'completada',
-        numero_transaccion: numTransaccion,
-        fecha_confirmacion: ahora
-      }
-    })
-
-    // 2. Aumentar el saldo
-    const billeteraActualizada = await prisma.billetera.update({
-      where: { id_usuario: billetera.id_usuario },
-      data: {
-        saldo_actual: { increment: montoFloat },
-        ultima_actualizacion: ahora
-      }
+    // 1 y 2. Crear la recarga y aumentar el saldo de forma ATOMICA (o todo, o nada)
+    const billeteraActualizada = await prisma.$transaction(async (tx) => {
+      await tx.recarga_billetera.create({
+        data: {
+          id_usuario: billetera.id_usuario,
+          id_billetera: billetera.id_billetera,
+          monto_recarga: montoFloat,
+          estado: 'completada',
+          numero_transaccion: numTransaccion,
+          fecha_confirmacion: ahora
+        }
+      })
+      return tx.billetera.update({
+        where: { id_usuario: billetera.id_usuario },
+        data: {
+          saldo_actual: { increment: montoFloat },
+          ultima_actualizacion: ahora
+        }
+      })
     })
 
     // 3. Registrar transaccion contable (REGLA 5 — CONDICIONES.md)
@@ -313,7 +328,7 @@ router.post('/abrir-billetera', async (req, res) => {
     const pinHash = await bcrypt.hash(pinFinal, 10)
     
     // Obtener rol cliente
-    const rolCliente = await prisma.rol.findFirst({ where: { nombre_rol: 'cliente' } })
+    const rolCliente = await prisma.rol.findFirst({ where: { nombre_rol: 'Cliente' } })
 
     usuario = await prisma.usuario.create({
       data: {
@@ -378,8 +393,7 @@ router.post('/abrir-billetera', async (req, res) => {
       requiere_pin: true,
       usuario: correoTemporal
     }
-    const firmaSecreta = process.env.JWT_SECRET || 'euphoria_secret_qr_key'
-    const tokenQR = jwt.sign(datosQRConPin, firmaSecreta)
+    const tokenQR = jwt.sign(datosQRConPin, process.env.JWT_SECRETO_QR)
 
     if (global.io) {
       global.io.emit('recarga_registrada')

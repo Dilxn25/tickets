@@ -13,6 +13,26 @@ const jwt = require('jsonwebtoken')
 const { z } = require('zod')
 const prisma = require('../../config/base-de-datos')
 const { normalizarRespuesta } = require('../../utilidades/texto')
+const rateLimit = require('express-rate-limit')
+
+// ---- Límites de solicitudes (anti fuerza bruta) ----
+// Login: máx. 10 intentos por IP cada 15 minutos.
+const limiteLogin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Espera unos minutos e intenta de nuevo.' },
+})
+
+// Recuperación de contraseña: máx. 8 intentos por IP cada 15 minutos.
+const limiteRecuperacion = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar la recuperación.' },
+})
 
 // ---- Esquemas de Validación (Zod) ----
 const esquemaLogin = z.object({
@@ -58,7 +78,7 @@ function generarTokens(usuario) {
 }
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', limiteLogin, async (req, res) => {
   try {
     const validacion = esquemaLogin.safeParse(req.body)
     if (!validacion.success) {
@@ -87,7 +107,7 @@ router.post('/login', async (req, res) => {
     }
 
     const tokens = generarTokens(usuario)
-    console.log('LOGIN COMPLETADO EXITOSAMENTE PARA:', usuario.correo)
+    console.log(`Login exitoso (usuario #${usuario.id_usuario}, rol ${usuario.rol.nombre_rol})`)
 
     res.json({
       mensaje: 'Sesión iniciada correctamente',
@@ -175,7 +195,7 @@ router.post('/renovar', async (req, res) => {
 })
 
 // POST /api/auth/recuperar/pregunta
-router.post('/recuperar/pregunta', async (req, res) => {
+router.post('/recuperar/pregunta', limiteRecuperacion, async (req, res) => {
   try {
     const { correo } = req.body
     if (!correo) return res.status(400).json({ error: 'El correo es requerido' })
@@ -196,7 +216,7 @@ router.post('/recuperar/pregunta', async (req, res) => {
 })
 
 // POST /api/auth/recuperar/reset
-router.post('/recuperar/reset', async (req, res) => {
+router.post('/recuperar/reset', limiteRecuperacion, async (req, res) => {
   try {
     const validacion = esquemaReset.safeParse(req.body)
     if (!validacion.success) {

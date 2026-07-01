@@ -59,18 +59,19 @@ router.post('/reservar', verificarToken, async (req, res) => {
 
     // Si es VIP y envían una mesa, bloquearla
     if (tipo === 'vip' && id_mesa) {
-      // Verificar si la mesa ya está ocupada
       const mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa: Number(id_mesa) } })
       if (!mesa) return res.status(404).json({ error: 'Mesa no encontrada' })
-      if (mesa.estado_ocupacion !== 'libre') {
-        return res.status(400).json({ error: 'La mesa ya ha sido reservada por otro usuario' })
-      }
 
-      // Bloquear la mesa
-      await prisma.mesa_espacio.update({
-        where: { id_mesa: Number(id_mesa) },
+      // Bloqueo ATÓMICO: solo reserva si la mesa SIGUE libre.
+      // updateMany con filtro estado_ocupacion='libre' evita que dos clientes
+      // reserven la misma mesa al mismo tiempo (condición de carrera).
+      const bloqueada = await prisma.mesa_espacio.updateMany({
+        where: { id_mesa: Number(id_mesa), estado_ocupacion: 'libre' },
         data: { estado_ocupacion: 'reservada' }
       })
+      if (bloqueada.count === 0) {
+        return res.status(400).json({ error: 'La mesa ya ha sido reservada por otro usuario' })
+      }
     }
 
     // TODO: Aquí se podría crear el registro en la tabla 'entrada'

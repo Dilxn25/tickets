@@ -49,7 +49,15 @@ router.get('/:id/reserva', async (req, res) => {
         fecha_registro: 'desc'
       },
       include: {
-        usuario_comanda_id_clienteTousuario: true
+        // Solo se exponen campos publicos del cliente (NUNCA password_hash ni datos sensibles)
+        usuario_comanda_id_clienteTousuario: {
+          select: {
+            id_usuario: true,
+            nombres: true,
+            apellidos: true,
+            telefono: true
+          }
+        }
       }
     })
 

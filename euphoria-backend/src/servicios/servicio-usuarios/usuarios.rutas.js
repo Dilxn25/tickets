@@ -158,10 +158,27 @@ router.get('/', async (req, res) => {
       take: 20 // Limitar resultados para búsquedas de meseros
     })
 
-    const resultado = usuarios.map(({ password_hash, ...u }) => ({
-      ...u,
-      rol: u.rol.nombre_rol,
-    }))
+    // El Administrador ve datos completos (sin hashes); Mesero/Bartender solo lo mínimo
+    // para identificar a un cliente en el POS (evita filtrar PII de todos los usuarios).
+    const esAdmin = rolUsuario === 'Administrador'
+    const resultado = usuarios.map((u) => {
+      const base = {
+        id_usuario: u.id_usuario,
+        nombres:    u.nombres,
+        apellidos:  u.apellidos,
+        telefono:   u.telefono,
+        ci_carnet:  u.ci_carnet,
+        rol:        u.rol.nombre_rol,
+      }
+      if (!esAdmin) return base
+      return {
+        ...base,
+        id_rol:          u.id_rol,
+        correo:          u.correo,
+        estado_cuenta:   u.estado_cuenta,
+        url_foto_perfil: u.url_foto_perfil,
+      }
+    })
 
     res.json(resultado)
   } catch (error) {
