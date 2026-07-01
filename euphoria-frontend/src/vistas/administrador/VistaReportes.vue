@@ -324,7 +324,7 @@
       <div v-if="modalActivo === 'clientes' || modalActivo === 'personal'" class="modal-fullscreen fade-in">
         <div class="modal-fs-header">
           <h2>{{ modalActivo === 'clientes' ? 'Registro Detallado de Clientes' : 'Registro del Personal' }}</h2>
-          <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
+          <button class="btn-cerrar-fs" @click="modalActivo = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cerrar</button>
         </div>
         <div class="modal-fs-body">
           <div class="tabla-contenedor">
@@ -360,7 +360,7 @@
       <div v-if="modalActivo === 'eventos'" class="modal-fullscreen fade-in">
         <div class="modal-fs-header">
           <h2>Reporte Detallado de Eventos</h2>
-          <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
+          <button class="btn-cerrar-fs" @click="modalActivo = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cerrar</button>
         </div>
         <div class="modal-fs-body">
           <div class="tabla-contenedor">
@@ -392,7 +392,7 @@
       <div v-if="modalActivo === 'productos'" class="modal-fullscreen fade-in">
         <div class="modal-fs-header">
           <h2>Ranking de Inventario (Más a Menos Vendidos)</h2>
-          <button class="btn-cerrar-fs" @click="modalActivo = null">✕ Cerrar</button>
+          <button class="btn-cerrar-fs" @click="modalActivo = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cerrar</button>
         </div>
         <div class="modal-fs-body">
           <div class="tabla-contenedor">
@@ -410,9 +410,9 @@
               <tbody>
                 <tr v-for="(prod, idx) in listadoProductosRanking" :key="prod.id_producto">
                   <td style="font-weight: 800; font-size: 1.1rem; text-align: center;">
-                    <span v-if="idx === 0" style="color: var(--color-alerta);">🏆 1</span>
-                    <span v-else-if="idx === 1" style="color: var(--texto-secundario);">🥈 2</span>
-                    <span v-else-if="idx === 2" style="color: var(--color-alerta);">🥉 3</span>
+                    <span v-if="idx === 0" style="color: var(--color-alerta); display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="8" r="6"></circle><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"></path></svg>1</span>
+                    <span v-else-if="idx === 1" style="color: var(--texto-secundario); display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="8" r="6"></circle><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"></path></svg>2</span>
+                    <span v-else-if="idx === 2" style="color: var(--color-alerta); display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="8" r="6"></circle><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"></path></svg>3</span>
                     <span v-else style="color: rgba(255,255,255,0.4);">#{{ idx + 1 }}</span>
                   </td>
                   <td style="font-weight: 700; color: var(--texto-principal);">{{ prod.nombre_producto }}</td>

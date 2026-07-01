@@ -3,7 +3,7 @@
     <!-- Header: Estadísticas rápidas -->
     <header class="bartender-header">
       <div class="header-left">
-        <h1 class="header-titulo">🍸 Euphoria Bar Station</h1>
+        <h1 class="header-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg> Euphoria Bar Station</h1>
         
         <nav class="bartender-tabs">
           <button :class="{ activo: pestana === 'pendientes' }" @click="cambiarPestana('pendientes')">En Cola</button>

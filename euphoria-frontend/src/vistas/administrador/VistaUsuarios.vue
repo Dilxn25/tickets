@@ -11,7 +11,10 @@
       </div>
     </div>
     <div class="filtros-barra">
-      <input v-model="busqueda" class="campo" placeholder="🔍 Buscar..." style="max-width:300px" />
+      <div class="buscador-wrap" style="max-width:300px; position:relative; flex:1 1 auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--texto-secundario); pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input v-model="busqueda" class="campo" placeholder="Buscar..." style="width:100%; padding-left:38px;" />
+      </div>
       <select v-model="filtroRol" class="campo" style="max-width:180px">
         <option value="">Todos los roles</option>
         <option v-for="r in rolesDb" :key="r.id_rol" :value="r.nombre_rol">{{ r.nombre_rol }}</option>
@@ -73,7 +76,7 @@
         <div class="modal fade-in">
           <div class="modal-cabecera">
             <h3>{{ usuarioEditando ? 'Editar Usuario' : 'Nuevo Usuario' }}</h3>
-            <button class="btn-x" @click="cerrarModal">✕</button>
+            <button class="btn-x" @click="cerrarModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <form class="modal-form" @submit.prevent="guardarUsuario">
             <div class="form-fila">
@@ -111,7 +114,7 @@
         <div class="modal fade-in" style="max-width:400px">
           <div class="modal-cabecera">
             <h3>Gestionar Roles</h3>
-            <button class="btn-x" @click="modalRolesAbierto=false">✕</button>
+            <button class="btn-x" @click="modalRolesAbierto=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div style="padding:1.5rem">
             <div style="display:flex; gap:10px; margin-bottom:1rem;">

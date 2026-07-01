@@ -13,7 +13,10 @@
 
     <!-- Filtros -->
     <div class="filtros-barra">
-      <input v-model="busqueda" class="campo" placeholder="🔍 Buscar producto..." style="max-width:280px" />
+      <div class="campo-busqueda">
+        <svg class="icono-busqueda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar producto..." />
+      </div>
       <select v-model="filtroCategoria" @change="cargarDatos" class="campo" style="max-width:180px">
         <option value="">Todas las categorías</option>
         <option v-for="c in categorias" :key="c.id_categoria" :value="c.id_categoria">{{ c.nombre_categoria }}</option>
@@ -63,7 +66,7 @@
         <div class="modal fade-in">
           <div class="modal-cabecera">
             <h3>{{ productoEditando ? 'Editar Producto' : 'Nuevo Producto' }}</h3>
-            <button class="btn-x" @click="cerrarModal">✕</button>
+            <button class="btn-x" @click="cerrarModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <form class="modal-form" @submit.prevent="guardarProducto">
             <div class="grupo-campo">
@@ -118,7 +121,7 @@
         <div class="modal fade-in" style="max-width:400px">
           <div class="modal-cabecera">
             <h3>Gestionar Categorías</h3>
-            <button class="btn-x" @click="modalCategoriasAbierto=false">✕</button>
+            <button class="btn-x" @click="modalCategoriasAbierto=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div style="padding:1.5rem">
             <div style="display:flex; gap:10px; margin-bottom:1rem;">
@@ -260,6 +263,9 @@ async function eliminarCategoria(cat) {
 .vista-titulo{font-size:1.4rem;margin-bottom:.2rem}
 .vista-subtitulo{color:var(--texto-secundario);font-size:.85rem}
 .filtros-barra{display:flex;gap:.75rem;margin-bottom:1.2rem;flex-wrap:wrap;align-items:center}
+.campo-busqueda{position:relative;max-width:280px;width:100%}
+.icono-busqueda{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--texto-secundario);pointer-events:none}
+.campo-con-icono{padding-left:38px;width:100%}
 .toggle-label{display:flex;align-items:center;gap:6px;color:var(--texto-secundario);font-size:.85rem;cursor:pointer;user-select:none}
 .vacio{color:var(--texto-desactivado);padding:3rem;text-align:center;width:100%}
 .productos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
@@ -285,7 +291,7 @@ async function eliminarCategoria(cat) {
 .modal{background:var(--fondo-tarjeta);border:1px solid var(--borde-sutil);border-radius:var(--radio-xl);width:100%;max-width:520px;box-shadow:var(--sombra-modal);max-height:90vh;overflow-y:auto}
 .modal-cabecera{display:flex;justify-content:space-between;align-items:center;padding:1.2rem 1.5rem;border-bottom:1px solid var(--borde-sutil);position:sticky;top:0;background:var(--fondo-tarjeta);z-index:1}
 .modal-cabecera h3{font-size:1.1rem}
-.btn-x{background:none;border:none;color:var(--texto-secundario);font-size:1.1rem;cursor:pointer}
+.btn-x{background:none;border:none;color:var(--texto-secundario);font-size:1.1rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .btn-x:hover{color:var(--color-error)}
 .modal-form{padding:1.5rem;display:flex;flex-direction:column;gap:1rem}
 .form-fila{display:grid;grid-template-columns:1fr 1fr;gap:1rem}

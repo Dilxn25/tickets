@@ -5,7 +5,7 @@
       <div class="icono-wrapper">
         <div class="anillo anillo-1"></div>
         <div class="anillo anillo-2"></div>
-        <span class="emoji">🚧</span>
+        <span class="emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48"><path d="M2 20h20"></path><path d="M4 20V10l8-4 8 4v10"></path><line x1="4" y1="14" x2="20" y2="14"></line></svg></span>
       </div>
       <h1 class="ec-titulo">Módulo en Construcción</h1>
       <p class="ec-desc">

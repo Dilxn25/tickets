@@ -90,7 +90,7 @@
       <!-- Modal de Detalle de Producto -->
       <div v-if="detalleProducto" class="modal-detalle fade-in" @click.self="cerrarDetalle">
         <div class="detalle-contenido">
-          <button class="btn-cerrar-detalle" @click="cerrarDetalle">✕</button>
+          <button class="btn-cerrar-detalle" @click="cerrarDetalle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           <div class="detalle-imagen">
             <img v-if="detalleProducto.url_imagen" :src="detalleProducto.url_imagen" :alt="detalleProducto.nombre_producto" />
             <div v-else class="placeholder">
@@ -124,7 +124,7 @@
       <div v-if="tiendaCarrito.totalItems > 0 && mostrarMiniCarrito" class="panel-carrito-flotante">
         <div class="cabecera-panel">
           <h4>Tu Pedido</h4>
-          <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel">✕</button>
+          <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
         <div class="lista-items-panel">
           <div v-for="item in tiendaCarrito.items" :key="item.id" class="item-panel">
@@ -145,7 +145,7 @@
       
       <!-- Botón Flotante (cuando está oculto) -->
       <button v-if="tiendaCarrito.totalItems > 0 && !mostrarMiniCarrito" class="btn-reabrir-carrito" @click="mostrarMiniCarrito = true">
-        🛒 {{ tiendaCarrito.totalItems }} - Bs. {{ tiendaCarrito.total.toFixed(2) }}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> {{ tiendaCarrito.totalItems }} - Bs. {{ tiendaCarrito.total.toFixed(2) }}
       </button>
     </Teleport>
   </div>

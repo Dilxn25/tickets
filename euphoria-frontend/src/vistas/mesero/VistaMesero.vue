@@ -382,7 +382,7 @@
                       </div>
                       <div class="qr-overlay-bottom">
                         <p class="qr-hint" v-if="!qrDetectado">Apunta la cámara al código QR del cliente</p>
-                        <p class="qr-hint qr-hint-ok" v-else>✓ Código detectado</p>
+                        <p class="qr-hint qr-hint-ok" v-else><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"></polyline></svg> Código detectado</p>
                       </div>
                     </div>
                   </div>

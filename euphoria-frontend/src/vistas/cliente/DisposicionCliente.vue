@@ -5,9 +5,14 @@
       <div class="logo-contenedor">
         <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo-img" />
       </div>
-      <div class="user-avatar" @click="cerrarSesion">
-        <img v-if="urlFoto" :src="urlFoto" class="avatar-img" alt="Perfil" />
-        <span v-else>{{ iniciales }}</span>
+      <div class="acciones-usuario">
+        <div class="user-avatar" @click="irPerfil" title="Mi perfil">
+          <img v-if="urlFoto" :src="urlFoto" class="avatar-img" alt="Perfil" />
+          <span v-else>{{ iniciales }}</span>
+        </div>
+        <button class="btn-salir-top" @click="cerrarSesion" title="Cerrar sesión" type="button" aria-label="Cerrar sesión">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
       </div>
     </header>
 
@@ -51,7 +56,9 @@
     <!-- Modal de Cerrar Sesión Custom -->
     <div v-if="modalLogout" class="modal-overlay fade-in">
       <div class="modal-logout">
-        <div class="icono-logout">🚪</div>
+        <div class="icono-logout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </div>
         <h3>¿Cerrar sesión?</h3>
         <p>¿Estás seguro de que deseas salir de tu cuenta?</p>
         <div class="modal-acciones">
@@ -79,6 +86,10 @@ const iniciales = computed(() => {
 const urlFoto = computed(() => tienda.usuario?.url_foto_perfil || tienda.usuario?.foto || null)
 
 const modalLogout = ref(false)
+
+function irPerfil() {
+  router.push('/cliente/perfil')
+}
 
 function cerrarSesion() {
   modalLogout.value = true
@@ -129,6 +140,31 @@ function confirmarCerrarSesion() {
   object-fit: contain;
   filter: drop-shadow(0 0 8px rgba(155, 89, 182, 0.6));
 }
+
+.acciones-usuario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-salir-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-error);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-salir-top svg { width: 20px; height: 20px; }
+.btn-salir-top:hover {
+  background: var(--color-error);
+  color: #fff;
+}
+.btn-salir-top:active { transform: scale(0.94); }
 
 .user-avatar {
   width: 40px;
@@ -235,7 +271,19 @@ function confirmarCerrarSesion() {
   border-radius: 20px; padding: 2rem; text-align: center; max-width: 300px; width: 100%;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
 }
-.icono-logout { font-size: 3rem; margin-bottom: 0.5rem; }
+.icono-logout {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.icono-logout svg { width: 30px; height: 30px; }
 .modal-logout h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--texto-principal); }
 .modal-logout p { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.5rem; }
 .modal-acciones { display: flex; gap: 10px; }

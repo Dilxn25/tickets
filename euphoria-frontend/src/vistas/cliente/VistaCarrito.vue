@@ -39,7 +39,7 @@
             <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
           </div>
           <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Eliminar" type="button">
-            ✕
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
       </div>

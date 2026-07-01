@@ -13,7 +13,7 @@
           <img v-if="urlFotoActual" :src="urlFotoActual" class="foto-img" />
           <span v-else>{{ iniciales }}</span>
           
-          <button class="btn-editar-foto" title="Cambiar foto" @click="triggerFileInput">📷</button>
+          <button class="btn-editar-foto" title="Cambiar foto" @click="triggerFileInput"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></button>
           <input type="file" accept="image/*" ref="fileInput" @change="manejarArchivo" style="display: none;" />
         </div>
       </div>
@@ -32,7 +32,7 @@
           <div class="campo-editable" :class="{ 'editando-activo': editando.nombres }">
             <span v-if="!editando.nombres">{{ form.nombres || 'No especificado' }}</span>
             <input v-else v-model="form.nombres" type="text" class="campo" required pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ ]+" title="Solo letras" autofocus>
-            <button type="button" class="btn-lapiz" @click="toggleEditar('nombres')" title="Editar">✏️</button>
+            <button type="button" class="btn-lapiz" @click="toggleEditar('nombres')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
           </div>
         </div>
         
@@ -41,7 +41,7 @@
           <div class="campo-editable" :class="{ 'editando-activo': editando.apellidos }">
             <span v-if="!editando.apellidos">{{ form.apellidos || 'No especificado' }}</span>
             <input v-else v-model="form.apellidos" type="text" class="campo" required pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ ]+" title="Solo letras" autofocus>
-            <button type="button" class="btn-lapiz" @click="toggleEditar('apellidos')" title="Editar">✏️</button>
+            <button type="button" class="btn-lapiz" @click="toggleEditar('apellidos')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
           </div>
         </div>
         
@@ -50,7 +50,7 @@
           <div class="campo-editable" :class="{ 'editando-activo': editando.ci_carnet }">
             <span v-if="!editando.ci_carnet">{{ form.ci_carnet || 'No especificado' }}</span>
             <input v-else v-model="form.ci_carnet" type="text" class="campo" placeholder="Añade tu número de carnet" autofocus>
-            <button type="button" class="btn-lapiz" @click="toggleEditar('ci_carnet')" title="Editar">✏️</button>
+            <button type="button" class="btn-lapiz" @click="toggleEditar('ci_carnet')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
           </div>
         </div>
         
@@ -59,7 +59,7 @@
           <div class="campo-editable" :class="{ 'editando-activo': editando.telefono }">
             <span v-if="!editando.telefono">{{ form.telefono || 'No especificado' }}</span>
             <input v-else v-model="form.telefono" type="tel" class="campo" placeholder="Añade tu número" pattern="[0-9]{8,15}" title="Solo números" autofocus>
-            <button type="button" class="btn-lapiz" @click="toggleEditar('telefono')" title="Editar">✏️</button>
+            <button type="button" class="btn-lapiz" @click="toggleEditar('telefono')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
           </div>
         </div>
 
