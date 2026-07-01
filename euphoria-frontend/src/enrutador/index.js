@@ -14,6 +14,8 @@ import VistaProductos from '../vistas/administrador/VistaProductos.vue'
 import VistaEventos from '../vistas/administrador/VistaEventos.vue'
 import VistaReportes from '../vistas/administrador/VistaReportes.vue'
 import VistaVentas from '../vistas/administrador/VistaVentas.vue'
+import VistaMapas from '../vistas/administrador/VistaMapas.vue'
+import VistaAforoAdmin from '../vistas/administrador/VistaAforoAdmin.vue'
 
 // ---- En Construcción (otros roles y módulos) ----
 import VistaEnConstruccion from '../vistas/VistaEnConstruccion.vue'
@@ -27,8 +29,11 @@ import VistaDetalleEventoCliente from '../vistas/cliente/VistaDetalleEventoClien
 import VistaPerfil from '../vistas/cliente/VistaPerfil.vue'
 import VistaBilletera from '../vistas/cliente/VistaBilletera.vue'
 import VistaCarrito from '../vistas/cliente/VistaCarrito.vue'
+import VistaReservaMapa from '../vistas/cliente/VistaReservaMapa.vue'
+import VistaMisReservas from '../vistas/cliente/VistaMisReservas.vue'
 
 import VistaMesero from '../vistas/mesero/VistaMesero.vue'
+import VistaRecepcionista from '../vistas/recepcionista/VistaRecepcionista.vue'
 
 import VistaBartender from '../vistas/bartender/VistaBartender.vue'
 
@@ -50,8 +55,8 @@ const rutas = [
       { path: 'productos', name: 'AdminProductos', component: VistaProductos },
       { path: 'eventos', name: 'AdminEventos', component: VistaEventos },
       { path: 'ventas', name: 'AdminVentas', component: VistaVentas },
-      { path: 'zonas', name: 'AdminZonas', component: VistaEnConstruccion },
-      { path: 'aforo', name: 'AdminAforo', component: VistaEnConstruccion },
+      { path: 'zonas', name: 'AdminZonas', component: VistaMapas },
+      { path: 'aforo', name: 'AdminAforo', component: VistaAforoAdmin },
       { path: 'ia', name: 'AdminIA', component: VistaEnConstruccion },
       { path: 'reportes', name: 'AdminReportes', component: VistaReportes },
     ],
@@ -74,7 +79,7 @@ const rutas = [
     path: '/recepcionista',
     component: DisposicionSimple,
     meta: { requiereAuth: true, rolPermitido: 'recepcionista' },
-    children: [{ path: '', name: 'Recepcionista', component: VistaEnConstruccion }],
+    children: [{ path: '', name: 'Recepcionista', component: VistaRecepcionista }],
   },
   {
     path: '/bartender',
@@ -95,6 +100,8 @@ const rutas = [
       { path: 'billetera', name: 'ClienteBilletera', component: VistaBilletera },
       { path: 'eventos', name: 'ClienteEventos', component: VistaEventosCliente },
       { path: 'eventos/:id', name: 'ClienteDetalleEvento', component: VistaDetalleEventoCliente },
+      { path: 'reservar/:idEvento', name: 'ClienteReservar', component: VistaReservaMapa },
+      { path: 'mis-reservas', name: 'ClienteMisReservas', component: VistaMisReservas },
       { path: 'carrito', name: 'ClienteCarrito', component: VistaCarrito },
       { path: 'perfil', name: 'ClientePerfil', component: VistaPerfil }
     ],

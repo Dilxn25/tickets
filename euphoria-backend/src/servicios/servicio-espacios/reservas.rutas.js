@@ -1,0 +1,327 @@
+// ============================================
+// EUPHORIA — Servicio de Reservas (Fase B)
+// El cliente ve el mapa de un evento, elige una mesa libre, paga con su
+// billetera de forma atomica y recibe una entrada con QR de acceso.
+// ============================================
+const express = require('express')
+const router = express.Router()
+const crypto = require('crypto')
+const jwt = require('jsonwebtoken')
+const QRCode = require('qrcode')
+const prisma = require('../../config/base-de-datos')
+const { verificarToken } = require('../../middlewares/autenticacion')
+
+router.use(verificarToken)
+
+// ---- Utilidades QR de entrada ----
+
+// Genera un codigo unico para qr_acceso (cabe en VarChar(255) y es irrepetible).
+function generarCodigoEntrada(idUsuario) {
+  return `ENT-${idUsuario}-${crypto.randomBytes(9).toString('hex')}`
+}
+
+// Firma un token JWT con los datos de la entrada y devuelve la imagen QR (dataURL).
+// El token va firmado para que no se pueda falsificar una entrada.
+async function generarImagenQREntrada(entrada) {
+  const secreto = process.env.JWT_SECRETO_QR
+  const token = jwt.sign(
+    { t: 'entrada', ie: entrada.id_entrada, qr: entrada.qr_acceso },
+    secreto
+  )
+  return QRCode.toDataURL(token, { errorCorrectionLevel: 'H', type: 'image/png', width: 320 })
+}
+
+// Precio "atractivo" (un decimal terminando en .0/.4/.5/.6/.9) — mismo criterio que recomendaciones.
+function precioAtractivo(p) {
+  const entero = Math.floor(p)
+  const dec = p - entero
+  const opciones = [0, 0.4, 0.5, 0.6, 0.9]
+  let mejor = 0, dmin = Infinity
+  for (const o of opciones) {
+    const d = Math.abs(dec - o)
+    if (d < dmin) { dmin = d; mejor = o }
+  }
+  return Math.round((entero + mejor) * 100) / 100
+}
+
+// Combos populares (pares mas co-comprados) para sugerir al reservar. Degrada a [] si falla.
+async function obtenerCombosSugeridos(limite = 3) {
+  try {
+    const DESCUENTO = 0.10
+    const pares = await prisma.$queryRawUnsafe(`
+      SELECT p1.id_producto id1, p1.nombre_producto n1, p1.precio_base pr1, p1.url_imagen img1,
+             p2.id_producto id2, p2.nombre_producto n2, p2.precio_base pr2, p2.url_imagen img2,
+             COUNT(*) veces
+      FROM detalle_comanda d1
+      JOIN detalle_comanda d2 ON d1.id_comanda = d2.id_comanda AND d1.id_producto < d2.id_producto
+      JOIN comanda c ON c.id_comanda = d1.id_comanda AND c.estado_despacho <> 'Cancelada'
+      JOIN producto p1 ON p1.id_producto = d1.id_producto
+      JOIN producto p2 ON p2.id_producto = d2.id_producto
+      GROUP BY p1.id_producto, p1.nombre_producto, p1.precio_base, p1.url_imagen,
+               p2.id_producto, p2.nombre_producto, p2.precio_base, p2.url_imagen
+      ORDER BY veces DESC LIMIT ${Number(limite) || 3}
+    `)
+    return pares.map(r => {
+      const normal = Number(r.pr1) + Number(r.pr2)
+      return {
+        nombre: `${r.n1} + ${r.n2}`,
+        productos: [
+          { id_producto: Number(r.id1), nombre: r.n1, url_imagen: r.img1 },
+          { id_producto: Number(r.id2), nombre: r.n2, url_imagen: r.img2 },
+        ],
+        precio_normal: Math.round(normal * 100) / 100,
+        precio_combo: precioAtractivo(normal * (1 - DESCUENTO)),
+        descuento_pct: DESCUENTO * 100,
+      }
+    })
+  } catch (error) {
+    console.error('Error obteniendo combos sugeridos:', error.message)
+    return []
+  }
+}
+
+// ---------- CATALOGO PARA EL CLIENTE ----------
+
+// GET /api/reservas/eventos — eventos con zonas reservables (mesas libres disponibles)
+router.get('/eventos', async (req, res) => {
+  try {
+    const eventos = await prisma.evento.findMany({
+      where: {
+        estado: { not: 'finalizado' },
+        zona: { some: { mesa_espacio: { some: { es_seleccionable: true, tipo_elemento: 'mesa' } } } },
+      },
+      orderBy: { fecha_hora_inicio: 'asc' },
+      include: {
+        zona: {
+          include: {
+            mesa_espacio: {
+              where: { es_seleccionable: true, tipo_elemento: 'mesa' },
+              select: { estado_ocupacion: true },
+            },
+          },
+        },
+      },
+    })
+
+    const salida = eventos.map(ev => {
+      let libres = 0, totales = 0
+      for (const z of ev.zona) {
+        for (const m of z.mesa_espacio) {
+          totales++
+          if (m.estado_ocupacion === 'libre') libres++
+        }
+      }
+      return {
+        id_evento: ev.id_evento,
+        nombre_evento: ev.nombre_evento,
+        descripcion: ev.descripcion,
+        url_portada: ev.url_portada,
+        fecha_hora_inicio: ev.fecha_hora_inicio,
+        fecha_hora_fin: ev.fecha_hora_fin,
+        estado: ev.estado,
+        mesas_libres: libres,
+        mesas_totales: totales,
+      }
+    })
+    res.json(salida)
+  } catch (error) {
+    console.error('Error listando eventos reservables:', error)
+    res.status(500).json({ error: 'Error al obtener los eventos' })
+  }
+})
+
+// GET /api/reservas/eventos/:idEvento/zonas — zonas del evento con su mapa (para elegir mesa)
+router.get('/eventos/:idEvento/zonas', async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const zonas = await prisma.zona.findMany({
+      where: { id_evento },
+      orderBy: { id_zona: 'asc' },
+      include: { mesa_espacio: { orderBy: { id_mesa: 'asc' } } },
+    })
+    // Solo exponemos lo necesario para dibujar y decidir; no filtramos elementos
+    // decorativos (pared/barra/escenario) porque el cliente los necesita para ubicarse.
+    res.json(zonas)
+  } catch (error) {
+    console.error('Error obteniendo zonas del evento:', error)
+    res.status(500).json({ error: 'Error al obtener el mapa del evento' })
+  }
+})
+
+// ---------- RESERVA ----------
+
+// POST /api/reservas/mesa — reservar una mesa y pagar con billetera (atomico)
+// Body: { id_mesa, cantidad_personas?, pin? }
+router.post('/mesa', async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const id_mesa = Number(req.body.id_mesa)
+    const cantidad_personas = Math.max(1, Number(req.body.cantidad_personas) || 1)
+    const { pin } = req.body
+
+    if (!id_mesa) return res.status(400).json({ error: 'Falta la mesa a reservar' })
+
+    // 1. Traer la mesa con su zona (para precio y validaciones)
+    const mesa = await prisma.mesa_espacio.findUnique({
+      where: { id_mesa },
+      include: { zona: true },
+    })
+    if (!mesa) return res.status(404).json({ error: 'La mesa no existe' })
+    if (mesa.tipo_elemento !== 'mesa' || !mesa.es_seleccionable) {
+      return res.status(400).json({ error: 'Ese elemento no es reservable' })
+    }
+    if (mesa.estado_ocupacion !== 'libre') {
+      return res.status(409).json({ error: 'Esa mesa ya fue reservada. Elige otra.' })
+    }
+    if (cantidad_personas > mesa.capacidad_sillas && mesa.capacidad_sillas > 0) {
+      return res.status(400).json({ error: `La mesa admite hasta ${mesa.capacidad_sillas} personas` })
+    }
+
+    // 2. Precio: el de la mesa si tiene, si no el base de la zona
+    const precio = Number(mesa.precio != null ? mesa.precio : mesa.zona.precio_entrada_base)
+    if (!(precio >= 0)) return res.status(400).json({ error: 'La mesa no tiene un precio valido' })
+
+    // 3. Billetera del cliente (+ PIN si esta configurado)
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
+    if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+
+    if (billetera.pin_transaccional) {
+      if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
+      const bcrypt = require('bcryptjs')
+      const pinValido = await bcrypt.compare(String(pin), billetera.pin_transaccional)
+      if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
+    }
+
+    if (Number(billetera.saldo_actual) < precio) {
+      return res.status(400).json({ error: 'Saldo insuficiente para reservar esta mesa' })
+    }
+
+    const codigo = generarCodigoEntrada(id_usuario)
+
+    // 4. Transaccion atomica: cobra SOLO si hay saldo, reserva la mesa SOLO si sigue libre.
+    let entradaCreada
+    try {
+      entradaCreada = await prisma.$transaction(async (tx) => {
+        // 4a. Descuento condicional de saldo (evita doble gasto / saldo negativo)
+        if (precio > 0) {
+          const descuento = await tx.billetera.updateMany({
+            where: { id_billetera: billetera.id_billetera, saldo_actual: { gte: precio } },
+            data: { saldo_actual: { decrement: precio }, ultima_actualizacion: new Date() },
+          })
+          if (descuento.count === 0) throw new Error('SALDO_INSUFICIENTE')
+        }
+
+        // 4b. Reserva condicional de la mesa (evita doble reserva simultanea)
+        const tomada = await tx.mesa_espacio.updateMany({
+          where: { id_mesa, estado_ocupacion: 'libre' },
+          data: { estado_ocupacion: 'reservada' },
+        })
+        if (tomada.count === 0) throw new Error('MESA_OCUPADA')
+
+        // 4c. Crear la entrada (reserva)
+        const entrada = await tx.entrada.create({
+          data: {
+            id_usuario,
+            id_zona: mesa.id_zona,
+            id_mesa,
+            qr_acceso: codigo,
+            codigo_ingreso: codigo.slice(-12).toUpperCase(),
+            cantidad_personas,
+            monto_pagado: precio,
+            estado_validacion: false,
+            fecha_reserva: new Date(),
+          },
+        })
+
+        // 4d. Registrar la transaccion (solo si hubo cobro real)
+        if (precio > 0) {
+          await tx.transaccion.create({
+            data: {
+              id_billetera: billetera.id_billetera,
+              id_responsable: id_usuario,
+              tipo_operacion: 'Reserva',
+              monto: precio,
+              fecha_hora: new Date(),
+            },
+          })
+        }
+        return entrada
+      })
+    } catch (e) {
+      if (e.message === 'SALDO_INSUFICIENTE') {
+        return res.status(400).json({ error: 'Saldo insuficiente para reservar esta mesa' })
+      }
+      if (e.message === 'MESA_OCUPADA') {
+        return res.status(409).json({ error: 'Alguien reservo esa mesa antes que tu. Elige otra.' })
+      }
+      throw e
+    }
+
+    // 5. QR de la entrada + combos sugeridos (upsell)
+    const imagenQR = await generarImagenQREntrada(entradaCreada)
+    const combos = await obtenerCombosSugeridos(3)
+
+    // 6. Tiempo real: avisar que la mesa cambio y refrescar saldo del cliente
+    if (global.io) {
+      global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa, estado: 'reservada' })
+      global.io.emit('billetera_actualizada', {
+        id_usuario,
+        saldo_nuevo: Number(billetera.saldo_actual) - precio,
+      })
+    }
+
+    res.status(201).json({
+      mensaje: 'Reserva confirmada',
+      entrada: {
+        id_entrada: entradaCreada.id_entrada,
+        codigo_ingreso: entradaCreada.codigo_ingreso,
+        cantidad_personas: entradaCreada.cantidad_personas,
+        monto_pagado: precio,
+        mesa: mesa.numero_nombre,
+        zona: mesa.zona.nombre_zona,
+      },
+      qr: imagenQR,
+      saldo_restante: Number(billetera.saldo_actual) - precio,
+      combos_sugeridos: combos,
+    })
+  } catch (error) {
+    console.error('Error reservando mesa:', error)
+    res.status(500).json({ error: 'Error al procesar la reserva' })
+  }
+})
+
+// ---------- MIS RESERVAS ----------
+
+// GET /api/reservas/mias — entradas/reservas del cliente con su QR
+router.get('/mias', async (req, res) => {
+  try {
+    const entradas = await prisma.entrada.findMany({
+      where: { id_usuario: req.usuario.id },
+      orderBy: { fecha_reserva: 'desc' },
+      include: {
+        zona: { include: { evento: true } },
+        mesa_espacio: true,
+      },
+    })
+
+    const salida = await Promise.all(entradas.map(async (e) => ({
+      id_entrada: e.id_entrada,
+      codigo_ingreso: e.codigo_ingreso,
+      cantidad_personas: e.cantidad_personas,
+      monto_pagado: e.monto_pagado != null ? Number(e.monto_pagado) : null,
+      estado_validacion: e.estado_validacion,
+      fecha_reserva: e.fecha_reserva,
+      mesa: e.mesa_espacio ? e.mesa_espacio.numero_nombre : null,
+      zona: e.zona ? e.zona.nombre_zona : null,
+      evento: e.zona && e.zona.evento ? e.zona.evento.nombre_evento : null,
+      fecha_evento: e.zona && e.zona.evento ? e.zona.evento.fecha_hora_inicio : null,
+      qr: await generarImagenQREntrada(e),
+    })))
+    res.json(salida)
+  } catch (error) {
+    console.error('Error obteniendo mis reservas:', error)
+    res.status(500).json({ error: 'Error al obtener tus reservas' })
+  }
+})
+
+module.exports = router

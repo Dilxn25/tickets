@@ -59,9 +59,14 @@
           <p class="descripcion">{{ evento.descripcion || 'Vive la mejor experiencia en EUPHORIA.' }}</p>
 
           <!-- Si el evento tiene zonas, mostramos info, si no, es reserva general -->
-          <button class="btn-reservar" @click="verDetalles(evento)">
-            Ver Detalles del Evento
-          </button>
+          <div class="acciones-evento">
+            <button class="btn-detalles" @click="verDetalles(evento)">
+              Ver Detalles
+            </button>
+            <button class="btn-reservar" @click="reservarMesa(evento)">
+              Reservar mesa
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -115,6 +120,9 @@ function obtenerHora(fecha) {
 // Acción del cliente
 function verDetalles(evento) {
   router.push(`/cliente/eventos/${evento.id_evento}`)
+}
+function reservarMesa(evento) {
+  router.push({ path: `/cliente/reservar/${evento.id_evento}`, query: { nombre: evento.nombre_evento } })
 }
 </script>
 
@@ -228,14 +236,27 @@ function verDetalles(evento) {
 .icono { width: 14px; height: 14px; }
 .descripcion { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.2rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+.acciones-evento { display: flex; gap: 10px; }
+.btn-detalles {
+  flex: 1;
+  background: var(--fondo-tarjeta-alt, rgba(255,255,255,0.05));
+  color: var(--texto-principal);
+  border: 1px solid var(--borde-sutil);
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: transform 0.2s;
+}
+.btn-detalles:active { transform: scale(0.98); }
 .btn-reservar {
-  width: 100%;
+  flex: 1.4;
   background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
   color: #fff;
   border: none;
   padding: 12px;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   box-shadow: 0 4px 15px rgba(219,39,119,0.3);
   transition: transform 0.2s;

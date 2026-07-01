@@ -109,16 +109,21 @@ model entrada {
   id_entrada        Int              @id @default(autoincrement())
   id_usuario        Int
   id_zona           Int
+  id_mesa           Int?
   qr_acceso         String           @unique(map: "ENTRADA_qr_acceso_key") @db.VarChar(255)
   codigo_ingreso    String?          @unique @db.VarChar(50)
   cantidad_personas Int              @default(1)
+  monto_pagado      Decimal?         @db.Decimal(10, 2)
   estado_validacion Boolean          @default(false)
+  fecha_reserva     DateTime         @default(now())
   usuario           usuario          @relation(fields: [id_usuario], references: [id_usuario], map: "ENTRADA_id_usuario_fkey")
   zona              zona             @relation(fields: [id_zona], references: [id_zona], map: "ENTRADA_id_zona_fkey")
+  mesa_espacio      mesa_espacio?    @relation(fields: [id_mesa], references: [id_mesa], map: "ENTRADA_id_mesa_fkey")
   registro_aforo    registro_aforo[]
 
   @@index([id_usuario], map: "ENTRADA_id_usuario_fkey")
   @@index([id_zona], map: "ENTRADA_id_zona_fkey")
+  @@index([id_mesa], map: "ENTRADA_id_mesa_fkey")
 }
 
 model evento {
@@ -138,14 +143,28 @@ model mesa_espacio {
   numero_nombre    String    @db.VarChar(50)
   posicion_x       Float
   posicion_y       Float
+  ancho            Float?
+  alto             Float?
+  rotacion         Float?
   capacidad_sillas Int
+  precio           Decimal?  @db.Decimal(10, 2)
   estado_ocupacion String    @db.VarChar(20)
   tipo_elemento    String    @db.VarChar(20)
   es_seleccionable Boolean   @default(true)
+  forma            String?   @db.VarChar(20)
   comanda          comanda[]
+  entrada          entrada[]
   zona             zona      @relation(fields: [id_zona], references: [id_zona], map: "MESA_ESPACIO_id_zona_fkey")
 
   @@index([id_zona], map: "MESA_ESPACIO_id_zona_fkey")
+}
+
+model plantilla_mapa {
+  id_plantilla Int      @id @default(autoincrement())
+  nombre       String   @db.VarChar(100)
+  descripcion  String?  @db.Text
+  layout_json  String   @db.LongText
+  fecha        DateTime @default(now())
 }
 
 model prediccion_ia {
@@ -252,6 +271,7 @@ model zona {
   nombre_zona         String           @db.VarChar(50)
   capacidad_maxima    Int
   precio_entrada_base Decimal          @db.Decimal(10, 2)
+  proporcion          Float?
   entrada             entrada[]
   mesa_espacio        mesa_espacio[]
   registro_aforo      registro_aforo[]
