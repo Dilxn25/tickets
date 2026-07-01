@@ -170,8 +170,7 @@ const productosFiltrados = computed(() => {
 })
 
 function abrirDetalle(producto) {
-  // Por ahora, o puede abrir un modal
-  console.log('Ver detalle', producto.nombre_producto)
+  // Reservado para abrir el detalle/modal del producto
 }
 
 function agregarAlCarrito(producto) {

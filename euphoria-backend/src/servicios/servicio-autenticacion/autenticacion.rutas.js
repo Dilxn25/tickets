@@ -107,7 +107,6 @@ router.post('/login', limiteLogin, async (req, res) => {
     }
 
     const tokens = generarTokens(usuario)
-    console.log(`Login exitoso (usuario #${usuario.id_usuario}, rol ${usuario.rol.nombre_rol})`)
 
     res.json({
       mensaje: 'Sesión iniciada correctamente',

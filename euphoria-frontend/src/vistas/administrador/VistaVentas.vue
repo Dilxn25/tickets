@@ -271,8 +271,6 @@ async function cargarVentas() {
         subtotal: parseFloat(det.subtotal)
       }))
     }))
-    
-    console.log('Ventas cargadas:', ventas.value)
   } catch (error) {
     console.error('Error cargando ventas:', error)
   } finally {
