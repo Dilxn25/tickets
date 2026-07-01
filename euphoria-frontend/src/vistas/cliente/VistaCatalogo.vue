@@ -183,6 +183,7 @@ function agregarAlCarrito(producto) {
 
 <style scoped>
 .vista-catalogo {
+  --azul-profundo: var(--color-info);
   padding: 1.5rem 1rem;
 }
 
@@ -314,7 +315,7 @@ function agregarAlCarrito(producto) {
 .imagen-box::after {
   content: '';
   position: absolute; bottom: 0; left: 0; right: 0; height: 30px;
-  background: linear-gradient(to top, rgba(26,17,40,1), transparent);
+  background: linear-gradient(to top, var(--fondo-tarjeta), transparent);
 }
 
 .info-box {

@@ -186,16 +186,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-:root {
-  --morado-brillante: #9D4EDD;
-  --azul-profundo: #3A86FF;
-  --verde-fresco: #06D6A0;
-  --rojo-suave: #EF476F;
-  --amarillo-alerta: #FFC107;
-  --fondo-principal: #0D1117;
-  --fondo-tarjeta: #161B22;
-  --texto-principal: #FFFFFF;
-  --texto-secundario: #8B949E;
+.contenedor-carrito {
+  --azul-profundo: var(--color-info);
+  --verde-fresco: var(--color-exito);
+  --rojo-suave: var(--color-error);
+  --amarillo-alerta: var(--color-alerta);
+  --fondo-principal: var(--fondo-app);
 }
 
 .contenedor-carrito {
@@ -379,7 +375,7 @@ onMounted(async () => {
 }
 
 .error-codigo {
-  color: #ff6b6b;
+  color: var(--color-error);
   font-size: 0.8rem;
   margin: 0.5rem 0 0 0;
 }
@@ -569,7 +565,7 @@ onMounted(async () => {
   padding: 0.5rem;
   font-size: 1rem;
 }
-.btn-eliminar:hover { color: #f44336; }
+.btn-eliminar:hover { color: var(--color-error); }
 
 /* RESUMEN MINIMALISTA */
 .resumen-mini {
@@ -662,7 +658,7 @@ onMounted(async () => {
 
 .alerta-error {
   background: rgba(244, 67, 54, 0.1);
-  color: #ff9999;
+  color: var(--color-error);
   border-color: rgba(244, 67, 54, 0.3);
 }
 

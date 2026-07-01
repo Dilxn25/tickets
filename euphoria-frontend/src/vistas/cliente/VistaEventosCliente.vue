@@ -132,7 +132,7 @@ function verDetalles(evento) {
   position: relative;
   width: 100%;
   height: 350px; /* Mas alto para apreciar mejor los posters verticales */
-  background: var(--fondo-oscuro);
+  background: var(--fondo-app);
 }
 
 .portada-img {
@@ -148,7 +148,7 @@ function verDetalles(evento) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f1240, #361b5c);
+  background: linear-gradient(135deg, var(--fondo-tarjeta), var(--fondo-tarjeta));
   color: rgba(255,255,255,0.1);
   font-size: 2.5rem;
   font-weight: 900;
@@ -159,7 +159,7 @@ function verDetalles(evento) {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: 80px;
-  background: linear-gradient(to top, rgba(15,10,25,1), transparent);
+  background: linear-gradient(to top, var(--fondo-app), transparent);
 }
 
 .fecha-badge {
@@ -183,7 +183,7 @@ function verDetalles(evento) {
 }
 
 .nombre { font-size: 1.2rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 0.4rem; }
-.hora { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--color-primario); font-weight: 600; margin-bottom: 0.8rem; }
+.hora { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--morado-brillante); font-weight: 600; margin-bottom: 0.8rem; }
 .icono { width: 14px; height: 14px; }
 .descripcion { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.2rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 

@@ -30,7 +30,7 @@
         </div>
         
         <div v-else-if="comandas.length === 0" class="mensaje-vacio fade-in">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.5" width="60" height="60" style="margin-bottom:10px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" width="60" height="60" style="margin-bottom:10px; stroke: var(--color-exito);"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           <h3>No hay pedidos pendientes</h3>
           <p>¡Buen trabajo! La barra está al día.</p>
         </div>
@@ -308,7 +308,7 @@ onUnmounted(() => {
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 5px 0;
-  background: linear-gradient(90deg, #F72585, #7209B7);
+  background: linear-gradient(90deg, var(--rosa-acento), var(--morado-medio));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -338,7 +338,7 @@ onUnmounted(() => {
 .stat-numero {
   font-size: 1.5rem;
   font-weight: bold;
-  color: #F72585;
+  color: var(--rosa-acento);
 }
 
 .stat-etiq {
@@ -397,7 +397,7 @@ onUnmounted(() => {
 }
 
 .comanda-card {
-  background: var(--bg-card);
+  background: var(--fondo-tarjeta);
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 16px;
   padding: 20px;
@@ -440,7 +440,7 @@ onUnmounted(() => {
 }
 
 .tiempo-critico {
-  color: #EF476F;
+  color: var(--color-error);
   background: rgba(239, 71, 111, 0.1);
 }
 
@@ -472,7 +472,7 @@ onUnmounted(() => {
 }
 
 .mesa-badge {
-  background: #F72585;
+  background: var(--rosa-acento);
   color: white;
   padding: 2px 8px;
   border-radius: 4px;
@@ -509,7 +509,7 @@ onUnmounted(() => {
 }
 
 .prod-cant {
-  background: #7209B7;
+  background: var(--morado-medio);
   color: white;
   font-weight: bold;
   padding: 2px 6px;
@@ -531,7 +531,7 @@ onUnmounted(() => {
 
 .btn-preparar {
   width: 100%;
-  background: #ffb703;
+  background: var(--color-alerta);
   color: #000;
   border: none;
   padding: 12px;
@@ -553,7 +553,7 @@ onUnmounted(() => {
 
 .btn-completar {
   width: 100%;
-  background: #06D6A0;
+  background: var(--color-exito);
   color: #000;
   border: none;
   padding: 12px;
@@ -629,9 +629,9 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.1);
 }
 .bartender-tabs button.activo {
-  background: #7209B7;
+  background: var(--morado-medio);
   color: white;
-  border-color: #7209B7;
+  border-color: var(--morado-medio);
 }
 
 /* Filtros de Fecha Historial */
@@ -655,7 +655,7 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.1);
 }
 .btn-filtro.activo {
-  background: linear-gradient(90deg, #F72585, #7209B7);
+  background: linear-gradient(90deg, var(--rosa-acento), var(--morado-medio));
   color: white;
   border: none;
 }
@@ -671,14 +671,14 @@ onUnmounted(() => {
   transition: all 0.3s;
 }
 .date-picker-container.activo {
-  border-color: #F72585;
+  border-color: var(--rosa-acento);
   box-shadow: 0 0 10px rgba(247, 37, 133, 0.3);
 }
 .date-picker-container svg {
   color: var(--texto-secundario);
 }
 .date-picker-container.activo svg {
-  color: #F72585;
+  color: var(--rosa-acento);
 }
 .date-picker {
   background: transparent;
@@ -754,12 +754,12 @@ onUnmounted(() => {
 }
 .est-completada {
   background: rgba(6, 214, 160, 0.1);
-  color: #06D6A0;
+  color: var(--color-exito);
   border: 1px solid rgba(6, 214, 160, 0.2);
 }
 .est-listo {
   background: rgba(247, 37, 133, 0.1);
-  color: #F72585;
+  color: var(--rosa-acento);
   border: 1px solid rgba(247, 37, 133, 0.2);
 }
 
@@ -792,7 +792,7 @@ onUnmounted(() => {
 }
 .info-valor svg {
   width: 14px; height: 14px;
-  color: #F72585;
+  color: var(--rosa-acento);
 }
 
 .hist-prods {
@@ -809,7 +809,7 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 .hp-cant {
-  background: #7209B7;
+  background: var(--morado-medio);
   color: white;
   font-weight: 800;
   font-size: 0.85rem;

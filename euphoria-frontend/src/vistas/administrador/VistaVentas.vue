@@ -130,7 +130,7 @@
             </div>
             <div class="campo-detalle">
               <span class="etiqueta">Total a Pagar:</span>
-              <span class="valor texto-fuerte" style="color: #10b981; font-size: 1.1rem;">Bs. {{ ventaSeleccionada.monto_total.toFixed(2) }}</span>
+              <span class="valor texto-fuerte" style="color: var(--color-exito); font-size: 1.1rem;">Bs. {{ ventaSeleccionada.monto_total.toFixed(2) }}</span>
             </div>
             <div v-if="ventaSeleccionada.monto_recibido" class="campo-detalle">
               <span class="etiqueta">Monto Recibido:</span>
@@ -613,7 +613,7 @@ async function cancelarVenta() {
 }
 
 .btn-peligro {
-  background: #ef4444;
+  background: var(--color-error);
   color: white;
 }
 
@@ -622,7 +622,7 @@ async function cancelarVenta() {
 }
 
 .btn-exito {
-  background: #10b981;
+  background: var(--color-exito);
   color: white;
 }
 

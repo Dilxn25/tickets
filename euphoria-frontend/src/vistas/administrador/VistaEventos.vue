@@ -311,6 +311,9 @@ async function confirmarCambioEstado() {
 </script>
 
 <style scoped>
+/* Mapeo de variables locales indefinidas a la paleta global */
+.vista-eventos { --fondo-oscuro: var(--fondo-app); --color-primario: var(--morado-claro); }
+
 /* Notificacion del Sistema — centrada y grande */
 .notif-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(6px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .notif-card { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-top: 5px solid var(--morado-brillante); border-radius: 20px; padding: 40px 35px 30px; display: flex; flex-direction: column; align-items: center; gap: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); max-width: 480px; width: 100%; text-align: center; }

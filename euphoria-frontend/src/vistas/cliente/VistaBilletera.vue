@@ -219,7 +219,7 @@
                 @blur="validarMonto"
                 class="input-field"
               />
-              <svg v-if="montoIngresado >= 10 && !errorMonto" class="icono-check-valido" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+              <svg v-if="montoIngresado >= 10 && !errorMonto" class="icono-check-valido" width="24" height="24" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
@@ -244,7 +244,7 @@
               
               <div v-else class="vista-previa-comprobante" @click.stop>
                 <div class="info-archivo">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                   </svg>
@@ -350,7 +350,7 @@
     <div v-if="modalExito" class="modal-overlay" @click.self="modalExito = false">
       <div class="modal-detalles modal-exito">
         <div class="icono-exito">
-          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
@@ -706,16 +706,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-:root {
-  --morado-brillante: #9D4EDD;
-  --azul-profundo: #3A86FF;
-  --verde-fresco: #06D6A0;
-  --rojo-suave: #EF476F;
-  --fondo-principal: #0D1117;
-  --fondo-tarjeta: #161B22;
-  --texto-principal: #FFFFFF;
-  --texto-secundario: #8B949E;
-  --borde-color: rgba(170, 59, 255, 0.2);
+/* Alias locales mapeados a la paleta global Euphoria (variables.css).
+   Se definen en el contenedor raiz para que hereden a todos los hijos. */
+.contenedor-billetera {
+  --azul-profundo:   var(--rosa-acento);
+  --verde-fresco:    var(--color-exito);
+  --rojo-suave:      var(--color-error);
+  --rojo-coral:      var(--color-error);
+  --fondo-principal: var(--fondo-app);
+  --borde-color:     var(--borde-sutil);
 }
 
 .contenedor-billetera {
@@ -839,7 +838,7 @@ onUnmounted(() => {
 .btn-ojo-nuevo {
   background: none;
   border: none;
-  color: #B0B5C1;
+  color: var(--texto-secundario);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -883,7 +882,7 @@ onUnmounted(() => {
 }
 
 .etiqueta-pequena {
-  color: #B0B5C1;
+  color: var(--texto-secundario);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -1644,19 +1643,19 @@ onUnmounted(() => {
 
 .badge-completada {
   background: rgba(6, 214, 160, 0.15);
-  color: #06D6A0;
+  color: var(--color-exito);
   border: 1px solid rgba(6, 214, 160, 0.3);
 }
 
 .badge-pendiente {
   background: rgba(255, 209, 102, 0.15);
-  color: #FFD166;
+  color: var(--color-alerta);
   border: 1px solid rgba(255, 209, 102, 0.3);
 }
 
 .badge-rechazada, .badge-rechazado {
   background: rgba(239, 71, 111, 0.15);
-  color: #EF476F;
+  color: var(--color-error);
   border: 1px solid rgba(239, 71, 111, 0.3);
 }
 
@@ -1689,7 +1688,7 @@ onUnmounted(() => {
 
 .btn-eliminar-archivo {
   background: rgba(239, 71, 111, 0.1);
-  color: #EF476F;
+  color: var(--color-error);
   border: none;
   border-radius: 50%;
   width: 32px;
@@ -1702,7 +1701,7 @@ onUnmounted(() => {
 }
 
 .btn-eliminar-archivo:hover {
-  background: #EF476F;
+  background: var(--color-error);
   color: white;
   transform: scale(1.1);
 }
@@ -1790,12 +1789,12 @@ onUnmounted(() => {
 }
 
 .input-monto-valido {
-  border-color: #06D6A0 !important;
+  border-color: var(--color-exito) !important;
   box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.2);
 }
 
 .input-monto-error {
-  border-color: #EF476F !important;
+  border-color: var(--color-error) !important;
   box-shadow: 0 0 0 2px rgba(239, 71, 111, 0.2);
 }
 
@@ -1803,7 +1802,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #FFD166;
+  color: var(--color-alerta);
   font-size: 0.85rem;
   margin-top: 0.5rem;
   background: rgba(255, 209, 102, 0.1);
@@ -1819,7 +1818,7 @@ onUnmounted(() => {
 
 .badge-pendiente {
   background: rgba(255, 193, 7, 0.15);
-  color: #ffc107;
+  color: var(--color-alerta);
 }
 
 .badge-rechazado {

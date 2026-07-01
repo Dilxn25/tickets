@@ -19,7 +19,7 @@
     <div v-if="modalExito" class="modal-overlay" @click.self="modalExito = null">
       <div class="modal-exito anim-fade">
         <div class="modal-icono-exito">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
@@ -113,7 +113,7 @@
             </label>
             <input v-model="nuevoId" type="text" placeholder="72285280" required @input="verificarIdentificador" autocomplete="off" />
             <p v-if="errorIdExiste" class="error-texto" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFD166" stroke-width="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-alerta)" stroke-width="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
@@ -148,7 +148,7 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:#EF476F;" @click="detenerCamaraAbrir">Detener Cámara</button>
+            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);" @click="detenerCamaraAbrir">Detener Cámara</button>
           </div>
 
 
@@ -209,7 +209,7 @@
             <div :class="['input-con-icono', { 'input-valido': nuevoMonto >= 10, 'input-error': nuevoMonto > 0 && nuevoMonto < 10 }]">
               <span class="prefijo">Bs.</span>
               <input v-model.number="nuevoMonto" type="number" min="0" step="1" placeholder="0" />
-              <svg v-if="nuevoMonto >= 10" class="icono-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2.5">
+              <svg v-if="nuevoMonto >= 10" class="icono-check" width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
@@ -297,11 +297,11 @@
             <div v-show="camaraComprobanteAbrirActiva" style="margin-top:0.75rem;">
               <div class="qr-scanner-wrapper"><div id="reader-comprobante-abrir"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteAbrirDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteAbrirDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteAbrirDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Detectado</p></div></div></div>
               <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:#06D6A0;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('abrir')">
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:var(--color-exito);border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('abrir')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                   Tomar Foto
                 </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:#EF476F;border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteAbrir">Cancelar</button>
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteAbrir">Cancelar</button>
               </div>
             </div>
 
@@ -323,7 +323,7 @@
             </div>
             <div v-if="ocrExitoso === true" class="estado-ocr exito-detallado">
               <div class="exito-icono">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </div>
               <div class="exito-texto">
                 <div class="exito-titulo">Comprobante válido</div>
@@ -331,7 +331,7 @@
               </div>
             </div>
             <div v-if="ocrExitoso === false" class="estado-ocr error-ocr">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD166" stroke-width="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-alerta)" stroke-width="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
@@ -341,7 +341,7 @@
 
           <!-- Banner error -->
           <div v-if="errorRecargar" class="banner-error anim-fade">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF476F" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-error)" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
@@ -399,7 +399,7 @@
             />
             <div v-if="resultadosBusqueda.length > 0" class="dropdown-resultados">
               <div v-for="u in resultadosBusqueda" :key="u.id_usuario" class="resultado-item" @click="seleccionarCliente(u)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
                 </svg>
                 <div class="resultado-info">
@@ -437,11 +437,11 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:#EF476F;" @click="detenerCamaraRecarga">Detener Cámara</button>
+            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);" @click="detenerCamaraRecarga">Detener Cámara</button>
           </div>
 
           <div v-if="clienteSeleccionado" class="cliente-chip">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
             </svg>
             <div class="chip-info">
@@ -466,7 +466,7 @@
             <div :class="['input-con-icono', { 'input-valido': montoRecarga >= 10, 'input-error': montoRecarga > 0 && montoRecarga < 10 }]">
               <span class="prefijo">Bs.</span>
               <input v-model.number="montoRecarga" type="number" min="1" step="0.5" placeholder="0.00" required />
-              <svg v-if="montoRecarga >= 10" class="icono-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2.5">
+              <svg v-if="montoRecarga >= 10" class="icono-check" width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
@@ -565,11 +565,11 @@
             <div v-show="camaraComprobanteRecargarActiva" style="margin-top:0.75rem;">
               <div class="qr-scanner-wrapper"><div id="reader-comprobante-recargar"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteRecargarDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteRecargarDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteRecargarDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Comprobante detectado</p></div></div></div>
               <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:#06D6A0;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('recargar')">
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:var(--color-exito);border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('recargar')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                   Tomar Foto
                 </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:#EF476F;border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteRecargar">Cancelar</button>
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteRecargar">Cancelar</button>
               </div>
             </div>
 
@@ -590,7 +590,7 @@
             </div>
             <div v-if="ocrExitoso === true" class="estado-ocr exito-detallado">
               <div class="exito-icono">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </div>
               <div class="exito-texto">
                 <div class="exito-titulo">Comprobante válido</div>
@@ -598,7 +598,7 @@
               </div>
             </div>
             <div v-if="ocrExitoso === false" class="estado-ocr error-ocr">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD166" stroke-width="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-alerta)" stroke-width="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
@@ -609,7 +609,7 @@
 
           <!-- Banner error -->
           <div v-if="errorRecargar" class="banner-error anim-fade">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF476F" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-error)" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
@@ -623,7 +623,7 @@
 
           <!-- Aviso si no hay cliente -->
           <div v-if="!clienteSeleccionado" class="aviso-cliente-requerido">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD166" stroke-width="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-alerta)" stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
               <line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
@@ -671,7 +671,7 @@
             />
             <div v-if="resultadosConsulta.length > 0" class="dropdown-resultados">
               <div v-for="u in resultadosConsulta" :key="u.id_usuario" class="resultado-item" @click="seleccionarClienteConsulta(u)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
                 </svg>
                 <div class="resultado-info">
@@ -720,13 +720,13 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%; margin-top:10px; background: rgba(239,71,111,0.15); border: 1px solid rgba(239,71,111,0.3); color: #EF476F;" @click="detenerCamaraCajero">
+            <button type="button" class="btn-accion-principal" style="width:100%; margin-top:10px; background: rgba(239,71,111,0.15); border: 1px solid rgba(239,71,111,0.3); color: var(--color-error);" @click="detenerCamaraCajero">
               Detener Cámara
             </button>
           </div>
 
           <div v-if="clienteConsultaSeleccionado" class="cliente-chip" style="margin-bottom: 1rem;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
             </svg>
             <div class="chip-info">
@@ -753,14 +753,14 @@
 
         <div v-if="resultadoConsulta" class="resultado-consulta" style="margin-top: 2rem; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; text-align: center;">
           <h3 style="color: white; margin-bottom: 0.5rem;">{{ resultadoConsulta.nombres }} {{ resultadoConsulta.apellidos }}</h3>
-          <p style="color: #aaa; margin-bottom: 1.5rem;">Saldo Actual: <strong style="color: #06D6A0; font-size: 1.2rem;">Bs. {{ resultadoConsulta.saldo.toFixed(2) }}</strong></p>
+          <p style="color: var(--texto-secundario); margin-bottom: 1.5rem;">Saldo Actual: <strong style="color: var(--color-exito); font-size: 1.2rem;">Bs. {{ resultadoConsulta.saldo.toFixed(2) }}</strong></p>
           
           <div style="background: white; padding: 1rem; border-radius: 16px; display: inline-block; margin-bottom: 1rem;">
             <img v-if="qrConsultaBase64" :src="qrConsultaBase64" alt="QR Público" style="width: 200px; height: 200px;" />
           </div>
           <div class="codigo-gigante" style="font-size: 1.2rem; word-break: break-all;">{{ resultadoConsulta.qr_publico }}</div>
           
-          <div style="margin-top: 1rem; text-align: left; color: #888; font-size: 0.9rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
+          <div style="margin-top: 1rem; text-align: left; color: var(--texto-secundario); font-size: 0.9rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
             <p style="margin-bottom: 0.5rem;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline>
@@ -774,12 +774,12 @@
               <strong style="color: white;">Tel/CI:</strong> {{ resultadoConsulta.telefono || resultadoConsulta.ci_carnet }}
             </p>
             <p style="margin-bottom: 0.5rem;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" style="stroke: var(--color-exito); vertical-align: middle; margin-right: 4px;">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
               </svg>
-              <strong style="color: white;">Estado:</strong> <span style="color: #06D6A0; text-transform: capitalize;">{{ resultadoConsulta.estado }}</span>
+              <strong style="color: white;">Estado:</strong> <span style="color: var(--color-exito); text-transform: capitalize;">{{ resultadoConsulta.estado }}</span>
             </p>
-            <p style="margin-top: 1rem; font-size: 0.8rem; color: #ffb703; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.8rem;">
+            <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--color-alerta); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.8rem;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 2px;">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
@@ -791,7 +791,7 @@
                 {{ cargandoPin ? '...' : 'Cambiar PIN' }}
               </button>
             </div>
-            <div v-if="msjPin" style="color: #06D6A0; font-size: 0.85rem; margin-top: 0.5rem;">{{ msjPin }}</div>
+            <div v-if="msjPin" style="color: var(--color-exito); font-size: 0.85rem; margin-top: 0.5rem;">{{ msjPin }}</div>
           </div>
         </div>
       </div>
@@ -857,31 +857,31 @@
 
             <!-- Panel Detalle Desplegable -->
             <div v-if="trxDetalleId === trx.id_recarga" class="detalle-trx-box anim-fade" style="width: 100%; margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; font-size: 0.9rem;">
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; color: #ccc;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; color: var(--texto-secundario);">
                 <div>
-                  <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.2rem;">ID Recarga</div>
+                  <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">ID Recarga</div>
                   <strong style="color: white;">#{{ trx.id_recarga }}</strong>
                 </div>
                 <div>
-                  <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.2rem;">Ref. Transacción</div>
+                  <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">Ref. Transacción</div>
                   <strong style="color: white;">{{ trx.numero_transaccion || 'N/A' }}</strong>
                 </div>
                 <div>
-                  <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.2rem;">Método de Pago</div>
+                  <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">Método de Pago</div>
                   <strong style="color: white; display: flex; align-items: center; gap: 4px;">
-                    <svg v-if="trx.comprobante_url" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <svg v-if="trx.comprobante_url" width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                     {{ trx.comprobante_url ? 'Transferencia QR' : 'Efectivo en Caja' }}
                   </strong>
                 </div>
                 <div>
-                  <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.2rem;">Realizado por</div>
+                  <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.2rem;">Realizado por</div>
                   <strong style="color: white;">{{ trx.comprobante_url ? 'Cliente (App Móvil)' : 'Cajero en Turno' }}</strong>
                 </div>
               </div>
 
               <div v-if="trx.comprobante_url" style="margin-top: 1.5rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-                <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.5rem;">Comprobante Adjunto del Cliente</div>
+                <div style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 0.5rem;">Comprobante Adjunto del Cliente</div>
                 <img :src="urlImagenBase(trx.comprobante_url)" alt="Comprobante" style="max-width: 100%; max-height: 350px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);" />
               </div>
             </div>
@@ -895,12 +895,12 @@
       <div class="modal-contenido modal-gigante" style="max-width: 450px; text-align: center;">
         <div class="modal-header-centrado">
           <div class="icono-exito-grande">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
           </div>
           <h2 style="color: white; margin: 1rem 0 0.5rem; font-size: 1.5rem;">¡Billetera Creada!</h2>
-          <p style="color: #aaa; margin: 0 0 1.5rem;">La cuenta está lista para usarse.</p>
+          <p style="color: var(--texto-secundario); margin: 0 0 1.5rem;">La cuenta está lista para usarse.</p>
         </div>
         
         <div class="qr-generado-box" style="background: white; padding: 1rem; border-radius: 16px; display: inline-block; margin-bottom: 1rem; box-shadow: 0 0 20px rgba(157,78,221,0.3);">
@@ -917,15 +917,15 @@
         
         <div class="credenciales-resumen" style="background: rgba(255,255,255,0.05); padding: 1.2rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: left; border: 1px solid rgba(255,255,255,0.1);">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
-            <span style="color: #888;">Correo:</span>
+            <span style="color: var(--texto-secundario);">Correo:</span>
             <strong style="color: white;">{{ credencialesGeneradas.credenciales.correo }}</strong>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
-            <span style="color: #888;">PIN de Seguridad:</span>
-            <strong style="color: #06D6A0; font-size: 1.1rem; letter-spacing: 2px;">{{ nuevoPin || '1234' }}</strong>
+            <span style="color: var(--texto-secundario);">PIN de Seguridad:</span>
+            <strong style="color: var(--color-exito); font-size: 1.1rem; letter-spacing: 2px;">{{ nuevoPin || '1234' }}</strong>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #888;">Saldo Inicial:</span>
+            <span style="color: var(--texto-secundario);">Saldo Inicial:</span>
             <strong style="color: white;">Bs. {{ nuevoMonto || '0.00' }}</strong>
           </div>
         </div>
@@ -1540,6 +1540,7 @@ onMounted(() => {
 
 <style scoped>
 .vista-cajero {
+  --borde-color: var(--borde-sutil);
   padding: 1.5rem;
   max-width: 680px;
   margin: 0 auto;
@@ -1560,7 +1561,7 @@ onMounted(() => {
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #9D4EDD, #3A0CA3);
+  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1580,7 +1581,7 @@ onMounted(() => {
   font-size: 1.4rem;
   font-weight: 800;
   color: var(--texto-principal);
-  background: linear-gradient(90deg, #fff, #9D4EDD);
+  background: linear-gradient(90deg, #fff, var(--morado-brillante));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1600,7 +1601,7 @@ onMounted(() => {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #06D6A0, #04a97e);
+  background: linear-gradient(135deg, var(--color-exito), var(--color-exito));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1609,7 +1610,7 @@ onMounted(() => {
 }
 
 .card-icon-morado {
-  background: linear-gradient(135deg, #9D4EDD, #3A0CA3);
+  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
   box-shadow: 0 8px 24px rgba(157,78,221,0.3);
 }
 
@@ -1667,7 +1668,7 @@ onMounted(() => {
 }
 
 .btn-ubicacion.seleccionado {
-  border-color: #9D4EDD;
+  border-color: var(--morado-brillante);
   background: rgba(157,78,221,0.15);
   color: white;
   box-shadow: 0 0 0 2px rgba(157,78,221,0.2);
@@ -1699,7 +1700,7 @@ onMounted(() => {
 }
 
 .btn-metodo.seleccionado {
-  border-color: #9D4EDD;
+  border-color: var(--morado-brillante);
   background: rgba(157,78,221,0.2);
   color: white;
 }
@@ -1746,7 +1747,7 @@ onMounted(() => {
 }
 
 .modal-exito {
-  background: #0f0f2a;
+  background: var(--fondo-app);
   border: 1px solid rgba(6,214,160,0.3);
   border-radius: 20px;
   padding: 2.5rem 2rem;
@@ -1787,7 +1788,7 @@ onMounted(() => {
   padding: 0.8rem 1rem;
   font-family: monospace;
   font-size: 0.85rem;
-  color: #06D6A0;
+  color: var(--color-exito);
   margin-bottom: 1.5rem;
   letter-spacing: 0.5px;
 }
@@ -1801,7 +1802,7 @@ onMounted(() => {
   border: 1px solid rgba(239,71,111,0.3);
   border-radius: 8px;
   padding: 0.7rem 1rem;
-  color: #EF476F;
+  color: var(--color-error);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -1810,7 +1811,7 @@ onMounted(() => {
   margin-left: auto;
   background: none;
   border: none;
-  color: #EF476F;
+  color: var(--color-error);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1825,7 +1826,7 @@ onMounted(() => {
   border: 1px solid rgba(255,209,102,0.25);
   border-radius: 8px;
   padding: 0.7rem 1rem;
-  color: #FFD166;
+  color: var(--color-alerta);
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -1840,7 +1841,7 @@ onMounted(() => {
   top: 100%;
   left: 0;
   right: 0;
-  background: #1a1a2e;
+  background: var(--fondo-tarjeta);
   border: 1px solid var(--borde-color);
   border-radius: 10px;
   z-index: 50;
@@ -1904,7 +1905,7 @@ onMounted(() => {
 
 .chip-sub {
   font-size: 0.8rem;
-  color: #06D6A0;
+  color: var(--color-exito);
 }
 
 .chip-cerrar {
@@ -1917,11 +1918,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #EF476F;
+  color: var(--color-error);
   transition: background 0.2s;
 }
 
-.chip-cerrar:hover { background: #EF476F; color: white; }
+.chip-cerrar:hover { background: var(--color-error); color: white; }
 
 /* Calculadora vuelto */
 .calculadora-vuelto {
@@ -1942,8 +1943,8 @@ onMounted(() => {
   margin-top: 0.8rem;
 }
 
-.vuelto-ok { background: rgba(6,214,160,0.1); color: #06D6A0; }
-.vuelto-error { background: rgba(239,71,111,0.1); color: #EF476F; }
+.vuelto-ok { background: rgba(6,214,160,0.1); color: var(--color-exito); }
+.vuelto-error { background: rgba(239,71,111,0.1); color: var(--color-error); }
 
 /* === QR SCANNER OVERLAY === */
 .qr-scanner-wrapper { position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #000; }
@@ -1956,20 +1957,20 @@ onMounted(() => {
 .qr-overlay-side { flex: 1; background: rgba(0,0,0,0.55); }
 .qr-overlay-bottom { display: flex; align-items: flex-start; justify-content: center; padding-top: 8px; }
 .qr-viewfinder { width: 200px; height: 200px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px #06D6A0 inset, 0 0 20px rgba(6,214,160,0.5); }
+.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(6,214,160,0.5); }
 .qr-viewfinder-vertical { width: 180px; height: 260px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder-vertical.qr-detected { box-shadow: 0 0 0 3px #06D6A0 inset, 0 0 20px rgba(6,214,160,0.5); }
+.qr-viewfinder-vertical.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(6,214,160,0.5); }
 .corner { position: absolute; width: 20px; height: 20px; border-color: #fff; border-style: solid; transition: border-color 0.3s ease; }
-.qr-viewfinder.qr-detected .corner, .qr-viewfinder-vertical.qr-detected .corner { border-color: #06D6A0; }
+.qr-viewfinder.qr-detected .corner, .qr-viewfinder-vertical.qr-detected .corner { border-color: var(--color-exito); }
 .corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
 .corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
 .corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
 .corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, #9D4EDD, #06D6A0, #9D4EDD, transparent); box-shadow: 0 0 8px rgba(157,78,221,0.8); animation: scan-move 1.8s ease-in-out infinite; }
+.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--color-exito), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(157,78,221,0.8); animation: scan-move 1.8s ease-in-out infinite; }
 @keyframes scan-move { 0% { top: 10px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: calc(100% - 10px); opacity: 0; } }
 .qr-hint { color: rgba(255,255,255,0.75); font-size: 0.75rem; text-align: center; margin: 0; padding: 0 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-.qr-hint-ok { color: #06D6A0; font-weight: 700; font-size: 0.82rem; }
-.btn-accion-secundario { background: rgba(157,78,221,0.12); border: 1px solid rgba(157,78,221,0.35); color: #9D4EDD; border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: 0.2s; }
+.qr-hint-ok { color: var(--color-exito); font-weight: 700; font-size: 0.82rem; }
+.btn-accion-secundario { background: rgba(157,78,221,0.12); border: 1px solid rgba(157,78,221,0.35); color: var(--morado-brillante); border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: 0.2s; }
 .btn-accion-secundario:hover { background: rgba(157,78,221,0.22); }
 
 /* Flujo QR */
@@ -2012,7 +2013,7 @@ onMounted(() => {
 }
 
 .qr-imagen-wrap:hover {
-  border-color: #9D4EDD;
+  border-color: var(--morado-brillante);
 }
 
 .qr-imagen-pago {
@@ -2062,7 +2063,7 @@ onMounted(() => {
 
 /* Modal QR ampliado */
 .modal-qr-ampliado {
-  background: #0f0f2a;
+  background: var(--fondo-app);
   border: 1px solid rgba(157,78,221,0.3);
   border-radius: 20px;
   padding: 2rem 1.5rem;
@@ -2092,13 +2093,13 @@ onMounted(() => {
 
 .modal-qr-cerrar:hover {
   background: rgba(239,71,111,0.15);
-  color: #EF476F;
+  color: var(--color-error);
 }
 
 .modal-qr-monto {
   font-size: 2rem;
   font-weight: 900;
-  color: #9D4EDD;
+  color: var(--morado-brillante);
   margin-bottom: 1rem;
   letter-spacing: 1px;
 }
@@ -2196,8 +2197,8 @@ onMounted(() => {
 }
 
 .estado-ocr.cargando { color: var(--texto-secundario); }
-.estado-ocr.exito { background: rgba(6,214,160,0.1); color: #06D6A0; }
-.estado-ocr.error-ocr { background: rgba(255,209,102,0.1); color: #FFD166; }
+.estado-ocr.exito { background: rgba(6,214,160,0.1); color: var(--color-exito); }
+.estado-ocr.error-ocr { background: rgba(255,209,102,0.1); color: var(--color-alerta); }
 
 .estado-ocr.exito-detallado {
   background: rgba(6,214,160,0.08);
@@ -2219,7 +2220,7 @@ onMounted(() => {
 }
 
 .exito-titulo {
-  color: #06D6A0;
+  color: var(--color-exito);
   font-weight: 700;
   font-size: 0.95rem;
 }
@@ -2250,7 +2251,7 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
-  color: #a0a0b0;
+  color: var(--texto-secundario);
   padding: 0.8rem 1.5rem;
   border-radius: 12px;
   font-size: 0.95rem;
@@ -2265,7 +2266,7 @@ onMounted(() => {
 }
 
 .tab-btn.activo {
-  background: linear-gradient(135deg, #9D4EDD, #3A0CA3);
+  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
   color: white;
   border-color: rgba(157, 78, 221, 0.5);
   box-shadow: 0 8px 20px rgba(157, 78, 221, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
@@ -2279,16 +2280,16 @@ onMounted(() => {
   display: inline-block;
 }
 .neon-dot.completada {
-  background: #06D6A0;
-  box-shadow: 0 0 10px #06D6A0;
+  background: var(--color-exito);
+  box-shadow: 0 0 10px var(--color-exito);
 }
 .neon-dot.pendiente {
-  background: #FFD166;
-  box-shadow: 0 0 10px #FFD166;
+  background: var(--color-alerta);
+  box-shadow: 0 0 10px var(--color-alerta);
 }
 .neon-dot.rechazada {
-  background: #EF476F;
-  box-shadow: 0 0 10px #EF476F;
+  background: var(--color-error);
+  box-shadow: 0 0 10px var(--color-error);
 }
 
 .tarjeta-modulo {
@@ -2355,12 +2356,12 @@ onMounted(() => {
 }
 
 .input-valido {
-  border-color: #06D6A0 !important;
+  border-color: var(--color-exito) !important;
   box-shadow: 0 0 0 2px rgba(6,214,160,0.15);
 }
 
 .input-error {
-  border-color: #EF476F !important;
+  border-color: var(--color-error) !important;
   box-shadow: 0 0 0 2px rgba(239,71,111,0.15);
 }
 
@@ -2370,7 +2371,7 @@ onMounted(() => {
 }
 
 .error-texto {
-  color: #EF476F;
+  color: var(--color-error);
   font-size: 0.8rem;
   margin-top: 0.3rem;
   display: flex;
@@ -2409,10 +2410,10 @@ onMounted(() => {
 }
 
 .btn-exito {
-  background: linear-gradient(135deg, #06D6A0, #04a97e);
+  background: linear-gradient(135deg, var(--color-exito), var(--color-exito));
 }
 .btn-exito:hover:not(:disabled) {
-  background: #04a97e;
+  background: var(--color-exito);
 }
 
 .alerta-credenciales {
@@ -2425,7 +2426,7 @@ onMounted(() => {
 }
 
 .alerta-credenciales h3 {
-  color: #06D6A0;
+  color: var(--color-exito);
   margin-top: 0;
 }
 
@@ -2505,7 +2506,7 @@ onMounted(() => {
 }
 
 .btn-accion-principal:hover:not(:disabled) {
-  background: #7b2cbf;
+  background: var(--morado-medio);
   transform: translateY(-2px);
 }
 
@@ -2522,7 +2523,7 @@ onMounted(() => {
 }
 
 .estado-vacio svg {
-  color: #06D6A0;
+  color: var(--color-exito);
   margin-bottom: 1rem;
 }
 
@@ -2568,7 +2569,7 @@ onMounted(() => {
 
 .btn-aprobar {
   background: rgba(6, 214, 160, 0.15);
-  color: #06D6A0;
+  color: var(--color-exito);
   border: 1px solid rgba(6, 214, 160, 0.3);
   padding: 0.5rem 1rem;
   border-radius: 6px;
@@ -2578,13 +2579,13 @@ onMounted(() => {
 }
 
 .btn-aprobar:hover {
-  background: #06D6A0;
+  background: var(--color-exito);
   color: #000;
 }
 
 .btn-rechazar {
   background: rgba(239, 71, 111, 0.15);
-  color: #EF476F;
+  color: var(--color-error);
   border: 1px solid rgba(239, 71, 111, 0.3);
   padding: 0.5rem 1rem;
   border-radius: 6px;
@@ -2594,7 +2595,7 @@ onMounted(() => {
 }
 
 .btn-rechazar:hover {
-  background: #EF476F;
+  background: var(--color-error);
   color: #fff;
 }
 

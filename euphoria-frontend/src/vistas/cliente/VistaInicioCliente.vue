@@ -292,7 +292,7 @@ onUnmounted(() => {
 @keyframes deslizarAbajo { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 
 .banner-contenido { display: flex; align-items: center; gap: 12px; }
-.punto-verde { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; box-shadow: 0 0 12px #00ff88; animation: latido 1.5s infinite alternate; }
+.punto-verde { width: 8px; height: 8px; background: var(--color-exito); border-radius: 50%; box-shadow: 0 0 12px var(--color-exito); animation: latido 1.5s infinite alternate; }
 .banner-texto { display: flex; flex-direction: column; }
 .banner-label { font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; }
 .banner-nombre { font-size: 1rem; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
@@ -302,7 +302,7 @@ onUnmounted(() => {
 /* Hero */
 .header-dashboard { margin-top: 5px; margin-bottom: 10px; }
 .titulo-hola { font-size: 2rem; font-weight: 900; color: #fff; margin-bottom: 0.2rem; letter-spacing: -0.5px; }
-.resaltado-neon { background: linear-gradient(135deg, #00c6ff, #0072ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 8px rgba(0,198,255,0.3)); }
+.resaltado-neon { background: linear-gradient(135deg, var(--color-info), #0072ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 8px rgba(0,198,255,0.3)); }
 .subtitulo { color: rgba(255,255,255,0.5); font-size: 0.95rem; font-weight: 500; }
 
 /* HERO CARRUSEL ESTILO E-COMMERCE */
@@ -337,7 +337,7 @@ onUnmounted(() => {
 .slide-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #1f1240, #361b5c);
+  background: linear-gradient(135deg, var(--fondo-tarjeta), var(--fondo-tarjeta));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -504,7 +504,7 @@ onUnmounted(() => {
 .saldo-monto {
   font-size: 2rem;
   font-weight: 900;
-  background: linear-gradient(135deg, #00c6ff, #aa3bff);
+  background: linear-gradient(135deg, var(--color-info), var(--morado-brillante));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

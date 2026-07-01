@@ -25,7 +25,7 @@
     <div v-if="mostrarModalListos" class="vista-pedidos-listos fade-in">
       <div class="vpl-header">
         <div class="vpl-titulo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2" width="28" height="28"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2" width="28" height="28"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
           <h2>Pedidos Listos en Barra</h2>
         </div>
         <button class="btn btn-secundario" @click="mostrarModalListos = false" style="display:flex; align-items:center; gap:8px;">
@@ -288,23 +288,23 @@
 
               <!-- Billetera Verificada (Paso 2) -->
               <div v-if="billeteraVerificada" class="pin-zone fade-in">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2" width="40" height="40" style="margin-bottom: 10px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito); margin-bottom: 10px;" stroke-width="2" width="40" height="40"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 <p class="pin-titulo">Billetera de: {{ nombreBilleteraVerificada }}</p>
                 <p class="pin-sub" style="margin-bottom: 1rem; color: rgba(255,255,255,0.5);">ID: {{ formCobro.qr_billetera }}</p>
                 
                 <!-- Mostrar saldo actual -->
                 <p style="text-align: center; font-size: 1.1rem; margin-bottom: 0.5rem;" 
-                   :style="{ color: saldoBilleteraVerificada >= totalCarrito ? '#06D6A0' : '#EF476F', fontWeight: 'bold' }">
+                   :style="{ color: saldoBilleteraVerificada >= totalCarrito ? 'var(--color-exito)' : 'var(--color-error)', fontWeight: 'bold' }">
                    Saldo Disponible: Bs. {{ saldoBilleteraVerificada.toFixed(2) }}
                 </p>
                 
-                <div v-if="saldoBilleteraVerificada < totalCarrito" style="text-align: center; color: #EF476F; margin-bottom: 15px; font-weight: bold; background: rgba(239, 71, 111, 0.1); padding: 5px; border-radius: 4px;">
+                <div v-if="saldoBilleteraVerificada < totalCarrito" style="text-align: center; color: var(--color-error); margin-bottom: 15px; font-weight: bold; background: rgba(239, 71, 111, 0.1); padding: 5px; border-radius: 4px;">
                   Saldo Insuficiente
                 </div>
 
                 <div v-if="saldoBilleteraVerificada >= totalCarrito">
                   <div v-if="requierePin">
-                    <p class="pin-sub" style="color: #ffb703; font-weight: bold; margin-bottom: 10px;">Por seguridad (QR Privado), ingresa el PIN:</p>
+                    <p class="pin-sub" style="color: var(--color-alerta); font-weight: bold; margin-bottom: 10px;">Por seguridad (QR Privado), ingresa el PIN:</p>
                     <input type="password" v-model="formCobro.pin" placeholder="••••" maxlength="4" class="input-pin" autofocus @input="verificarPinLleno" />
                   </div>
                   <div v-else style="margin-top: 15px;">
@@ -453,7 +453,7 @@
         <div class="exito-card-detallado fade-in">
           <!-- Icono neón de éxito -->
           <div class="exito-icono-anillo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="3" width="48" height="48"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="3" width="48" height="48"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
           
           <h3>¡Cobro Realizado con Éxito!</h3>
@@ -479,13 +479,13 @@
             </div>
             
             <div v-if="detalleExito.metodo === 'Transferencia QR'" class="recibo-ia-footer">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" width="14" height="14"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2" width="14" height="14"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
               <span>Comprobante validado por IA OCR Euphoria</span>
             </div>
             
             <div v-if="detalleExito.metodo === 'Billetera'" class="recibo-ia-footer" style="background: rgba(157, 78, 221, 0.1); border-color: rgba(157, 78, 221, 0.3);">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2" width="14" height="14"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
-              <span>Pago descontado. Saldo actual: <strong style="color: #9D4EDD;">Bs. {{ (detalleExito.saldo_restante || 0).toFixed(2) }}</strong></span>
+              <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2" width="14" height="14"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+              <span>Pago descontado. Saldo actual: <strong style="color: var(--morado-brillante);">Bs. {{ (detalleExito.saldo_restante || 0).toFixed(2) }}</strong></span>
             </div>
           </div>
 
@@ -501,7 +501,7 @@
     <div class="toast-container">
       <transition-group name="toast">
         <div v-for="t in toasts" :key="t.id" class="toast-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#06D6A0" stroke-width="2" width="24" height="24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2" width="24" height="24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
           {{ t.mensaje }}
         </div>
       </transition-group>
@@ -1042,6 +1042,10 @@ onUnmounted(() => {
 
 <style scoped>
 .vista-pos {
+  /* Mapeo de variables locales indefinidas hacia la paleta global */
+  --fondo-principal: var(--fondo-app);
+  --fondo-oscuro: var(--fondo-sidebar);
+  --color-primario: var(--rosa-acento);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -1257,17 +1261,17 @@ onUnmounted(() => {
 .qr-overlay-side { flex: 1; background: rgba(0,0,0,0.55); }
 .qr-overlay-bottom { display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; }
 .qr-viewfinder { width: 220px; height: 220px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px #06D6A0 inset, 0 0 20px rgba(6,214,160,0.5); }
+.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(6,214,160,0.5); }
 .corner { position: absolute; width: 22px; height: 22px; border-color: #fff; border-style: solid; transition: border-color 0.3s ease; }
-.qr-viewfinder.qr-detected .corner { border-color: #06D6A0; }
+.qr-viewfinder.qr-detected .corner { border-color: var(--color-exito); }
 .corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
 .corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
 .corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
 .corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, #aa3bff, #00C6FF, #aa3bff, transparent); box-shadow: 0 0 8px rgba(170,59,255,0.8); animation: scan-move 1.8s ease-in-out infinite; }
+.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--color-info), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(170,59,255,0.8); animation: scan-move 1.8s ease-in-out infinite; }
 @keyframes scan-move { 0% { top: 10px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: calc(100% - 10px); opacity: 0; } }
 .qr-hint { color: rgba(255,255,255,0.75); font-size: 0.78rem; text-align: center; margin: 0; padding: 0 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-.qr-hint-ok { color: #06D6A0; font-weight: 700; font-size: 0.85rem; }
+.qr-hint-ok { color: var(--color-exito); font-weight: 700; font-size: 0.85rem; }
 
 
 /* PIN */
@@ -1389,7 +1393,7 @@ onUnmounted(() => {
 .btn-cerrar-modal-cliente {
   background: rgba(255, 255, 255, 0.06);
   border: none;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1401,7 +1405,7 @@ onUnmounted(() => {
 }
 .btn-cerrar-modal-cliente:hover {
   background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
+  color: var(--color-error);
   transform: rotate(90deg);
 }
 .modal-nuevo-pie {
@@ -1414,7 +1418,7 @@ onUnmounted(() => {
 .modal-nuevo-pie .btn-cancelar {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  color: var(--texto-principal);
   padding: 12px 20px;
   border-radius: 12px;
   font-weight: 600;
@@ -1539,7 +1543,7 @@ onUnmounted(() => {
   font-weight: 700;
 }
 .recibo-val.destacado {
-  color: #2ecc71;
+  color: var(--color-exito);
   font-size: 1.25rem;
   font-weight: 900;
 }
@@ -1565,7 +1569,7 @@ onUnmounted(() => {
   border-radius: 10px;
   padding: 8px;
   font-size: 0.78rem;
-  color: #2ecc71;
+  color: var(--color-exito);
   font-weight: 600;
   margin-top: 5px;
 }
@@ -1707,14 +1711,14 @@ onUnmounted(() => {
 }
 .btn-campana.activo {
   background: rgba(6, 214, 160, 0.15);
-  border-color: #06D6A0;
-  color: #06D6A0;
+  border-color: var(--color-exito);
+  color: var(--color-exito);
 }
 .campana-badge {
   position: absolute;
   top: -4px;
   right: -4px;
-  background: #EF476F;
+  background: var(--color-error);
   color: white;
   font-size: 0.75rem;
   font-weight: bold;
@@ -1787,7 +1791,7 @@ onUnmounted(() => {
 .card-listo-full {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(6, 214, 160, 0.3);
-  border-left: 5px solid #06D6A0;
+  border-left: 5px solid var(--color-exito);
   border-radius: 16px;
   padding: 20px;
   display: flex;
@@ -1811,14 +1815,14 @@ onUnmounted(() => {
   color: white;
 }
 .clf-destino {
-  background: #F72585;
+  background: var(--rosa-acento);
   color: white;
   font-weight: bold;
   font-size: 0.8rem;
   padding: 4px 10px;
   border-radius: 12px;
 }
-.clf-destino.vip { background: #7209B7; }
+.clf-destino.vip { background: var(--morado-medio); }
 
 .clf-cliente {
   display: flex;
@@ -1843,7 +1847,7 @@ onUnmounted(() => {
   gap: 10px;
 }
 .clf-cant {
-  background: #06D6A0;
+  background: var(--color-exito);
   color: black;
   font-weight: 900;
   padding: 3px 8px;
@@ -1862,7 +1866,7 @@ onUnmounted(() => {
   width: 100%;
   padding: 12px;
   background: rgba(6, 214, 160, 0.1);
-  color: #06D6A0;
+  color: var(--color-exito);
   border: 1px solid rgba(6, 214, 160, 0.4);
   border-radius: 12px;
   font-weight: bold;
@@ -1871,7 +1875,7 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 .btn-entregar-full:hover:not(:disabled) {
-  background: #06D6A0;
+  background: var(--color-exito);
   color: black;
 }
 
@@ -1901,7 +1905,7 @@ onUnmounted(() => {
 
 .toast-item {
   background: rgba(0,0,0,0.85);
-  border-left: 4px solid #06D6A0;
+  border-left: 4px solid var(--color-exito);
   color: white;
   padding: 12px 20px;
   border-radius: 8px;

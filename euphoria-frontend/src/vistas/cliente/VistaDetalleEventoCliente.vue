@@ -205,7 +205,7 @@ function mostrarAlertaMapaFaltante() {
   position: relative;
   width: 100%;
   max-height: 70vh; /* No ocupar toda la pantalla, pero sí bastante */
-  background: var(--fondo-oscuro);
+  background: var(--fondo-app);
   display: flex;
   justify-content: center;
 }
@@ -224,7 +224,7 @@ function mostrarAlertaMapaFaltante() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f1240, #361b5c);
+  background: linear-gradient(135deg, var(--fondo-tarjeta), var(--fondo-tarjeta));
   color: rgba(255,255,255,0.1);
   font-size: 3rem;
   font-weight: 900;
@@ -235,7 +235,7 @@ function mostrarAlertaMapaFaltante() {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: 150px;
-  background: linear-gradient(to top, var(--fondo-principal), transparent);
+  background: linear-gradient(to top, var(--fondo-app), transparent);
 }
 
 /* Info Cuerpo */
@@ -272,7 +272,7 @@ function mostrarAlertaMapaFaltante() {
   border-radius: 12px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-primario);
+  color: var(--morado-brillante);
   border: 1px solid rgba(255,255,255,0.05);
 }
 
@@ -386,7 +386,7 @@ function mostrarAlertaMapaFaltante() {
 .opcion-precio {
   font-weight: 800;
   font-size: 1rem;
-  color: var(--color-primario);
+  color: var(--morado-brillante);
 }
 
 /* Mapa de Mesas VIP */

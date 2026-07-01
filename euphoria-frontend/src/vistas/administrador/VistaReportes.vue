@@ -8,7 +8,7 @@
         <span class="badge-tiempo-real" style="margin-right: 0;">
           <span class="punto-verde animate-pulse">●</span> Actualizado en vivo
         </span>
-        <button class="btn-sincronizar" style="background: linear-gradient(135deg, #aa3bff, #00C6FF); margin: 0; padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: 12px;" @click="exportarPDF">
+        <button class="btn-sincronizar" style="background: linear-gradient(135deg, var(--morado-brillante), var(--color-info)); margin: 0; padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: 12px;" @click="exportarPDF">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar PDF
         </button>
@@ -30,8 +30,8 @@
           <svg viewBox="0 0 360 160" class="svg-tendencia-2d">
             <defs>
               <linearGradient id="grad-neon-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#aa3bff" stop-opacity="0.3" />
-                <stop offset="100%" stop-color="#aa3bff" stop-opacity="0" />
+                <stop offset="0%" stop-color="var(--morado-brillante)" stop-opacity="0.3" />
+                <stop offset="100%" stop-color="var(--morado-brillante)" stop-opacity="0" />
               </linearGradient>
             </defs>
             <!-- Cuadrícula premium de fondo -->
@@ -48,12 +48,12 @@
             <path v-if="salesTrendFillPoints" :d="salesTrendFillPoints" fill="url(#grad-neon-fill)" />
             
             <!-- Línea de trazado vector principal -->
-            <path v-if="salesTrendPoints" :d="salesTrendPoints" fill="none" stroke="#aa3bff" stroke-width="3" stroke-linecap="round" class="linea-tendencia-neon" />
+            <path v-if="salesTrendPoints" :d="salesTrendPoints" fill="none" stroke="var(--morado-brillante)" stroke-width="3" stroke-linecap="round" class="linea-tendencia-neon" />
             
             <!-- Puntos vectoriales con sus etiquetas de datos exactas en Bs. -->
             <g v-for="(pt, idx) in trendComandas" :key="idx">
               <!-- Círculo del nodo de venta -->
-              <circle :cx="pt.x" :cy="pt.y" r="5" fill="#fff" stroke="#aa3bff" stroke-width="2.5" />
+              <circle :cx="pt.x" :cy="pt.y" r="5" fill="#fff" stroke="var(--morado-brillante)" stroke-width="2.5" />
               <!-- Etiqueta de valor flotando sobre el nodo -->
               <text :x="pt.x" :y="pt.y - 12" fill="#fff" font-size="10.5" font-weight="800" text-anchor="middle" class="texto-nodo-grafico">
                 Bs. {{ pt.subtotal.toFixed(0) }}
@@ -105,19 +105,19 @@
             <svg viewBox="0 0 200 200" class="svg-torta">
               <!-- Sector 1: Efectivo -->
               <circle cx="100" cy="100" r="50" fill="transparent"
-                      stroke="#2ecc71" stroke-width="100"
+                      stroke="var(--color-exito)" stroke-width="100"
                       :stroke-dasharray="(porcentajeEfectivo * 3.14159) + ' 314.159'"
                       stroke-dashoffset="0"
                       class="torta-sector" />
               <!-- Sector 2: Transferencia QR -->
               <circle cx="100" cy="100" r="50" fill="transparent"
-                      stroke="#3498db" stroke-width="100"
+                      stroke="var(--color-info)" stroke-width="100"
                       :stroke-dasharray="(porcentajeQR * 3.14159) + ' 314.159'"
                       :stroke-dashoffset="-(porcentajeEfectivo * 3.14159)"
                       class="torta-sector" />
               <!-- Sector 3: Billetera -->
               <circle cx="100" cy="100" r="50" fill="transparent"
-                      stroke="#aa3bff" stroke-width="100"
+                      stroke="var(--morado-brillante)" stroke-width="100"
                       :stroke-dasharray="(porcentajeBilletera * 3.14159) + ' 314.159'"
                       :stroke-dashoffset="-((porcentajeEfectivo + porcentajeQR) * 3.14159)"
                       class="torta-sector" />
@@ -142,21 +142,21 @@
           </div>
           <div class="anillos-leyenda">
             <div class="leyenda-item">
-              <span class="punto-leyenda" style="background:#2ecc71;"></span>
+              <span class="punto-leyenda" style="background:var(--color-exito);"></span>
               <div class="leyenda-info">
                 <span class="l-nombre">Efectivo</span>
                 <span class="l-valores">{{ porcentajeEfectivo }}% ({{ conteoEfectivo }})</span>
               </div>
             </div>
             <div class="leyenda-item">
-              <span class="punto-leyenda" style="background:#3498db;"></span>
+              <span class="punto-leyenda" style="background:var(--color-info);"></span>
               <div class="leyenda-info">
                 <span class="l-nombre">Transf. QR</span>
                 <span class="l-valores">{{ porcentajeQR }}% ({{ conteoQR }})</span>
               </div>
             </div>
             <div class="leyenda-item">
-              <span class="punto-leyenda" style="background:#aa3bff;"></span>
+              <span class="punto-leyenda" style="background:var(--morado-brillante);"></span>
               <div class="leyenda-info">
                 <span class="l-nombre">Billetera</span>
                 <span class="l-valores">{{ porcentajeBilletera }}% ({{ conteoBilletera }})</span>
@@ -189,7 +189,7 @@
               <defs>
                 <linearGradient :id="'grad-col-' + idx" x1="0%" y1="100%" x2="0%" y2="0%">
                   <stop offset="0%" :stop-color="m.color" />
-                  <stop offset="100%" stop-color="#aa3bff" />
+                  <stop offset="100%" stop-color="var(--morado-brillante)" />
                 </linearGradient>
               </defs>
               
@@ -360,7 +360,7 @@
                   <td>{{ formatearFecha(ev.fecha_hora_inicio) }}</td>
                   <td><span :class="['badge-pago', ev.estado]">{{ ev.estado }}</span></td>
                   <td style="font-weight: 600;">{{ ev.asistenciaReal || 0 }} pers.</td>
-                  <td style="font-weight:bold; color:var(--color-exito, #2ecc71);">Bs. {{ (ev.ventasReales || 0).toFixed(2) }}</td>
+                  <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (ev.ventasReales || 0).toFixed(2) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -390,20 +390,20 @@
               <tbody>
                 <tr v-for="(prod, idx) in listadoProductosRanking" :key="prod.id_producto">
                   <td style="font-weight: 800; font-size: 1.1rem; text-align: center;">
-                    <span v-if="idx === 0" style="color: #f1c40f;">🏆 1</span>
-                    <span v-else-if="idx === 1" style="color: #a0aec0;">🥈 2</span>
-                    <span v-else-if="idx === 2" style="color: #e67e22;">🥉 3</span>
+                    <span v-if="idx === 0" style="color: var(--color-alerta);">🏆 1</span>
+                    <span v-else-if="idx === 1" style="color: var(--texto-secundario);">🥈 2</span>
+                    <span v-else-if="idx === 2" style="color: var(--color-alerta);">🥉 3</span>
                     <span v-else style="color: rgba(255,255,255,0.4);">#{{ idx + 1 }}</span>
                   </td>
-                  <td style="font-weight: 700; color: #fff;">{{ prod.nombre_producto }}</td>
+                  <td style="font-weight: 700; color: var(--texto-principal);">{{ prod.nombre_producto }}</td>
                   <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
                   <td>
                     <span :class="['stock-indicador', prod.stock_actual < 10 ? 'bajo' : 'normal']">
                       {{ prod.stock_actual }} uds.
                     </span>
                   </td>
-                  <td style="font-weight: 700; color: var(--morado-brillante, #aa3bff);">{{ prod.vecesVendido }} uds.</td>
-                  <td style="font-weight: bold; color: var(--color-exito, #2ecc71);">Bs. {{ (prod.ingresosGenerados || 0).toFixed(2) }}</td>
+                  <td style="font-weight: 700; color: var(--morado-brillante);">{{ prod.vecesVendido }} uds.</td>
+                  <td style="font-weight: bold; color: var(--color-exito);">Bs. {{ (prod.ingresosGenerados || 0).toFixed(2) }}</td>
                 </tr>
                 <tr v-if="listadoProductosRanking.length === 0">
                   <td colspan="6" class="texto-centro">No hay datos de productos registrados en el inventario.</td>
@@ -470,7 +470,7 @@
     <div class="seccion-billetera fade-in">
       <div class="sb-cabecera">
         <div class="sb-titulo-area">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2" width="28" height="28"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--morado-brillante)" stroke-width="2" width="28" height="28"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
           <h3>Billetera Digital — Análisis de Uso</h3>
         </div>
         <button class="btn-ver-historial" @click="mostrarHistorialRecargas = !mostrarHistorialRecargas">
@@ -557,11 +557,11 @@
             <div class="anillos-visual">
               <svg viewBox="0 0 200 200" class="svg-torta">
                 <circle cx="100" cy="100" r="50" fill="transparent"
-                  stroke="#9D4EDD" stroke-width="100"
+                  stroke="var(--morado-brillante)" stroke-width="100"
                   :stroke-dasharray="(pctRecargaPropia * 3.14159) + ' 314.159'"
                   stroke-dashoffset="0" />
                 <circle cx="100" cy="100" r="50" fill="transparent"
-                  stroke="#06D6A0" stroke-width="100"
+                  stroke="var(--color-exito)" stroke-width="100"
                   :stroke-dasharray="(pctRecargaCajero * 3.14159) + ' 314.159'"
                   :stroke-dashoffset="-(pctRecargaPropia * 3.14159)" />
                 <g v-if="pctRecargaPropia > 10">
@@ -574,14 +574,14 @@
             </div>
             <div class="anillos-leyenda">
               <div class="leyenda-item">
-                <span class="punto-leyenda" style="background:#9D4EDD;"></span>
+                <span class="punto-leyenda" style="background:var(--morado-brillante);"></span>
                 <div class="leyenda-info">
                   <span class="l-nombre">Cuenta Propia</span>
                   <span class="l-valores">{{ pctRecargaPropia }}% ({{ reporteBilletera.recargas?.por_cuenta_propia ?? 0 }})</span>
                 </div>
               </div>
               <div class="leyenda-item">
-                <span class="punto-leyenda" style="background:#06D6A0;"></span>
+                <span class="punto-leyenda" style="background:var(--color-exito);"></span>
                 <div class="leyenda-info">
                   <span class="l-nombre">En Caja (Cajero)</span>
                   <span class="l-valores">{{ pctRecargaCajero }}% ({{ reporteBilletera.recargas?.por_cajero ?? 0 }})</span>
@@ -590,7 +590,7 @@
               <div class="leyenda-item" style="margin-top:15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
                 <div class="leyenda-info">
                   <span class="l-nombre">Total recargado</span>
-                  <span class="l-valores" style="font-size:1.1rem; color: #9D4EDD; font-weight: 900;">Bs. {{ (reporteBilletera.recargas?.monto_total ?? 0).toFixed(2) }}</span>
+                  <span class="l-valores" style="font-size:1.1rem; color: var(--morado-brillante); font-weight: 900;">Bs. {{ (reporteBilletera.recargas?.monto_total ?? 0).toFixed(2) }}</span>
                 </div>
               </div>
             </div>
@@ -616,7 +616,7 @@
               <div class="barra-pista">
                 <div class="barra-progreso" :style="{
                   width: maxSaldoCliente > 0 ? (cli.saldo / maxSaldoCliente * 100) + '%' : '0%',
-                  background: ['#9D4EDD','#06D6A0','#3A0CA3','#FFD166','#EF476F'][i]
+                  background: ['var(--morado-brillante)','var(--color-exito)','var(--morado-medio)','var(--color-alerta)','var(--color-error)'][i]
                 }"></div>
               </div>
             </div>
@@ -642,7 +642,7 @@
               <div class="barra-pista">
                 <div class="barra-progreso" :style="{
                   width: maxRecargasCajero > 0 ? (caj.cantidad / maxRecargasCajero * 100) + '%' : '0%',
-                  background: ['#06D6A0','#9D4EDD','#FFD166','#3498db','#EF476F'][i]
+                  background: ['var(--color-exito)','var(--morado-brillante)','var(--color-alerta)','var(--color-info)','var(--color-error)'][i]
                 }"></div>
               </div>
             </div>
@@ -653,7 +653,7 @@
       <!-- Historial de Recargas Recientes -->
       <div v-if="mostrarHistorialRecargas" class="historial-recargas-panel fade-in">
         <h4 class="hr-titulo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#9D4EDD" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--morado-brillante)" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           Últimas 20 Recargas
         </h4>
         <div class="tabla-contenedor">
@@ -675,7 +675,7 @@
                 <td>
                   <span class="badge-pago" :class="r.rol === 5 ? 'planificado' : 'activo'">{{ r.rol === 5 ? 'Cuenta Propia' : 'Cajero' }}</span>
                 </td>
-                <td style="font-weight:bold; color:#06D6A0;">Bs. {{ r.monto.toFixed(2) }}</td>
+                <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (r.monto).toFixed(2) }}</td>
                 <td><span class="badge-pago activo">{{ r.estado }}</span></td>
                 <td>{{ formatearFecha(r.fecha) }}</td>
               </tr>
@@ -1248,7 +1248,7 @@ async function cargarReportes(silencioso = false) {
         total: categoriaTotales[catName]
       }))
       const maxCatVal = Math.max(...catArray.map(c => c.total), 1)
-      const coloresCategorias = ['#aa3bff', '#ec4899', '#3498db', '#2ecc71', '#f1c40f', '#e67e22', '#e74c3c']
+      const coloresCategorias = ['var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-info)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-alerta)', 'var(--color-error)']
       
       datosCategorias.value = catArray.map((c, idx) => ({
         ...c,
@@ -1272,7 +1272,7 @@ async function cargarReportes(silencioso = false) {
       })).sort((a, b) => b.total - a.total)
 
       const maxMeseroVal = Math.max(...meserosArray.map(m => m.total), 1)
-      const coloresMeseros = ['#3498db', '#aa3bff', '#ec4899', '#2ecc71', '#f1c40f', '#e67e22', '#e74c3c']
+      const coloresMeseros = ['var(--color-info)', 'var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-alerta)', 'var(--color-error)']
       
       datosMeseros.value = meserosArray.map((m, idx) => ({
         ...m,
@@ -1296,15 +1296,15 @@ async function cargarReportes(silencioso = false) {
         total: metodosTotales[metName]
       }))
       const coloresMetodos = {
-        'Efectivo': '#2ecc71',
-        'Transferencia QR': '#3498db',
-        'Billetera': '#aa3bff'
+        'Efectivo': 'var(--color-exito)',
+        'Transferencia QR': 'var(--color-info)',
+        'Billetera': 'var(--morado-brillante)'
       }
 
       datosMetodos.value = metArray.map(m => ({
         ...m,
         porcentaje: Math.round((m.total / totalMetodos) * 100),
-        color: coloresMetodos[m.nombre] || '#ec4899'
+        color: coloresMetodos[m.nombre] || 'var(--rosa-acento)'
       })).sort((a, b) => b.total - a.total)
 
       // Generar puntos vectoriales SVG para el gráfico bidimensional de tendencia de ventas (últimas 7 comandas)
@@ -1400,7 +1400,7 @@ function formatearFecha(isoStr) {
   gap: 8px;
   background: rgba(46, 204, 113, 0.08);
   border: 1px solid rgba(46, 204, 113, 0.2);
-  color: #2ecc71;
+  color: var(--color-exito);
   padding: 8px 14px;
   border-radius: 20px;
   font-size: 0.8rem;
@@ -1409,14 +1409,14 @@ function formatearFecha(isoStr) {
   text-transform: uppercase;
 }
 .punto-verde {
-  color: #2ecc71;
+  color: var(--color-exito);
   font-size: 0.9rem;
 }
 .btn-sincronizar {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--morado-brillante, #aa3bff), var(--rosa-acento, #ec4899));
+  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
   border: none;
   color: #fff;
   padding: 10px 18px;
@@ -1474,12 +1474,12 @@ function formatearFecha(isoStr) {
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
 }
-.bg-clientes { border-left: 4px solid #3498db; }
-.bg-personal { border-left: 4px solid #9b59b6; }
-.bg-ventas { border-left: 4px solid #2ecc71; }
-.bg-productos { border-left: 4px solid #f1c40f; }
-.bg-eventos { border-left: 4px solid #e67e22; }
-.bg-asistencia { border-left: 4px solid #e74c3c; }
+.bg-clientes { border-left: 4px solid var(--color-info); }
+.bg-personal { border-left: 4px solid var(--morado-claro); }
+.bg-ventas { border-left: 4px solid var(--color-exito); }
+.bg-productos { border-left: 4px solid var(--color-alerta); }
+.bg-eventos { border-left: 4px solid var(--color-alerta); }
+.bg-asistencia { border-left: 4px solid var(--color-error); }
 
 .icono-est {
   padding: 16px;
@@ -1493,12 +1493,12 @@ function formatearFecha(isoStr) {
 .tarjeta-estadistica:hover .icono-est {
   transform: scale(1.1);
 }
-.bg-clientes .icono-est { color: #3498db; background: rgba(52, 152, 219, 0.1); }
-.bg-personal .icono-est { color: #9b59b6; background: rgba(155, 89, 182, 0.1); }
-.bg-ventas .icono-est { color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
-.bg-productos .icono-est { color: #f1c40f; background: rgba(241, 196, 15, 0.1); }
-.bg-eventos .icono-est { color: #e67e22; background: rgba(230, 126, 34, 0.1); }
-.bg-asistencia .icono-est { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
+.bg-clientes .icono-est { color: var(--color-info); background: rgba(52, 152, 219, 0.1); }
+.bg-personal .icono-est { color: var(--morado-claro); background: rgba(155, 89, 182, 0.1); }
+.bg-ventas .icono-est { color: var(--color-exito); background: rgba(46, 204, 113, 0.1); }
+.bg-productos .icono-est { color: var(--color-alerta); background: rgba(241, 196, 15, 0.1); }
+.bg-eventos .icono-est { color: var(--color-alerta); background: rgba(230, 126, 34, 0.1); }
+.bg-asistencia .icono-est { color: var(--color-error); background: rgba(231, 76, 60, 0.1); }
 
 .info-est {
   display: flex;
@@ -1507,7 +1507,7 @@ function formatearFecha(isoStr) {
 }
 .info-est h3 {
   font-size: 0.85rem;
-  color: var(--texto-secundario, #a0aec0);
+  color: var(--texto-secundario);
   text-transform: uppercase;
   letter-spacing: 1.2px;
   margin: 0 0 4px;
@@ -1529,7 +1529,7 @@ function formatearFecha(isoStr) {
 .modal-fullscreen {
   position: fixed;
   inset: 0;
-  background: #0b0c10; /* Fondo totalmente sólido e impenetrable */
+  background: var(--fondo-app); /* Fondo totalmente sólido e impenetrable */
   z-index: 99999; /* Z-Index extremo para evitar solapamientos con sidebar o navbar */
   display: flex;
   flex-direction: column;
@@ -1557,14 +1557,14 @@ function formatearFecha(isoStr) {
   font-weight: 800;
   color: #fff;
   margin: 0;
-  background: linear-gradient(135deg, #fff, #a0aec0);
+  background: linear-gradient(135deg, #fff, var(--texto-secundario));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .btn-cerrar-fs {
   background: rgba(231, 76, 60, 0.12);
   border: 1px solid rgba(231, 76, 60, 0.3);
-  color: #e74c3c;
+  color: var(--color-error);
   padding: 10px 24px;
   border-radius: 12px;
   font-weight: 700;
@@ -1587,7 +1587,7 @@ function formatearFecha(isoStr) {
   padding: 40px;
   flex: 1;
   overflow-y: auto;
-  background: radial-gradient(circle at top left, #12131b 0%, #0b0c10 100%);
+  background: radial-gradient(circle at top left, var(--fondo-tarjeta) 0%, var(--fondo-app) 100%);
 }
 
 /* FILTRO DE FECHAS */
@@ -1604,7 +1604,7 @@ function formatearFecha(isoStr) {
   cursor: pointer;
 }
 .input-filtro:focus {
-  border-color: var(--morado-brillante, #aa3bff);
+  border-color: var(--morado-brillante);
   background: rgba(255,255,255,0.1);
 }
 
@@ -1613,7 +1613,7 @@ function formatearFecha(isoStr) {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0 10px;
-  color: #e2e8f0;
+  color: var(--texto-principal);
 }
 .tabla-admin th {
   padding: 16px 24px;
@@ -1621,7 +1621,7 @@ function formatearFecha(isoStr) {
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 1.2px;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   text-align: left;
   border-bottom: 2px solid rgba(255, 255, 255, 0.08);
 }
@@ -1660,12 +1660,12 @@ function formatearFecha(isoStr) {
   align-items: center;
   gap: 6px;
 }
-.badge-pago.efectivo { background: rgba(46, 204, 113, 0.1); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.2); }
-.badge-pago.transferencia-qr { background: rgba(52, 152, 219, 0.1); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.2); }
-.badge-pago.billetera { background: rgba(155, 89, 182, 0.1); color: #9b59b6; border: 1px solid rgba(155, 89, 182, 0.2); }
-.badge-pago.activo { background: rgba(46, 204, 113, 0.1); color: #2ecc71; }
-.badge-pago.finalizado { background: rgba(231, 76, 60, 0.1); color: #e74c3c; }
-.badge-pago.planificado { background: rgba(241, 196, 15, 0.1); color: #f1c40f; }
+.badge-pago.efectivo { background: rgba(46, 204, 113, 0.1); color: var(--color-exito); border: 1px solid rgba(46, 204, 113, 0.2); }
+.badge-pago.transferencia-qr { background: rgba(52, 152, 219, 0.1); color: var(--color-info); border: 1px solid rgba(52, 152, 219, 0.2); }
+.badge-pago.billetera { background: rgba(155, 89, 182, 0.1); color: var(--morado-claro); border: 1px solid rgba(155, 89, 182, 0.2); }
+.badge-pago.activo { background: rgba(46, 204, 113, 0.1); color: var(--color-exito); }
+.badge-pago.finalizado { background: rgba(231, 76, 60, 0.1); color: var(--color-error); }
+.badge-pago.planificado { background: rgba(241, 196, 15, 0.1); color: var(--color-alerta); }
 
 .texto-sutil {
   color: rgba(255,255,255,0.3);
@@ -1746,7 +1746,7 @@ function formatearFecha(isoStr) {
 }
 .subtexto-grafico {
   font-size: 0.8rem;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   font-weight: 500;
 }
 .grafico-contenido {
@@ -1767,7 +1767,7 @@ function formatearFecha(isoStr) {
   font-size: 0.88rem;
 }
 .categoria-nombre {
-  color: #e2e8f0;
+  color: var(--texto-principal);
   font-weight: 700;
 }
 .categoria-monto {
@@ -1800,7 +1800,7 @@ function formatearFecha(isoStr) {
   font-size: 0.88rem;
 }
 .metodo-nombre {
-  color: #e2e8f0;
+  color: var(--texto-principal);
   font-weight: 700;
 }
 .metodo-monto {
@@ -1840,7 +1840,7 @@ function formatearFecha(isoStr) {
 }
 .alerta-icono {
   background: rgba(231, 76, 60, 0.15);
-  color: #e74c3c;
+  color: var(--color-error);
   padding: 14px;
   border-radius: 16px;
   display: flex;
@@ -1860,14 +1860,14 @@ function formatearFecha(isoStr) {
 .alerta-contenido h4 {
   font-size: 1.05rem;
   font-weight: 800;
-  color: #e74c3c;
+  color: var(--color-error);
   margin: 0;
   letter-spacing: 0.5px;
   text-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
 }
 .alerta-contenido p {
   font-size: 0.88rem;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   margin: 0;
 }
 .alerta-productos-lista {
@@ -1891,9 +1891,9 @@ function formatearFecha(isoStr) {
 .punto-alerta {
   width: 6px;
   height: 6px;
-  background: #e74c3c;
+  background: var(--color-error);
   border-radius: 50%;
-  box-shadow: 0 0 8px #e74c3c;
+  box-shadow: 0 0 8px var(--color-error);
   animation: pulsaPunto 1.5s infinite ease-in-out;
 }
 @keyframes pulsaPunto {
@@ -1912,7 +1912,7 @@ function formatearFecha(isoStr) {
 .explicacion-grafico p {
   font-size: 0.78rem;
   line-height: 1.4;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   margin: 0;
 }
 .texto-nodo-grafico {
@@ -1949,7 +1949,7 @@ function formatearFecha(isoStr) {
   filter: drop-shadow(0px 0px 8px rgba(170, 59, 255, 0.15));
 }
 .linea-tendencia-neon {
-  filter: drop-shadow(0 0 5px #aa3bff);
+  filter: drop-shadow(0 0 5px var(--morado-brillante));
   stroke-dasharray: 1000;
   stroke-dashoffset: 1000;
   animation: dibujaCurva 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -2004,7 +2004,7 @@ function formatearFecha(isoStr) {
 }
 .monto-centro-etiqueta {
   font-size: 0.78rem;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -2039,7 +2039,7 @@ function formatearFecha(isoStr) {
 .l-nombre {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--texto-principal);
 }
 .l-valores {
   font-size: 0.78rem;
@@ -2057,12 +2057,12 @@ function formatearFecha(isoStr) {
 }
 .stock-indicador.bajo {
   background: rgba(231, 76, 60, 0.1);
-  color: #e74c3c;
+  color: var(--color-error);
   border: 1px solid rgba(231, 76, 60, 0.2);
 }
 .stock-indicador.normal {
   background: rgba(46, 204, 113, 0.1);
-  color: #2ecc71;
+  color: var(--color-exito);
   border: 1px solid rgba(46, 204, 113, 0.2);
 }
 
@@ -2253,7 +2253,7 @@ function formatearFecha(isoStr) {
 }
 .columna-nombre-eje {
   font-size: 0.75rem;
-  color: #a0aec0;
+  color: var(--texto-secundario);
   font-weight: 700;
   margin-top: 8px;
   text-align: center;
@@ -2300,7 +2300,7 @@ function formatearFecha(isoStr) {
   gap: 8px;
   background: rgba(157, 78, 221, 0.1);
   border: 1px solid rgba(157, 78, 221, 0.3);
-  color: #9D4EDD;
+  color: var(--morado-brillante);
   padding: 8px 18px;
   border-radius: 12px;
   font-weight: 700;
@@ -2308,7 +2308,7 @@ function formatearFecha(isoStr) {
   transition: all 0.2s;
 }
 .btn-ver-historial:hover {
-  background: #9D4EDD;
+  background: var(--morado-brillante);
   color: white;
 }
 
@@ -2343,12 +2343,12 @@ function formatearFecha(isoStr) {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0,0,0,0.2);
 }
-.kbi-morado { border-left-color: #9D4EDD; }
-.kbi-verde  { border-left-color: #06D6A0; }
-.kbi-azul   { border-left-color: #3A0CA3; }
-.kbi-rojo   { border-left-color: #EF476F; }
-.kbi-amarillo { border-left-color: #FFD166; }
-.kbi-rosa   { border-left-color: #F72585; }
+.kbi-morado { border-left-color: var(--morado-brillante); }
+.kbi-verde  { border-left-color: var(--color-exito); }
+.kbi-azul   { border-left-color: var(--morado-medio); }
+.kbi-rojo   { border-left-color: var(--color-error); }
+.kbi-amarillo { border-left-color: var(--color-alerta); }
+.kbi-rosa   { border-left-color: var(--rosa-acento); }
 
 .kbi-icono {
   width: 48px;
@@ -2369,7 +2369,7 @@ function formatearFecha(isoStr) {
 .kbi-label {
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--texto-secundario, rgba(255,255,255,0.5));
+  color: var(--texto-secundario);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
