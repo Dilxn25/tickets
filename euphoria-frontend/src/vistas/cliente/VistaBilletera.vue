@@ -1,24 +1,36 @@
 <template>
-  <div class="contenedor-billetera">
-    <h1 class="titulo-principal-billetera aparecer-subir">Billetera de {{ usuario }}</h1>
+  <div class="contenedor-billetera entrada-cine">
+    <!-- Encabezado compacto -->
+    <header class="hero-billetera">
+      <div class="hero-billetera-contenido">
+        <h1 class="titulo-principal-billetera">Mi billetera</h1>
+        <p class="hero-billetera-sub">Recarga, paga con QR y sigue tus movimientos en tiempo real.</p>
+      </div>
+    </header>
 
     <div class="billetera-layout-grid">
       <!-- Columna Izquierda: Tarjeta y Acciones -->
       <div class="panel-izquierdo">
         <!-- TARJETA PRINCIPAL TYPE BILLETERA/CREDITO -->
-        <div class="tarjeta-billetera hover-elevar aparecer-subir">
+        <div class="tarjeta-billetera hover-elevar">
+          <div class="tarjeta-brillo" aria-hidden="true"></div>
           <!-- Fila Superior -->
           <div class="fila-superior">
             <div class="grupo-saldo">
               <p class="etiqueta-pequena">Saldo disponible</p>
-              <p class="valor-grande">Bs. {{ formatoMoneda(saldo) }}</p>
+              <p class="valor-grande"><span class="valor-moneda">Bs.</span>{{ formatoMoneda(saldo) }}</p>
             </div>
             <div class="grupo-marca">
               <img src="@/activos/imagenes/logo-euphoria.png" alt="Logotipo de Euphoria" class="img-logo" />
             </div>
           </div>
 
-          <div class="espaciador-tarjeta"></div>
+          <div class="tarjeta-media">
+            <span class="chip-tarjeta" aria-hidden="true">
+              <span class="chip-lineas"></span>
+            </span>
+            <span class="tarjeta-wordmark">Euphoria Club · Wallet</span>
+          </div>
 
           <!-- Fila Inferior -->
           <div class="fila-inferior">
@@ -46,27 +58,38 @@
         </div>
 
     <!-- Acciones para Generar QRs (Pago) -->
-    <div class="acciones-billetera escalonar aparecer-subir">
+    <p class="acciones-titulo">Pagar en barra</p>
+    <div class="acciones-billetera escalonar">
       <button class="btn-abrir-recarga btn-pagar" @click="mostrarQRRapido('sin_pin')" type="button">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <path d="M7 7h.01"></path>
-          <path d="M17 7h.01"></path>
-          <path d="M7 17h.01"></path>
-          <path d="M17 17h.01"></path>
-        </svg>
-        QR público
+        <span class="qr-tile-icono">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <path d="M7 7h.01"></path>
+            <path d="M17 7h.01"></path>
+            <path d="M7 17h.01"></path>
+            <path d="M17 17h.01"></path>
+          </svg>
+        </span>
+        <span class="qr-tile-texto">
+          <span class="qr-tile-titulo">QR público</span>
+          <span class="qr-tile-sub">Cobro directo</span>
+        </span>
       </button>
       <button class="btn-abrir-recarga btn-pagar btn-privado" @click="mostrarQRRapido('con_pin')" type="button">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <path d="M7 7h.01"></path>
-          <path d="M17 7h.01"></path>
-          <path d="M7 17h.01"></path>
-          <path d="M17 17h.01"></path>
-          <rect x="10" y="10" width="4" height="4" rx="1" ry="1"></rect>
-        </svg>
-        QR privado
+        <span class="qr-tile-icono">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <path d="M7 7h.01"></path>
+            <path d="M17 7h.01"></path>
+            <path d="M7 17h.01"></path>
+            <path d="M17 17h.01"></path>
+            <rect x="10" y="10" width="4" height="4" rx="1" ry="1"></rect>
+          </svg>
+        </span>
+        <span class="qr-tile-texto">
+          <span class="qr-tile-titulo">QR privado</span>
+          <span class="qr-tile-sub">Protegido con PIN</span>
+        </span>
       </button>
     </div>
 
@@ -75,8 +98,10 @@
       <!-- Columna Derecha: Historial -->
       <div class="panel-derecho">
         <!-- HISTORIAL RECARGAS -->
-        <div class="seccion-historial aparecer-subir">
-      <h2>Historial de recargas</h2>
+        <div class="seccion-historial">
+      <div class="historial-encabezado">
+        <h2>Historial de recargas</h2>
+      </div>
       <div v-if="historial.length === 0" class="historial-vacio">
         <div class="icono-vacio">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
@@ -728,54 +753,178 @@ onUnmounted(() => {
   align-items: start;
 }
 
-@media (min-width: 900px) {
+/* Tablet: dos columnas (tarjeta + historial) para aprovechar el ancho */
+@media (min-width: 640px) {
+  .billetera-layout-grid {
+    grid-template-columns: minmax(320px, 400px) 1fr;
+    gap: 2rem;
+  }
+}
+@media (min-width: 1024px) {
   .billetera-layout-grid {
     grid-template-columns: 420px 1fr;
     gap: 3rem;
   }
 }
+/* El historial se adapta segun el ancho de SU columna (no del viewport) */
+.panel-derecho { container-type: inline-size; }
+
+/* Encabezado compacto (sin eyebrow ni degradado: menos ruido, mas profesional) */
+.hero-billetera {
+  position: relative;
+  margin-bottom: 1.35rem;
+  padding: 0.25rem 0.15rem 0;
+}
+
+.orbe-hero-a {
+  width: 300px;
+  height: 300px;
+  top: -160px;
+  left: -80px;
+}
+
+.orbe-hero-b {
+  width: 240px;
+  height: 240px;
+  top: -120px;
+  right: -60px;
+  opacity: 0.28;
+}
+
+.hero-billetera-contenido {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 640px;
+}
 
 .titulo-principal-billetera {
-  font-family: var(--fuente-titulo);
-  font-size: clamp(1.7rem, 4vw, 2.1rem);
-  font-weight: 800;
-  text-align: center;
   color: var(--texto-principal);
-  margin-bottom: 1.75rem;
-  letter-spacing: -0.03em;
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
   line-height: 1.1;
   text-wrap: balance;
+}
+
+.hero-billetera-sub {
+  margin: 0.3rem 0 0;
+  color: var(--texto-secundario);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 52ch;
+  text-wrap: pretty;
+}
+
+@media (max-width: 600px) {
+  .hero-billetera { margin-bottom: 1.15rem; }
 }
 
 /* TARJETA BILLETERA */
 .tarjeta-billetera {
   position: relative;
+  isolation: isolate;
   width: 100%;
-  padding: 2.5rem;
-  border-radius: var(--radio-xl);
+  padding: 2rem 2.25rem 2.25rem;
+  border-radius: 26px;
   background:
-    radial-gradient(120% 120% at 100% 0%, rgba(236,72,153,0.28), transparent 55%),
-    var(--gradiente-marca-3);
-  border: 1px solid var(--borde-activo);
-  box-shadow: 0 18px 44px rgba(19, 6, 48, 0.55), var(--glow-morado), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    radial-gradient(130% 120% at 100% 0%, rgba(236,72,153,0.42), transparent 55%),
+    radial-gradient(120% 120% at 0% 100%, rgba(139,92,246,0.55), transparent 60%),
+    linear-gradient(150deg, #2a1268 0%, #4a1f9e 42%, #7b2fb8 72%, #b83a8f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 30px 70px -20px rgba(120, 30, 140, 0.7),
+    0 10px 26px rgba(19, 6, 48, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
-  margin-bottom: 1.5rem;
+  /* Mantiene proporción de tarjeta: no se estira a full-width dejando huecos.
+     Se centra en su columna; en desktop (grid 2-col) la columna ya es angosta. */
+  max-width: 460px;
+  margin: 0 auto 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.35rem;
 }
 
-/* Efecto brillo minimalista */
-.tarjeta-billetera::before {
+/* Halo perimetral sutil bajo la tarjeta */
+.tarjeta-billetera::after {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 55%);
-  transform: rotate(30deg);
+  inset: 0;
+  border-radius: inherit;
   pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 -40px 70px -30px rgba(0, 0, 0, 0.5);
+}
+
+/* Sheen diagonal que cruza la tarjeta */
+.tarjeta-brillo {
+  position: absolute;
+  top: -60%;
+  left: -30%;
+  width: 55%;
+  height: 220%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.22) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.08) 55%, transparent 100%);
+  transform: rotate(8deg) translateX(-30%);
+  filter: blur(2px);
+  transition: transform 1.1s var(--ease-cine);
+}
+
+.tarjeta-billetera:hover .tarjeta-brillo {
+  transform: rotate(8deg) translateX(360%);
+}
+
+.tarjeta-billetera > *:not(.tarjeta-brillo) {
+  position: relative;
+  z-index: 2;
+}
+
+/* Chip + wordmark central */
+.tarjeta-media {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.chip-tarjeta {
+  position: relative;
+  width: 44px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(150deg, #f7e08a 0%, #d9b24a 45%, #b8862b 100%);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.35);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.chip-lineas {
+  position: absolute;
+  inset: 6px 8px;
+  border-radius: 3px;
+  background:
+    linear-gradient(to right, transparent 45%, rgba(120,80,10,0.55) 45%, rgba(120,80,10,0.55) 55%, transparent 55%),
+    linear-gradient(to bottom, transparent 45%, rgba(120,80,10,0.55) 45%, rgba(120,80,10,0.55) 55%, transparent 55%);
+  border: 1px solid rgba(120,80,10,0.4);
+}
+
+.tarjeta-wordmark {
+  font-family: var(--fuente-titulo);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta-billetera:hover .tarjeta-brillo { transform: rotate(8deg) translateX(-30%); }
 }
 
 .fila-superior {
@@ -931,13 +1080,24 @@ onUnmounted(() => {
 }
 
 .valor-grande {
-  font-size: 2.8rem;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(2.6rem, 8vw, 3.3rem);
   font-weight: 800;
   color: white;
   margin: 0;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 2px 12px rgba(19, 6, 48, 0.35);
+  text-shadow: 0 2px 20px rgba(19, 6, 48, 0.45);
+}
+
+.valor-moneda {
+  font-size: 0.42em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(255,255,255,0.78);
+  margin-right: 0.4rem;
+  vertical-align: 0.5em;
 }
 
 /* RESPONSIVIDAD TARJETA */
@@ -961,41 +1121,102 @@ onUnmounted(() => {
 }
 
 /* ACCIONES BILLETERA (PAGOS) */
-.acciones-billetera {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem; /* Reducido para evitar el enorme espacio muerto arriba del historial */
-  flex-wrap: wrap;
+.acciones-titulo {
+  font-family: var(--fuente-titulo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--texto-secundario);
+  margin: 0 0 0.85rem 0;
+  padding-left: 0.15rem;
 }
 
+.acciones-billetera {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  margin: 0 auto 1.5rem;
+  max-width: 460px;
+}
+/* La etiqueta "Pagar en barra" también alineada con la tarjeta */
+.acciones-titulo { max-width: 460px; margin-left: auto; margin-right: auto; }
+
 .btn-abrir-recarga {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  background: var(--fondo-tarjeta);
+  gap: 0.85rem;
+  background: linear-gradient(155deg, var(--fondo-tarjeta-alt), var(--fondo-tarjeta));
   border: 1px solid var(--borde-sutil);
   color: var(--texto-principal);
-  padding: 0.9rem 1.6rem;
-  border-radius: var(--radio-md);
+  padding: 1rem 1.1rem;
+  border-radius: var(--radio-lg);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: var(--trans-normal);
+  text-align: left;
+  transition: transform 0.3s var(--ease-cine), box-shadow 0.3s var(--ease-cine), border-color 0.3s ease;
 }
 
-.btn-pagar {
-  border-color: var(--verde-fresco);
+.qr-tile-icono {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-md);
+  color: #fff;
+  background: rgba(168, 85, 247, 0.16);
+  border: 1px solid var(--glass-borde);
+  transition: transform 0.3s var(--ease-cine), background 0.3s ease;
 }
 
-.btn-privado {
-  border-color: var(--rojo-coral);
+.qr-tile-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.qr-tile-titulo {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+}
+
+.qr-tile-sub {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--texto-secundario);
+}
+
+.btn-privado .qr-tile-icono {
+  background: rgba(236, 72, 153, 0.16);
+  border-color: rgba(236, 72, 153, 0.4);
 }
 
 .btn-abrir-recarga:hover {
-  border-color: var(--morado-brillante);
-  background: rgba(157, 78, 221, 0.1);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: var(--borde-activo);
+  box-shadow: 0 16px 34px -14px rgba(168, 85, 247, 0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.btn-abrir-recarga:hover .qr-tile-icono {
+  transform: scale(1.06);
+  background: rgba(168, 85, 247, 0.28);
+}
+
+.btn-privado:hover {
+  box-shadow: 0 16px 34px -14px rgba(236, 72, 153, 0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.btn-privado:hover .qr-tile-icono {
+  background: rgba(236, 72, 153, 0.3);
 }
 
 .btn-abrir-recarga:active {
@@ -1007,16 +1228,8 @@ onUnmounted(() => {
   outline-offset: 2px;
 }
 
-.btn-pagar:hover {
-  border-color: var(--verde-fresco);
-  background: rgba(34, 197, 94, 0.12);
-  box-shadow: 0 8px 22px rgba(34, 197, 94, 0.15);
-}
-
-.btn-privado:hover {
-  border-color: var(--rojo-coral);
-  background: rgba(239, 68, 68, 0.12);
-  box-shadow: 0 8px 22px rgba(239, 68, 68, 0.15);
+@media (max-width: 420px) {
+  .acciones-billetera { grid-template-columns: 1fr; }
 }
 
 /* MODALES GLOBALES */
@@ -1037,16 +1250,19 @@ onUnmounted(() => {
 .modal-cambiar-pin,
 .modal-recarga,
 .modal-detalles {
-  background: rgba(22, 27, 34, 0.95);
-  backdrop-filter: blur(15px);
-  border: 1px solid var(--morado-brillante);
-  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.14), transparent 55%),
+    linear-gradient(165deg, rgba(36, 21, 86, 0.96), rgba(20, 10, 46, 0.97));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl);
   padding: 2rem;
   max-width: 500px;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 24px 70px rgba(7, 3, 20, 0.8), 0 0 26px rgba(168, 85, 247, 0.3);
+  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.28);
   animation: modalAparece 0.28s var(--ease-suave) both;
 }
 
@@ -1608,11 +1824,13 @@ onUnmounted(() => {
 /* DETALLES TRANSACCIÓN */
 .modal-detalles {
   width: 90%;
-  max-width: 400px;
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  max-width: 420px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.12), transparent 55%),
+    linear-gradient(165deg, rgba(36, 21, 86, 0.96), rgba(20, 10, 46, 0.97));
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl);
+  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.22);
   display: flex;
   flex-direction: column;
 }
@@ -1671,12 +1889,20 @@ onUnmounted(() => {
 }
 
 /* HISTORIAL */
+.historial-encabezado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 1.4rem;
+}
+
 .seccion-historial h2 {
   font-family: var(--fuente-titulo);
-  font-size: 1.4rem;
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
   font-weight: 800;
-  letter-spacing: -0.025em;
-  margin-bottom: 1.25rem;
+  letter-spacing: -0.03em;
+  margin: 0;
   color: var(--texto-principal);
   text-wrap: balance;
 }
@@ -1724,10 +1950,11 @@ onUnmounted(() => {
 }
 
 .tabla-historial {
-  background: var(--fondo-tarjeta);
+  background: linear-gradient(180deg, rgba(36, 21, 86, 0.55), rgba(27, 16, 64, 0.75));
   border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-lg);
+  border-radius: var(--radio-xl);
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 48px rgba(10, 6, 26, 0.4);
 }
 
 .fila-encabezado {
@@ -1761,8 +1988,8 @@ onUnmounted(() => {
   border-bottom: none;
 }
 
-/* Transformación de tabla a tarjetas en celulares */
-@media (max-width: 600px) {
+/* Transformación de tabla a tarjetas según el ancho de la columna del historial */
+@container (max-width: 560px) {
   .tabla-historial {
     background: transparent;
     border: none;
@@ -1773,7 +2000,7 @@ onUnmounted(() => {
   .fila-historial {
     display: grid;
     grid-template-columns: 1fr auto; /* Dos columnas: Izquierda contenido, Derecha badge/botón */
-    grid-template-areas: 
+    grid-template-areas:
       "monto estado"
       "transaccion transaccion"
       "fecha boton";
@@ -2089,20 +2316,6 @@ onUnmounted(() => {
   
   .grid-qr {
     grid-template-columns: 1fr;
-  }
-
-  .fila-encabezado {
-    display: none;
-  }
-
-  .fila-historial {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-    padding: 1rem;
-  }
-  
-  .columna-monto {
-    font-size: 1.1rem;
   }
 }
 </style>

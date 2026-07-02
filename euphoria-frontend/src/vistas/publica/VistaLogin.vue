@@ -6,12 +6,51 @@
       <div class="orbe orbe-2"></div>
       <div class="orbe orbe-3"></div>
     </div>
+    <!-- Orbes ambientales de neon adicionales -->
+    <div class="orbe-deco morado orbe-amb-1"></div>
+    <div class="orbe-deco rosa orbe-amb-2"></div>
 
-    <div class="login-contenedor">
-      <!-- Logo y bienvenida -->
-      <div class="login-cabecera">
-        <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo" />
-      </div>
+    <div class="login-shell">
+      <!-- ===== Panel de marca (hero) ===== -->
+      <aside class="login-hero textura-grano">
+        <span class="eyebrow hero-eyebrow">Acceso · Miembros Euphoria</span>
+
+        <div class="hero-logo-wrap">
+          <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo" />
+        </div>
+
+        <h1 class="display-lg hero-titulo">
+          La noche <span class="texto-marca">empieza aquí</span>
+        </h1>
+        <p class="hero-sub">
+          Entra a tu mundo nocturno: reservas VIP, eventos en vivo y tu
+          billetera digital, todo en un mismo lugar.
+        </p>
+
+        <ul class="hero-chips escalonar">
+          <li class="hero-chip">
+            <span class="chip-punto"></span> Reservas de zona &amp; mesas VIP
+          </li>
+          <li class="hero-chip">
+            <span class="chip-punto"></span> Eventos y line-ups en vivo
+          </li>
+          <li class="hero-chip">
+            <span class="chip-punto"></span> Billetera y accesos digitales
+          </li>
+        </ul>
+      </aside>
+
+      <!-- ===== Tarjeta de autenticación ===== -->
+      <div class="login-contenedor">
+        <!-- Logo compacto (visible al colapsar a 1 columna) -->
+        <div class="login-cabecera">
+          <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo logo-compacto" />
+        </div>
+
+        <div class="card-intro">
+          <span class="eyebrow card-eyebrow">{{ esRegistro ? 'Crear cuenta' : 'Bienvenido de vuelta' }}</span>
+          <h2 class="display-md card-titulo">{{ esRegistro ? 'Únete a la lista' : 'Entra a la fiesta' }}</h2>
+        </div>
 
       <div class="tabs-auth" role="tablist">
         <button type="button" role="tab" :aria-selected="!esRegistro" :class="['tab-btn', !esRegistro ? 'activo' : '']" @click="esRegistro = false; error = ''">Iniciar sesión</button>
@@ -90,7 +129,12 @@
 
         <button type="submit" class="btn btn-primario btn-lg w-full brillo-hover boton-ingreso" :disabled="cargando">
           <span v-if="cargando" class="spinner"></span>
-          <span v-else>{{ esRegistro ? 'Crear mi cuenta' : 'Ingresar' }}</span>
+          <span v-else class="boton-ingreso-txt">
+            {{ esRegistro ? 'Crear mi cuenta' : 'Ingresar' }}
+            <span class="boton-flecha" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+            </span>
+          </span>
         </button>
       </form>
 
@@ -103,6 +147,7 @@
       </div>
 
       <p class="footer-texto">Euphoria &copy; 2026 · Todos los derechos reservados</p>
+      </div>
     </div>
 
     <!-- Modal Recuperar Contraseña -->
@@ -367,12 +412,89 @@ async function restablecerPassword() {
   66%     { transform: translate(-18px,14px) scale(0.96); }
 }
 
+/* Orbes ambientales adicionales (neon de marca sobre el overlay) */
+.orbe-amb-1 { width: 520px; height: 520px; top: -160px; right: 6%; opacity: 0.3; }
+.orbe-amb-2 { width: 460px; height: 460px; bottom: -180px; left: 4%; opacity: 0.26; }
+
+/* ===== Shell partido: hero + tarjeta ===== */
+.login-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  display: grid;
+  grid-template-columns: 1.05fr minmax(380px, 440px);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4.5rem);
+}
+
+/* ===== Panel de marca (hero) ===== */
+.login-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.4rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  animation: heroEntra 0.8s var(--ease-cine) both;
+}
+@keyframes heroEntra {
+  from { opacity: 0; transform: translateX(-26px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+.hero-eyebrow { animation: none; }
+.hero-logo-wrap { width: 100%; }
+.hero-titulo {
+  color: var(--texto-principal);
+  margin: 0.2rem 0 0;
+  text-wrap: balance;
+}
+.hero-sub {
+  color: var(--texto-secundario);
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 42ch;
+  text-wrap: pretty;
+}
+.hero-chips {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+}
+.hero-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--texto-principal);
+  padding: 11px 16px;
+  border-radius: var(--radio-full);
+  background: rgba(46, 26, 102, 0.32);
+  border: 1px solid var(--glass-borde);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.3s var(--ease-cine), border-color 0.3s ease, background 0.3s ease;
+}
+.hero-chip:hover {
+  transform: translateX(5px);
+  border-color: var(--borde-activo);
+  background: rgba(168, 85, 247, 0.14);
+}
+.chip-punto {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--gradiente-marca);
+  box-shadow: 0 0 10px var(--rosa-acento);
+}
+
 /* Contenedor del login */
 @property --angulo { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 
 .login-contenedor {
   width: 100%;
-  max-width: 430px;
   /* Tarjeta opaca y oscura: garantiza legibilidad del texto sin depender
      de la imagen de fondo (antes usaba --glass-fondo al 35% y las letras
      apagadas se perdían sobre el fondo brillante). */
@@ -381,12 +503,14 @@ async function restablecerPassword() {
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-xl);
-  padding: 2.5rem 2rem;
-  box-shadow: var(--sombra-modal), var(--sombra-glow);
+  padding: 2.6rem 2.2rem;
+  box-shadow: var(--sombra-modal), var(--sombra-glow),
+              inset 0 1px 0 rgba(255,255,255,0.06);
   position: relative;
   z-index: 1;
   isolation: isolate;
-  animation: entradaCard 0.65s var(--ease-suave) both;
+  animation: entradaCard 0.7s var(--ease-cine) both;
+  animation-delay: 0.12s;
 }
 /* Aura de color giratoria detrás de la tarjeta */
 .login-contenedor::after {
@@ -407,7 +531,8 @@ async function restablecerPassword() {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.login-cabecera { text-align: center; margin-bottom: 2rem; }
+/* La cabecera de la tarjeta solo aloja el logo compacto (colapso a 1 col) */
+.login-cabecera { display: none; text-align: center; margin-bottom: 1.4rem; }
 .logo {
   height: auto;
   width: 100%;
@@ -417,9 +542,27 @@ async function restablecerPassword() {
   margin: 0 auto;
   animation: pulsoLogo 4.5s ease-in-out infinite;
 }
+/* En el hero el logo se alinea a la izquierda y algo mas grande */
+.login-hero .logo { margin: 0; max-width: 260px; }
+/* Logo compacto dentro de la tarjeta: solo visible al colapsar a 1 columna */
+.logo-compacto { display: none; max-width: 200px; }
 @keyframes pulsoLogo {
   0%,100% { filter: drop-shadow(0 0 10px rgba(168,85,247,0.5)); }
   50%     { filter: drop-shadow(0 0 24px rgba(236,72,153,0.72)); }
+}
+
+/* Intro de la tarjeta (eyebrow + titulo que cambia segun pestaña) */
+.card-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-bottom: 1.5rem;
+}
+.card-eyebrow { animation: none; }
+.card-titulo {
+  color: var(--texto-principal);
+  margin: 0;
 }
 
 /* Tabs */
@@ -543,6 +686,20 @@ async function restablecerPassword() {
   outline: none;
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.55), var(--glow-morado);
 }
+.boton-ingreso { transition: transform 0.25s var(--ease-cine), box-shadow 0.25s ease; }
+.boton-ingreso:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(236,72,153,0.4), var(--glow-morado); }
+.boton-ingreso:active { transform: scale(0.98); }
+.boton-ingreso-txt {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+}
+.boton-flecha {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: transform 0.35s var(--ease-cine);
+}
+.boton-flecha svg { width: 15px; height: 15px; }
+.boton-ingreso:hover .boton-flecha { transform: translateX(3px) scale(1.08); }
 
 .alerta-error {
   background: rgba(231,76,60,0.1);
@@ -668,6 +825,8 @@ async function restablecerPassword() {
 /* ===== ACCESIBILIDAD: MOVIMIENTO REDUCIDO ===== */
 @media (prefers-reduced-motion: reduce) {
   .orbe,
+  .login-pagina,
+  .login-hero,
   .login-contenedor,
   .login-contenedor::after,
   .logo,
@@ -682,15 +841,27 @@ async function restablecerPassword() {
 
 /* ===== RESPONSIVIDAD ===== */
 
-/* Tablet: 481px - 1024px */
+/* Desktop intermedio: aprieta el gap del shell */
 @media (max-width: 1024px) {
-  .login-contenedor {
-    max-width: 440px;
-    padding: 2.2rem 1.8rem;
-  }
+  .login-shell { gap: 2rem; grid-template-columns: 1fr minmax(360px, 420px); }
+  .login-contenedor { padding: 2.2rem 1.8rem; }
+  .hero-sub { font-size: 0.94rem; }
   .orbe-1 { width: min(400px, 60vw); height: min(400px, 60vw); }
   .orbe-2 { width: min(320px, 50vw); height: min(320px, 50vw); }
   .orbe-3 { width: min(260px, 45vw); height: min(260px, 45vw); }
+}
+
+/* Colapso a 1 columna: se oculta el hero, la tarjeta se centra */
+@media (max-width: 900px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    max-width: 440px;
+    gap: 0;
+  }
+  .login-hero { display: none; }
+  .login-cabecera { display: block; }
+  .logo-compacto { display: block; }
+  .orbe-amb-1, .orbe-amb-2 { opacity: 0.2; }
 }
 
 /* Celular: <= 480px */

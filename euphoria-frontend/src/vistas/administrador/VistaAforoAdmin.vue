@@ -1,18 +1,30 @@
 <template>
   <div class="vista-aforo-admin">
-    <div class="encabezado aparecer-subir">
-      <div>
-        <h1 class="titulo">Aforo en tiempo real</h1>
-        <p class="subtitulo">Monitorea la ocupación de cada zona en vivo</p>
+    <div class="vista-cabecera aparecer-subir">
+      <div class="cabecera-titulo">
+        <span class="titulo-medallon" :class="!cargando && eventos.length ? estadoTotal : ''" aria-hidden="true">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path d="M12 21a9 9 0 1 0-9-9" />
+            <path d="M12 12l4-3" stroke-linecap="round" />
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="vista-titulo">Aforo en tiempo real</h1>
+          <p class="vista-subtitulo">Monitorea la ocupación de cada zona en vivo</p>
+        </div>
       </div>
-      <select v-if="eventos.length" v-model="idEventoSel" class="selector-evento" @change="cargarAforo">
-        <option v-for="e in eventos" :key="e.id_evento" :value="e.id_evento">{{ e.nombre_evento }}</option>
-      </select>
+      <div class="cabecera-acciones">
+        <span v-if="!cargando && eventos.length" class="pulso-vivo"><span class="dot"></span>En vivo</span>
+        <select v-if="eventos.length" v-model="idEventoSel" class="selector-evento" @change="cargarAforo">
+          <option v-for="e in eventos" :key="e.id_evento" :value="e.id_evento">{{ e.nombre_evento }}</option>
+        </select>
+      </div>
     </div>
 
     <div v-if="cargando" class="cargando"><div class="spinner"></div></div>
 
-    <div v-else-if="!eventos.length" class="vacio aparecer-zoom">
+    <div v-else-if="!eventos.length" class="vacio superficie aparecer-zoom">
       <div class="vacio-icono" aria-hidden="true">
         <span class="dot"></span>
       </div>
@@ -22,43 +34,70 @@
 
     <template v-else>
       <!-- Resumen general -->
-      <div class="resumen aparecer-subir">
-        <div class="anillo" :class="estadoTotal">
-          <svg viewBox="0 0 120 120">
-            <circle class="anillo-fondo" cx="60" cy="60" r="52" />
-            <circle class="anillo-valor" cx="60" cy="60" r="52"
-              :stroke-dasharray="circunferencia"
-              :stroke-dashoffset="circunferencia * (1 - Math.min(100, porcentajeTotal) / 100)" />
-          </svg>
-          <div class="anillo-centro">
-            <span class="pct">{{ porcentajeTotal }}%</span>
-            <span class="lbl">ocupado</span>
+      <section class="resumen superficie aparecer-subir" :class="estadoTotal">
+        <div class="resumen-gauge">
+          <div class="anillo" :class="estadoTotal">
+            <svg viewBox="0 0 120 120">
+              <circle class="anillo-pista" cx="60" cy="60" r="52" />
+              <circle class="anillo-fondo" cx="60" cy="60" r="52" />
+              <circle class="anillo-valor" cx="60" cy="60" r="52"
+                :stroke-dasharray="circunferencia"
+                :stroke-dashoffset="circunferencia * (1 - Math.min(100, porcentajeTotal) / 100)" />
+            </svg>
+            <div class="anillo-centro">
+              <span class="pct">{{ porcentajeTotal }}<i>%</i></span>
+              <span class="lbl">ocupado</span>
+            </div>
+          </div>
+          <div class="estado-chip" :class="estadoTotal">
+            <span class="chip-dot"></span>{{ textoEstado(estadoTotal) }}
           </div>
         </div>
+
         <div class="resumen-datos">
-          <div class="dato-grande">
-            <span class="num">{{ aforoTotal }}</span>
-            <span class="lbl">personas dentro</span>
+          <div class="kpi kpi-hero">
+            <span class="kpi-num">{{ aforoTotal }}</span>
+            <span class="kpi-lbl">personas dentro</span>
           </div>
-          <div class="dato-chico"><b>{{ capacidadTotal }}</b> capacidad total</div>
-          <div class="dato-chico"><b>{{ Math.max(0, capacidadTotal - aforoTotal) }}</b> lugares libres</div>
-          <div class="estado-chip" :class="estadoTotal">{{ textoEstado(estadoTotal) }}</div>
+          <div class="kpi-fila">
+            <div class="kpi">
+              <span class="kpi-num sm">{{ capacidadTotal }}</span>
+              <span class="kpi-lbl">capacidad total</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-num sm acento-libre">{{ Math.max(0, capacidadTotal - aforoTotal) }}</span>
+              <span class="kpi-lbl">lugares libres</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-num sm">{{ zonas.length }}</span>
+              <span class="kpi-lbl">zonas activas</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       <!-- Zonas -->
+      <div class="zonas-encabezado aparecer-subir">
+        <h2 class="seccion-h2">Ocupación por zona</h2>
+        <ul class="leyenda" aria-hidden="true">
+          <li class="ok"><span class="ll-dot"></span>Disponible</li>
+          <li class="alerta"><span class="ll-dot"></span>Casi lleno</li>
+          <li class="lleno"><span class="ll-dot"></span>Lleno</li>
+        </ul>
+      </div>
+
       <div class="grid-zonas escalonar">
-        <div v-for="z in zonas" :key="z.id_zona" class="zona-card hover-elevar" :class="z.estado">
+        <div v-for="z in zonas" :key="z.id_zona" class="zona-card superficie hover-elevar" :class="z.estado">
           <div class="zona-top">
             <span class="zona-nombre">{{ z.nombre_zona }}</span>
-            <span class="zona-estado" :class="z.estado">{{ textoEstado(z.estado) }}</span>
+            <span class="zona-estado" :class="z.estado"><span class="ze-dot"></span>{{ textoEstado(z.estado) }}</span>
           </div>
-          <div class="zona-num"><b>{{ z.aforo_actual }}</b> / {{ z.capacidad }}</div>
+          <div class="zona-num"><b>{{ z.aforo_actual }}</b><i>/ {{ z.capacidad }}</i></div>
           <div class="barra">
             <div class="barra-relleno" :class="z.estado" :style="{ width: Math.min(100, z.porcentaje) + '%' }"></div>
           </div>
           <div class="zona-pie">
-            <span>{{ z.porcentaje }}%</span>
+            <span class="zp-pct">{{ z.porcentaje }}%</span>
             <span>{{ z.disponibles }} libres</span>
           </div>
         </div>
@@ -150,10 +189,23 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 <style scoped>
 .vista-aforo-admin { padding: var(--esp-6); max-width: 1400px; margin: 0 auto; }
 
-.encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-6); flex-wrap: wrap; }
-.titulo { font-family: var(--fuente-titulo); font-size: 1.65rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; color: var(--texto-principal); text-wrap: balance; }
-.subtitulo { font-size: 0.9rem; color: var(--texto-secundario); margin-top: 2px; }
-.selector-evento { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 10px 14px; border-radius: var(--radio-md); font-size: 0.9rem; font-weight: 600; min-width: 220px; transition: var(--trans-normal); cursor: pointer; }
+/* Estado -> color de acento (una fuente de verdad) */
+.ok    { --c: var(--morado-brillante); --c-rgb: 168,85,247; --c2: var(--rosa-acento); }
+.alerta{ --c: #f5c518; --c-rgb: 245,197,24;  --c2: #f59e0b; }
+.lleno { --c: #f4586a; --c-rgb: 244,88,106;  --c2: #dc2626; }
+
+/* Cabecera de vista */
+.vista-cabecera { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-6); flex-wrap: wrap; }
+.cabecera-titulo { display: flex; align-items: center; gap: var(--esp-4); min-width: 0; }
+.titulo-medallon { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radio-lg); color: var(--morado-brillante); background: linear-gradient(150deg, rgba(168,85,247,0.22), rgba(236,72,153,0.12)); border: 1px solid rgba(168,85,247,0.35); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 22px rgba(168,85,247,0.22); transition: var(--trans-normal); }
+.titulo-medallon.alerta { color: #f5c518; background: linear-gradient(150deg, rgba(245,197,24,0.2), rgba(245,158,11,0.1)); border-color: rgba(245,197,24,0.4); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 22px rgba(245,197,24,0.2); }
+.titulo-medallon.lleno { color: #f4586a; background: linear-gradient(150deg, rgba(244,88,106,0.22), rgba(220,38,38,0.12)); border-color: rgba(244,88,106,0.42); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 22px rgba(244,88,106,0.22); }
+.vista-titulo { font-family: var(--fuente-titulo); font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; color: var(--texto-principal); text-wrap: balance; }
+.vista-subtitulo { font-size: 0.9rem; color: var(--texto-secundario); margin-top: 2px; }
+
+.cabecera-acciones { display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; }
+.pulso-vivo { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.01em; color: #7ef0b0; padding: 7px 13px; border-radius: var(--radio-full); background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.28); }
+.selector-evento { background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 11px 15px; border-radius: var(--radio-md); font-size: 0.9rem; font-weight: 600; min-width: 220px; transition: var(--trans-normal); cursor: pointer; }
 .selector-evento:hover { border-color: var(--borde-activo); box-shadow: var(--sombra-glow); }
 .selector-evento:focus-visible { outline: none; border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
 
@@ -162,62 +214,74 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 @keyframes girar { to { transform: rotate(360deg); } }
 .vacio { display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--texto-secundario); padding: 4.5rem 2rem; }
 .vacio-icono { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radio-full); background: rgba(155,89,182,0.12); border: 1px solid var(--borde-sutil); margin-bottom: var(--esp-4); }
-.vacio-icono .dot { width: 12px; height: 12px; background: var(--morado-brillante); animation: latido 1.8s infinite; }
+.vacio-icono .dot { width: 12px; height: 12px; background: var(--morado-brillante); box-shadow: 0 0 10px rgba(168,85,247,0.7); animation: latido 1.8s infinite; }
 .vacio-titulo { font-family: var(--fuente-titulo); font-size: 1.05rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 4px; }
 
-/* Resumen */
-.resumen { display: flex; align-items: center; gap: 2rem; background: var(--gradiente-sutil); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); padding: var(--esp-6); margin-bottom: var(--esp-5); flex-wrap: wrap; box-shadow: var(--sombra-tarjeta); }
-.anillo { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
-.anillo svg { transform: rotate(-90deg); width: 140px; height: 140px; }
-.anillo-fondo { fill: none; stroke: var(--fondo-app); stroke-width: 10; }
-.anillo-valor { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
-.anillo.ok .anillo-valor { stroke: var(--morado-brillante); filter: drop-shadow(0 0 6px rgba(168,85,247,0.5)); }
-.anillo.alerta .anillo-valor { stroke: #eab308; filter: drop-shadow(0 0 6px rgba(234,179,8,0.45)); }
-.anillo.lleno .anillo-valor { stroke: #ef4444; filter: drop-shadow(0 0 6px rgba(239,68,68,0.45)); }
-.anillo-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.anillo-centro .pct { font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); font-variant-numeric: tabular-nums; }
-.anillo-centro .lbl { font-size: 0.72rem; color: var(--texto-secundario); }
+/* Resumen (panel hero: gauge + KPIs) */
+.resumen { position: relative; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: clamp(1.5rem, 4vw, 3.5rem); padding: clamp(1.5rem, 3vw, 2.5rem); margin-bottom: var(--esp-6); overflow: hidden; }
+.resumen::before { content: ''; position: absolute; top: -40%; left: -10%; width: 340px; height: 340px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--c-rgb, 168,85,247), 0.22), transparent 70%); pointer-events: none; filter: blur(6px); transition: opacity 0.6s ease; }
 
-.resumen-datos { display: flex; flex-direction: column; gap: 6px; }
-.dato-grande { display: flex; flex-direction: column; }
-.dato-grande .num { font-size: 2.3rem; font-weight: 800; letter-spacing: -0.03em; color: var(--texto-principal); line-height: 1; font-variant-numeric: tabular-nums; }
-.dato-grande .lbl { font-size: 0.82rem; color: var(--texto-secundario); margin-top: 2px; }
-.dato-chico { font-size: 0.85rem; color: var(--texto-secundario); font-variant-numeric: tabular-nums; }
-.dato-chico b { color: var(--texto-principal); }
-.estado-chip { display: inline-block; width: fit-content; margin-top: var(--esp-2); font-size: 0.78rem; font-weight: 700; padding: 4px 12px; border-radius: var(--radio-full); }
-.estado-chip.ok { background: rgba(155,89,182,0.18); color: var(--morado-brillante); }
-.estado-chip.alerta { background: rgba(234,179,8,0.15); color: #eab308; }
-.estado-chip.lleno { background: rgba(239,68,68,0.15); color: #ef4444; }
+.resumen-gauge { display: flex; flex-direction: column; align-items: center; gap: var(--esp-4); position: relative; z-index: 1; }
+.anillo { position: relative; width: 168px; height: 168px; flex-shrink: 0; }
+.anillo svg { transform: rotate(-90deg); width: 168px; height: 168px; }
+.anillo-pista { fill: none; stroke: rgba(255,255,255,0.04); stroke-width: 14; }
+.anillo-fondo { fill: none; stroke: rgba(0,0,0,0.35); stroke-width: 11; }
+.anillo-valor { fill: none; stroke-width: 11; stroke-linecap: round; stroke: var(--c, var(--morado-brillante)); filter: drop-shadow(0 0 8px rgba(var(--c-rgb, 168,85,247), 0.6)); transition: stroke-dashoffset 0.7s cubic-bezier(0.22,1,0.36,1), stroke 0.4s ease; }
+.anillo-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.anillo-centro .pct { font-family: var(--fuente-titulo); font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--texto-principal); font-variant-numeric: tabular-nums; }
+.anillo-centro .pct i { font-style: normal; font-size: 1.1rem; font-weight: 700; color: var(--c, var(--morado-brillante)); margin-left: 1px; }
+.anillo-centro .lbl { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--texto-secundario); margin-top: 5px; }
+
+.estado-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 0.8rem; font-weight: 700; padding: 6px 15px; border-radius: var(--radio-full); color: var(--c, var(--morado-brillante)); background: rgba(var(--c-rgb, 168,85,247), 0.14); border: 1px solid rgba(var(--c-rgb, 168,85,247), 0.32); }
+.chip-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+.resumen-datos { position: relative; z-index: 1; display: flex; flex-direction: column; gap: var(--esp-5); min-width: 0; }
+.kpi { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi-num { font-family: var(--fuente-titulo); font-weight: 800; letter-spacing: -0.03em; line-height: 0.95; color: var(--texto-principal); font-variant-numeric: tabular-nums; }
+.kpi-hero .kpi-num { font-size: clamp(2.8rem, 6vw, 3.8rem); }
+.kpi-num.sm { font-size: 1.7rem; }
+.kpi-num.acento-libre { color: var(--rosa-acento); }
+.kpi-lbl { font-size: 0.8rem; color: var(--texto-secundario); }
+.kpi-hero .kpi-lbl { font-size: 0.9rem; font-weight: 600; }
+.kpi-fila { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--esp-4); padding-top: var(--esp-5); border-top: 1px solid var(--borde-sutil); }
+
+/* Encabezado de sección de zonas */
+.zonas-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-4); flex-wrap: wrap; }
+.seccion-h2 { font-family: var(--fuente-titulo); font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); }
+.leyenda { display: flex; align-items: center; gap: var(--esp-4); flex-wrap: wrap; }
+.leyenda li { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76rem; font-weight: 600; color: var(--texto-secundario); }
+.leyenda .ll-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 7px rgba(var(--c-rgb), 0.55); }
 
 /* Zonas */
-.grid-zonas { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--esp-4); }
-.zona-card { position: relative; background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); padding: var(--esp-5); transition: var(--trans-normal); overflow: hidden; }
-.zona-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--gradiente-marca); opacity: 0; transition: opacity 0.25s ease; }
-.zona-card:hover { border-color: var(--borde-activo); }
-.zona-card:hover::before { opacity: 1; }
-.zona-card.alerta { border-color: rgba(234,179,8,0.4); }
-.zona-card.lleno { border-color: rgba(239,68,68,0.45); }
-.zona-top { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); margin-bottom: 0.7rem; }
-.zona-nombre { font-size: 0.95rem; font-weight: 700; color: var(--texto-principal); letter-spacing: -0.01em; }
-.zona-estado { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: var(--radio-full); }
-.zona-estado.ok { background: rgba(155,89,182,0.18); color: var(--morado-brillante); }
-.zona-estado.alerta { background: rgba(234,179,8,0.15); color: #eab308; }
-.zona-estado.lleno { background: rgba(239,68,68,0.15); color: #ef4444; }
-.zona-num { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-secundario); margin-bottom: 0.7rem; font-variant-numeric: tabular-nums; }
-.zona-num b { color: var(--rosa-acento); }
-.barra { height: 10px; background: var(--fondo-app); border-radius: var(--radio-full); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.35); }
-.barra-relleno { height: 100%; border-radius: var(--radio-full); transition: width 0.6s cubic-bezier(0.22,1,0.36,1); }
-.barra-relleno.ok { background: linear-gradient(90deg, var(--morado-brillante), var(--rosa-acento)); }
-.barra-relleno.alerta { background: linear-gradient(90deg, #eab308, #f59e0b); }
-.barra-relleno.lleno { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.zona-pie { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--texto-secundario); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.grid-zonas { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--esp-4); }
+.zona-card { position: relative; padding: var(--esp-5); overflow: hidden; }
+.zona-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, var(--c), var(--c2, var(--c))); opacity: 0.9; }
+.zona-top { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); margin-bottom: var(--esp-3); }
+.zona-nombre { font-size: 0.98rem; font-weight: 700; color: var(--texto-principal); letter-spacing: -0.01em; }
+.zona-estado { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 4px 11px; border-radius: var(--radio-full); color: var(--c); background: rgba(var(--c-rgb), 0.14); border: 1px solid rgba(var(--c-rgb), 0.3); }
+.zona-estado .ze-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+.zona-num { display: flex; align-items: baseline; gap: 6px; margin-bottom: var(--esp-3); font-variant-numeric: tabular-nums; }
+.zona-num b { font-family: var(--fuente-titulo); font-size: 1.85rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: var(--texto-principal); }
+.zona-num i { font-style: normal; font-size: 0.95rem; font-weight: 600; color: var(--texto-secundario); }
+.barra { height: 10px; background: rgba(0,0,0,0.4); border-radius: var(--radio-full); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.45); }
+.barra-relleno { height: 100%; border-radius: var(--radio-full); background: linear-gradient(90deg, var(--c), var(--c2, var(--c))); box-shadow: 0 0 12px rgba(var(--c-rgb), 0.5); transition: width 0.7s cubic-bezier(0.22,1,0.36,1); }
+.zona-pie { display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; color: var(--texto-secundario); margin-top: var(--esp-3); font-variant-numeric: tabular-nums; }
+.zp-pct { font-weight: 700; color: var(--c); }
 
 .live-nota { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: var(--esp-6); font-size: 0.8rem; color: var(--texto-secundario); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); animation: latido 1.4s infinite; }
 @keyframes latido { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
+@media (max-width: 720px) {
+  .resumen { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: var(--esp-5); }
+  .resumen-datos { align-items: center; width: 100%; }
+  .kpi-hero { align-items: center; }
+  .kpi-fila { width: 100%; gap: var(--esp-3); }
+  .kpi-num.sm { font-size: 1.4rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner, .dot, .vacio-icono .dot { animation: none; }
-  .barra-relleno, .anillo-valor, .zona-card, .selector-evento { transition: none; }
+  .barra-relleno, .anillo-valor, .zona-card, .selector-evento, .titulo-medallon { transition: none; }
 }
 </style>

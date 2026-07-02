@@ -1,9 +1,17 @@
 <template>
   <div class="vista-ventas fade-in">
     <div class="vista-cabecera">
-      <div>
-        <h2 class="vista-titulo">Gestión de ventas</h2>
-        <p class="vista-subtitulo">Monitorea todas las comandas, transacciones y comprobantes de pago</p>
+      <div class="cabecera-titulo">
+        <span class="titulo-medallon" aria-hidden="true">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"></path>
+            <path d="M9 12h6"></path>
+          </svg>
+        </span>
+        <div>
+          <h2 class="vista-titulo">Gestión de ventas</h2>
+          <p class="vista-subtitulo">Comandas, transacciones y comprobantes de pago</p>
+        </div>
       </div>
       <div class="cabecera-acciones">
         <span v-if="actualizando" class="indicador-actualizando"><span class="punto-vivo"></span>Actualizando</span>
@@ -13,20 +21,30 @@
 
     <!-- Si no hay venta seleccionada, mostrar tabla -->
     <template v-if="!ventaSeleccionada">
-      <div class="filtros-barra">
-        <input v-model="busqueda" class="campo" placeholder="Buscar por cliente, comanda..." style="max-width:300px" />
-        <select v-model="filtroEstado" class="campo" style="max-width:180px">
-          <option value="">Todos los estados</option>
-          <option value="Pendiente">Pendientes</option>
-          <option value="Preparando">Preparando</option>
-          <option value="Listo">Listos</option>
-          <option value="Completada">Completadas</option>
-          <option value="Cancelada">Canceladas</option>
-        </select>
-        <input v-model="filtroFecha" type="date" class="campo" style="max-width:180px" />
+      <div class="filtros-panel superficie">
+        <div class="filtros-barra">
+          <label class="campo-busqueda">
+            <svg class="icono-busqueda" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+            </svg>
+            <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar por cliente, comanda..." />
+          </label>
+          <select v-model="filtroEstado" class="campo" style="max-width:180px">
+            <option value="">Todos los estados</option>
+            <option value="Pendiente">Pendientes</option>
+            <option value="Preparando">Preparando</option>
+            <option value="Listo">Listos</option>
+            <option value="Completada">Completadas</option>
+            <option value="Cancelada">Canceladas</option>
+          </select>
+          <input v-model="filtroFecha" type="date" class="campo" style="max-width:180px" />
+        </div>
+        <div class="filtros-meta">
+          <span class="chip-conteo"><strong>{{ ventasTotal }}</strong> comandas</span>
+        </div>
       </div>
 
-      <div class="tarjeta tabla-wrapper">
+      <div class="panel-tabla superficie tabla-wrapper">
         <div v-if="cargando" class="estado-carga">
           <div class="fila-esqueleto" v-for="n in 6" :key="n">
             <span class="esqueleto" style="width: 12%"></span>
@@ -61,10 +79,10 @@
               </td>
             </tr>
             <tr v-for="venta in ventasFiltradas" :key="venta.id_comanda" class="fila-tabla">
-              <td class="texto-fuerte sin-label">#{{ venta.id_comanda }}</td>
+              <td class="texto-fuerte sin-label"><span class="celda-id">#{{ venta.id_comanda }}</span></td>
               <td class="texto-sec" data-label="Cliente">{{ venta.cliente_nombre }}</td>
               <td class="texto-sec" data-label="Atendido por">{{ venta.mesero_nombre }}</td>
-              <td data-label="Monto"><span class="badge badge-exito">Bs. {{ venta.monto_total.toFixed(2) }}</span></td>
+              <td data-label="Monto"><span class="monto-tabla">Bs. {{ venta.monto_total.toFixed(2) }}</span></td>
               <td data-label="Pago"><span class="badge" :class="getBadgeClasePago(venta.metodo_pago)">{{ venta.metodo_pago }}</span></td>
               <td data-label="Estado"><span class="badge" :class="getBadgeClaseEstado(venta.estado)">{{ venta.estado }}</span></td>
               <td class="texto-sec" data-label="Fecha">{{ formatearFecha(venta.fecha_comanda) }}</td>
@@ -87,7 +105,7 @@
 
     <!-- Detalle de venta -->
     <template v-else>
-      <div class="tarjeta detalle-venta fade-in">
+      <div class="detalle-venta superficie fade-in">
         <div class="detalle-cabecera">
           <div>
             <h3>Comanda #{{ ventaSeleccionada.id_comanda }}</h3>
@@ -96,6 +114,27 @@
           <span :class="getBadgeClaseEstado(ventaSeleccionada.estado)" class="badge badge-grande">
             {{ ventaSeleccionada.estado }}
           </span>
+        </div>
+
+        <!-- Resumen de montos destacado -->
+        <div class="resumen-montos bezel">
+          <div class="bezel-core resumen-core textura-grano">
+            <div class="monto-principal">
+              <span class="monto-label">Total a pagar</span>
+              <span class="monto-cifra">Bs. {{ ventaSeleccionada.monto_total.toFixed(2) }}</span>
+              <span class="badge monto-metodo" :class="getBadgeClasePago(ventaSeleccionada.metodo_pago)">{{ ventaSeleccionada.metodo_pago }}</span>
+            </div>
+            <div v-if="ventaSeleccionada.monto_recibido || ventaSeleccionada.cambio_dado" class="monto-secundarios">
+              <div v-if="ventaSeleccionada.monto_recibido" class="monto-mini">
+                <span class="monto-mini-label">Recibido</span>
+                <span class="monto-mini-cifra">Bs. {{ ventaSeleccionada.monto_recibido.toFixed(2) }}</span>
+              </div>
+              <div v-if="ventaSeleccionada.cambio_dado" class="monto-mini">
+                <span class="monto-mini-label">Cambio</span>
+                <span class="monto-mini-cifra">Bs. {{ ventaSeleccionada.cambio_dado.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="detalle-grid">
@@ -118,7 +157,7 @@
 
           <!-- Información del Cliente -->
           <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Cliente (Quién pidió)</h4>
+            <h4 class="seccion-titulo">Cliente</h4>
             <div class="campo-detalle">
               <span class="etiqueta">Nombre:</span>
               <span class="valor">{{ ventaSeleccionada.cliente_nombre }}</span>
@@ -131,7 +170,7 @@
 
           <!-- Información del Mesero -->
           <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Atendido por (mesero/personal)</h4>
+            <h4 class="seccion-titulo">Atendido por</h4>
             <div class="campo-detalle">
               <span class="etiqueta">Nombre:</span>
               <span class="valor">{{ ventaSeleccionada.mesero_nombre }}</span>
@@ -454,9 +493,29 @@ async function cancelarVenta() {
   flex-wrap: wrap;
 }
 
+.cabecera-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-4);
+}
+
+.titulo-medallon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radio-md);
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid var(--glass-borde);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 20px rgba(168,85,247,0.18);
+}
+
 .vista-titulo {
   font-family: var(--fuente-titulo);
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--texto-principal);
@@ -465,7 +524,7 @@ async function cancelarVenta() {
 
 .vista-subtitulo {
   color: var(--texto-secundario);
-  margin: 6px 0 0 0;
+  margin: 5px 0 0 0;
   font-size: 0.9rem;
   max-width: 60ch;
   line-height: 1.5;
@@ -504,11 +563,45 @@ async function cancelarVenta() {
   50% { opacity: 0.35; transform: scale(0.7); }
 }
 
+/* Panel de filtros de vidrio */
+.filtros-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-4);
+  flex-wrap: wrap;
+  padding: var(--esp-4);
+  margin-bottom: var(--esp-5);
+}
+
 .filtros-barra {
   display: flex;
   gap: var(--esp-3);
-  margin-bottom: var(--esp-5);
   flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+
+.filtros-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.chip-conteo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radio-full);
+  font-size: 0.82rem;
+  color: var(--texto-secundario);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--glass-borde);
+  white-space: nowrap;
+}
+.chip-conteo strong {
+  color: var(--texto-principal);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Campos con la estética global (tema oscuro) */
@@ -531,14 +624,27 @@ async function cancelarVenta() {
   box-shadow: var(--anillo-foco);
 }
 
-/* Superficie de tarjeta / tabla */
-.tarjeta {
-  background: var(--gradiente-sutil);
-  border-radius: var(--radio-lg);
-  border: 1px solid var(--borde-sutil);
-  box-shadow: 0 4px 24px rgba(26, 15, 61, 0.45);
+/* Buscador con icono embebido */
+.campo-busqueda {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  max-width: 340px;
 }
+.icono-busqueda {
+  position: absolute;
+  left: 14px;
+  color: var(--texto-desactivado);
+  pointer-events: none;
+}
+.campo-con-icono {
+  width: 100%;
+  padding-left: 40px;
+}
+.campo-busqueda:focus-within .icono-busqueda { color: var(--morado-hover); }
 
+/* Panel de tabla (superficie de vidrio) */
 .tabla-wrapper {
   overflow-x: auto;
   padding: 0;
@@ -551,19 +657,23 @@ async function cancelarVenta() {
 }
 
 .tabla th {
-  background: rgba(168, 85, 247, 0.08);
-  padding: 15px 16px;
+  background: rgba(168, 85, 247, 0.1);
+  padding: 14px 16px;
   text-align: left;
-  font-weight: 600;
-  font-size: 0.72rem;
+  font-weight: 700;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.7px;
   color: var(--texto-secundario);
-  border-bottom: 1px solid var(--borde-sutil);
+  border-bottom: 1px solid var(--glass-borde);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
 }
 
 .tabla td {
-  padding: 15px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--borde-sutil);
   color: var(--texto-principal);
   font-variant-numeric: tabular-nums;
@@ -575,8 +685,30 @@ async function cancelarVenta() {
   transition: background var(--trans-rapida), box-shadow var(--trans-rapida);
 }
 .fila-tabla:hover {
-  background: rgba(168, 85, 247, 0.09);
-  box-shadow: inset 3px 0 0 var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.1);
+  box-shadow: inset 2px 0 0 var(--morado-brillante), inset 0 0 40px rgba(168,85,247,0.05);
+}
+
+/* Identificador de comanda con acento monoespaciado */
+.celda-id {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: var(--radio-sm);
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--glass-borde);
+}
+
+/* Monto en tabla: cifra destacada, no un badge */
+.monto-tabla {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-exito);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .celda-vacia {
@@ -808,9 +940,91 @@ async function cancelarVenta() {
 .detalle-cabecera h3 {
   margin: 0;
   font-family: var(--fuente-titulo);
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--texto-principal);
+}
+
+/* Resumen de montos destacado (hardware look) */
+.resumen-montos {
+  margin-bottom: var(--esp-6);
+}
+
+.resumen-core {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--esp-5);
+  padding: var(--esp-5) var(--esp-6);
+  overflow: hidden;
+}
+
+.monto-principal {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.monto-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--texto-secundario);
+}
+
+.monto-cifra {
+  font-family: var(--fuente-titulo);
+  font-size: clamp(2rem, 5vw, 2.7rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--color-exito);
+  text-shadow: 0 0 26px rgba(34, 197, 94, 0.28);
+  font-variant-numeric: tabular-nums;
+}
+
+.monto-metodo {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.monto-secundarios {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--esp-3);
+  flex-wrap: wrap;
+}
+
+.monto-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 18px;
+  border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid var(--glass-borde);
+  min-width: 110px;
+}
+
+.monto-mini-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--texto-secundario);
+}
+
+.monto-mini-cifra {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
 
 .detalle-grid {
@@ -822,15 +1036,18 @@ async function cancelarVenta() {
 
 .detalle-seccion {
   margin-bottom: var(--esp-6);
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-sutil);
+  background: rgba(46, 26, 102, 0.28);
+  border: 1px solid var(--glass-borde);
   border-radius: var(--radio-lg);
   padding: var(--esp-5);
-  transition: border-color var(--trans-normal);
+  transition: border-color var(--trans-normal), box-shadow var(--trans-normal), transform var(--trans-normal);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 .detalle-grid .detalle-seccion:hover {
   border-color: var(--borde-activo);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 26px rgba(10, 6, 26, 0.4);
+  transform: translateY(-2px);
 }
 
 .detalle-grid .detalle-seccion { margin-bottom: 0; }
@@ -1030,7 +1247,28 @@ async function cancelarVenta() {
 
   .filtros-barra {
     flex-direction: column;
+    width: 100%;
   }
+
+  .filtros-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .chip-conteo { width: 100%; justify-content: center; }
+
+  .campo-busqueda {
+    max-width: none;
+    flex-basis: auto;
+  }
+
+  .resumen-core {
+    padding: var(--esp-5);
+  }
+
+  .monto-secundarios { width: 100%; }
+
+  .monto-mini { flex: 1 1 auto; }
 
   .campo {
     width: 100%;

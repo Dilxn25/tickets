@@ -1,7 +1,7 @@
 <template>
   <div class="vista-usuarios fade-in">
-    <div class="vista-cabecera aparecer-subir">
-      <div>
+    <header class="vista-cabecera aparecer-subir">
+      <div class="titulo-bloque">
         <h2 class="vista-titulo">Administración de usuarios</h2>
         <p class="vista-subtitulo">Gestiona los accesos y roles del sistema</p>
       </div>
@@ -9,26 +9,49 @@
         <button class="btn btn-secundario hover-crecer" @click="abrirModalRoles()">Gestionar roles</button>
         <button class="btn btn-primario brillo-hover hover-crecer" @click="abrirModal()">+ Nuevo usuario</button>
       </div>
-    </div>
-    <div class="filtros-barra aparecer-subir">
-      <div class="buscador-wrap" style="max-width:300px; position:relative; flex:1 1 auto;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--texto-secundario); pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input v-model="busqueda" class="campo" placeholder="Buscar..." style="width:100%; padding-left:38px;" />
+    </header>
+
+    <section class="stats-tira aparecer-subir" aria-label="Resumen de usuarios">
+      <div class="stat-celda">
+        <span class="stat-etiqueta">Usuarios</span>
+        <span class="stat-numero">{{ usuarios.length }}</span>
       </div>
-      <select v-model="filtroRol" class="campo" style="max-width:180px">
+      <div class="stat-celda">
+        <span class="stat-etiqueta">Activos</span>
+        <span class="stat-numero stat-exito">{{ usuarios.filter(u => u.estado_cuenta === 'activo').length }}</span>
+      </div>
+      <div class="stat-celda">
+        <span class="stat-etiqueta">Bloqueados</span>
+        <span class="stat-numero stat-error">{{ usuarios.filter(u => u.estado_cuenta !== 'activo').length }}</span>
+      </div>
+      <div class="stat-celda">
+        <span class="stat-etiqueta">Roles</span>
+        <span class="stat-numero">{{ rolesDb.length }}</span>
+      </div>
+    </section>
+
+    <div class="filtros-barra superficie aparecer-subir">
+      <div class="buscador-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" class="buscador-icono"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input v-model="busqueda" class="campo buscador-input" placeholder="Buscar por nombre, correo o CI…" />
+      </div>
+      <select v-model="filtroRol" class="campo campo-filtro">
         <option value="">Todos los roles</option>
         <option v-for="r in rolesDb" :key="r.id_rol" :value="r.nombre_rol">{{ r.nombre_rol }}</option>
       </select>
-      <select v-model="filtroEstado" class="campo" style="max-width:180px">
+      <select v-model="filtroEstado" class="campo campo-filtro">
         <option value="">Todos los estados</option>
         <option value="activo">activo</option>
         <option value="inactivo">inactivo</option>
       </select>
+      <span class="filtros-conteo">{{ usuariosFiltrados.length }} resultado{{ usuariosFiltrados.length === 1 ? '' : 's' }}</span>
     </div>
-    <div class="tarjeta tabla-wrapper aparecer-subir">
+
+    <div class="tabla-panel superficie aparecer-subir">
+      <div class="tabla-scroll">
       <table class="tabla responsiva">
         <thead><tr>
-          <th>Usuario</th><th>CI/Carnet</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th>
+          <th>Usuario</th><th>CI/Carnet</th><th>Correo</th><th>Rol</th><th>Estado</th><th class="th-acciones">Acciones</th>
         </tr></thead>
         <tbody>
           <tr v-if="!usuariosFiltrados.length">
@@ -68,6 +91,7 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <Paginacion
@@ -337,14 +361,34 @@ async function eliminarRol(rol) {
 </script>
 
 <style scoped>
-.vista-cabecera { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; gap:1rem; flex-wrap:wrap; }
-.vista-titulo   { font-family:var(--fuente-titulo); font-size:1.75rem; font-weight:800; letter-spacing:-0.03em; line-height:1.1; margin-bottom:.3rem; text-wrap:balance; }
+.vista-usuarios { display:flex; flex-direction:column; }
+.vista-cabecera { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.25rem; gap:1rem; flex-wrap:wrap; }
+.titulo-bloque  { min-width:0; }
+.vista-titulo   { font-family:var(--fuente-titulo); font-size:1.75rem; font-weight:800; color:var(--texto-principal); letter-spacing:-0.025em; line-height:1.1; margin-bottom:.3rem; text-wrap:balance; }
 .vista-subtitulo { color:var(--texto-secundario); font-size:.9rem; line-height:1.5; }
 .cabecera-acciones { display:flex; gap:.625rem; flex-wrap:wrap; }
-.filtros-barra  { display:flex; gap:.75rem; margin-bottom:1.2rem; flex-wrap:wrap; align-items:center; background:var(--glass-fondo); border:1px solid var(--glass-borde); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); padding:var(--esp-3); border-radius:var(--radio-lg); }
-.tabla-wrapper  { padding:0; overflow-x:auto; border-radius:var(--radio-lg); }
+
+/* Tira de métricas rápidas (densidad de herramienta) */
+.stats-tira     { display:grid; grid-template-columns:repeat(4, 1fr); gap:.75rem; margin-bottom:1.1rem; }
+.stat-celda     { position:relative; display:flex; flex-direction:column; gap:.15rem; padding:.85rem 1.1rem; border-radius:var(--radio-lg); background:var(--gradiente-sutil); border:1px solid var(--borde-sutil); box-shadow:inset 0 1px 0 rgba(255,255,255,.05); overflow:hidden; }
+.stat-celda::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--gradiente-marca); opacity:.85; }
+.stat-etiqueta  { font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--texto-desactivado); }
+.stat-numero    { font-family:var(--fuente-titulo); font-size:1.85rem; font-weight:800; line-height:1; letter-spacing:-.02em; color:var(--texto-principal); font-variant-numeric:tabular-nums; }
+.stat-exito     { color:var(--color-exito); }
+.stat-error     { color:var(--color-error); }
+
+.filtros-barra  { display:flex; gap:.7rem; margin-bottom:1.1rem; flex-wrap:wrap; align-items:center; padding:.85rem; }
+.buscador-wrap  { position:relative; flex:1 1 260px; min-width:200px; max-width:380px; }
+.buscador-icono { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--texto-desactivado); pointer-events:none; }
+.buscador-input { width:100%; padding-left:40px; }
+.campo-filtro   { flex:0 1 180px; min-width:150px; }
+.filtros-conteo { margin-left:auto; padding:.35rem .7rem; border-radius:var(--radio-full); background:rgba(168,85,247,.12); border:1px solid var(--borde-sutil); font-size:.75rem; font-weight:600; color:var(--texto-secundario); font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
+
+.tabla-panel    { overflow:hidden; }
+.tabla-scroll   { overflow-x:auto; }
 .tabla          { width:100%; border-collapse:collapse; min-width:600px; }
-.tabla th       { padding:15px 16px; text-align:left; font-size:.7rem; color:var(--texto-desactivado); font-weight:700; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--borde-sutil); background:linear-gradient(180deg, rgba(168,85,247,.1), rgba(168,85,247,.04)); position:sticky; top:0; z-index:1; }
+.tabla th       { padding:14px 16px; text-align:left; font-size:.7rem; color:var(--texto-secundario); font-weight:700; text-transform:uppercase; letter-spacing:.07em; border-bottom:1px solid var(--borde-sutil); background:linear-gradient(180deg, rgba(168,85,247,.12), rgba(168,85,247,.04)); backdrop-filter:blur(6px); position:sticky; top:0; z-index:1; }
+.tabla th.th-acciones { text-align:right; }
 .tabla td       { padding:13px 16px; }
 .fila-tabla     { border-bottom:1px solid var(--borde-sutil); transition:background-color .2s var(--ease-suave), box-shadow .2s ease; }
 .fila-tabla:last-child  { border-bottom:none; }
@@ -362,7 +406,13 @@ async function eliminarRol(rol) {
 .celda-mono     { font-variant-numeric:tabular-nums; letter-spacing:.01em; }
 .con-punto      { display:inline-flex; align-items:center; gap:6px; }
 .con-punto::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; flex-shrink:0; }
+/* Badges refinados: pill con borde tintado y numeración tabular */
+.tabla .badge   { border-radius:var(--radio-full); font-weight:600; letter-spacing:.01em; padding:.28rem .65rem; }
+.tabla .badge-info { background:rgba(168,85,247,.14); color:var(--morado-hover); border:1px solid var(--borde-sutil); }
+.tabla .badge-exito.con-punto { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.32); color:var(--color-exito); }
+.tabla .badge-error.con-punto { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.32); color:var(--color-error); }
 .acciones       { display:flex; gap:6px; }
+.fila-tabla td:last-child .acciones { justify-content:flex-end; }
 .acciones .btn:active { transform:translateY(1px); }
 .btn-x:focus-visible, .acciones .btn:focus-visible, .cabecera-acciones .btn:focus-visible { outline:2px solid var(--morado-brillante); outline-offset:2px; }
 .fila-rol       { transition:background-color .2s var(--ease-suave), transform .2s var(--ease-suave); }
@@ -382,13 +432,24 @@ async function eliminarRol(rol) {
 /* Tablet: 481px - 1024px */
 @media(max-width:1024px) {
   .modal { max-width:min(520px, 92vw); }
+  .cabecera-acciones { width:100%; }
+  .cabecera-acciones .btn { flex:1 1 auto; }
+}
+
+/* Móvil intermedio: la tira de métricas pasa a 2 columnas */
+@media(max-width:640px) {
+  .stats-tira { grid-template-columns:repeat(2, 1fr); }
 }
 
 /* Celular: <=480px */
 @media(max-width:480px) {
   .form-fila { grid-template-columns:1fr; }
-  .vista-cabecera > div[style] { width:100%; }
-  .filtros-barra .campo { max-width:none !important; flex:1 1 100%; }
+  .titulo-bloque { width:100%; }
+  .buscador-wrap { flex:1 1 100%; max-width:none; }
+  .campo-filtro { flex:1 1 100%; max-width:none; min-width:0; }
+  .filtros-barra .campo { max-width:none !important; }
+  .filtros-conteo { margin-left:0; }
+  .stat-numero { font-size:1.6rem; }
   .modal { max-width:100%; border-radius:var(--radio-lg); }
   .modal-cabecera { padding:1rem 1.1rem; }
   .modal-form { padding:1.1rem; }

@@ -37,6 +37,11 @@
     </div>
 
     <!-- 1. SECCIÓN DE GRÁFICOS PREMIUM (AHORA PRIMERO) -->
+    <div class="rep-seccion-head">
+      <h3 class="rep-seccion-titulo">Analítica en vivo</h3>
+      <span class="rep-seccion-sub">Ventas, personal y métodos de cobro</span>
+      <span class="rep-seccion-linea"></span>
+    </div>
     <div class="grid-graficos fade-in">
       <!-- 1. Tendencia de Ventas (Gráfico 2D vectorizado en neon) -->
       <div class="tarjeta-grafico">
@@ -247,6 +252,11 @@
     </div>
 
     <!-- 2. TARJETAS DE RESUMEN (AHORA SEGUNDO) -->
+    <div class="rep-seccion-head">
+      <h3 class="rep-seccion-titulo">Resumen operativo</h3>
+      <span class="rep-seccion-sub">Toca una tarjeta para ver el detalle</span>
+      <span class="rep-seccion-linea"></span>
+    </div>
     <div class="grid-resumen fade-in escalonar">
       <div class="tarjeta-estadistica bg-clientes" @click="abrirModal('clientes')">
         <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
@@ -1450,32 +1460,94 @@ function formatearFecha(isoStr) {
 </script>
 
 <style scoped>
-/* CABECERA Y ACCIONES */
+/* CABECERA Y ACCIONES — banner de vidrio premium */
 .vista-cabecera {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 18px;
+  padding: 24px 28px;
+  border-radius: var(--radio-xl);
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+              0 18px 48px rgba(10, 6, 26, 0.5);
+  overflow: hidden;
+}
+.vista-cabecera::before {
+  content: '';
+  position: absolute;
+  top: -60%;
+  right: -6%;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.22), transparent 65%);
+  pointer-events: none;
 }
 .vista-cabecera-info {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
+  padding-left: 16px;
+}
+.vista-cabecera-info::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  box-shadow: var(--glow-morado);
 }
 .vista-titulo {
   font-family: var(--fuente-titulo);
-  font-size: clamp(1.7rem, 2.4vw, 2.1rem);
+  font-size: clamp(1.65rem, 2.4vw, 2.1rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.025em;
   line-height: 1.05;
   margin: 0;
-  background: var(--gradiente-texto);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   color: var(--texto-principal);
+}
+
+/* ENCABEZADOS DE SECCIÓN */
+.rep-seccion-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 34px 0 18px;
+}
+.rep-seccion-titulo {
+  font-family: var(--fuente-titulo);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+  margin: 0;
+  flex-shrink: 0;
+}
+.rep-seccion-sub {
+  font-size: 0.82rem;
+  color: var(--texto-secundario);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.rep-seccion-linea {
+  flex: 1;
+  height: 1px;
+  min-width: 20px;
+  background: linear-gradient(90deg, var(--borde-sutil), transparent);
+}
+@media (max-width: 560px) {
+  .rep-seccion-head { flex-wrap: wrap; gap: 4px 12px; }
+  .rep-seccion-linea { flex-basis: 100%; }
 }
 .vista-subtitulo {
   font-size: 0.9rem;
@@ -1550,39 +1622,57 @@ function formatearFecha(isoStr) {
   100% { transform: rotate(360deg); }
 }
 
-/* CARDS GRID */
+/* CARDS GRID — KPIs de vidrio con acento por categoría (sin franja lateral) */
 .grid-resumen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 20px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+  margin-top: 4px;
 }
 .tarjeta-estadistica {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 24px;
-  padding: 24px;
+  --acento: var(--morado-brillante);
+  --acento-tinte: rgba(168, 85, 247, 0.12);
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-xl);
+  padding: 22px 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  min-height: 130px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  backdrop-filter: blur(10px);
+  gap: 18px;
+  min-height: 132px;
+  transition: transform 0.3s var(--ease-suave), box-shadow 0.3s ease, border-color 0.3s ease;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+/* acento superior + halo tintado por categoría */
 .tarjeta-estadistica::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: linear-gradient(135deg, rgba(255,255,255,0.03), transparent);
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--acento), transparent 85%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+.tarjeta-estadistica::after {
+  content: '';
+  position: absolute;
+  top: -50%; right: -20%;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, var(--acento-tinte), transparent 68%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
   pointer-events: none;
 }
 .tarjeta-estadistica:hover {
   transform: translateY(-6px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 18px 40px rgba(10, 4, 20, 0.5), var(--sombra-glow);
+  border-color: color-mix(in srgb, var(--acento) 45%, transparent);
+  box-shadow: 0 22px 48px rgba(10, 4, 20, 0.55), 0 0 26px var(--acento-tinte);
 }
+.tarjeta-estadistica:hover::after { opacity: 1; }
 .tarjeta-estadistica:focus-visible {
   outline: none;
   border-color: transparent;
@@ -1591,57 +1681,85 @@ function formatearFecha(isoStr) {
 .tarjeta-estadistica:active {
   transform: translateY(-2px) scale(0.99);
 }
-.bg-clientes { border-left: 4px solid var(--color-info); }
-.bg-personal { border-left: 4px solid var(--morado-claro); }
-.bg-ventas { border-left: 4px solid var(--color-exito); }
-.bg-productos { border-left: 4px solid var(--color-alerta); }
-.bg-eventos { border-left: 4px solid var(--color-alerta); }
-.bg-asistencia { border-left: 4px solid var(--color-error); }
+.bg-clientes  { --acento: var(--color-info);       --acento-tinte: rgba(56, 189, 248, 0.14); }
+.bg-personal  { --acento: var(--morado-claro);     --acento-tinte: rgba(139, 92, 246, 0.16); }
+.bg-ventas    { --acento: var(--color-exito);      --acento-tinte: rgba(34, 197, 94, 0.14); }
+.bg-productos { --acento: var(--color-alerta);     --acento-tinte: rgba(245, 158, 11, 0.14); }
+.bg-eventos   { --acento: var(--morado-brillante); --acento-tinte: rgba(168, 85, 247, 0.15); }
+.bg-asistencia{ --acento: var(--color-error);      --acento-tinte: rgba(239, 68, 68, 0.14); }
+
+/* Rejilla uniforme y limpia: 3 columnas en escritorio (2 filas de 3, sin huecos) */
+@media (min-width: 900px) {
+  .grid-resumen { grid-template-columns: repeat(3, 1fr); }
+}
+/* KPI destacado: Ventas Totales gana peso visual (número grande + halo de marca) */
+.bg-ventas {
+  background:
+    radial-gradient(130% 150% at 100% 0%, rgba(34, 197, 94, 0.14), transparent 60%),
+    var(--glass-fondo);
+  border-color: color-mix(in srgb, var(--color-exito) 30%, var(--glass-borde));
+}
+.bg-ventas .info-est h2 { font-size: clamp(2.2rem, 3vw, 2.7rem); }
 
 .icono-est {
-  padding: 16px;
-  border-radius: 18px;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border-radius: var(--radio-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: transform 0.3s;
+  color: var(--acento);
+  background: var(--acento-tinte);
+  border: 1px solid color-mix(in srgb, var(--acento) 30%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.3s var(--ease-rebote), box-shadow 0.3s ease;
 }
 .tarjeta-estadistica:hover .icono-est {
-  transform: scale(1.1);
+  transform: scale(1.08) rotate(-3deg);
+  box-shadow: 0 0 20px var(--acento-tinte), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
-.bg-clientes .icono-est { color: var(--color-info); background: rgba(52, 152, 219, 0.1); }
-.bg-personal .icono-est { color: var(--morado-claro); background: rgba(155, 89, 182, 0.1); }
-.bg-ventas .icono-est { color: var(--color-exito); background: rgba(46, 204, 113, 0.1); }
-.bg-productos .icono-est { color: var(--color-alerta); background: rgba(241, 196, 15, 0.1); }
-.bg-eventos .icono-est { color: var(--color-alerta); background: rgba(230, 126, 34, 0.1); }
-.bg-asistencia .icono-est { color: var(--color-error); background: rgba(231, 76, 60, 0.1); }
 
 .info-est {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-width: 0;
 }
 .info-est h3 {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: var(--texto-secundario);
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  margin: 0 0 4px;
-  font-weight: 600;
+  letter-spacing: 1.4px;
+  margin: 0 0 6px;
+  font-weight: 700;
 }
 .info-est h2 {
-  font-size: 2rem;
+  font-size: 2.15rem;
   color: #fff;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 .info-est p {
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.4);
+  font-size: 0.78rem;
+  color: var(--texto-secundario);
+  font-weight: 500;
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.info-est p::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--acento);
+  box-shadow: 0 0 6px var(--acento);
+  flex-shrink: 0;
 }
 
 /* MODALES PANTALLA COMPLETA ULTRA-PREMIUM */
@@ -1672,13 +1790,11 @@ function formatearFecha(isoStr) {
   flex-shrink: 0;
 }
 .modal-fs-header h2 {
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--texto-principal);
   margin: 0;
-  background: linear-gradient(135deg, #fff, var(--texto-secundario));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.01em;
 }
 .btn-cerrar-fs {
   background: rgba(231, 76, 60, 0.12);
@@ -1970,41 +2086,70 @@ function formatearFecha(isoStr) {
   }
 }
 .tarjeta-grafico {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
+  position: relative;
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-xl);
   padding: 24px;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+              0 18px 48px rgba(10, 6, 26, 0.5);
+  transition: transform 0.3s var(--ease-suave), box-shadow 0.3s ease, border-color 0.3s ease;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+.tarjeta-grafico::before {
+  content: '';
+  position: absolute;
+  top: -40%; left: -10%;
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.1), transparent 66%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
 }
 .tarjeta-grafico:hover {
-  transform: translateY(-4px);
-  border-color: rgba(168, 85, 247, 0.22);
-  box-shadow: 0 18px 48px rgba(10, 4, 20, 0.55), 0 0 24px rgba(168, 85, 247, 0.12);
-  background: rgba(255, 255, 255, 0.03);
+  transform: translateY(-5px);
+  border-color: rgba(168, 85, 247, 0.4);
+  box-shadow: 0 24px 56px rgba(10, 4, 20, 0.6), 0 0 30px rgba(168, 85, 247, 0.14);
 }
+.tarjeta-grafico:hover::before { opacity: 1; }
 .grafico-header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  padding-bottom: 14px;
+  gap: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--borde-sutil);
+  padding-bottom: 16px;
 }
 .grafico-header-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+}
+/* icono del header como azulejo de marca */
+.grafico-header > svg {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 38px;
+  height: 38px;
+  padding: 8px;
+  border-radius: var(--radio-md);
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--glass-borde);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .grafico-titulo {
   font-size: 1.15rem;
   font-weight: 800;
   color: #fff;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 .subtexto-grafico {
   font-size: 0.8rem;
@@ -2021,7 +2166,13 @@ function formatearFecha(isoStr) {
 
 /* Barras de Categorías */
 .fila-barra {
-  margin-bottom: 18px;
+  margin-bottom: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radio-md);
+  transition: background 0.2s ease;
+}
+.fila-barra:hover {
+  background: rgba(168, 85, 247, 0.06);
 }
 .barra-etiqueta {
   display: flex;
@@ -2201,7 +2352,11 @@ function formatearFecha(isoStr) {
   align-items: center;
   justify-content: center;
   flex: 1;
-  padding: 15px 0;
+  padding: 18px 14px;
+  border-radius: var(--radio-lg);
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.05), rgba(0, 0, 0, 0.18));
+  border: 1px solid rgba(168, 85, 247, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .svg-tendencia-2d {
   width: 100%;
@@ -2235,8 +2390,12 @@ function formatearFecha(isoStr) {
   align-items: center;
   justify-content: space-around;
   flex: 1;
-  gap: 25px;
-  padding: 15px 0;
+  gap: 24px;
+  padding: 20px 18px;
+  border-radius: var(--radio-lg);
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.05), rgba(0, 0, 0, 0.18));
+  border: 1px solid rgba(168, 85, 247, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .anillos-visual {
   position: relative;
@@ -2288,19 +2447,29 @@ function formatearFecha(isoStr) {
 .anillos-leyenda {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   flex: 1;
 }
 .leyenda-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radio-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.leyenda-item:hover {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: var(--glass-borde);
 }
 .punto-leyenda {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 .leyenda-info {
   display: flex;
@@ -2364,7 +2533,8 @@ function formatearFecha(isoStr) {
     border-radius: 16px;
   }
   .icono-est {
-    padding: 8px;
+    width: 42px;
+    height: 42px;
     border-radius: 10px;
   }
   .icono-est svg {
@@ -2459,10 +2629,14 @@ function formatearFecha(isoStr) {
 .grafico-contenido-columnas {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  height: 260px;
+  justify-content: center;
+  min-height: 260px;
   width: 100%;
-  padding-top: 20px;
+  padding: 18px 14px;
+  border-radius: var(--radio-lg);
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.05), rgba(0, 0, 0, 0.18));
+  border: 1px solid rgba(168, 85, 247, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .contenedor-columnas {
   display: flex;
@@ -2538,31 +2712,54 @@ function formatearFecha(isoStr) {
    SECCIÓN BILLETERA DIGITAL
 ============================================ */
 .seccion-billetera {
-  margin-top: 40px;
+  position: relative;
+  margin-top: 44px;
   padding: 30px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(157, 78, 221, 0.2);
-  border-radius: 20px;
-  box-shadow: 0 0 40px rgba(157, 78, 221, 0.05);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(168, 85, 247, 0.08), transparent 55%),
+    var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-xl);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+              0 24px 60px rgba(10, 6, 26, 0.5);
+  overflow: hidden;
 }
 
 .sb-cabecera {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 26px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--borde-sutil);
   flex-wrap: wrap;
   gap: 15px;
 }
 .sb-titulo-area {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+}
+.sb-titulo-area svg {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  padding: 9px;
+  border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid var(--glass-borde);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--glow-morado);
 }
 .sb-titulo-area h3 {
   margin: 0;
-  font-size: 1.4rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.35rem;
   font-weight: 800;
+  letter-spacing: -0.015em;
   color: white;
 }
 
@@ -2609,40 +2806,55 @@ function formatearFecha(isoStr) {
 }
 
 .kbi-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 20px;
+  --acento: var(--morado-brillante);
+  --acento-tinte: rgba(168, 85, 247, 0.14);
+  position: relative;
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-lg);
+  padding: 18px 20px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  border-left-width: 4px;
-  border-left-style: solid;
-  transition: transform 0.2s, box-shadow 0.2s;
+  gap: 16px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.25s var(--ease-suave), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.kbi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--acento), transparent 80%);
+  pointer-events: none;
 }
 .kbi-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(168, 85, 247, 0.2);
-  box-shadow: 0 12px 28px rgba(10, 4, 20, 0.4), 0 0 18px rgba(168, 85, 247, 0.1);
+  border-color: color-mix(in srgb, var(--acento) 45%, transparent);
+  box-shadow: 0 14px 30px rgba(10, 4, 20, 0.45), 0 0 20px var(--acento-tinte);
 }
-.kbi-morado { border-left-color: var(--morado-brillante); }
-.kbi-verde  { border-left-color: var(--color-exito); }
-.kbi-azul   { border-left-color: var(--morado-medio); }
-.kbi-rojo   { border-left-color: var(--color-error); }
-.kbi-amarillo { border-left-color: var(--color-alerta); }
-.kbi-rosa   { border-left-color: var(--rosa-acento); }
+.kbi-morado   { --acento: var(--morado-brillante); --acento-tinte: rgba(168, 85, 247, 0.15); }
+.kbi-verde    { --acento: var(--color-exito);      --acento-tinte: rgba(34, 197, 94, 0.14); }
+.kbi-azul     { --acento: var(--color-info);       --acento-tinte: rgba(56, 189, 248, 0.14); }
+.kbi-rojo     { --acento: var(--color-error);      --acento-tinte: rgba(239, 68, 68, 0.14); }
+.kbi-amarillo { --acento: var(--color-alerta);     --acento-tinte: rgba(245, 158, 11, 0.14); }
+.kbi-rosa     { --acento: var(--rosa-acento);      --acento-tinte: rgba(236, 72, 153, 0.15); }
 
 .kbi-icono {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radio-md);
+  background: var(--acento-tinte);
+  border: 1px solid color-mix(in srgb, var(--acento) 28%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: white;
+  color: var(--acento);
+  transition: transform 0.25s var(--ease-rebote);
 }
+.kbi-card:hover .kbi-icono { transform: scale(1.08) rotate(-3deg); }
 .kbi-info {
   display: flex;
   flex-direction: column;

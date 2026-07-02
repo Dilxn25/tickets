@@ -13,91 +13,105 @@
       <button class="btn btn-secundario hover-crecer" @click="router.push('/cliente/eventos')">Volver a la cartelera</button>
     </div>
     
-    <div v-else class="contenido-detalle">
+    <div v-else class="contenido-detalle entrada-cine">
+      <!-- Orbes de neon ambientales -->
+      <div class="orbe-deco morado orbe-a" aria-hidden="true"></div>
+      <div class="orbe-deco rosa orbe-b" aria-hidden="true"></div>
+
       <!-- Botón de regreso -->
       <button class="btn-regresar" @click="router.push('/cliente/eventos')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
         <span>Volver</span>
       </button>
 
-      <!-- Portada Gigante Responsiva -->
-      <div class="portada-full">
-        <img v-if="evento.url_portada" :src="evento.url_portada" class="poster-img" alt="Poster del Evento" />
-        <div v-else class="poster-placeholder">EUPHORIA</div>
-        
-        <!-- Etiqueta de estado sobre la imagen -->
-        <div v-if="evento.estado" class="badge-activo-flotante">
-          <span class="punto-vivo"></span>
-          {{ evento.estado.toUpperCase() }}
-        </div>
+      <!-- HERO: poster enmarcado + panel de datos (bento asimetrico) -->
+      <header class="hero-evento">
+        <!-- Poster en marco tipo hardware (double-bezel) -->
+        <div class="hero-media bezel hover-elevar">
+          <div class="hero-media-core bezel-core textura-grano">
+            <img v-if="evento.url_portada" :src="evento.url_portada" class="poster-img" alt="Poster del Evento" />
+            <div v-else class="poster-placeholder">EUPHORIA</div>
 
-        <div class="overlay-gradiente-full"></div>
-      </div>
-
-      <!-- Información del Evento -->
-      <div class="info-cuerpo">
-        <h1 class="titulo-evento">{{ evento.nombre_evento }}</h1>
-        
-        <div class="meta-tags">
-          <span class="tag-fecha">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            {{ formatearFecha(evento.fecha_hora_inicio) }}
-          </span>
-        </div>
-
-        <div class="tarjeta-cristal">
-          <div class="seccion-descripcion">
-            <h3>Sobre este evento</h3>
-            <p>{{ evento.descripcion || 'Vive la mejor experiencia en EUPHORIA. Contamos con las mejores luces, sonido y ambiente de la ciudad.' }}</p>
+            <!-- Etiqueta de estado sobre la imagen -->
+            <div v-if="evento.estado" class="badge-activo-flotante">
+              <span class="punto-vivo"></span>
+              {{ evento.estado.toUpperCase() }}
+            </div>
           </div>
         </div>
 
-        <!-- Selección de Espacio y Mesa -->
-        <div v-if="zonas.length" class="seccion-espacios fade-in">
+        <!-- Panel de informacion -->
+        <div class="hero-panel">
+          <h1 class="titulo-evento">{{ evento.nombre_evento }}</h1>
+
+          <div class="meta-tags">
+            <span class="tag-fecha">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              {{ formatearFecha(evento.fecha_hora_inicio) }}
+            </span>
+          </div>
+
+          <div class="tarjeta-cristal superficie textura-grano">
+            <div class="seccion-descripcion">
+              <h3><span class="deco-linea" aria-hidden="true"></span> Sobre este evento</h3>
+              <p>{{ evento.descripcion || 'Vive la mejor experiencia en EUPHORIA. Contamos con las mejores luces, sonido y ambiente de la ciudad.' }}</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Selección de Espacio y Mesa -->
+      <section v-if="zonas.length" class="seccion-espacios superficie textura-grano fade-in">
+        <div class="espacios-cabecera">
           <h3><span class="paso-num">1</span> Selecciona tu zona</h3>
           <p class="subtexto-espacios">Elige dónde quieres estar esta noche.</p>
+        </div>
 
-          <div class="opciones-espacio escalonar">
-            <div
-              v-for="zona in zonas"
-              :key="zona.id_zona"
-              class="opcion-tarjeta"
-              :class="{ seleccionado: zonaSeleccionada && zonaSeleccionada.id_zona === zona.id_zona }"
-              @click="seleccionarZona(zona)"
-            >
-              <div class="opcion-info">
-                <h4 style="display:flex; align-items:center; gap: 6px;">
+        <div class="opciones-espacio escalonar">
+          <div
+            v-for="zona in zonas"
+            :key="zona.id_zona"
+            class="opcion-tarjeta"
+            :class="{ seleccionado: zonaSeleccionada && zonaSeleccionada.id_zona === zona.id_zona }"
+            @click="seleccionarZona(zona)"
+          >
+            <div class="opcion-info">
+              <h4>
+                <span class="opcion-icono" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  {{ zona.nombre_zona }}
-                </h4>
-                <p v-if="zona.mesa_espacio && zona.mesa_espacio.length">Mesas exclusivas y atención preferencial</p>
-                <p v-else>Acceso a pista principal (Sin mesa asignada)</p>
-              </div>
-              <div class="opcion-precio">Bs. {{ formatearMonto(zona.precio_entrada_base) }}</div>
+                </span>
+                {{ zona.nombre_zona }}
+              </h4>
+              <p v-if="zona.mesa_espacio && zona.mesa_espacio.length">Mesas exclusivas y atención preferencial</p>
+              <p v-else>Acceso a pista principal (Sin mesa asignada)</p>
             </div>
-          </div>
-
-          <!-- Mapa de Mesas de la zona seleccionada -->
-          <div v-if="mesasDisponibles.length" class="seccion-mapa fade-in">
-            <h3 style="margin-top: 1.5rem;"><span class="paso-num">2</span> Elige tu mesa</h3>
-            <div class="mapa-mesas escalonar">
-              <div
-                v-for="mesa in mesasDisponibles"
-                :key="mesa.id_mesa"
-                class="mesa-item"
-                :class="{
-                  'mesa-ocupada': mesa.estado_ocupacion !== 'libre',
-                  'mesa-seleccionada': mesaSeleccionada && mesaSeleccionada.id_mesa === mesa.id_mesa
-                }"
-                @click="seleccionarMesa(mesa)"
-              >
-                <span class="mesa-nombre">{{ mesa.numero_nombre }}</span>
-                <span class="mesa-capacidad">{{ mesa.capacidad_sillas }} sillas</span>
-              </div>
+            <div class="opcion-precio">
+              <span class="opcion-precio-moneda">Bs.</span>
+              {{ formatearMonto(zona.precio_entrada_base) }}
             </div>
           </div>
         </div>
-      </div>
+
+        <!-- Mapa de Mesas de la zona seleccionada -->
+        <div v-if="mesasDisponibles.length" class="seccion-mapa fade-in">
+          <h3 class="titulo-paso-2"><span class="paso-num">2</span> Elige tu mesa</h3>
+          <div class="mapa-mesas escalonar">
+            <div
+              v-for="mesa in mesasDisponibles"
+              :key="mesa.id_mesa"
+              class="mesa-item"
+              :class="{
+                'mesa-ocupada': mesa.estado_ocupacion !== 'libre',
+                'mesa-seleccionada': mesaSeleccionada && mesaSeleccionada.id_mesa === mesa.id_mesa
+              }"
+              @click="seleccionarMesa(mesa)"
+            >
+              <span class="mesa-nombre">{{ mesa.numero_nombre }}</span>
+              <span class="mesa-capacidad">{{ mesa.capacidad_sillas }} sillas</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- Barra Flotante de Reserva -->
       <div v-if="zonas.length" class="barra-reserva fade-in">
@@ -111,11 +125,12 @@
           :disabled="!puedeReservar || reservando"
           @click="confirmarReserva"
         >
-          {{ reservando ? 'Procesando…' : 'Ir a pagar' }}
+          <span class="reservar-label">{{ reservando ? 'Procesando…' : 'Ir a pagar' }}</span>
+          <span class="reservar-icono" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </span>
         </button>
       </div>
-
-
     </div>
 
     <!-- Modal de Resultado de la Reserva -->
@@ -266,8 +281,20 @@ async function confirmarReserva() {
 .vista-detalle-evento {
   position: relative;
   min-height: 100dvh;
-  padding-bottom: 100px; /* Para la barra flotante */
+  padding-bottom: 120px; /* Para la barra flotante */
+  overflow-x: clip;
 }
+
+.contenido-detalle {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(3.5rem, 7vw, 5rem) clamp(1.1rem, 4vw, 2.5rem) 0;
+}
+
+/* Orbes ambientales */
+.orbe-a { width: 460px; height: 460px; top: -140px; right: -120px; opacity: 0.28; }
+.orbe-b { width: 380px; height: 380px; top: 40vh; left: -140px; opacity: 0.22; }
 
 /* Loader */
 .cargando { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
@@ -356,64 +383,77 @@ async function confirmarReserva() {
 .btn-regresar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-regresar svg { width: 18px; height: 18px; transition: transform 0.2s var(--ease-suave); }
 
-/* Portada Full */
-.portada-full {
+/* HERO: bento asimetrico (poster + panel) */
+.hero-evento {
   position: relative;
-  width: 100%;
-  max-height: 70vh; /* No ocupar toda la pantalla, pero sí bastante */
-  background: var(--fondo-app);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: clamp(1.5rem, 3.5vw, 3rem);
+  align-items: start;
+  margin-bottom: clamp(2rem, 5vw, 3.5rem);
+}
+
+/* Marco del poster (double-bezel) */
+.hero-media {
+  position: sticky;
+  top: clamp(4.5rem, 8vw, 6rem);
+  align-self: start;
+}
+.hero-media-core {
+  position: relative;
+  overflow: hidden;
   display: flex;
+  align-items: center;
   justify-content: center;
+  min-height: 340px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(168, 85, 247, 0.16), transparent 60%),
+    var(--gradiente-sutil);
 }
 
 .poster-img {
   width: 100%;
-  max-width: 600px; /* Para que en PC no sea inmenso */
   height: auto;
-  max-height: 70vh;
-  object-fit: contain; /* Para ver el poster vertical COMPLETO sin recortar */
+  max-height: 74vh;
+  display: block;
+  object-fit: contain; /* Poster vertical completo sin recortar */
+  position: relative;
+  z-index: 1;
 }
 
 .poster-placeholder {
   width: 100%;
-  height: 50vh;
+  min-height: 46vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--gradiente-sutil);
-  color: rgba(168, 85, 247, 0.22);
+  color: rgba(168, 85, 247, 0.3);
   font-family: var(--fuente-titulo);
-  font-size: clamp(2.2rem, 9vw, 3.4rem);
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
   font-weight: 900;
   letter-spacing: 0.14em;
   text-shadow: var(--glow-morado);
-}
-
-.overlay-gradiente-full {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 150px;
-  background: linear-gradient(to top, var(--fondo-app), transparent);
-}
-
-/* Info Cuerpo */
-.info-cuerpo {
-  padding: 1.5rem;
-  max-width: 800px;
-  margin: 0 auto;
-  margin-top: -30px;
   position: relative;
-  z-index: 10;
+  z-index: 1;
+}
+
+/* Panel de datos */
+.hero-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: clamp(0.25rem, 2vw, 1.25rem);
 }
 
 .titulo-evento {
   font-family: var(--fuente-titulo);
-  font-size: clamp(1.9rem, 6vw, 2.4rem);
+  font-size: clamp(1.55rem, 3.2vw, 1.9rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   color: var(--texto-principal);
   margin-bottom: var(--esp-4);
-  line-height: 1.1;
   text-wrap: balance;
 }
 
@@ -421,7 +461,7 @@ async function confirmarReserva() {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 2rem;
+  margin-bottom: var(--esp-5);
 }
 
 .tag-fecha {
@@ -472,18 +512,13 @@ async function confirmarReserva() {
 }
 @keyframes latido { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 1; } }
 
-/* Tarjetas Cristal para el contenido */
+/* Tarjeta Cristal (descripción) — usa .superficie global */
 .tarjeta-cristal {
   position: relative;
-  background: var(--glass-fondo);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--glass-borde);
-  border-radius: var(--radio-lg);
-  padding: var(--esp-5);
-  margin-bottom: var(--esp-6);
-  box-shadow: var(--sombra-tarjeta), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  width: 100%;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
 }
+.tarjeta-cristal > * { position: relative; z-index: 1; }
 
 .seccion-descripcion h3, .seccion-mapa h3, .seccion-espacios h3 {
   display: flex;
@@ -494,7 +529,17 @@ async function confirmarReserva() {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--texto-principal);
-  margin-bottom: var(--esp-1);
+  margin-bottom: var(--esp-3);
+}
+
+/* Línea decorativa antes del título de descripción */
+.deco-linea {
+  width: 24px;
+  height: 3px;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+  flex-shrink: 0;
 }
 
 /* Numero de paso: cuadro con gradiente de marca */
@@ -513,10 +558,25 @@ async function confirmarReserva() {
   box-shadow: 0 3px 10px rgba(168, 85, 247, 0.4);
 }
 
+/* Sección de espacios como superficie amplia */
+.seccion-espacios {
+  position: relative;
+  z-index: 1;
+  padding: clamp(1.4rem, 3.5vw, 2.5rem);
+  margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+}
+.seccion-espacios > * { position: relative; z-index: 1; }
+
+.espacios-cabecera { margin-bottom: var(--esp-5); }
+.espacios-cabecera h3 { font-size: 1.35rem; }
+
+.titulo-paso-2 { margin-top: var(--esp-6); }
+
 .subtexto-espacios {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--texto-secundario);
-  margin-bottom: var(--esp-4);
+  margin-top: var(--esp-2);
+  margin-bottom: 0;
 }
 
 /* Opciones de Espacio */
@@ -567,26 +627,56 @@ async function confirmarReserva() {
 }
 
 .opcion-info h4 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-family: var(--fuente-titulo);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--texto-principal);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
+}
+
+/* Icono en circulo (candado) dentro de la zona */
+.opcion-icono {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid var(--borde-sutil);
+  color: var(--morado-hover);
+  transition: var(--trans-normal);
+}
+.opcion-tarjeta.seleccionado .opcion-icono {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: var(--rosa-acento);
+  color: var(--rosa-suave);
 }
 
 .opcion-info p {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--texto-secundario);
 }
 
 .opcion-precio {
   font-family: var(--fuente-titulo);
   font-weight: 800;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   color: var(--morado-hover);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  letter-spacing: -0.02em;
+}
+.opcion-precio-moneda {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  margin-right: 2px;
+  vertical-align: 0.15em;
 }
 
 /* Mapa de Mesas VIP */
@@ -654,18 +744,31 @@ async function confirmarReserva() {
   left: 0;
   right: 0;
   background: var(--fondo-navbar);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
   border-top: 1px solid var(--borde-sutil);
-  padding: var(--esp-4) var(--esp-5);
+  padding: var(--esp-4) clamp(1.1rem, 4vw, 2.5rem);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--esp-4);
   z-index: 50;
   padding-bottom: calc(var(--esp-4) + env(safe-area-inset-bottom));
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -8px 40px rgba(10, 6, 26, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+.barra-reserva::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--borde-activo), transparent);
+  opacity: 0.7;
+}
+.barra-reserva > * {
+  max-width: 1120px;
+}
+.barra-reserva .reserva-info { flex: 1; margin-left: max(0px, calc((100vw - 1120px) / 2)); }
+.barra-reserva .btn-reservar-final { margin-right: max(0px, calc((100vw - 1120px) / 2)); }
 
 .reserva-info {
   display: flex;
@@ -677,29 +780,51 @@ async function confirmarReserva() {
 .reserva-precio { font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 800; color: var(--texto-principal); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
 .btn-reservar-final {
-  background: var(--gradiente-marca);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(120deg, var(--morado-medio) 0%, var(--morado-brillante) 35%, var(--rosa-acento) 62%, var(--morado-brillante) 88%, var(--morado-medio) 100%);
+  background-size: 220% 100%;
   color: #fff;
   border: none;
-  padding: 13px 26px;
+  padding: 12px 12px 12px 26px;
   border-radius: var(--radio-full);
+  font-family: var(--fuente-titulo);
   font-size: 1rem;
   font-weight: 700;
-  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.35);
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 26px rgba(168, 85, 247, 0.4);
   cursor: pointer;
-  transition: var(--trans-normal);
+  transition: transform 0.35s var(--ease-suave), box-shadow 0.35s var(--ease-suave), background-position 0.6s var(--ease-suave);
   white-space: nowrap;
 }
-.btn-reservar-final:hover:not(.btn-desactivado) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45), var(--glow-morado); }
+.reservar-icono {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: transform 0.35s var(--ease-suave);
+}
+.reservar-icono svg { width: 17px; height: 17px; }
+.btn-reservar-final:hover:not(.btn-desactivado) {
+  transform: translateY(-2px);
+  background-position: 100% 0;
+  box-shadow: 0 16px 36px rgba(236, 72, 153, 0.5), var(--glow-morado);
+}
+.btn-reservar-final:hover:not(.btn-desactivado) .reservar-icono { transform: translateX(3px) translateY(-1px) scale(1.06); }
 .btn-reservar-final:active:not(.btn-desactivado) { transform: scale(0.96); }
 .btn-reservar-final:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
 .btn-desactivado {
-  background: rgba(168, 85, 247, 0.1);
+  background: rgba(168, 85, 247, 0.12);
   color: var(--texto-desactivado);
   box-shadow: none;
   cursor: not-allowed;
   transform: scale(1) !important;
 }
+.btn-desactivado .reservar-icono { background: rgba(255, 255, 255, 0.06); }
 
 .resumen-pago {
   background: rgba(255,255,255,0.03);
@@ -715,6 +840,33 @@ async function confirmarReserva() {
 /* Modales */
 .modal-fondo { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
 .modal { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); width: 100%; box-shadow: var(--sombra-modal), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+
+/* ===== Responsivo ===== */
+@media (max-width: 860px) {
+  .hero-evento {
+    grid-template-columns: 1fr;
+    gap: clamp(1.25rem, 5vw, 2rem);
+  }
+  .hero-media {
+    position: static;
+    max-width: 440px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .hero-panel { align-items: stretch; }
+}
+
+@media (max-width: 480px) {
+  .contenido-detalle {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .titulo-paso-2 { margin-top: var(--esp-5); }
+  .mapa-mesas { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .barra-reserva { padding: var(--esp-3) var(--esp-4); padding-bottom: calc(var(--esp-3) + env(safe-area-inset-bottom)); }
+  .btn-reservar-final { padding: 11px 11px 11px 20px; font-size: 0.92rem; }
+  .reserva-precio { font-size: 1.1rem; }
+}
 
 /* Respeta la preferencia de menos movimiento */
 @media (prefers-reduced-motion: reduce) {

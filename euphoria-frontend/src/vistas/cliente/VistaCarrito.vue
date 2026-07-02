@@ -1,14 +1,24 @@
 <template>
-  <div class="contenedor-carrito">
-    <div class="carrito-header-mini aparecer-subir">
-      <h1>Tu pedido</h1>
-      <span v-if="items.length > 0" class="badge-items">{{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}</span>
-      <span v-else class="badge-items">Vacío</span>
-    </div>
+  <div class="contenedor-carrito entrada-cine textura-grano">
+    <!-- Orbes de neon ambientales -->
+    <div class="orbe-deco morado orbe-uno"></div>
+    <div class="orbe-deco rosa orbe-dos"></div>
+
+    <!-- ENCABEZADO -->
+    <header class="carrito-hero">
+      <div class="hero-fila">
+        <h1 class="titulo-vista">Tu pedido</h1>
+        <span v-if="items.length > 0" class="badge-items">
+          {{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}
+        </span>
+        <span v-else class="badge-items">Vacío</span>
+      </div>
+      <p class="hero-sub">Revisa tus productos y paga con tu billetera.</p>
+    </header>
 
 
     <!-- Carrito Vacío -->
-    <div v-if="items.length === 0" class="carrito-vacio aparecer-subir">
+    <div v-if="items.length === 0" class="carrito-vacio superficie textura-grano aparecer-subir">
       <div class="icono-vacio-envoltura efecto-flotar">
         <svg class="icono-vacio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="9" cy="21" r="1"></circle>
@@ -18,74 +28,99 @@
       </div>
       <h2 class="titulo-vacio">Tu carrito está vacío</h2>
       <p>Agrega bebidas o productos desde el catálogo para verlos aquí.</p>
-      <RouterLink to="/cliente/catalogo" class="btn btn-primario hover-elevar brillo-hover">
-        Ver productos
+      <RouterLink to="/cliente/catalogo" class="cta-isla brillo-hover">
+        <span>Ver productos</span>
+        <span class="cta-icono">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </span>
       </RouterLink>
     </div>
 
     <!-- Contenido Carrito -->
     <div v-else class="carrito-contenido aparecer-subir">
-      <div class="lista-items escalonar">
-        <div v-for="item in items" :key="item.id" class="item-carrito">
-          <img :src="item.imagen" :alt="item.nombre" class="imagen-item" />
-          <div class="info-item">
-            <h3>{{ item.nombre }}</h3>
-            <p class="precio-unitario">Bs. {{ item.precio.toFixed(2) }}</p>
-          </div>
-          <div class="cantidad-control">
-            <button class="btn-cantidad" @click="disminuirCantidad(item.id)" type="button">−</button>
-            <span class="cantidad">{{ item.cantidad }}</span>
-            <button class="btn-cantidad" @click="aumentarCantidad(item.id)" type="button">+</button>
-          </div>
-          <div class="subtotal">
-            <p class="label">Subtotal</p>
-            <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
-          </div>
-          <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Eliminar" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
+      <!-- Columna de items -->
+      <div class="columna-items">
+        <div class="lista-encabezado">
+          <h2 class="lista-titulo">Productos</h2>
+          <span class="lista-hairline"></span>
         </div>
-      </div>
-
-      <!-- Resumen Minimalista -->
-      <div class="resumen-mini">
-        <div class="resumen-mini-contenido">
-          <h2>Resumen</h2>
-          <div class="fila-mini">
-            <span>Subtotal</span>
-            <span>Bs. {{ subtotal.toFixed(2) }}</span>
-          </div>
-          <div class="fila-mini total-mini">
-            <span>Total</span>
-            <span>Bs. {{ total.toFixed(2) }}</span>
-          </div>
-          
-          <div class="botones-mini">
-            <button class="btn-pago-mini" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
-              {{ textoBotonPago }}
+        <div class="lista-items escalonar">
+          <div v-for="item in items" :key="item.id" class="item-carrito hover-elevar">
+            <div class="item-media">
+              <img :src="item.imagen" :alt="item.nombre" class="imagen-item" />
+            </div>
+            <div class="info-item">
+              <h3>{{ item.nombre }}</h3>
+              <p class="precio-unitario">Bs. {{ item.precio.toFixed(2) }} <span class="por-unidad">c/u</span></p>
+            </div>
+            <div class="cantidad-control">
+              <button class="btn-cantidad" @click="disminuirCantidad(item.id)" type="button" aria-label="Disminuir">−</button>
+              <span class="cantidad">{{ item.cantidad }}</span>
+              <button class="btn-cantidad" @click="aumentarCantidad(item.id)" type="button" aria-label="Aumentar">+</button>
+            </div>
+            <div class="subtotal">
+              <p class="label">Subtotal</p>
+              <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
+            </div>
+            <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Eliminar" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
-            <RouterLink to="/cliente/catalogo" class="btn-volver-mini" type="button">
-              Volver al catálogo
-            </RouterLink>
           </div>
-
-        <div v-if="errorCargaSaldo" class="alerta alerta-error">
-          {{ errorCargaSaldo }}
-        </div>
-
-        <div v-else-if="!cargandoSaldo && saldoInsuficiente" class="alerta alerta-error">
-          Tu saldo de Bs. {{ saldo.toFixed(2) }} es insuficiente. Te falta Bs. {{ (total - saldo).toFixed(2) }}
-        </div>
-
-        <div v-if="mensajeExito" class="alerta alerta-exito">
-          {{ mensajeExito }}
-        </div>
-        
-        <div v-if="errorPago" class="alerta alerta-error">
-          {{ errorPago }}
-        </div>
         </div>
       </div>
+
+      <!-- Resumen destacado -->
+      <aside class="resumen-mini">
+        <div class="resumen-mini-contenido bezel">
+          <div class="bezel-core resumen-core textura-grano">
+            <h2 class="resumen-titulo">Resumen</h2>
+
+            <div class="fila-mini">
+              <span>Unidades</span>
+              <span>{{ totalItems }}</span>
+            </div>
+            <div class="fila-mini">
+              <span>Subtotal</span>
+              <span>Bs. {{ subtotal.toFixed(2) }}</span>
+            </div>
+
+            <div class="total-mini">
+              <span class="total-etiqueta">Total a pagar</span>
+              <span class="total-cifra">
+                <span class="total-moneda">Bs.</span>{{ total.toFixed(2) }}
+              </span>
+            </div>
+
+            <div class="botones-mini">
+              <button class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
+                <span class="pago-texto">{{ textoBotonPago }}</span>
+                <span class="cta-icono">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </span>
+              </button>
+              <RouterLink to="/cliente/catalogo" class="btn-volver-mini" type="button">
+                Volver al catálogo
+              </RouterLink>
+            </div>
+
+            <div v-if="errorCargaSaldo" class="alerta alerta-error">
+              {{ errorCargaSaldo }}
+            </div>
+
+            <div v-else-if="!cargandoSaldo && saldoInsuficiente" class="alerta alerta-error">
+              Tu saldo de Bs. {{ saldo.toFixed(2) }} es insuficiente. Te falta Bs. {{ (total - saldo).toFixed(2) }}
+            </div>
+
+            <div v-if="mensajeExito" class="alerta alerta-exito">
+              {{ mensajeExito }}
+            </div>
+
+            <div v-if="errorPago" class="alerta alerta-error">
+              {{ errorPago }}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -222,351 +257,237 @@ onMounted(async () => {
 }
 
 .contenedor-carrito {
-  max-width: 1100px;
+  position: relative;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 2rem 1rem;
-  padding-bottom: 100px;
-  background: var(--fondo-principal);
+  padding: clamp(1.5rem, 1rem + 2vw, 3rem) 1rem 120px;
+  overflow: clip;
 }
 
-/* HEADER MINIMALISTA */
-.carrito-header-mini {
+/* Orbes ambientales */
+.orbe-deco { z-index: 0; }
+.orbe-uno {
+  width: 460px; height: 460px;
+  top: -160px; right: -120px;
+  opacity: 0.28;
+}
+.orbe-dos {
+  width: 400px; height: 400px;
+  bottom: 40px; left: -160px;
+  opacity: 0.22;
+}
+
+/* ===== ENCABEZADO ===== */
+.carrito-hero {
+  position: relative;
+  z-index: 1;
+  margin-bottom: clamp(1.25rem, 0.9rem + 1.6vw, 2rem);
+}
+
+.hero-fila {
   display: flex;
-  align-items: center;
-  gap: var(--esp-4);
-  margin-bottom: var(--esp-6);
-  padding-bottom: var(--esp-4);
-  border-bottom: 1px solid var(--borde-sutil);
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--esp-3);
 }
 
-.carrito-header-mini h1 {
-  font-family: var(--fuente-titulo);
-  font-size: clamp(1.7rem, 1.4rem + 1.2vw, 2.05rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+.titulo-vista {
   margin: 0;
   margin-right: auto;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.55rem, 1.2rem + 1.4vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   color: var(--texto-principal);
   text-wrap: balance;
+}
+
+.hero-sub {
+  margin: 0.45rem 0 0;
+  color: var(--texto-secundario);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 48ch;
+  text-wrap: pretty;
 }
 
 .badge-items {
   background: rgba(168, 85, 247, 0.12);
   color: var(--morado-hover);
   border: 1px solid var(--borde-activo);
-  padding: 0.32rem 0.95rem;
+  padding: 0.4rem 1.05rem;
   border-radius: var(--radio-full);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 20px rgba(168, 85, 247, 0.22);
+  align-self: center;
 }
 
-/* SECCIÓN SIN RESERVA */
-.seccion-sin-reserva {
-  margin-bottom: 2rem;
-}
-
-.alerta-sin-reserva {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  background: rgba(255, 193, 7, 0.1);
-  border: 2px solid var(--amarillo-alerta);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.icono-alerta {
-  width: 40px;
-  height: 40px;
-  background: var(--amarillo-alerta);
-  color: #000;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.contenido-alerta {
-  flex: 1;
-}
-
-.titulo-alerta {
-  font-weight: 700;
-  color: var(--texto-principal);
-  margin: 0 0 0.5rem 0;
-}
-
-.mensaje-alerta {
-  color: var(--texto-secundario);
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-/* OPCIONES PAGO */
-.opciones-pago {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.opcion-reserva,
-.opcion-codigo {
-  background: var(--fondo-tarjeta);
-  border: 1px solid rgba(170, 59, 255, 0.2);
-  border-radius: 12px;
-  padding: 1.5rem;
-  display: flex;
-  gap: 1rem;
-}
-
-.icono-opcion {
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  font-size: 1.3rem;
-  flex-shrink: 0;
-}
-
-.titulo-opcion {
-  margin: 0 0 0.3rem 0;
-  color: var(--texto-principal);
-  font-weight: 700;
-}
-
-.descripcion-opcion {
-  color: var(--texto-secundario);
-  font-size: 0.85rem;
-  margin: 0 0 0.8rem 0;
-}
-
-.link-opcion {
-  display: inline-block;
-  color: var(--morado-brillante);
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.3s;
-}
-
-.link-opcion:hover {
-  text-decoration: underline;
-}
-
-/* CAMPO CÓDIGO */
-.campo-codigo {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
-}
-
-.input-codigo {
-  flex: 1;
-  padding: 0.6rem;
-  background: var(--fondo-principal);
-  border: 1px solid rgba(170, 59, 255, 0.2);
-  border-radius: 6px;
-  color: var(--texto-principal);
-  font-size: 0.9rem;
-}
-
-.input-codigo:focus {
-  outline: none;
-  border-color: var(--morado-brillante);
-}
-
-.btn-validar-codigo {
-  padding: 0.6rem 1.2rem;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
-  border: none;
-  color: white;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: all 0.3s;
-}
-
-.btn-validar-codigo:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(157, 78, 221, 0.3);
-}
-
-.btn-validar-codigo:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.error-codigo {
-  color: var(--color-error);
-  font-size: 0.8rem;
-  margin: 0.5rem 0 0 0;
-}
-
-.exito-codigo {
-  color: var(--verde-fresco);
-  font-size: 0.8rem;
-  margin: 0.5rem 0 0 0;
-}
-
-/* ALERTA CÓDIGO VÁLIDO */
-.alerta-codigo-valido {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  background: rgba(6, 214, 160, 0.1);
-  border: 2px solid var(--verde-fresco);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.icono-check {
-  width: 40px;
-  height: 40px;
-  background: var(--verde-fresco);
-  color: #000;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.contenido-check {
-  flex: 1;
-}
-
-.titulo-check {
-  font-weight: 700;
-  color: var(--texto-principal);
-  margin: 0 0 0.3rem 0;
-}
-
-.mensaje-check {
-  color: var(--texto-secundario);
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-/* CARRITO VACÍO */
+/* ===== CARRITO VACÍO ===== */
 .carrito-vacio {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 4.5rem 2rem 5rem;
+  padding: clamp(3rem, 2rem + 4vw, 5.5rem) 2rem;
+  border-radius: var(--radio-xl);
 }
 
 .icono-vacio-envoltura {
-  width: 108px;
-  height: 108px;
+  position: relative;
+  z-index: 1;
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radio-full);
-  background: radial-gradient(circle at 50% 35%, rgba(168, 85, 247, 0.16), rgba(168, 85, 247, 0.03) 70%);
-  border: 1px solid var(--borde-sutil);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px rgba(168, 85, 247, 0.12);
+  background: radial-gradient(circle at 50% 32%, rgba(168, 85, 247, 0.22), rgba(168, 85, 247, 0.02) 72%);
+  border: 1px solid var(--glass-borde);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 44px rgba(168, 85, 247, 0.2);
   margin-bottom: var(--esp-5);
 }
 
 .icono-vacio {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   color: var(--morado-hover);
 }
 
 .titulo-vacio {
+  position: relative;
+  z-index: 1;
   font-family: var(--fuente-titulo);
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.8rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
   color: var(--texto-principal);
   margin: 0 0 var(--esp-2) 0;
 }
 
 .carrito-vacio p {
+  position: relative;
+  z-index: 1;
   color: var(--texto-secundario);
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.55;
   max-width: 42ch;
   text-wrap: pretty;
   margin: 0 0 var(--esp-6) 0;
 }
 
-/* CONTENIDO CARRITO */
+.carrito-vacio .cta-isla {
+  position: relative;
+  z-index: 1;
+  text-decoration: none;
+}
+
+/* ===== CONTENIDO CARRITO (BENTO) ===== */
 .carrito-contenido {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 372px;
+  align-items: start;
+  gap: clamp(1.25rem, 0.75rem + 1.5vw, 2.25rem);
+}
+
+.columna-items {
+  min-width: 0;
+}
+
+.lista-encabezado {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 2rem;
+  align-items: center;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-4);
+}
+
+.lista-titulo {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+  white-space: nowrap;
+}
+
+.lista-hairline {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--borde-sutil), transparent);
 }
 
 .lista-items {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.85rem;
 }
 
+/* ---- Item premium ---- */
 .item-carrito {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--esp-4);
-  background: var(--gradiente-sutil);
-  border: 1px solid var(--borde-sutil);
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
   border-radius: var(--radio-lg);
-  padding: var(--esp-3) var(--esp-4);
-  transition: transform 0.25s var(--ease-suave), border-color 0.25s ease, box-shadow 0.25s ease;
+  padding: 0.85rem 1.1rem;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(10, 6, 26, 0.4);
+  overflow: hidden;
 }
-.item-carrito:hover {
-  border-color: var(--borde-activo);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 26px rgba(168, 85, 247, 0.14);
+.item-carrito::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--gradiente-marca);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease-cine);
+}
+.item-carrito:hover::before { opacity: 1; }
+
+.item-media {
+  padding: 4px;
+  border-radius: calc(var(--radio-md) + 4px);
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid var(--glass-borde);
+  flex-shrink: 0;
 }
 
 .imagen-item {
-  width: 54px;
-  height: 54px;
+  display: block;
+  width: 58px;
+  height: 58px;
   object-fit: cover;
   border-radius: var(--radio-md);
-  flex-shrink: 0;
-  border: 1px solid var(--borde-sutil);
-  transition: border-color 0.25s ease;
-}
-.item-carrito:hover .imagen-item {
-  border-color: var(--borde-activo);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
 .info-item {
-  flex: 1 1 120px;
-  min-width: 0; /* Permite achicarse sin romper layout */
+  flex: 1 1 130px;
+  min-width: 0;
 }
 
 .info-item h3 {
   font-family: var(--fuente-titulo);
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--texto-principal);
-  margin: 0 0 0.3rem 0;
+  margin: 0 0 0.25rem 0;
 }
 
 .precio-unitario {
@@ -576,15 +497,21 @@ onMounted(async () => {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+.por-unidad {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
 
 .cantidad-control {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--fondo-input);
+  background: rgba(10, 6, 26, 0.45);
   border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-md);
-  padding: 0.3rem;
+  border-radius: var(--radio-full);
+  padding: 0.32rem;
 }
 
 .btn-cantidad {
@@ -593,32 +520,32 @@ onMounted(async () => {
   color: #fff;
   font-weight: 700;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radio-sm);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radio-full);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
   line-height: 1;
-  transition: var(--trans-rapida);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+  transition: transform 0.25s var(--ease-cine), box-shadow 0.25s ease;
 }
-
 .btn-cantidad:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--sombra-glow);
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: 0 6px 18px rgba(236, 72, 153, 0.4), var(--sombra-glow);
 }
 .btn-cantidad:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
   box-shadow: none;
 }
 .btn-cantidad:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--fondo-input), 0 0 0 4px var(--borde-activo);
+  box-shadow: 0 0 0 2px var(--fondo-tarjeta), 0 0 0 4px var(--borde-activo);
 }
 
 .cantidad {
-  min-width: 24px;
+  min-width: 26px;
   text-align: center;
   font-weight: 700;
   color: var(--texto-principal);
@@ -627,19 +554,24 @@ onMounted(async () => {
 
 .subtotal {
   text-align: right;
-  min-width: 70px;
+  min-width: 84px;
   white-space: nowrap;
 }
 
 .subtotal .label {
-  display: none;
+  display: block;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--texto-terciario, var(--texto-secundario));
+  margin: 0 0 0.15rem 0;
 }
 
 .subtotal .valor {
   font-family: var(--fuente-titulo);
   font-weight: 800;
   color: var(--morado-hover);
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -659,48 +591,48 @@ onMounted(async () => {
 }
 .btn-eliminar:hover {
   color: var(--color-error);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
 }
-.btn-eliminar:active { transform: scale(0.92); }
+.btn-eliminar:active { transform: scale(0.9); }
 .btn-eliminar:focus-visible {
   outline: none;
   color: var(--color-error);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
 }
 
-/* RESUMEN MINIMALISTA */
+/* ===== RESUMEN DESTACADO ===== */
 .resumen-mini {
-  width: 300px;
-  background: transparent;
   position: sticky;
-  top: 20px;
+  top: 24px;
 }
 
 .resumen-mini-contenido {
-  background: var(--gradiente-sutil);
-  border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-lg);
-  padding: var(--esp-5);
-  box-shadow: var(--sombra-tarjeta);
+  border-radius: var(--radio-xl);
 }
 
-.resumen-mini h2 {
+.resumen-core {
+  padding: clamp(1.4rem, 1rem + 1vw, 1.9rem);
+}
+
+.resumen-titulo {
+  margin: 0 0 var(--esp-5);
   font-family: var(--fuente-titulo);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--texto-principal);
-  margin: 0 0 var(--esp-4) 0;
-  border-bottom: 1px solid var(--borde-sutil);
-  padding-bottom: var(--esp-3);
 }
 
 .fila-mini {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: var(--texto-secundario);
-  margin-bottom: var(--esp-3);
+  padding: 0.55rem 0;
+}
+.fila-mini + .fila-mini {
+  border-top: 1px solid var(--borde-sutil);
 }
 .fila-mini span:last-child {
   font-variant-numeric: tabular-nums;
@@ -708,22 +640,43 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+/* Total protagonista */
 .total-mini {
-  margin-top: var(--esp-4);
-  padding: var(--esp-4);
-  border-radius: var(--radio-md);
-  background: rgba(168, 85, 247, 0.1);
+  margin: var(--esp-4) 0 var(--esp-5);
+  padding: var(--esp-4) var(--esp-4) calc(var(--esp-4) + 2px);
+  border-radius: var(--radio-lg);
+  background: linear-gradient(150deg, rgba(168, 85, 247, 0.16), rgba(236, 72, 153, 0.1));
   border: 1px solid var(--borde-activo);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--texto-principal);
-  margin-bottom: var(--esp-5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 30px rgba(168, 85, 247, 0.18);
 }
-.total-mini span:last-child {
+
+.total-etiqueta {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--morado-hover);
+  margin-bottom: 0.4rem;
+}
+
+.total-cifra {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
   font-family: var(--fuente-titulo);
   font-weight: 800;
-  color: var(--morado-hover);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-size: clamp(2.2rem, 1.6rem + 3vw, 2.9rem);
+  color: var(--texto-principal);
   font-variant-numeric: tabular-nums;
+}
+.total-moneda {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--morado-hover);
+  align-self: center;
 }
 
 .botones-mini {
@@ -732,24 +685,22 @@ onMounted(async () => {
   gap: 0.8rem;
 }
 
+/* Botón de pago (CTA isla a ancho completo) */
 .btn-pago-mini {
   width: 100%;
-  padding: 0.9rem;
-  background: var(--gradiente-marca);
-  color: #fff;
-  border: none;
-  border-radius: var(--radio-full);
-  font-weight: 700;
-  font-size: 0.98rem;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.3);
-  transition: transform 0.25s var(--ease-suave), box-shadow 0.25s ease, opacity 0.2s ease;
+  justify-content: space-between;
+  padding: 15px 15px 15px 24px;
+  font-size: 1rem;
 }
-.btn-pago-mini:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236, 72, 153, 0.4), var(--glow-morado); }
-.btn-pago-mini:active:not(:disabled) { transform: translateY(0) scale(0.99); box-shadow: 0 4px 12px rgba(168, 85, 247, 0.28); }
-.btn-pago-mini:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--fondo-tarjeta), 0 0 0 4px var(--borde-activo); }
-.btn-pago-mini:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.pago-texto { line-height: 1; }
+.btn-pago-mini:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: grayscale(0.35);
+}
+.btn-pago-mini:disabled .cta-icono { transform: none; }
 
 .btn-volver-mini {
   width: 100%;
@@ -761,11 +712,11 @@ onMounted(async () => {
   text-align: center;
   font-weight: 600;
   text-decoration: none;
-  font-size: 0.9rem;
-  transition: var(--trans-normal);
+  font-size: 0.92rem;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.2s ease;
 }
 .btn-volver-mini:hover {
-  background: rgba(168, 85, 247, 0.14);
+  background: rgba(168, 85, 247, 0.16);
   border-color: var(--morado-brillante);
   color: var(--texto-principal);
 }
@@ -775,7 +726,7 @@ onMounted(async () => {
   box-shadow: 0 0 0 2px var(--fondo-tarjeta), 0 0 0 4px var(--borde-activo);
 }
 
-/* ALERTAS */
+/* ===== ALERTAS ===== */
 .alerta {
   margin-top: var(--esp-4);
   padding: var(--esp-4);
@@ -784,7 +735,7 @@ onMounted(async () => {
   line-height: 1.45;
   border: 1px solid;
   font-variant-numeric: tabular-nums;
-  animation: subirEntrada 0.35s var(--ease-suave) both;
+  animation: subirEntrada 0.35s var(--ease-cine) both;
 }
 
 .alerta-error {
@@ -799,61 +750,49 @@ onMounted(async () => {
   border-color: rgba(34, 197, 94, 0.3);
 }
 
-/* RESPONSIVE */
+/* ===== RESPONSIVE ===== */
 
-/* TABLET: 481px - 1024px */
-@media (min-width: 481px) and (max-width: 1024px) {
+/* Tablet: colapsa a una columna, resumen deja de ser sticky */
+@media (max-width: 1024px) {
   .carrito-contenido {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
   .resumen-mini {
-    width: 100%;
     position: static;
   }
 }
 
-/* TABLET / MÓVIL: apila el resumen y da espacio a los controles */
 @media (max-width: 768px) {
-  .carrito-contenido {
-    flex-direction: column;
-  }
-  .resumen-mini {
-    width: 100%;
-    position: static;
-  }
   .info-item {
     flex: 1 1 100%;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
   }
   .cantidad-control {
     margin-right: auto;
   }
 }
 
-/* MÓVIL: <=480px — evita que cantidad y subtotal queden apretados */
+/* Móvil: reordena la fila inferior para que respire */
 @media (max-width: 480px) {
   .contenedor-carrito {
-    padding: 1rem 0.75rem;
-    padding-bottom: 100px;
+    padding: 1rem 0.75rem 110px;
   }
 
   .item-carrito {
     gap: 0.75rem;
-    padding: 0.75rem;
+    padding: 0.8rem;
   }
 
-  /* Nombre + precio ocupan el ancho junto a la imagen */
   .info-item {
-    flex: 1 1 calc(100% - 66px);
+    flex: 1 1 calc(100% - 74px);
     margin-bottom: 0;
   }
 
-  /* Fila inferior: controles a la izquierda, subtotal a la derecha, sin apretarse */
   .cantidad-control {
     order: 2;
     margin-right: 0;
     padding: 0.35rem;
-    gap: 0.75rem;
+    gap: 0.7rem;
   }
 
   .btn-cantidad {
@@ -868,18 +807,10 @@ onMounted(async () => {
     text-align: right;
   }
 
-  .subtotal .label {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--texto-secundario);
-    margin: 0 0 0.15rem 0;
-  }
-
   .subtotal .valor {
-    font-size: 1.05rem;
+    font-size: 1.08rem;
   }
 
-  /* Botón eliminar cómodo para tocar, arriba a la derecha */
   .btn-eliminar {
     order: 1;
     align-self: flex-start;
@@ -889,14 +820,15 @@ onMounted(async () => {
   }
 }
 
-/* MOVIMIENTO REDUCIDO: respeta la preferencia de accesibilidad */
+/* ===== MOVIMIENTO REDUCIDO ===== */
 @media (prefers-reduced-motion: reduce) {
   .alerta,
   .item-carrito,
   .btn-pago-mini,
   .btn-cantidad,
   .btn-eliminar,
-  .btn-volver-mini {
+  .btn-volver-mini,
+  .efecto-flotar {
     animation: none;
     transition: none;
   }

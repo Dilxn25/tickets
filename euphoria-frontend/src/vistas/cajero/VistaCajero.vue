@@ -32,7 +32,7 @@
     </div>
 
     <!-- Header Visual Premium -->
-    <div class="cajero-header">
+    <div class="cajero-header superficie">
       <div class="cajero-logo-zona">
         <div class="cajero-badge">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
@@ -40,10 +40,14 @@
             <line x1="2" y1="10" x2="22" y2="10"></line>
           </svg>
         </div>
-        <div>
-          <div class="cajero-rol-label">Módulo</div>
+        <div class="cajero-titulos">
           <div class="cajero-titulo-visual">Caja Euphoria</div>
+          <div class="cajero-rol-label">Recargas, billeteras y transacciones</div>
         </div>
+      </div>
+      <div class="cajero-header-tag">
+        <span class="cajero-header-dot"></span>
+        Punto de venta
       </div>
     </div>
 
@@ -1591,53 +1595,110 @@ onMounted(() => {
 <style scoped>
 .vista-cajero {
   --borde-color: var(--borde-sutil);
-  padding: 1.5rem;
-  max-width: 680px;
+  position: relative;
+  padding: 1.75rem 1.5rem 3rem;
+  max-width: 720px;
   margin: 0 auto;
 }
 
-/* Header Premium */
+/* Halo ambiental sutil detrás del contenido (no captura clicks) */
+.vista-cajero::before {
+  content: '';
+  position: absolute;
+  inset: -10% -20% auto -20%;
+  height: 420px;
+  background:
+    radial-gradient(50% 60% at 20% 0%, rgba(168,85,247,0.16), transparent 70%),
+    radial-gradient(45% 55% at 90% 10%, rgba(236,72,153,0.12), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.vista-cajero > * { position: relative; z-index: 1; }
+
+/* Header Premium — barra de vidrio */
 .cajero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
+  padding: 1.1rem 1.35rem;
+  border-radius: var(--radio-xl);
 }
 
 .cajero-logo-zona {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
 }
 
+.cajero-titulos { min-width: 0; }
+
 .cajero-badge {
-  width: 52px;
-  height: 52px;
+  width: 54px;
+  height: 54px;
   border-radius: var(--radio-lg);
-  background: var(--gradiente-marca);
+  background: var(--gradiente-marca-3, var(--gradiente-marca));
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 20px rgba(168,85,247,0.4), inset 0 1px 0 rgba(255,255,255,0.22);
+  box-shadow: 0 8px 22px rgba(168,85,247,0.45), inset 0 1px 0 rgba(255,255,255,0.28);
   flex-shrink: 0;
+  position: relative;
+}
+
+.cajero-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
 }
 
 .cajero-rol-label {
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   color: var(--texto-secundario);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-top: 0.2rem;
 }
 
 .cajero-titulo-visual {
   font-family: var(--fuente-titulo);
-  font-size: 1.45rem;
+  font-size: 1.65rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
   color: var(--texto-principal);
-  background: linear-gradient(90deg, var(--texto-principal), var(--morado-brillante));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+}
+
+/* Chip de estado en el header (1 sola etiqueta por vista) */
+.cajero-header-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radio-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--morado-hover);
+  background: rgba(168,85,247,0.12);
+  border: 1px solid var(--glass-borde);
+  flex-shrink: 0;
+}
+
+.cajero-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-exito);
+  box-shadow: 0 0 10px var(--color-exito);
 }
 
 /* Card Visual Header */
@@ -1658,13 +1719,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(34,197,94,0.3), inset 0 1px 0 rgba(255,255,255,0.22);
+  box-shadow: 0 10px 26px rgba(34,197,94,0.32), inset 0 1px 0 rgba(255,255,255,0.28);
   flex-shrink: 0;
+  position: relative;
+}
+
+.card-icon-grande::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
+  pointer-events: none;
 }
 
 .card-icon-morado {
-  background: var(--gradiente-marca);
-  box-shadow: 0 8px 24px rgba(168,85,247,0.3), inset 0 1px 0 rgba(255,255,255,0.22);
+  background: var(--gradiente-marca-3, var(--gradiente-marca));
+  box-shadow: 0 10px 26px rgba(168,85,247,0.34), inset 0 1px 0 rgba(255,255,255,0.28);
 }
 
 .card-titulo {
@@ -2341,55 +2412,59 @@ onMounted(() => {
 
 .tabs-cajero {
   display: flex;
-  gap: 0.8rem;
+  gap: 0.35rem;
   margin-bottom: 2rem;
-  justify-content: center;
+  padding: 0.4rem;
+  border-radius: var(--radio-xl);
+  background: var(--glass-fondo);
+  border: 1px solid var(--glass-borde);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(10,6,26,0.45);
   flex-wrap: wrap; /* Permite que los botones bajen si no hay espacio */
 }
 
 .tab-btn {
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(168, 85, 247, 0.06);
-  border: 1px solid var(--borde-sutil);
-  backdrop-filter: blur(10px);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--texto-secundario);
-  padding: 0.85rem 1.5rem;
-  min-height: 48px;
+  padding: 0.7rem 1rem;
+  min-height: 46px;
   border-radius: var(--radio-lg);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: color 0.25s var(--ease-suave), background 0.25s var(--ease-suave), box-shadow 0.3s var(--ease-suave), transform 0.2s var(--ease-suave);
 }
 
+.tab-btn svg { opacity: 0.85; transition: opacity 0.2s ease; }
+
 .tab-btn:hover {
-  background: rgba(168, 85, 247, 0.12);
-  border-color: var(--borde-activo);
+  background: rgba(168, 85, 247, 0.1);
   color: var(--texto-principal);
-  transform: translateY(-2px);
 }
 
 .tab-btn:active {
-  transform: translateY(0) scale(0.98);
+  transform: scale(0.98);
 }
 
 .tab-btn:focus-visible {
   outline: none;
-  border-color: var(--morado-brillante);
   box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.4));
 }
 
 .tab-btn.activo {
   background: var(--gradiente-marca);
-  color: var(--texto-principal);
-  border-color: transparent;
-  box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
-  transform: translateY(-2px);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(168, 85, 247, 0.45), inset 0 1px 0 rgba(255,255,255,0.25);
 }
+
+.tab-btn.activo svg { opacity: 1; }
 
 .neon-dot {
   width: 10px;
@@ -2411,11 +2486,29 @@ onMounted(() => {
 }
 
 .tarjeta-modulo {
-  background: var(--gradiente-sutil, var(--fondo-tarjeta));
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(168,85,247,0.05), transparent 30%),
+    var(--gradiente-sutil, var(--fondo-tarjeta));
   border-radius: var(--radio-xl);
   padding: 2rem 2rem 2.25rem;
-  border: 1px solid var(--borde-sutil);
-  box-shadow: var(--sombra-tarjeta, 0 18px 44px -12px rgba(26,15,61,0.7)), inset 0 1px 0 rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-borde);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 22px 55px rgba(10,6,26,0.55),
+    0 0 34px rgba(168,85,247,0.08);
+}
+
+/* Filo de neón superior que reafirma la marca */
+.tarjeta-modulo::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  right: 1.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168,85,247,0.6), rgba(236,72,153,0.5), transparent);
+  opacity: 0.8;
 }
 
 .tarjeta-modulo h2 {
@@ -2451,11 +2544,12 @@ onMounted(() => {
   width: 100%;
   background: var(--fondo-input);
   border: 1px solid var(--borde-sutil);
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1rem;
   border-radius: var(--radio-md);
   color: var(--texto-principal);
   font-size: 1rem;
-  transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease), box-shadow var(--trans-rapida, 0.15s) var(--ease-suave, ease);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+  transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease), box-shadow var(--trans-rapida, 0.15s) var(--ease-suave, ease), background var(--trans-rapida, 0.15s) var(--ease-suave, ease);
 }
 
 .grupo-input input:hover:not(:focus), .grupo-input select:hover:not(:focus) {
@@ -2518,13 +2612,21 @@ onMounted(() => {
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-md);
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
   transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease), box-shadow var(--trans-rapida, 0.15s) var(--ease-suave, ease);
 }
 
 .input-con-icono .prefijo {
-  padding: 0 1rem;
-  color: var(--texto-secundario);
-  font-weight: 600;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  margin-right: 0.2rem;
+  color: var(--morado-hover);
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: rgba(168,85,247,0.1);
+  border-right: 1px solid var(--borde-sutil);
 }
 
 .input-con-icono input {
@@ -2735,26 +2837,38 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.8rem;
-  background: rgba(168,85,247,0.05);
-  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02), transparent),
+    rgba(168,85,247,0.05);
+  padding: 1.1rem 1.2rem;
   border-radius: var(--radio-lg);
   border: 1px solid var(--borde-sutil);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   transition: border-color var(--trans-normal, 0.2s) var(--ease-suave, ease), transform var(--trans-normal, 0.2s) var(--ease-suave, ease), box-shadow var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .item-pendiente:hover {
   border-color: var(--borde-activo);
   transform: translateY(-2px);
-  box-shadow: var(--sombra-glow);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 28px rgba(10,6,26,0.4), var(--sombra-glow);
 }
 
 .info-principal {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: var(--texto-principal);
   display: flex;
-  gap: 1rem;
+  gap: 0.9rem;
   align-items: center;
+  flex-wrap: wrap;
   font-variant-numeric: tabular-nums;
+}
+
+.info-principal strong {
+  font-family: var(--fuente-titulo);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--texto-principal);
 }
 
 .fecha {
@@ -2873,11 +2987,17 @@ onMounted(() => {
   /* Header cajero compacto */
   .cajero-header {
     margin-bottom: 1rem;
+    padding: 0.9rem 1rem;
+  }
+
+  .cajero-header-tag {
+    font-size: 0.68rem;
+    padding: 0.35rem 0.7rem;
   }
 
   .cajero-badge {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
   }
 
   .cajero-titulo-visual {

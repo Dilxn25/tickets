@@ -1,20 +1,41 @@
 <template>
-  <div class="vista-productos fade-in">
-    <div class="vista-cabecera">
-      <div>
-        <h2 class="vista-titulo">Catálogo de productos</h2>
-        <p class="vista-subtitulo">Bebidas, snacks, combos y más</p>
+  <div class="vista-productos entrada-cine">
+    <!-- Cabecera premium: título + acciones + métricas de un vistazo -->
+    <header class="productos-encabezado superficie">
+      <div class="encabezado-fila">
+        <div class="encabezado-texto">
+          <h2 class="vista-titulo">Catálogo de productos</h2>
+          <p class="vista-subtitulo">Bebidas, snacks, combos y más</p>
+        </div>
+        <div class="cabecera-acciones">
+          <button class="btn btn-secundario hover-crecer" @click="abrirModalCategorias()">Gestionar categorías</button>
+          <button class="btn btn-primario brillo-hover" @click="abrirModal()">
+            <span class="btn-mas" aria-hidden="true">+</span> Nuevo producto
+          </button>
+        </div>
       </div>
-      <div class="cabecera-acciones">
-        <button class="btn btn-secundario hover-crecer" @click="abrirModalCategorias()">Gestionar categorías</button>
-        <button class="btn btn-primario brillo-hover" @click="abrirModal()">
-          <span class="btn-mas" aria-hidden="true">+</span> Nuevo producto
-        </button>
-      </div>
-    </div>
+      <dl class="encabezado-metricas">
+        <div class="metrica">
+          <dt class="metrica-label">Productos</dt>
+          <dd class="metrica-valor">{{ productos.length }}</dd>
+        </div>
+        <div class="metrica metrica-promo">
+          <dt class="metrica-label">En promoción</dt>
+          <dd class="metrica-valor">{{ productos.filter(p => p.estado_promocion).length }}</dd>
+        </div>
+        <div class="metrica metrica-riesgo">
+          <dt class="metrica-label">Stock bajo</dt>
+          <dd class="metrica-valor">{{ productos.filter(p => p.stock_actual < 5).length }}</dd>
+        </div>
+        <div class="metrica">
+          <dt class="metrica-label">Categorías</dt>
+          <dd class="metrica-valor">{{ categorias.length }}</dd>
+        </div>
+      </dl>
+    </header>
 
     <!-- Filtros -->
-    <div class="filtros-barra">
+    <div class="filtros-barra superficie">
       <div class="campo-busqueda">
         <svg class="icono-busqueda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar producto..." aria-label="Buscar producto" />
@@ -26,6 +47,7 @@
       <label class="toggle-label">
         <input type="checkbox" v-model="soloPromos" @change="cargarDatos" /> Solo promociones
       </label>
+      <span class="filtros-conteo">{{ productosFiltrados.length }} resultado{{ productosFiltrados.length === 1 ? '' : 's' }}</span>
     </div>
 
     <!-- Cuadrícula -->
@@ -35,23 +57,27 @@
         <p class="vacio-titulo">Sin coincidencias</p>
         <p class="vacio-texto">No hay productos que coincidan con los filtros actuales.</p>
       </div>
-      <div v-for="p in listaPaginada" :key="p.id_producto" class="tarjeta-producto hover-elevar">
+      <article v-for="p in listaPaginada" :key="p.id_producto" class="tarjeta-producto hover-elevar">
         <div class="producto-imagen">
           <img v-if="p.url_imagen" :src="p.url_imagen" :alt="`Imagen de ${p.nombre_producto}`" />
           <div v-else class="imagen-placeholder" aria-hidden="true">IMG</div>
-          <span v-if="p.es_combo" class="badge-combo">Combo</span>
-          <span v-if="p.estado_promocion" class="badge-promo">Promo</span>
+          <div class="producto-badges">
+            <span v-if="p.es_combo" class="badge-combo">Combo</span>
+            <span v-if="p.estado_promocion" class="badge-promo">Promo</span>
+          </div>
         </div>
         <div class="producto-info">
-          <p class="producto-nombre">{{ p.nombre_producto }}</p>
           <p class="producto-categoria">{{ p.nombre_categoria }}</p>
-          <div class="producto-precios">
-            <span v-if="p.estado_promocion" class="precio-base-tachado">Bs. {{ p.precio_base }}</span>
-            <span class="precio-actual">Bs. {{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+          <p class="producto-nombre">{{ p.nombre_producto }}</p>
+          <div class="producto-pie">
+            <div class="producto-precios">
+              <span v-if="p.estado_promocion" class="precio-base-tachado">Bs. {{ p.precio_base }}</span>
+              <span class="precio-actual"><span class="precio-moneda">Bs.</span>{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+            </div>
+            <span class="producto-stock" :class="p.stock_actual < 5 ? 'stock-bajo' : ''">
+              <span class="stock-punto" aria-hidden="true"></span>{{ p.stock_actual }} en stock
+            </span>
           </div>
-          <p class="producto-stock" :class="p.stock_actual < 5 ? 'stock-bajo' : ''">
-            Stock: {{ p.stock_actual }}
-          </p>
         </div>
         <div class="producto-acciones">
           <button class="btn btn-sm btn-secundario" @click="abrirModal(p)">Editar</button>
@@ -59,7 +85,7 @@
             {{ p.estado_promocion ? 'Quitar promo' : 'Hacer promo' }}
           </button>
         </div>
-      </div>
+      </article>
     </div>
 
     <Paginacion :total="productosFiltrados.length" :pagina="pagina" :limite="limite"
@@ -265,12 +291,25 @@ async function eliminarCategoria(cat) {
 </script>
 
 <style scoped>
-.vista-cabecera{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap}
-.vista-titulo{font-family:var(--fuente-titulo);font-size:1.7rem;font-weight:800;letter-spacing:-0.025em;margin-bottom:.25rem;text-wrap:balance}
-.vista-subtitulo{color:var(--texto-secundario);font-size:.88rem;letter-spacing:.005em}
+/* ---- Cabecera premium ---- */
+.productos-encabezado{padding:1.4rem 1.5rem;margin-bottom:1.1rem;display:flex;flex-direction:column;gap:1.25rem}
+.encabezado-fila{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.vista-titulo{font-family:var(--fuente-titulo);font-size:1.7rem;font-weight:800;color:var(--texto-principal);letter-spacing:-0.025em;margin-bottom:.2rem;text-wrap:balance}
+.vista-subtitulo{color:var(--texto-secundario);font-size:.9rem;letter-spacing:.005em}
 .cabecera-acciones{display:flex;gap:.625rem;flex-wrap:wrap}
 .btn-mas{font-size:1.05em;font-weight:700;line-height:1;margin-right:1px}
-.filtros-barra{display:flex;gap:.75rem;margin-bottom:1.2rem;flex-wrap:wrap;align-items:center;background:var(--glass-fondo);border:1px solid var(--glass-borde);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:var(--esp-3);border-radius:var(--radio-lg)}
+
+/* Métricas de un vistazo: números que importan, grandes y legibles */
+.encabezado-metricas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin:0;padding-top:1.1rem;border-top:1px solid var(--glass-borde)}
+.metrica{display:flex;flex-direction:column-reverse;gap:.15rem;padding:.7rem .9rem;border-radius:var(--radio-md);background:rgba(168,85,247,.06);border:1px solid transparent;transition:border-color var(--trans-rapida),background-color var(--trans-rapida)}
+.metrica:hover{border-color:var(--glass-borde);background:rgba(168,85,247,.1)}
+.metrica-label{font-size:.68rem;color:var(--texto-secundario);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.metrica-valor{font-family:var(--fuente-titulo);font-size:1.75rem;font-weight:800;line-height:1;color:var(--texto-principal);letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.metrica-promo .metrica-valor{color:var(--rosa-suave)}
+.metrica-riesgo .metrica-valor{color:var(--color-alerta)}
+
+/* ---- Filtros ---- */
+.filtros-barra{display:flex;gap:.75rem;margin-bottom:1.2rem;flex-wrap:wrap;align-items:center;padding:var(--esp-3) var(--esp-4);border-radius:var(--radio-lg)}
 .campo-busqueda{position:relative;max-width:280px;width:100%}
 .icono-busqueda{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--texto-secundario);pointer-events:none;transition:color var(--trans-rapida)}
 .campo-busqueda:focus-within .icono-busqueda{color:var(--morado-brillante)}
@@ -278,35 +317,48 @@ async function eliminarCategoria(cat) {
 .toggle-label{display:flex;align-items:center;gap:6px;color:var(--texto-secundario);font-size:.85rem;cursor:pointer;user-select:none;transition:color var(--trans-rapida)}
 .toggle-label:hover{color:var(--texto-principal)}
 .toggle-label input{accent-color:var(--morado-brillante);cursor:pointer}
+.filtros-conteo{margin-left:auto;font-size:.78rem;font-weight:600;color:var(--texto-secundario);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- Estado vacío ---- */
 .vacio{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;color:var(--texto-desactivado);padding:3.5rem 2rem;text-align:center;width:100%;background:var(--gradiente-sutil);border:1px dashed var(--borde-sutil);border-radius:var(--radio-lg)}
 .vacio-icono{color:var(--morado-brillante);opacity:.55;margin-bottom:.35rem}
 .vacio-titulo{font-family:var(--fuente-titulo);font-weight:700;font-size:1rem;color:var(--texto-secundario)}
 .vacio-texto{font-size:.85rem;max-width:34ch;text-wrap:pretty}
-.productos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.1rem}
-.tarjeta-producto{background:var(--gradiente-sutil);border:1px solid var(--borde-sutil);border-radius:var(--radio-lg);overflow:hidden;transition:border-color var(--trans-normal);display:flex;flex-direction:column;box-shadow:var(--sombra-tarjeta)}
+
+/* ---- Cuadrícula de productos ---- */
+.productos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1.1rem}
+.tarjeta-producto{position:relative;background:var(--gradiente-sutil);border:1px solid var(--borde-sutil);border-radius:var(--radio-lg);overflow:hidden;transition:border-color var(--trans-normal),box-shadow var(--trans-normal),transform var(--trans-normal);display:flex;flex-direction:column;box-shadow:0 6px 22px rgba(10,6,26,.45)}
+.tarjeta-producto::before{content:'';position:absolute;inset:0 0 auto 0;height:2px;background:var(--gradiente-marca);opacity:0;transition:opacity var(--trans-normal);z-index:2}
 .tarjeta-producto:hover{border-color:var(--borde-activo)}
-.producto-imagen{position:relative;height:150px;background:var(--fondo-tarjeta-alt);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tarjeta-producto:hover::before{opacity:1}
+.producto-imagen{position:relative;height:158px;background:radial-gradient(120% 120% at 50% 0%,var(--fondo-tarjeta-alt),var(--fondo-tarjeta));display:flex;align-items:center;justify-content:center;overflow:hidden}
+.producto-imagen::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(14,8,33,.55));pointer-events:none}
 .producto-imagen img{width:100%;height:100%;object-fit:cover;transition:transform var(--trans-lenta)}
-.tarjeta-producto:hover .producto-imagen img{transform:scale(1.05)}
+.tarjeta-producto:hover .producto-imagen img{transform:scale(1.06)}
 .imagen-placeholder{font-family:var(--fuente-titulo);font-size:1.5rem;font-weight:700;letter-spacing:.08em;color:var(--texto-desactivado);opacity:.5}
-.badge-combo,.badge-promo{position:absolute;top:8px;font-size:.62rem;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:var(--radio-full);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.badge-combo{left:8px;background:rgba(52,152,219,.28);color:var(--color-info);border:1px solid rgba(52,152,219,.4)}
-.badge-promo{right:8px;background:rgba(236,72,153,.28);color:var(--rosa-suave);border:1px solid rgba(236,72,153,.45)}
-.producto-info{padding:.9rem;flex:1}
-.producto-nombre{font-family:var(--fuente-titulo);font-weight:700;font-size:.97rem;margin-bottom:.25rem;line-height:1.25;letter-spacing:-0.01em;text-wrap:pretty}
-.producto-categoria{font-size:.7rem;color:var(--morado-brillante);margin-bottom:.55rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.producto-precios{display:flex;align-items:baseline;gap:.5rem;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
-.precio-base-tachado{text-decoration:line-through;color:var(--texto-desactivado);font-size:.8rem}
-.precio-actual{font-family:var(--fuente-titulo);font-weight:700;font-size:1.08rem;color:var(--texto-principal);letter-spacing:-0.01em}
-.producto-stock{font-size:.75rem;color:var(--texto-secundario);font-variant-numeric:tabular-nums}
-.stock-bajo{color:var(--color-alerta)!important;font-weight:600}
+.producto-badges{position:absolute;top:9px;left:9px;right:9px;display:flex;justify-content:space-between;gap:6px;z-index:2;pointer-events:none}
+.badge-combo,.badge-promo{font-size:.62rem;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:var(--radio-full);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.badge-combo{background:rgba(56,189,248,.28);color:var(--color-info);border:1px solid rgba(56,189,248,.45)}
+.badge-promo{margin-left:auto;background:rgba(236,72,153,.3);color:var(--rosa-suave);border:1px solid rgba(236,72,153,.5)}
+.producto-info{padding:.9rem;flex:1;display:flex;flex-direction:column;gap:.15rem}
+.producto-categoria{font-size:.68rem;color:var(--morado-hover);text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.producto-nombre{font-family:var(--fuente-titulo);font-weight:700;font-size:1rem;margin-bottom:.2rem;line-height:1.25;letter-spacing:-0.01em;color:var(--texto-principal);text-wrap:pretty}
+.producto-pie{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:.5rem;padding-top:.55rem}
+.producto-precios{display:flex;flex-direction:column;gap:1px;font-variant-numeric:tabular-nums}
+.precio-base-tachado{text-decoration:line-through;color:var(--texto-desactivado);font-size:.75rem}
+.precio-actual{font-family:var(--fuente-titulo);font-weight:800;font-size:1.35rem;color:var(--texto-principal);letter-spacing:-0.02em;line-height:1;display:inline-flex;align-items:baseline;gap:.2rem}
+.precio-moneda{font-size:.72rem;font-weight:600;color:var(--texto-secundario);letter-spacing:0}
+.producto-stock{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--texto-secundario);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stock-punto{width:6px;height:6px;border-radius:50%;background:var(--color-exito);box-shadow:0 0 7px rgba(34,197,94,.6);flex:0 0 auto}
+.stock-bajo{color:var(--color-alerta)}
+.stock-bajo .stock-punto{background:var(--color-alerta);box-shadow:0 0 7px rgba(245,158,11,.65)}
 .producto-acciones{display:flex;gap:6px;padding:.75rem;border-top:1px solid var(--borde-sutil);margin-top:auto}
 .producto-acciones .btn{flex:1;justify-content:center}
 .btn-alerta{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:var(--color-alerta);transition:var(--trans-rapida)}
 .btn-alerta:hover{background:rgba(245,158,11,.24);border-color:rgba(245,158,11,.55)}
 .btn-alerta:active{transform:translateY(1px)}
-.modal-fondo{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100;padding:1rem}
-.modal{background:var(--fondo-tarjeta);border:1px solid var(--borde-sutil);border-radius:var(--radio-xl);width:100%;max-width:520px;box-shadow:var(--sombra-modal);max-height:90vh;overflow-y:auto}
+.modal-fondo{position:fixed;inset:0;background:rgba(6,3,16,.68);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100;padding:1rem}
+.modal{background:var(--gradiente-sutil);border:1px solid var(--borde-activo);border-radius:var(--radio-xl);width:100%;max-width:520px;box-shadow:var(--sombra-modal),0 0 0 1px rgba(168,85,247,.12),0 0 40px rgba(168,85,247,.18);max-height:90vh;overflow-y:auto}
 .modal-cabecera{display:flex;justify-content:space-between;align-items:center;padding:1.2rem 1.5rem;border-bottom:1px solid var(--borde-sutil);position:sticky;top:0;background:var(--fondo-tarjeta);z-index:1}
 .modal-cabecera h3{font-family:var(--fuente-titulo);font-size:1.15rem;font-weight:700;letter-spacing:-0.01em}
 .btn-x{background:none;border:none;color:var(--texto-secundario);font-size:1.1rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:var(--radio-md);transition:var(--trans-rapida)}
@@ -333,14 +385,22 @@ async function eliminarCategoria(cat) {
   .producto-imagen img{max-width:100%}
 }
 
+/* Tablet estrecha / móvil grande: métricas a 2 columnas */
+@media(max-width:640px){
+  .encabezado-metricas{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .filtros-conteo{margin-left:0;width:100%}
+}
+
 /* Celular: <=480px */
 @media(max-width:480px){
-  .vista-cabecera{flex-direction:column;align-items:stretch}
+  .productos-encabezado{padding:1.1rem}
+  .encabezado-fila{flex-direction:column;align-items:stretch}
   .cabecera-acciones{flex-wrap:wrap}
   .cabecera-acciones .btn{flex:1}
   .filtros-barra .campo{max-width:100%!important;width:100%}
-  .productos-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem}
-  .producto-imagen{height:120px}
+  /* Colapso a 1 columna en móvil */
+  .productos-grid{grid-template-columns:1fr;gap:.85rem}
+  .producto-imagen{height:150px}
   /* En tarjetas angostas los botones se apilan y ocupan todo el ancho */
   .producto-acciones{flex-direction:column;gap:8px;padding:.6rem}
   .producto-acciones .btn{width:100%;justify-content:center}
