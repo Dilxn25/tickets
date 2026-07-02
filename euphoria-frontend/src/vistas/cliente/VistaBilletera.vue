@@ -392,10 +392,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const tienda = useTiendaAutenticacion()
+const notif = useNotificaciones()
 const usuario = computed(() => tienda.usuario?.nombre || 'Cliente')
 
 // Estado billetera
@@ -652,7 +654,7 @@ async function mostrarQRRapido(tipo) {
     qrAmpliado.value = tipo
   } catch (error) {
     console.error('Error generando QRs:', error)
-    alert('Error al generar los QRs de pago')
+    notif.error('Error al generar los QRs de pago')
   }
 }
 

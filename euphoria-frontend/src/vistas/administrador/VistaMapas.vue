@@ -27,17 +27,11 @@
     <section class="barra-mapa superficie">
       <div class="campo-selector">
         <label>Evento</label>
-        <select v-model="eventoSel" @change="cargarZonas" class="campo">
-          <option :value="null" disabled>Selecciona un evento</option>
-          <option v-for="ev in eventos" :key="ev.id_evento" :value="ev.id_evento">{{ ev.nombre_evento }}</option>
-        </select>
+        <BaseSelect v-model="eventoSel" :options="opcionesEvento" placeholder="Selecciona un evento" @update:model-value="cargarZonas" />
       </div>
       <div class="campo-selector" v-if="eventoSel">
         <label>Zona</label>
-        <select v-model="zonaSelId" @change="seleccionarZona" class="campo">
-          <option :value="null" disabled>Selecciona una zona</option>
-          <option v-for="z in zonas" :key="z.id_zona" :value="z.id_zona">{{ z.nombre_zona }}</option>
-        </select>
+        <BaseSelect v-model="zonaSelId" :options="opcionesZona" placeholder="Selecciona una zona" @update:model-value="seleccionarZona" />
       </div>
       <div class="grupo-zona" v-if="eventoSel">
         <button class="btn btn-sm btn-secundario" @click="abrirNuevaZona">
@@ -48,12 +42,7 @@
       </div>
       <div class="campo-selector" v-if="zonaSel">
         <label>Forma del plano</label>
-        <select v-model.number="planoProporcion" @change="cambiarProporcion" class="campo">
-          <option :value="1.6">Horizontal</option>
-          <option :value="2">Panorámico (ancho)</option>
-          <option :value="1">Cuadrado</option>
-          <option :value="0.75">Vertical (alto)</option>
-        </select>
+        <BaseSelect v-model="planoProporcion" :options="OPCIONES_PROPORCION" @update:model-value="cambiarProporcion" />
       </div>
       <div v-if="zonaSel" class="panel-aforo">
         <div class="aforo-fila">
@@ -157,10 +146,7 @@
 
           <label class="prop-campo" v-if="permiteForma(elSel.tipo_elemento)">
             <span>Forma</span>
-            <select v-model="elSel.forma" class="campo">
-              <option value="redondo">Redondo</option>
-              <option value="cuadrado">Cuadrado</option>
-            </select>
+            <BaseSelect v-model="elSel.forma" :options="OPCIONES_FORMA" />
           </label>
 
           <label class="prop-campo" v-if="cuentaAforo(elSel.tipo_elemento)">
@@ -280,11 +266,27 @@
 <script setup>
 import { ref, computed } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+
+const notif = useNotificaciones()
 
 const eventos = ref([])
 const eventoSel = ref(null)
 const zonas = ref([])
 const zonaSelId = ref(null)
+const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
+const opcionesZona = computed(() => zonas.value.map(z => ({ value: z.id_zona, label: z.nombre_zona })))
+const OPCIONES_PROPORCION = [
+  { value: 1.6, label: 'Horizontal' },
+  { value: 2, label: 'Panorámico (ancho)' },
+  { value: 1, label: 'Cuadrado' },
+  { value: 0.75, label: 'Vertical (alto)' },
+]
+const OPCIONES_FORMA = [
+  { value: 'redondo', label: 'Redondo' },
+  { value: 'cuadrado', label: 'Cuadrado' },
+]
 const zonaSel = ref(null)
 const elementos = ref([])
 const seleccionado = ref(null)
@@ -409,7 +411,7 @@ async function guardarEditarZona() {
     const z = zonas.value.find(z => z.id_zona === zonaSel.value.id_zona)
     if (z) { z.nombre_zona = formEditarZona.value.nombre_zona; z.capacidad_maxima = formEditarZona.value.capacidad_maxima; z.precio_entrada_base = formEditarZona.value.precio_entrada_base }
     modalEditarZona.value = false
-  } catch (e) { alert(e.error || 'Error al editar la zona') }
+  } catch (e) { notif.error(e.error || 'Error al editar la zona') }
 }
 
 const TAM_DEFECTO = { mesa: { ancho: 7, alto: 10 }, silla: { ancho: 4, alto: 6 }, barra: { ancho: 22, alto: 7 }, escenario: { ancho: 30, alto: 14 }, pared: { ancho: 24, alto: 3 }, area: { ancho: 42, alto: 45 } }
@@ -577,8 +579,9 @@ async function guardarMapa() {
     const res = await clienteHttp.put(`/espacios/zonas/${zonaSel.value.id_zona}/mapa`, payload)
     elementos.value = (res.elementos || []).map(normalizar)
     seleccionado.value = null
+    notif.exito('Mapa guardado')
   } catch (e) {
-    alert(e.error || 'Error al guardar el mapa')
+    notif.error(e.error || 'Error al guardar el mapa')
   } finally {
     guardando.value = false
   }
@@ -597,7 +600,8 @@ async function guardarPlantilla() {
       elementos: elementos.value.map(({ _id, id_mesa, ...resto }) => resto),
     })
     modalGuardarPlantilla.value = false
-  } catch (e) { alert(e.error || 'Error al guardar la plantilla') }
+    notif.exito('Plantilla guardada')
+  } catch (e) { notif.error(e.error || 'Error al guardar la plantilla') }
 }
 
 async function abrirPlantillas() {
@@ -609,7 +613,8 @@ async function aplicarPlantilla(id_plantilla) {
     await clienteHttp.post(`/espacios/zonas/${zonaSel.value.id_zona}/aplicar-plantilla`, { id_plantilla })
     modalPlantillas.value = false
     await seleccionarZona()
-  } catch (e) { alert(e.error || 'Error al aplicar la plantilla') }
+    notif.exito('Plantilla aplicada')
+  } catch (e) { notif.error(e.error || 'Error al aplicar la plantilla') }
 }
 
 cargarEventos()

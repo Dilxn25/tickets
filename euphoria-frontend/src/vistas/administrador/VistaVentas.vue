@@ -29,14 +29,7 @@
             </svg>
             <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar por cliente, comanda..." />
           </label>
-          <select v-model="filtroEstado" class="campo" style="max-width:180px">
-            <option value="">Todos los estados</option>
-            <option value="Pendiente">Pendientes</option>
-            <option value="Preparando">Preparando</option>
-            <option value="Listo">Listos</option>
-            <option value="Completada">Completadas</option>
-            <option value="Cancelada">Canceladas</option>
-          </select>
+          <div style="flex:0 1 180px;min-width:150px"><BaseSelect v-model="filtroEstado" :options="opcionesEstadoVenta" placeholder="Todos los estados" /></div>
           <input v-model="filtroFecha" type="date" class="campo" style="max-width:180px" />
         </div>
         <div class="filtros-meta">
@@ -280,6 +273,19 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+
+const notif = useNotificaciones()
+
+const opcionesEstadoVenta = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'Pendiente', label: 'Pendientes' },
+  { value: 'Preparando', label: 'Preparando' },
+  { value: 'Listo', label: 'Listos' },
+  { value: 'Completada', label: 'Completadas' },
+  { value: 'Cancelada', label: 'Canceladas' },
+]
 
 const ventas = ref([])
 const ventaSeleccionada = ref(null)
@@ -452,7 +458,7 @@ async function marcarCompletada() {
     if (idx >= 0) ventas.value[idx].estado = 'Completada'
   } catch (error) {
     console.error('Error actualizando estado:', error)
-    alert('Error al actualizar estado')
+    notif.error('Error al actualizar estado')
   } finally {
     cambiandoEstado.value = false
   }
@@ -460,17 +466,25 @@ async function marcarCompletada() {
 
 async function cancelarVenta() {
   if (!ventaSeleccionada.value) return
-  if (!confirm('¿Estás seguro de cancelar esta venta?')) return
-  
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: 'Cancelar venta',
+    mensaje: 'Esta acción marcará la comanda como cancelada. ¿Deseas continuar?',
+    textoConfirmar: 'Sí, cancelar venta',
+    textoCancelar: 'No',
+  })
+  if (!ok) return
+
   cambiandoEstado.value = true
   try {
     await servicioComandas.cambiarEstado(ventaSeleccionada.value.id_comanda, 'Cancelada')
     ventaSeleccionada.value.estado = 'Cancelada'
     const idx = ventas.value.findIndex(v => v.id_comanda === ventaSeleccionada.value.id_comanda)
     if (idx >= 0) ventas.value[idx].estado = 'Cancelada'
+    notif.exito('Venta cancelada')
   } catch (error) {
     console.error('Error cancelando venta:', error)
-    alert('Error al cancelar venta')
+    notif.error('Error al cancelar venta')
   } finally {
     cambiandoEstado.value = false
   }

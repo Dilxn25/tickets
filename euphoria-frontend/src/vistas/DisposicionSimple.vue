@@ -35,15 +35,15 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 
 const tienda = useTiendaAutenticacion()
-const router = useRouter()
 
 function cerrar() {
   tienda.cerrarSesion()
-  router.push('/login')
+  // Navegación dura: re-arranca la app limpia en /login (evita quedar en
+  // blanco hasta refrescar) y corta sockets/intervalos del turno.
+  window.location.assign('/login')
 }
 </script>
 

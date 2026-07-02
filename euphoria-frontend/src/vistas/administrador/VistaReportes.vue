@@ -736,6 +736,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+const notif = useNotificaciones()
 
 // Umbral único de stock bajo para reposición, usado tanto en la alerta de
 // Inventario Crítico como en el indicador de la tabla de ranking (evita
@@ -872,7 +874,7 @@ function exportarPDF() {
     || listadoProductosRanking.value.some(p => p.vecesVendido > 0)
     || (conteoEfectivo.value + conteoQR.value + conteoBilletera.value) > 0
   if (!hayDatos) {
-    alert('Aún no hay datos suficientes para generar el reporte PDF. Espere a que se carguen los reportes o ajuste el periodo seleccionado.')
+    notif.advertencia('Aún no hay datos suficientes para generar el reporte PDF. Espera a que carguen los reportes o ajusta el periodo seleccionado.')
     return
   }
 

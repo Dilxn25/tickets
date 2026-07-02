@@ -16,9 +16,7 @@
       </div>
       <div class="cabecera-acciones">
         <span v-if="!cargando && eventos.length" class="pulso-vivo"><span class="dot"></span>En vivo</span>
-        <select v-if="eventos.length" v-model="idEventoSel" class="selector-evento" @change="cargarAforo">
-          <option v-for="e in eventos" :key="e.id_evento" :value="e.id_evento">{{ e.nombre_evento }}</option>
-        </select>
+        <div v-if="eventos.length" class="selector-evento"><BaseSelect v-model="idEventoSel" :options="opcionesEvento" placeholder="Selecciona un evento" @update:model-value="cargarAforo" /></div>
       </div>
     </div>
 
@@ -114,9 +112,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const eventos = ref([])
 const idEventoSel = ref(null)
+const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
 const zonas = ref([])
 const aforoTotal = ref(0)
 const capacidadTotal = ref(0)
@@ -205,9 +205,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 
 .cabecera-acciones { display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; }
 .pulso-vivo { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.01em; color: #7ef0b0; padding: 7px 13px; border-radius: var(--radio-full); background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.28); }
-.selector-evento { background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 11px 15px; border-radius: var(--radio-md); font-size: 0.9rem; font-weight: 600; min-width: 220px; transition: var(--trans-normal); cursor: pointer; }
-.selector-evento:hover { border-color: var(--borde-activo); box-shadow: var(--sombra-glow); }
-.selector-evento:focus-visible { outline: none; border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
+.selector-evento { min-width: 220px; }
 
 .cargando { display: flex; justify-content: center; padding: 4rem; }
 .spinner { width: 40px; height: 40px; border: 4px solid rgba(139,92,246,0.15); border-top-color: var(--morado-brillante); border-radius: 50%; animation: girar 0.9s cubic-bezier(0.5,0.15,0.5,0.85) infinite; }

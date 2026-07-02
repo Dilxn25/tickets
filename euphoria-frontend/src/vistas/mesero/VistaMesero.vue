@@ -151,12 +151,7 @@
             <div class="mesa-icono">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 12h18M3 6h18M3 18h18"></path></svg>
             </div>
-            <select v-model="mesaSeleccionada" @change="alCambiarMesa" class="select-mesa">
-              <option :value="null">Pedido en Barra (sin mesa)</option>
-              <option v-for="mesa in mesas" :key="mesa.id_mesa" :value="mesa">
-                Mesa {{ mesa.numero_nombre }} — {{ mesa.estado_ocupacion === 'reservada' ? 'Reservada' : 'Libre' }}
-              </option>
-            </select>
+            <div class="select-mesa-wrap"><BaseSelect v-model="mesaSeleccionada" :options="opcionesMesa" @update:model-value="alCambiarMesa" /></div>
           </div>
           <div v-if="mesaSeleccionada && clienteAutoAsignado" class="cliente-auto-mesa">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -561,6 +556,9 @@ import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+const notif = useNotificaciones()
 
 import { Html5Qrcode } from "html5-qrcode"
 
@@ -585,6 +583,10 @@ const totalItemsCarrito = computed(() => {
 // Mesa y zona
 const mesas = ref([])
 const mesaSeleccionada = ref(null)
+const opcionesMesa = computed(() => [
+  { value: null, label: 'Pedido en Barra (sin mesa)' },
+  ...mesas.value.map(m => ({ value: m, label: `Mesa ${m.numero_nombre} — ${m.estado_ocupacion === 'reservada' ? 'Reservada' : 'Libre'}` })),
+])
 const clienteAutoAsignado = ref('')
 
 // Variables de Cliente
@@ -792,7 +794,9 @@ function restar(idx) {
 
 function cerrarSesion() {
   tienda.cerrarSesion()
-  router.push('/login')
+  // Navegación dura: re-arranca la app limpia en /login (evita quedar en
+  // blanco hasta refrescar) y corta sockets/intervalos del turno.
+  window.location.assign('/login')
 }
 
 // Detectar si es dispositivo movil
@@ -1128,7 +1132,7 @@ async function entregarPedido(id) {
       mostrarModalListos.value = false
     }
   } catch(e) {
-    alert('Error al entregar pedido. Intenta de nuevo.')
+    notif.error('Error al entregar pedido. Intenta de nuevo.')
   } finally {
     procesandoEntrega.value = null
   }
@@ -1479,8 +1483,12 @@ onUnmounted(() => {
 .mesa-selector-row { display: flex; align-items: center; gap: 10px; background: var(--fondo-input); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); padding: 4px 12px; transition: var(--trans-rapida); }
 .mesa-selector-row:focus-within { border-color: var(--morado-brillante); }
 .mesa-icono { color: var(--texto-secundario); display: flex; align-items: center; flex-shrink: 0; }
-.select-mesa { flex: 1; background: transparent; border: none; color: var(--texto-principal); font-size: 0.9rem; padding: 10px 0; outline: none; cursor: pointer; }
-.select-mesa option { background: var(--fondo-tarjeta); color: var(--texto-principal); }
+.select-mesa-wrap { flex: 1; min-width: 0; }
+/* El disparador se integra en la barra (sin borde/fondo propios) */
+.select-mesa-wrap :deep(.bs-disparador),
+.select-mesa-wrap :deep(.bs-abierto .bs-disparador) {
+  background: transparent; border: none; box-shadow: none; padding: 8px 0; min-height: 38px;
+}
 .cliente-auto-mesa { display: flex; align-items: center; gap: 6px; background: rgba(34, 197, 94,0.08); border: 1px solid rgba(34, 197, 94,0.25); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: var(--color-exito); margin-top: 6px; }
 
 /* Buscador de Cliente */

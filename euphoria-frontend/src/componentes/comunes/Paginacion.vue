@@ -8,11 +8,12 @@
     <div class="pag-derecha">
       <div class="pag-selector">
         <span class="pag-label">Ver</span>
-        <div class="pag-select-envoltura">
-          <select :value="limite" @change="$emit('update:limite', Number($event.target.value))">
-            <option v-for="op in opciones" :key="op" :value="op">{{ op }}</option>
-          </select>
-          <svg class="pag-chevron-select" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <div class="pag-select-mini">
+          <BaseSelect
+            :model-value="limite"
+            :options="opciones"
+            @update:model-value="v => $emit('update:limite', v)"
+          />
         </div>
       </div>
 
@@ -31,6 +32,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const props = defineProps({
   total:   { type: Number, default: 0 },
@@ -82,34 +84,7 @@ const hasta = computed(() => Math.min(props.pagina * props.limite, props.total))
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.pag-select-envoltura {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-.pag-select-envoltura select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--fondo-tarjeta-alt);
-  border: 1px solid var(--borde-sutil);
-  color: var(--texto-principal);
-  padding: 7px 30px 7px 12px;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.pag-select-envoltura select:hover { border-color: var(--borde-activo); }
-.pag-chevron-select {
-  position: absolute;
-  right: 9px;
-  width: 14px;
-  height: 14px;
-  color: var(--texto-secundario);
-  pointer-events: none;
-}
+.pag-select-mini { width: 96px; }
 
 .pag-botones {
   display: flex;

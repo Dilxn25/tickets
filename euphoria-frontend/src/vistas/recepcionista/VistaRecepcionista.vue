@@ -9,10 +9,7 @@
       <label v-if="eventos.length" class="selector-wrap">
         <span class="selector-lbl">Evento activo</span>
         <div class="selector-caja">
-          <select v-model="idEventoSel" class="selector-evento" @change="cargarAforo">
-            <option v-for="e in eventos" :key="e.id_evento" :value="e.id_evento">{{ e.nombre_evento }}</option>
-          </select>
-          <svg class="selector-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <BaseSelect v-model="idEventoSel" :options="opcionesEvento" placeholder="Selecciona un evento" @update:model-value="cargarAforo" />
         </div>
       </label>
     </header>
@@ -157,9 +154,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import { Html5Qrcode } from 'html5-qrcode'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const eventos = ref([])
 const idEventoSel = ref(null)
+const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
 const zonas = ref([])
 const aforoTotal = ref(0)
 const capacidadTotal = ref(0)
@@ -340,16 +339,7 @@ onUnmounted(() => {
 
 .selector-wrap { display: flex; flex-direction: column; gap: 5px; min-width: 220px; }
 .selector-lbl { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--texto-desactivado); padding-left: 2px; }
-.selector-caja { position: relative; }
-.selector-evento {
-  width: 100%; appearance: none; -webkit-appearance: none;
-  background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
-  padding: 11px 40px 11px 15px; border-radius: var(--radio-md); font-size: 0.92rem; font-weight: 600;
-  font-family: var(--fuente-principal); transition: var(--trans-rapida); cursor: pointer; outline: none;
-}
-.selector-evento:hover { border-color: var(--borde-activo); }
-.selector-evento:focus { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
-.selector-flecha { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--morado-hover); pointer-events: none; }
+.selector-caja { position: relative; min-width: 220px; }
 
 /* ---- Alertas ---- */
 .alertas { display: flex; flex-direction: column; gap: var(--esp-2); margin-bottom: var(--esp-5); }

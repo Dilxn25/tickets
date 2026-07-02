@@ -225,6 +225,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+const notif = useNotificaciones()
 
 const pestana = ref('pendientes')
 
@@ -333,7 +335,7 @@ async function cambiarEstado(id, nuevoEstado) {
     }
   } catch (err) {
     console.error('Error al cambiar estado:', err)
-    alert('No se pudo actualizar la orden. Intenta de nuevo.')
+    notif.error('No se pudo actualizar la orden. Intenta de nuevo.')
   } finally {
     procesandoId.value = null
   }

@@ -17,15 +17,16 @@
         'sidebar-movil-visible': esMovil && !colapsado,
       }"
     >
-      <!-- Logo -->
+      <!-- Logo: wordmark expandido / monograma cuando está colapsado -->
       <div class="sidebar-logo-area">
         <span class="sidebar-logo-halo" aria-hidden="true" />
         <img
+          v-if="!colapsado"
           src="@/activos/imagenes/logo-euphoria.png"
           alt="Euphoria"
-          class="sidebar-logo-img"
-          :class="colapsado ? 'sidebar-logo-chico' : 'sidebar-logo-grande'"
+          class="sidebar-logo-img sidebar-logo-grande"
         />
+        <span v-else class="sidebar-logo-mono" role="img" aria-label="Euphoria" />
       </div>
 
       <!-- Navegación -->
@@ -143,7 +144,10 @@ const urlFoto      = computed(() => tienda.usuario?.url_foto_perfil ?? tienda.us
 
 function cerrar() {
   tienda.cerrarSesion()
-  router.push('/login')
+  // Navegación dura: re-arranca la app limpia en /login (evita el estado
+  // colgado que dejaba la pantalla en blanco hasta refrescar) y limpia
+  // sockets/intervalos/fetches en vuelo del panel.
+  window.location.assign('/login')
 }
 </script>
 
@@ -269,7 +273,57 @@ function cerrar() {
   filter: drop-shadow(0 0 16px rgba(236, 72, 153, 0.65));
 }
 .sidebar-logo-grande { height: 46px; width: auto; max-width: 182px; }
-.sidebar-logo-chico  { height: 34px; width: auto; }
+/* Monograma para el sidebar colapsado (el wordmark no cabe en 76px).
+   Acabado negro metalizado: acero oscuro con reflejo superior y bisel. */
+.sidebar-logo-mono {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  font-size: 1.55rem;
+  overflow: hidden;
+  background:
+    linear-gradient(158deg, #3a3a40 0%, #202024 34%, #0c0c0f 72%, #17171b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  transition: transform 0.34s var(--ease-suave), box-shadow 0.3s ease;
+  /* "E" con degradado plateado metálico */
+  color: transparent;
+  background-clip: padding-box;
+}
+/* Brillo diagonal que cruza el metal */
+.sidebar-logo-mono::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, rgba(255,255,255,0.16) 0%, transparent 42%);
+  pointer-events: none;
+}
+.sidebar-logo-mono::after {
+  content: "E";
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(180deg, #f4f4f8 0%, #c8c8d0 45%, #85858f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+.sidebar-logo-mono:hover {
+  transform: scale(1.06);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
 
 /* ─── Nav ───────────────────────────────────────────────────────────────── */
 .sidebar-nav-area {

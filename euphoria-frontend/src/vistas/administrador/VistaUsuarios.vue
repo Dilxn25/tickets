@@ -35,15 +35,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" class="buscador-icono"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input v-model="busqueda" class="campo buscador-input" placeholder="Buscar por nombre, correo o CI…" />
       </div>
-      <select v-model="filtroRol" class="campo campo-filtro">
-        <option value="">Todos los roles</option>
-        <option v-for="r in rolesDb" :key="r.id_rol" :value="r.nombre_rol">{{ r.nombre_rol }}</option>
-      </select>
-      <select v-model="filtroEstado" class="campo campo-filtro">
-        <option value="">Todos los estados</option>
-        <option value="activo">activo</option>
-        <option value="inactivo">inactivo</option>
-      </select>
+      <div class="campo-filtro">
+        <BaseSelect v-model="filtroRol" :options="opcionesFiltroRol" placeholder="Todos los roles" />
+      </div>
+      <div class="campo-filtro">
+        <BaseSelect v-model="filtroEstado" :options="opcionesFiltroEstado" placeholder="Todos los estados" />
+      </div>
       <span class="filtros-conteo">{{ usuariosFiltrados.length }} resultado{{ usuariosFiltrados.length === 1 ? '' : 's' }}</span>
     </div>
 
@@ -74,7 +71,7 @@
             </td>
             <td class="texto-sec celda-mono" data-label="CI/Carnet">{{ u.ci_carnet || '—' }}</td>
             <td class="texto-sec" data-label="Correo">{{ u.correo }}</td>
-            <td data-label="Rol"><span class="badge badge-info">{{ u.rol }}</span></td>
+            <td data-label="Rol"><span class="badge badge-rol"><span class="punto-rol" :style="{ background: colorRol(u.rol) }" />{{ u.rol }}</span></td>
             <td data-label="Estado"><span :class="u.estado_cuenta==='activo'?'badge badge-exito con-punto':'badge badge-error con-punto'">{{ u.estado_cuenta }}</span></td>
             <td class="sin-label">
               <div class="acciones">
@@ -122,9 +119,7 @@
             <div class="form-fila">
               <div class="grupo-campo"><label class="etiqueta">Correo *</label><input v-model="form.correo" type="email" class="campo" required /></div>
               <div class="grupo-campo"><label class="etiqueta">Rol *</label>
-                <select v-model="form.id_rol" class="campo" required>
-                  <option v-for="r in rolesDb" :key="r.id_rol" :value="r.id_rol">{{ r.nombre_rol }}</option>
-                </select>
+                <BaseSelect v-model="form.id_rol" :options="opcionesRolForm" placeholder="Seleccionar rol…" />
               </div>
             </div>
             <div class="grupo-campo" v-if="!usuarioEditando"><label class="etiqueta">Contraseña *</label><input v-model="form.password" type="password" class="campo" required minlength="6" /></div>
@@ -219,8 +214,35 @@ import { servicioUsuarios } from '@/servicios-api/servicio-usuarios.js'
 import { servicioRoles }    from '@/servicios-api/servicio-roles.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
+const notif = useNotificaciones()
 const tiendaAuth = useTiendaAutenticacion()
+
+// Color sutil por rol: solo un punto, para escanear la tabla sin recargar el diseño.
+const COLORES_ROL = {
+  'Administrador': '#a855f7',
+  'Cajero':        '#22c55e',
+  'Mesero':        '#3b82f6',
+  'Recepcionista': '#ec4899',
+  'Bartender':     '#f59e0b',
+  'Cliente':       '#06b6d4',
+}
+const colorRol = (nombre) => COLORES_ROL[nombre] || '#8b8b96'
+
+const opcionesFiltroRol = computed(() => [
+  { value: '', label: 'Todos los roles' },
+  ...rolesDb.value.map(r => ({ value: r.nombre_rol, label: r.nombre_rol, color: colorRol(r.nombre_rol) })),
+])
+const opcionesFiltroEstado = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'activo',   label: 'Activo',   color: '#22c55e' },
+  { value: 'inactivo', label: 'Inactivo', color: '#ef4444' },
+]
+const opcionesRolForm = computed(() =>
+  rolesDb.value.map(r => ({ value: r.id_rol, label: r.nombre_rol, color: colorRol(r.nombre_rol) }))
+)
 
 const busqueda     = ref(''); const filtroRol = ref(''); const filtroEstado = ref(''); const cargando = ref(false)
 const pagina       = ref(1);  const limite = ref(20)
@@ -259,12 +281,9 @@ const listaPaginada = computed(() => {
   return usuariosFiltrados.value.slice(ini, ini + limite.value)
 })
 
-let debounceFiltros = null
-watch([busqueda, filtroRol, filtroEstado], () => {
-  pagina.value = 1
-  clearTimeout(debounceFiltros)
-  debounceFiltros = setTimeout(() => { cargarUsuarios() }, 350)
-})
+// El filtrado es instantáneo en cliente (computed). Solo reiniciamos la página
+// al cambiar un filtro; ya no hay refetch por tecla (esa era la causa del lag).
+watch([busqueda, filtroRol, filtroEstado], () => { pagina.value = 1 })
 
 onMounted(() => { cargarUsuarios() })
 
@@ -285,26 +304,28 @@ function cerrarModal() { modalAbierto.value = false }
 
 async function guardarUsuario() {
   if (/\d/.test(form.nombres) || /\d/.test(form.apellidos)) {
-    alert('Nombres y apellidos no pueden contener números.'); return
+    notif.advertencia('Nombres y apellidos no pueden contener números.'); return
   }
+  const editando = !!usuarioEditando.value
   try {
     const payload = { nombres: form.nombres, apellidos: form.apellidos, ci_carnet: form.ci_carnet, telefono: form.telefono, correo: form.correo, id_rol: form.id_rol }
     if (usuarioEditando.value) {
       await servicioUsuarios.editar(usuarioEditando.value.id_usuario, payload)
     } else {
-      if (form.password.length < 6) { alert('La contraseña debe tener al menos 6 caracteres'); return }
+      if (form.password.length < 6) { notif.advertencia('La contraseña debe tener al menos 6 caracteres'); return }
       payload.password = form.password
       await servicioUsuarios.crear(payload)
     }
     cerrarModal(); cargarUsuarios()
-  } catch (error) { alert(error.error || 'Error al guardar usuario') }
+    notif.exito(editando ? 'Usuario actualizado' : 'Usuario creado')
+  } catch (error) { notif.error(error.error || 'Error al guardar usuario') }
 }
 
 const esUsuarioActual = (user) => tiendaAuth.usuario?.id != null && user.id_usuario === tiendaAuth.usuario.id
 
 async function alternarEstado(user) {
   if (esUsuarioActual(user) && user.estado_cuenta === 'activo') {
-    alert('No puedes bloquear tu propia cuenta.'); return
+    notif.advertencia('No puedes bloquear tu propia cuenta.'); return
   }
   if (user.rol === 'Administrador' && user.estado_cuenta === 'activo') {
     adminABanear.value = user; modalAlertaAdmin.value = true; return
@@ -324,7 +345,7 @@ async function ejecutarCambioEstado(user) {
     cargarUsuarios()
   } catch (error) {
     console.error('Error al cambiar estado:', error)
-    alert(error.error || 'Error al cambiar el estado del usuario')
+    notif.error(error.error || 'Error al cambiar el estado del usuario')
   }
 }
 
@@ -334,8 +355,8 @@ async function confirmarReseteo() {
   if (!usuarioEditando.value) return
   try {
     const res = await servicioUsuarios.resetearPassword(usuarioEditando.value.id_usuario)
-    alert(res.mensaje); modalAlertaReset.value = false; cerrarModal()
-  } catch (error) { alert(error.error || 'Error al resetear la contraseña') }
+    notif.exito(res.mensaje); modalAlertaReset.value = false; cerrarModal()
+  } catch (error) { notif.error(error.error || 'Error al resetear la contraseña') }
 }
 
 function abrirModalRoles() { modalRolesAbierto.value = true }
@@ -346,17 +367,25 @@ async function crearRol() {
     await servicioRoles.crear({ nombre_rol: nuevoRolNombre.value })
     nuevoRolNombre.value = ''
     rolesDb.value = await servicioRoles.listar()
-  } catch { alert('Error al crear rol') }
+    notif.exito('Rol creado')
+  } catch { notif.error('Error al crear rol') }
 }
 
 async function eliminarRol(rol) {
-  if (rol.nombre_rol === 'Administrador') { alert('No puedes eliminar el rol de Administrador.'); return }
-  if (!confirm(`¿Eliminar el rol "${rol.nombre_rol}"? Los usuarios con este rol podrían quedar sin rol asignado.`)) return
+  if (rol.nombre_rol === 'Administrador') { notif.advertencia('No puedes eliminar el rol de Administrador.'); return }
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: `Eliminar rol "${rol.nombre_rol}"`,
+    mensaje: 'Los usuarios con este rol podrían quedar sin rol asignado. ¿Deseas continuar?',
+    textoConfirmar: 'Sí, eliminar',
+  })
+  if (!ok) return
   try {
     await servicioRoles.eliminar(rol.id_rol)
     rolesDb.value = await servicioRoles.listar()
     cargarUsuarios()
-  } catch { alert('Error al eliminar rol') }
+    notif.exito('Rol eliminado')
+  } catch { notif.error('Error al eliminar rol') }
 }
 </script>
 
@@ -409,6 +438,8 @@ async function eliminarRol(rol) {
 /* Badges refinados: pill con borde tintado y numeración tabular */
 .tabla .badge   { border-radius:var(--radio-full); font-weight:600; letter-spacing:.01em; padding:.28rem .65rem; }
 .tabla .badge-info { background:rgba(168,85,247,.14); color:var(--morado-hover); border:1px solid var(--borde-sutil); }
+.tabla .badge-rol { display:inline-flex; align-items:center; gap:7px; background:var(--fondo-tarjeta-alt); color:var(--texto-principal); border:1px solid var(--borde-sutil); font-weight:600; }
+.punto-rol { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .tabla .badge-exito.con-punto { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.32); color:var(--color-exito); }
 .tabla .badge-error.con-punto { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.32); color:var(--color-error); }
 .acciones       { display:flex; gap:6px; }

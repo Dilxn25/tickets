@@ -72,13 +72,7 @@
           </div>
           <div class="grupo-campo">
             <label class="etiqueta">Pregunta de seguridad</label>
-            <select v-model="formulario.pregunta_seguridad" class="campo" required>
-              <option value="" disabled>Selecciona una pregunta...</option>
-              <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
-              <option value="¿En qué ciudad nació tu madre?">¿En qué ciudad nació tu madre?</option>
-              <option value="¿Cuál es el nombre de tu colegio de primaria?">¿Cuál es el nombre de tu colegio de primaria?</option>
-              <option value="¿Cuál es tu comida favorita?">¿Cuál es tu comida favorita?</option>
-            </select>
+            <BaseSelect v-model="formulario.pregunta_seguridad" :options="PREGUNTAS_SEGURIDAD" placeholder="Selecciona una pregunta…" />
           </div>
           <div class="grupo-campo">
             <label class="etiqueta">Respuesta secreta</label>
@@ -199,6 +193,14 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter, isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { servicioAuth } from '@/servicios-api/servicio-autenticacion.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+
+const PREGUNTAS_SEGURIDAD = [
+  '¿Cuál es el nombre de tu primera mascota?',
+  '¿En qué ciudad nació tu madre?',
+  '¿Cuál es el nombre de tu colegio de primaria?',
+  '¿Cuál es tu comida favorita?',
+].map(p => ({ value: p, label: p }))
 
 const router  = useRouter()
 const tienda  = useTiendaAutenticacion()

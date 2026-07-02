@@ -33,6 +33,7 @@
         <article v-for="p in destacados" :key="'dest-' + p.id_producto" class="destacado-card brillo-hover" @click="abrirDetalle(p)">
           <div class="destacado-img">
             <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
+            <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
             <div v-else class="placeholder">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </div>
@@ -109,6 +110,7 @@
 
           <div class="imagen-box">
             <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
+            <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
             <div v-else class="placeholder">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </div>
@@ -150,6 +152,7 @@
           <button class="btn-cerrar-detalle" @click="cerrarDetalle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           <div class="detalle-imagen">
             <img v-if="detalleProducto.url_imagen" :src="detalleProducto.url_imagen" :alt="detalleProducto.nombre_producto" />
+            <ComboImagen v-else-if="detalleProducto.es_combo && detalleProducto.combos_como_padre?.length" :componentes="detalleProducto.combos_como_padre" />
             <div v-else class="placeholder">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </div>
@@ -213,6 +216,7 @@ import { ref, computed, onMounted } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
+import ComboImagen from '@/componentes/comunes/ComboImagen.vue'
 
 const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()

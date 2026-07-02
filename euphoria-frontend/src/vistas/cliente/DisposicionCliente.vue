@@ -122,7 +122,9 @@ function cerrarSesion() {
 function confirmarCerrarSesion() {
   modalLogout.value = false
   tienda.cerrarSesion()
-  router.push('/login')
+  // Navegación dura: re-arranca la app limpia en /login (evita quedar en
+  // blanco hasta refrescar) y corta el socket de billetera/aforo.
+  window.location.assign('/login')
 }
 </script>
 

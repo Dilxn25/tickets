@@ -40,10 +40,7 @@
         <svg class="icono-busqueda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar producto..." aria-label="Buscar producto" />
       </div>
-      <select v-model="filtroCategoria" @change="cargarDatos" class="campo" style="max-width:180px">
-        <option value="">Todas las categorías</option>
-        <option v-for="c in categorias" :key="c.id_categoria" :value="c.id_categoria">{{ c.nombre_categoria }}</option>
-      </select>
+      <div class="filtro-select"><BaseSelect v-model="filtroCategoria" :options="opcionesCatFiltro" placeholder="Todas las categorías" @update:model-value="cargarDatos" /></div>
       <label class="toggle-label">
         <input type="checkbox" v-model="soloPromos" @change="cargarDatos" /> Solo promociones
       </label>
@@ -60,6 +57,7 @@
       <article v-for="p in listaPaginada" :key="p.id_producto" class="tarjeta-producto hover-elevar">
         <div class="producto-imagen">
           <img v-if="p.url_imagen" :src="p.url_imagen" :alt="`Imagen de ${p.nombre_producto}`" />
+          <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
           <div v-else class="imagen-placeholder" aria-hidden="true">IMG</div>
           <div class="producto-badges">
             <span v-if="p.es_combo" class="badge-combo">Combo</span>
@@ -108,9 +106,7 @@
             <div class="form-fila">
               <div class="grupo-campo">
                 <label class="etiqueta">Categoría *</label>
-                <select v-model="form.id_categoria" class="campo" required>
-                  <option v-for="c in categorias" :key="c.id_categoria" :value="c.id_categoria">{{ c.nombre_categoria }}</option>
-                </select>
+                <BaseSelect v-model="form.id_categoria" :options="opcionesCategoria" placeholder="Seleccionar categoría…" />
               </div>
               <div class="grupo-campo">
                 <label class="etiqueta">Stock actual *</label>
@@ -138,6 +134,27 @@
             <div class="toggles-fila">
               <label class="toggle-label"><input type="checkbox" v-model="form.estado_promocion" /> En promoción</label>
               <label class="toggle-label"><input type="checkbox" v-model="form.es_combo" /> Es combo</label>
+            </div>
+
+            <!-- Editor de combo: qué productos lo componen -->
+            <div v-if="form.es_combo" class="combo-editor">
+              <label class="etiqueta">Productos del combo</label>
+              <p class="combo-hint">Un combo agrupa varios productos a un precio especial. Elige qué incluye y en qué cantidad.</p>
+              <div class="combo-agregar">
+                <div class="combo-sel"><BaseSelect v-model="comboSel" :options="opcionesComponentes" placeholder="Elegir producto…" /></div>
+                <input v-model.number="comboCant" type="number" min="1" class="campo combo-cant" aria-label="Cantidad" />
+                <button type="button" class="btn btn-secundario" @click="agregarComponente">Agregar</button>
+              </div>
+              <ul v-if="componentesCombo.length" class="combo-lista">
+                <li v-for="c in componentesCombo" :key="c.id_producto_hijo" class="combo-item">
+                  <span class="combo-cant-badge">{{ c.cantidad }}×</span>
+                  <span class="combo-nombre">{{ c.nombre_producto }}</span>
+                  <button type="button" class="btn-quitar-combo" aria-label="Quitar" @click="quitarComponente(c.id_producto_hijo)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </li>
+              </ul>
+              <p v-else class="combo-vacio">Aún no agregaste productos al combo.</p>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secundario" @click="cerrarModal">Cancelar</button>
@@ -177,15 +194,50 @@
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import ComboImagen from '@/componentes/comunes/ComboImagen.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+
+const notif = useNotificaciones()
 
 const busqueda=ref('');const filtroCategoria=ref('');const soloPromos=ref(false);const cargando=ref(false)
 const modalAbierto=ref(false);const productoEditando=ref(null)
 const modalCategoriasAbierto=ref(false);const nuevaCategoriaNombre=ref('')
 const categorias=ref([])
+const opcionesCatFiltro = computed(() => [{ value:'', label:'Todas las categorías' }, ...categorias.value.map(c => ({ value:c.id_categoria, label:c.nombre_categoria }))])
+const opcionesCategoria = computed(() => categorias.value.map(c => ({ value:c.id_categoria, label:c.nombre_categoria })))
 const productos=ref([])
 const archivoImagen=ref(null)
 
 const form=reactive({nombre_producto:'',id_categoria:'',precio_base:0,precio_promocion:'',descripcion:'',stock_actual:0,estado_promocion:false,es_combo:false})
+
+// ── Editor de combo ──────────────────────────────────────────────────────
+const componentesCombo = ref([])  // [{ id_producto_hijo, cantidad, nombre_producto }]
+const comboSel = ref('')
+const comboCant = ref(1)
+
+// Productos que se pueden agregar: no combos, no el propio producto, no repetidos.
+const opcionesComponentes = computed(() =>
+  productos.value
+    .filter(p => !p.es_combo)
+    .filter(p => p.id_producto !== productoEditando.value?.id_producto)
+    .filter(p => !componentesCombo.value.some(c => c.id_producto_hijo === p.id_producto))
+    .map(p => ({ value: p.id_producto, label: p.nombre_producto }))
+)
+
+function agregarComponente() {
+  if (!comboSel.value) { notif.advertencia('Elige un producto para agregar al combo.'); return }
+  const prod = productos.value.find(p => p.id_producto === comboSel.value)
+  if (!prod) return
+  const cant = parseInt(comboCant.value) || 1
+  componentesCombo.value.push({ id_producto_hijo: prod.id_producto, cantidad: cant, nombre_producto: prod.nombre_producto })
+  comboSel.value = ''
+  comboCant.value = 1
+}
+
+function quitarComponente(idHijo) {
+  componentesCombo.value = componentesCombo.value.filter(c => c.id_producto_hijo !== idHijo)
+}
 
 async function cargarDatos() {
   cargando.value = true
@@ -225,16 +277,41 @@ function manejarArchivo(e) {
   archivoImagen.value = e.target.files[0]
 }
 
-function abrirModal(p=null){
+async function abrirModal(p=null){
   productoEditando.value=p;
   archivoImagen.value=null;
+  componentesCombo.value = []
+  comboSel.value = ''
+  comboCant.value = 1
   if(p) Object.assign(form,{nombre_producto:p.nombre_producto,id_categoria:p.id_categoria,precio_base:p.precio_base,precio_promocion:p.precio_promocion ?? '',descripcion:p.descripcion ?? '',stock_actual:p.stock_actual,estado_promocion:!!p.estado_promocion,es_combo:!!p.es_combo});
   else Object.assign(form,{nombre_producto:'',id_categoria:categorias.value[0]?.id_categoria || '',precio_base:0,precio_promocion:'',descripcion:'',stock_actual:0,estado_promocion:false,es_combo:false});
   modalAbierto.value=true
+  // Si es combo en edición, precargamos sus componentes desde el backend.
+  if (p && p.es_combo) {
+    try {
+      const detalle = await servicioProductos.obtener(p.id_producto)
+      componentesCombo.value = (detalle.combos_como_padre || []).map(c => ({
+        id_producto_hijo: c.id_producto_hijo,
+        cantidad: c.cantidad,
+        nombre_producto: c.nombre_producto,
+      }))
+    } catch { /* si falla, se abre vacío */ }
+  }
 }
 function cerrarModal(){modalAbierto.value=false}
 
 async function guardarProducto(){
+  // Validación de promoción (el backend también la valida como defensa).
+  if (form.estado_promocion) {
+    const promo = parseFloat(form.precio_promocion)
+    const base = parseFloat(form.precio_base)
+    if (!(promo > 0)) { notif.advertencia('Para activar la promoción, define un precio de promoción mayor a 0.'); return }
+    if (promo >= base) { notif.advertencia('El precio de promoción debe ser menor al precio base.'); return }
+  }
+  // Un combo debe incluir al menos un producto.
+  if (form.es_combo && !componentesCombo.value.length) {
+    notif.advertencia('Un combo debe incluir al menos un producto. Agrega sus componentes.'); return
+  }
   try {
     const formData = new FormData()
     formData.append('nombre_producto', form.nombre_producto)
@@ -245,6 +322,12 @@ async function guardarProducto(){
     formData.append('stock_actual', form.stock_actual)
     formData.append('estado_promocion', form.estado_promocion)
     formData.append('es_combo', form.es_combo)
+    // Componentes del combo (el backend los sincroniza en combo_detalle).
+    if (form.es_combo) {
+      formData.append('componentes', JSON.stringify(
+        componentesCombo.value.map(c => ({ id_producto_hijo: c.id_producto_hijo, cantidad: c.cantidad }))
+      ))
+    }
     
     if (archivoImagen.value) {
       formData.append('imagen', archivoImagen.value)
@@ -257,14 +340,63 @@ async function guardarProducto(){
     }
     cerrarModal()
     cargarDatos()
-  } catch (error) { alert(error.error || 'Error al guardar producto') }
+    notif.exito(productoEditando.value ? 'Producto actualizado' : 'Producto creado')
+  } catch (error) { notif.error(error.error || 'Error al guardar producto') }
 }
 
 async function alternarPromo(p) {
+  // Si ya está en promo, la quitamos directo.
+  if (p.estado_promocion) {
+    try {
+      await servicioProductos.cambiarPromo(p.id_producto)
+      cargarDatos()
+      notif.info(`Promoción de "${p.nombre_producto}" desactivada`)
+    } catch (error) { notif.error(error.error || 'Error al cambiar promoción') }
+    return
+  }
+
+  // Al activar: si no hay un precio de promo válido, pedimos el precio ahí mismo
+  // (advertencia amarilla + input) en vez de bloquear con un aviso seco.
+  const base = parseFloat(p.precio_base)
+  const promoActual = parseFloat(p.precio_promocion)
+  const promoValida = promoActual > 0 && promoActual < base
+
+  if (!promoValida) {
+    const valor = await notif.solicitar({
+      variante: 'advertencia',
+      titulo: 'Falta el precio de promoción',
+      mensaje: `"${p.nombre_producto}" no tiene un precio de promoción. Escribe a cuánto quieres dejarlo (precio base: Bs. ${base.toFixed(2)}).`,
+      etiqueta: 'Precio de promoción',
+      prefijo: 'Bs.',
+      tipoInput: 'number',
+      placeholder: '0.00',
+      textoConfirmar: 'Aplicar promoción',
+      validar: (v) => {
+        const n = parseFloat(v)
+        if (!(n > 0)) return 'Ingresa un precio mayor a 0.'
+        if (n >= base) return `Debe ser menor al precio base (Bs. ${base.toFixed(2)}).`
+        return null
+      },
+    })
+    if (valor === null) return // canceló
+    try {
+      // Fijamos el precio de promo y activamos, en un solo paso.
+      const fd = new FormData()
+      fd.append('precio_promocion', parseFloat(valor))
+      fd.append('estado_promocion', 'true')
+      await servicioProductos.editar(p.id_producto, fd)
+      cargarDatos()
+      notif.exito(`Promoción activada: Bs. ${parseFloat(valor).toFixed(2)}`)
+    } catch (error) { notif.error(error.error || 'No se pudo aplicar la promoción') }
+    return
+  }
+
+  // Ya tiene precio válido: solo activamos.
   try {
     await servicioProductos.cambiarPromo(p.id_producto)
     cargarDatos()
-  } catch (error) { console.error('Error al cambiar promoción:', error) }
+    notif.exito(`Promoción de "${p.nombre_producto}" activada`)
+  } catch (error) { notif.error(error.error || 'Error al cambiar promoción') }
 }
 
 function abrirModalCategorias() {
@@ -277,16 +409,23 @@ async function crearCategoria() {
     await servicioProductos.crearCategoria({ nombre_categoria: nuevaCategoriaNombre.value })
     nuevaCategoriaNombre.value = ''
     cargarDatos()
-  } catch (err) { alert('Error al crear categoría') }
+    notif.exito('Categoría creada')
+  } catch (err) { notif.error('Error al crear categoría') }
 }
 
 async function eliminarCategoria(cat) {
-  const confirmacion = confirm(`Si eliminas la categoría "${cat.nombre_categoria}", todos los productos que pertenezcan a ella se reasignarán a "Otro". ¿Estás seguro?`)
-  if (!confirmacion) return
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: `Eliminar "${cat.nombre_categoria}"`,
+    mensaje: 'Los productos de esta categoría se reasignarán a "Otro". ¿Deseas continuar?',
+    textoConfirmar: 'Sí, eliminar',
+  })
+  if (!ok) return
   try {
     await servicioProductos.eliminarCategoria(cat.id_categoria)
     cargarDatos()
-  } catch (err) { alert('Error al eliminar categoría') }
+    notif.exito('Categoría eliminada')
+  } catch (err) { notif.error('Error al eliminar categoría') }
 }
 </script>
 
@@ -311,6 +450,21 @@ async function eliminarCategoria(cat) {
 /* ---- Filtros ---- */
 .filtros-barra{display:flex;gap:.75rem;margin-bottom:1.2rem;flex-wrap:wrap;align-items:center;padding:var(--esp-3) var(--esp-4);border-radius:var(--radio-lg)}
 .campo-busqueda{position:relative;max-width:280px;width:100%}
+.filtro-select{flex:0 1 180px;min-width:150px}
+
+/* Editor de combo */
+.combo-editor{margin-top:.25rem;padding:1rem;border:1px dashed var(--borde-sutil);border-radius:var(--radio-lg);background:rgba(168,85,247,.05);display:flex;flex-direction:column;gap:.6rem}
+.combo-hint{font-size:.78rem;color:var(--texto-secundario);line-height:1.4;margin:0}
+.combo-agregar{display:flex;gap:.5rem;align-items:center}
+.combo-sel{flex:1;min-width:0}
+.combo-cant{width:74px;flex-shrink:0;text-align:center}
+.combo-lista{list-style:none;margin:.25rem 0 0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.combo-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:var(--radio-md);background:var(--fondo-tarjeta-alt);border:1px solid var(--borde-sutil)}
+.combo-cant-badge{font-weight:800;font-size:.82rem;color:var(--morado-hover);font-variant-numeric:tabular-nums;flex-shrink:0}
+.combo-nombre{flex:1;font-size:.86rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-quitar-combo{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:none;color:var(--texto-desactivado);border-radius:var(--radio-sm);cursor:pointer;transition:color .15s ease,background-color .15s ease}
+.btn-quitar-combo:hover{color:var(--color-error);background:rgba(239,68,68,.12)}
+.combo-vacio{font-size:.8rem;color:var(--texto-desactivado);font-style:italic;margin:.25rem 0 0}
 .icono-busqueda{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--texto-secundario);pointer-events:none;transition:color var(--trans-rapida)}
 .campo-busqueda:focus-within .icono-busqueda{color:var(--morado-brillante)}
 .campo-con-icono{padding-left:38px;width:100%}
@@ -398,6 +552,7 @@ async function eliminarCategoria(cat) {
   .cabecera-acciones{flex-wrap:wrap}
   .cabecera-acciones .btn{flex:1}
   .filtros-barra .campo{max-width:100%!important;width:100%}
+  .filtro-select{flex:1 1 100%;min-width:0}
   /* Colapso a 1 columna en móvil */
   .productos-grid{grid-template-columns:1fr;gap:.85rem}
   .producto-imagen{height:150px}

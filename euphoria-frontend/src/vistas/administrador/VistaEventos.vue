@@ -44,11 +44,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono-busqueda"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input v-model="filtroBusqueda" class="campo campo-con-icono" placeholder="Buscar por nombre..." />
         </div>
-        <select v-model="filtroEstado" class="campo select-estado">
-          <option value="">Todos los estados</option>
-          <option value="activo">Activos</option>
-          <option value="planificado">Planificados</option>
-        </select>
+        <div class="select-estado"><BaseSelect v-model="filtroEstado" :options="opcionesFiltroEstado" placeholder="Todos los estados" /></div>
       </div>
     </div>
 
@@ -194,11 +190,7 @@
               Selecciona el nuevo estado para el evento: <strong>{{ eventoParaEstado?.nombre_evento }}</strong>
             </p>
             
-            <select v-model="nuevoEstadoSeleccionado" class="campo" style="margin-bottom: 1.5rem; text-align: center;">
-              <option value="planificado" :disabled="estadoDeshabilitado('planificado')">Planificado</option>
-              <option value="activo" :disabled="estadoDeshabilitado('activo')">Activo</option>
-              <option value="finalizado" :disabled="estadoDeshabilitado('finalizado')">Finalizado</option>
-            </select>
+            <div style="margin-bottom: 1.5rem;"><BaseSelect v-model="nuevoEstadoSeleccionado" :options="opcionesNuevoEstado" placeholder="Selecciona un estado…" /></div>
 
             <p v-if="eventoExpirado" style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 1.5rem;">
               La fecha de este evento ya pasó: no puede reactivarse ni volver a planificarse.
@@ -218,7 +210,17 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+
+const notif = useNotificaciones()
+
+const opcionesFiltroEstado = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'activo', label: 'Activos' },
+  { value: 'planificado', label: 'Planificados' },
+]
 
 // Estado
 const eventos = ref([])
@@ -373,8 +375,9 @@ async function guardarEvento() {
     
     cerrarModal()
     cargarEventos()
+    notif.exito(eventoEditando.value ? 'Evento actualizado' : 'Evento creado')
   } catch (error) {
-    alert('Error al guardar el evento: ' + (error.error || error.message))
+    notif.error('Error al guardar el evento: ' + (error.error || error.message))
   } finally {
     guardando.value = false
   }
@@ -411,12 +414,18 @@ function estadoDeshabilitado(destino) {
   return false
 }
 
+const opcionesNuevoEstado = computed(() => [
+  { value: 'planificado', label: 'Planificado', disabled: estadoDeshabilitado('planificado') },
+  { value: 'activo',      label: 'Activo',      disabled: estadoDeshabilitado('activo') },
+  { value: 'finalizado',  label: 'Finalizado',  disabled: estadoDeshabilitado('finalizado') },
+])
+
 async function confirmarCambioEstado() {
   if (!eventoParaEstado.value || !nuevoEstadoSeleccionado.value) return
 
   // Bloquear transiciones incoherentes tambien a nivel de accion.
   if (estadoDeshabilitado(nuevoEstadoSeleccionado.value)) {
-    alert('Esa transición de estado no es válida para este evento.')
+    notif.advertencia('Esa transición de estado no es válida para este evento.')
     return
   }
 
@@ -424,8 +433,9 @@ async function confirmarCambioEstado() {
     await servicioEventos.cambiarEstado(eventoParaEstado.value.id_evento, nuevoEstadoSeleccionado.value)
     modalEstado.value = false
     cargarEventos()
+    notif.exito('Estado del evento actualizado')
   } catch (error) {
-    alert('Error al cambiar el estado del evento')
+    notif.error('Error al cambiar el estado del evento')
   }
 }
 </script>

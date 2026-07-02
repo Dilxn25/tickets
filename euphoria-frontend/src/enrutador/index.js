@@ -50,7 +50,8 @@ const rutas = [
     component: DisposicionAdmin,
     meta: { requiereAuth: true, rolPermitido: 'administrador' },
     children: [
-      { path: '', redirect: '/administrador/usuarios' },
+      // El admin entra directo a su dashboard (Reportes)
+      { path: '', redirect: '/administrador/reportes' },
       { path: 'usuarios', name: 'AdminUsuarios', component: VistaUsuarios },
       { path: 'productos', name: 'AdminProductos', component: VistaProductos },
       { path: 'eventos', name: 'AdminEventos', component: VistaEventos },

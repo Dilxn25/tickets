@@ -66,10 +66,13 @@ export const useTiendaCarrito = defineStore('carrito', () => {
       }
       const precioBase = parseFloat(producto.precio_base) || 0
       const precioPromo = parseFloat(producto.precio_promocion) || 0
+      // Solo aplicamos el precio de promo si es válido (mayor a 0 y menor al base);
+      // si la promo está activa pero sin precio válido, cobramos el base (nunca 0).
+      const enPromo = producto.estado_promocion && precioPromo > 0 && precioPromo < precioBase
       items.value.push({
         id: producto.id_producto,
         nombre: producto.nombre_producto,
-        precio: producto.estado_promocion ? precioPromo : precioBase,
+        precio: enPromo ? precioPromo : precioBase,
         cantidad: 1,
         stock: stockActual,
         imagen: producto.url_imagen || ''

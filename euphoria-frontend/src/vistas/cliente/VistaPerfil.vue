@@ -107,13 +107,7 @@
 
           <div class="grupo-campo">
             <label>Pregunta de seguridad</label>
-            <select v-model="formSeguridad.pregunta" class="campo" required>
-              <option value="" disabled>Selecciona una pregunta...</option>
-              <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
-              <option value="¿En qué ciudad nació tu madre?">¿En qué ciudad nació tu madre?</option>
-              <option value="¿Cuál es el nombre de tu colegio de primaria?">¿Cuál es el nombre de tu colegio de primaria?</option>
-              <option value="¿Cuál es tu comida favorita?">¿Cuál es tu comida favorita?</option>
-            </select>
+            <BaseSelect v-model="formSeguridad.pregunta" :options="PREGUNTAS_SEGURIDAD" placeholder="Selecciona una pregunta…" />
           </div>
           <div class="grupo-campo">
             <label>Respuesta secreta</label>
@@ -163,6 +157,14 @@
 import { ref, computed } from 'vue'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import clienteHttp from '@/servicios-api/cliente-http.js' // Usamos el cliente base para peticiones directas
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+
+const PREGUNTAS_SEGURIDAD = [
+  '¿Cuál es el nombre de tu primera mascota?',
+  '¿En qué ciudad nació tu madre?',
+  '¿Cuál es el nombre de tu colegio de primaria?',
+  '¿Cuál es tu comida favorita?',
+].map(p => ({ value: p, label: p }))
 
 const tienda = useTiendaAutenticacion()
 const fileInput = ref(null)

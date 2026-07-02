@@ -6,4 +6,11 @@
       <component :is="Component" />
     </transition>
   </RouterView>
+
+  <!-- Capa global de avisos: toasts + confirmaciones (reemplaza alert/confirm/prompt) -->
+  <CapaNotificaciones />
 </template>
+
+<script setup>
+import CapaNotificaciones from '@/componentes/comunes/CapaNotificaciones.vue'
+</script>

@@ -952,6 +952,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+const notif = useNotificaciones()
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
 import { io } from 'socket.io-client'
@@ -1493,7 +1495,7 @@ async function resolverTransaccion(id, estado) {
     await cargarHistorial()
   } catch (error) {
     console.error(error)
-    alert('Error al resolver transacción')
+    notif.error('Error al resolver transacción')
   }
 }
 
