@@ -4,16 +4,20 @@
       <div class="spinner"></div>
     </div>
     
-    <div v-else-if="!evento" class="estado-vacio">
+    <div v-else-if="!evento" class="estado-vacio aparecer-subir">
+      <div class="estado-vacio-icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="15" x2="16" y2="15"></line></svg>
+      </div>
       <h3>Evento no encontrado</h3>
-      <button class="btn btn-secundario" @click="router.push('/cliente/eventos')">Volver a la cartelera</button>
+      <p class="estado-vacio-texto">Puede que este evento ya no esté disponible o haya cambiado de fecha.</p>
+      <button class="btn btn-secundario hover-crecer" @click="router.push('/cliente/eventos')">Volver a la cartelera</button>
     </div>
     
     <div v-else class="contenido-detalle">
       <!-- Botón de regreso -->
       <button class="btn-regresar" @click="router.push('/cliente/eventos')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        Volver
+        <span>Volver</span>
       </button>
 
       <!-- Portada Gigante Responsiva -->
@@ -50,10 +54,10 @@
 
         <!-- Selección de Espacio y Mesa -->
         <div v-if="zonas.length" class="seccion-espacios fade-in">
-          <h3>1. Selecciona tu Zona</h3>
+          <h3><span class="paso-num">1</span> Selecciona tu zona</h3>
           <p class="subtexto-espacios">Elige dónde quieres estar esta noche.</p>
 
-          <div class="opciones-espacio">
+          <div class="opciones-espacio escalonar">
             <div
               v-for="zona in zonas"
               :key="zona.id_zona"
@@ -75,8 +79,8 @@
 
           <!-- Mapa de Mesas de la zona seleccionada -->
           <div v-if="mesasDisponibles.length" class="seccion-mapa fade-in">
-            <h3 style="margin-top: 1.5rem;">2. Elige tu Mesa</h3>
-            <div class="mapa-mesas">
+            <h3 style="margin-top: 1.5rem;"><span class="paso-num">2</span> Elige tu mesa</h3>
+            <div class="mapa-mesas escalonar">
               <div
                 v-for="mesa in mesasDisponibles"
                 :key="mesa.id_mesa"
@@ -107,7 +111,7 @@
           :disabled="!puedeReservar || reservando"
           @click="confirmarReserva"
         >
-          {{ reservando ? 'Procesando...' : 'Ir a Pagar' }}
+          {{ reservando ? 'Procesando…' : 'Ir a pagar' }}
         </button>
       </div>
 
@@ -261,17 +265,63 @@ async function confirmarReserva() {
 <style scoped>
 .vista-detalle-evento {
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding-bottom: 100px; /* Para la barra flotante */
 }
 
 /* Loader */
-.cargando { display: flex; align-items: center; justify-content: center; height: 100vh; }
-.spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--morado-brillante); border-radius: 50%; animation: girar 1s linear infinite; }
+.cargando { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(168, 85, 247, 0.12);
+  border-top-color: var(--morado-brillante);
+  border-radius: 50%;
+  animation: girar 0.9s var(--ease-suave) infinite;
+  box-shadow: var(--glow-morado);
+}
 @keyframes girar { to { transform: rotate(360deg); } }
 
 /* Vacio */
-.estado-vacio { text-align: center; padding: 4rem 2rem; color: var(--texto-secundario); }
+.estado-vacio {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: var(--texto-secundario);
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.estado-vacio-icono {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--esp-5);
+  border-radius: var(--radio-full);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--borde-sutil);
+  color: var(--morado-hover);
+}
+.estado-vacio-icono svg { width: 34px; height: 34px; }
+.estado-vacio h3 {
+  font-family: var(--fuente-titulo);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--texto-principal);
+  margin-bottom: var(--esp-2);
+  letter-spacing: -0.01em;
+}
+.estado-vacio-texto {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--texto-secundario);
+  margin-bottom: var(--esp-6);
+  text-wrap: pretty;
+}
 
 /* Contenido */
 .btn-regresar {
@@ -279,20 +329,32 @@ async function confirmarReserva() {
   top: 15px;
   left: 15px;
   z-index: 50;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(8px);
+  background: rgba(14, 8, 33, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: #fff;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--glass-borde);
   padding: 8px 16px 8px 12px;
-  border-radius: 20px;
+  border-radius: var(--radio-full);
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
+  box-shadow: 0 4px 16px rgba(14, 8, 33, 0.5);
+  transition: var(--trans-normal);
 }
-.btn-regresar svg { width: 18px; height: 18px; }
+.btn-regresar:hover {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: var(--borde-activo);
+  transform: translateX(-2px);
+}
+.btn-regresar:hover svg { transform: translateX(-2px); }
+.btn-regresar:active { transform: scale(0.96); }
+.btn-regresar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-regresar svg { width: 18px; height: 18px; transition: transform 0.2s var(--ease-suave); }
 
 /* Portada Full */
 .portada-full {
@@ -318,11 +380,13 @@ async function confirmarReserva() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--fondo-tarjeta), var(--fondo-tarjeta));
-  color: rgba(255,255,255,0.1);
-  font-size: 3rem;
+  background: var(--gradiente-sutil);
+  color: rgba(168, 85, 247, 0.22);
+  font-family: var(--fuente-titulo);
+  font-size: clamp(2.2rem, 9vw, 3.4rem);
   font-weight: 900;
-  letter-spacing: 5px;
+  letter-spacing: 0.14em;
+  text-shadow: var(--glow-morado);
 }
 
 .overlay-gradiente-full {
@@ -343,11 +407,14 @@ async function confirmarReserva() {
 }
 
 .titulo-evento {
-  font-size: 2rem;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.9rem, 6vw, 2.4rem);
   font-weight: 800;
+  letter-spacing: -0.03em;
   color: var(--texto-principal);
-  margin-bottom: 1rem;
-  line-height: 1.2;
+  margin-bottom: var(--esp-4);
+  line-height: 1.1;
+  text-wrap: balance;
 }
 
 .meta-tags {
@@ -360,15 +427,19 @@ async function confirmarReserva() {
 .tag-fecha {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,0.05);
-  padding: 6px 12px;
-  border-radius: 12px;
+  gap: 7px;
+  background: rgba(168, 85, 247, 0.1);
+  padding: 7px 15px;
+  border-radius: var(--radio-full);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--morado-brillante);
-  border: 1px solid rgba(255,255,255,0.05);
+  color: var(--morado-hover);
+  border: 1px solid var(--borde-sutil);
+  text-transform: capitalize;
+  transition: var(--trans-normal);
 }
+.tag-fecha:hover { background: rgba(168, 85, 247, 0.16); border-color: var(--borde-activo); }
+.tag-fecha .icono { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.9; }
 
 /* Etiqueta Activo sobre la imagen (estilo LIVE) */
 .badge-activo-flotante {
@@ -403,25 +474,49 @@ async function confirmarReserva() {
 
 /* Tarjetas Cristal para el contenido */
 .tarjeta-cristal {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+  position: relative;
+  background: var(--glass-fondo);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-lg);
+  padding: var(--esp-5);
+  margin-bottom: var(--esp-6);
+  box-shadow: var(--sombra-tarjeta), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .seccion-descripcion h3, .seccion-mapa h3, .seccion-espacios h3 {
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  font-family: var(--fuente-titulo);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--texto-principal);
-  margin-bottom: 0.3rem;
+  margin-bottom: var(--esp-1);
+}
+
+/* Numero de paso: cuadro con gradiente de marca */
+.paso-num {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radio-sm);
+  background: var(--gradiente-marca);
+  color: #fff;
+  font-family: var(--fuente-titulo);
+  font-size: 0.85rem;
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgba(168, 85, 247, 0.4);
 }
 
 .subtexto-espacios {
   font-size: 0.85rem;
   color: var(--texto-secundario);
-  margin-bottom: 1rem;
+  margin-bottom: var(--esp-4);
 }
 
 /* Opciones de Espacio */
@@ -435,23 +530,29 @@ async function confirmarReserva() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.2rem;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 16px;
+  gap: var(--esp-4);
+  padding: var(--esp-4) var(--esp-5);
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.25s var(--ease-suave), border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
 }
 
 .opcion-tarjeta:hover {
-  background: rgba(255,255,255,0.05);
+  border-color: var(--borde-activo);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
+.opcion-tarjeta:active { transform: scale(0.99); }
+.opcion-tarjeta:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
 .opcion-tarjeta.seleccionado {
-  background: rgba(219,39,119,0.1);
+  background: rgba(236, 72, 153, 0.12);
   border-color: var(--rosa-acento);
-  box-shadow: 0 4px 15px rgba(219,39,119,0.15);
+  box-shadow: 0 6px 20px rgba(236, 72, 153, 0.2), var(--glow-rosa);
 }
+.opcion-tarjeta.seleccionado:hover { transform: translateY(-2px); }
 
 .opcion-desactivada {
   background: rgba(255,255,255,0.01);
@@ -466,6 +567,7 @@ async function confirmarReserva() {
 }
 
 .opcion-info h4 {
+  font-family: var(--fuente-titulo);
   font-size: 1rem;
   font-weight: 700;
   color: var(--texto-principal);
@@ -478,9 +580,13 @@ async function confirmarReserva() {
 }
 
 .opcion-precio {
+  font-family: var(--fuente-titulo);
   font-weight: 800;
-  font-size: 1rem;
-  color: var(--morado-brillante);
+  font-size: 1.05rem;
+  color: var(--morado-hover);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* Mapa de Mesas VIP */
@@ -491,18 +597,19 @@ async function confirmarReserva() {
   margin-top: 15px;
 }
 .mesa-item {
-  background: rgba(255,255,255,0.05);
-  border: 1px dashed rgba(255,255,255,0.2);
-  border-radius: 12px;
+  background: var(--fondo-tarjeta-alt);
+  border: 1px dashed var(--borde-sutil);
+  border-radius: var(--radio-md);
   padding: 15px 10px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--trans-normal);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .mesa-nombre {
+  font-family: var(--fuente-titulo);
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--texto-principal);
@@ -510,12 +617,15 @@ async function confirmarReserva() {
 .mesa-capacidad {
   font-size: 0.75rem;
   color: var(--texto-secundario);
+  font-variant-numeric: tabular-nums;
 }
-.mesa-item:hover:not(.mesa-ocupada) { background: rgba(255,255,255,0.1); }
+.mesa-item:hover:not(.mesa-ocupada) { border-color: var(--borde-activo); transform: translateY(-2px); border-style: solid; }
+.mesa-item:not(.mesa-ocupada):active { transform: scale(0.96); }
+.mesa-item:focus-visible { outline: none; box-shadow: var(--anillo-foco); border-color: var(--borde-activo); }
 .mesa-item.mesa-seleccionada {
-  background: var(--morado-brillante);
-  border: 1px solid var(--morado-brillante);
-  box-shadow: 0 4px 15px rgba(155, 89, 182, 0.4);
+  background: var(--gradiente-marca);
+  border: 1px solid transparent;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.4), var(--glow-morado);
 }
 .mesa-item.mesa-seleccionada .mesa-nombre,
 .mesa-item.mesa-seleccionada .mesa-capacidad {
@@ -543,40 +653,48 @@ async function confirmarReserva() {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(15,10,25,0.9);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255,255,255,0.05);
-  padding: 1rem 1.5rem;
+  background: var(--fondo-navbar);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--borde-sutil);
+  padding: var(--esp-4) var(--esp-5);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--esp-4);
   z-index: 50;
-  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--esp-4) + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
 }
 
 .reserva-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-.reserva-texto { font-size: 0.8rem; color: var(--texto-secundario); }
-.reserva-precio { font-size: 1.2rem; font-weight: 800; color: var(--texto-principal); }
+.reserva-texto { font-size: 0.8rem; color: var(--texto-secundario); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; }
+.reserva-precio { font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 800; color: var(--texto-principal); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
 .btn-reservar-final {
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   color: #fff;
   border: none;
-  padding: 12px 24px;
-  border-radius: 20px;
+  padding: 13px 26px;
+  border-radius: var(--radio-full);
   font-size: 1rem;
   font-weight: 700;
-  box-shadow: 0 4px 15px rgba(219,39,119,0.3);
-  transition: all 0.3s ease;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.35);
+  cursor: pointer;
+  transition: var(--trans-normal);
+  white-space: nowrap;
 }
-.btn-reservar-final:active { transform: scale(0.95); }
+.btn-reservar-final:hover:not(.btn-desactivado) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45), var(--glow-morado); }
+.btn-reservar-final:active:not(.btn-desactivado) { transform: scale(0.96); }
+.btn-reservar-final:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
 .btn-desactivado {
-  background: rgba(255,255,255,0.1);
+  background: rgba(168, 85, 247, 0.1);
   color: var(--texto-desactivado);
   box-shadow: none;
   cursor: not-allowed;
@@ -595,6 +713,23 @@ async function confirmarReserva() {
 }
 
 /* Modales */
-.modal-fondo { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
-.modal { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); width: 100%; box-shadow: var(--sombra-modal); }
+.modal-fondo { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+.modal { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); width: 100%; box-shadow: var(--sombra-modal), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.5s; }
+  .punto-vivo { animation: none; }
+  .escalonar > * { animation: none !important; }
+  .btn-regresar,
+  .btn-regresar svg,
+  .opcion-tarjeta,
+  .mesa-item,
+  .btn-reservar-final,
+  .tag-fecha { transition-duration: 0.01ms; }
+  .btn-regresar:hover,
+  .opcion-tarjeta:hover,
+  .mesa-item:hover:not(.mesa-ocupada),
+  .btn-reservar-final:hover:not(.btn-desactivado) { transform: none; }
+}
 </style>

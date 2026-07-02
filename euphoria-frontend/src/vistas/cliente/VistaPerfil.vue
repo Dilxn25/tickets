@@ -1,10 +1,11 @@
 <template>
   <div class="vista-perfil fade-in">
     <div class="header-perfil">
-      <h2 class="titulo-seccion">Mi Perfil</h2>
+      <p class="eyebrow-perfil">Tu cuenta</p>
+      <h2 class="titulo-seccion">Mi perfil</h2>
     </div>
 
-    <div class="tarjeta-perfil">
+    <div class="tarjeta-perfil hover-elevar">
       <!-- Portada y Foto -->
       <div class="portada-contenedor">
         <!-- Placeholder Portada -->
@@ -12,8 +13,8 @@
         <div class="foto-perfil">
           <img v-if="urlFotoActual" :src="urlFotoActual" class="foto-img" />
           <span v-else>{{ iniciales }}</span>
-          
-          <button class="btn-editar-foto" title="Cambiar foto" @click="triggerFileInput"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></button>
+
+          <button class="btn-editar-foto" type="button" title="Cambiar foto" @click="triggerFileInput"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></button>
           <input type="file" accept="image/*" ref="fileInput" @change="manejarArchivo" style="display: none;" />
         </div>
       </div>
@@ -24,9 +25,9 @@
       </div>
 
       <!-- Formulario de Datos Personales -->
-      <form class="formulario-perfil" @submit.prevent="guardarDatos">
-        <h4 class="subtitulo-form">Datos Personales</h4>
-        
+      <form class="formulario-perfil escalonar" @submit.prevent="guardarDatos">
+        <h4 class="subtitulo-form">Datos personales</h4>
+
         <div class="grupo-campo">
           <label>Nombres</label>
           <div class="campo-editable" :class="{ 'editando-activo': editando.nombres }">
@@ -46,7 +47,7 @@
         </div>
         
         <div class="grupo-campo">
-          <label>CI / Carnet (Opcional)</label>
+          <label>CI / carnet (opcional)</label>
           <div class="campo-editable" :class="{ 'editando-activo': editando.ci_carnet }">
             <span v-if="!editando.ci_carnet">{{ form.ci_carnet || 'No especificado' }}</span>
             <input v-else v-model="form.ci_carnet" type="text" class="campo" placeholder="Añade tu número de carnet" autofocus>
@@ -55,7 +56,7 @@
         </div>
         
         <div class="grupo-campo">
-          <label>Teléfono (Opcional)</label>
+          <label>Teléfono (opcional)</label>
           <div class="campo-editable" :class="{ 'editando-activo': editando.telefono }">
             <span v-if="!editando.telefono">{{ form.telefono || 'No especificado' }}</span>
             <input v-else v-model="form.telefono" type="tel" class="campo" placeholder="Añade tu número" pattern="[0-9]{8,15}" title="Solo números" autofocus>
@@ -65,8 +66,8 @@
 
         <div v-if="hayCambios" class="acciones-form fade-in">
           <button type="button" class="btn-cancelar" @click="cancelarEdicion" :disabled="cargandoDatos">Cancelar</button>
-          <button type="submit" class="btn-guardar-inline" :disabled="cargandoDatos">
-            {{ cargandoDatos ? 'Guardando...' : 'Guardar Cambios' }}
+          <button type="submit" class="btn-guardar-inline brillo-hover" :disabled="cargandoDatos">
+            {{ cargandoDatos ? 'Guardando…' : 'Guardar cambios' }}
           </button>
         </div>
         
@@ -75,12 +76,12 @@
       </form>
 
       <!-- Formulario de Pregunta de Seguridad -->
-      <form class="formulario-perfil" @submit.prevent="guardarSeguridad" style="margin-top: 2rem;">
-        <h4 class="subtitulo-form">Recuperación de Cuenta</h4>
-        <p class="texto-ayuda">Establece una pregunta y respuesta secreta por si olvidas tu contraseña.</p>
+      <form class="formulario-perfil escalonar" @submit.prevent="guardarSeguridad">
+        <h4 class="subtitulo-form">Recuperación de cuenta</h4>
+        <p class="texto-ayuda">Define una pregunta y una respuesta secreta por si olvidas tu contraseña.</p>
 
         <div class="grupo-campo">
-          <label>Pregunta de Seguridad</label>
+          <label>Pregunta de seguridad</label>
           <select v-model="formSeguridad.pregunta" class="campo" required>
             <option value="" disabled>Selecciona una pregunta...</option>
             <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
@@ -90,32 +91,32 @@
           </select>
         </div>
         <div class="grupo-campo">
-          <label>Respuesta Secreta</label>
-          <input v-model="formSeguridad.respuesta" type="text" class="campo" required placeholder="Escribe tu respuesta..." />
+          <label>Respuesta secreta</label>
+          <input v-model="formSeguridad.respuesta" type="text" class="campo" required placeholder="Escribe tu respuesta" />
         </div>
 
-        <button type="submit" class="btn-guardar btn-secundario" :disabled="cargandoSeguridad">
-          {{ cargandoSeguridad ? 'Guardando...' : 'Guardar Pregunta' }}
+        <button type="submit" class="btn-guardar btn-secundario brillo-hover" :disabled="cargandoSeguridad">
+          {{ cargandoSeguridad ? 'Guardando…' : 'Guardar pregunta' }}
         </button>
         <p v-if="mensajeSeguridad" class="mensaje exito">{{ mensajeSeguridad }}</p>
         <p v-if="errorSeguridad" class="mensaje error">{{ errorSeguridad }}</p>
       </form>
 
       <!-- Formulario de Contraseña -->
-      <form class="formulario-perfil" @submit.prevent="cambiarPassword" style="margin-top: 2rem;">
+      <form class="formulario-perfil escalonar" @submit.prevent="cambiarPassword">
         <h4 class="subtitulo-form">Seguridad</h4>
-        
+
         <div class="grupo-campo">
-          <label>Contraseña Actual</label>
+          <label>Contraseña actual</label>
           <input v-model="formPass.actual" type="password" class="campo" required placeholder="••••••••">
         </div>
         <div class="grupo-campo">
-          <label>Nueva Contraseña</label>
+          <label>Nueva contraseña</label>
           <input v-model="formPass.nueva" type="password" class="campo" required minlength="6" placeholder="••••••••">
         </div>
 
-        <button type="submit" class="btn-guardar btn-secundario" :disabled="cargandoPass">
-          {{ cargandoPass ? 'Actualizando...' : 'Cambiar Contraseña' }}
+        <button type="submit" class="btn-guardar btn-secundario brillo-hover" :disabled="cargandoPass">
+          {{ cargandoPass ? 'Actualizando…' : 'Cambiar contraseña' }}
         </button>
         <p v-if="mensajePass" class="mensaje exito">{{ mensajePass }}</p>
         <p v-if="errorPass" class="mensaje error">{{ errorPass }}</p>
@@ -312,46 +313,68 @@ async function guardarSeguridad() {
   box-sizing: border-box;
 }
 .header-perfil {
-  margin-bottom: 1rem;
+  margin-bottom: var(--esp-5);
+  padding-left: 2px;
+}
+.eyebrow-perfil {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--morado-hover);
+  margin-bottom: 4px;
 }
 .titulo-seccion {
-  font-size: 1.5rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.7rem;
   font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   color: var(--texto-principal);
 }
 
 .tarjeta-perfil {
-  background: var(--fondo-tarjeta);
+  background: var(--gradiente-sutil);
   border: 1px solid var(--borde-sutil);
-  border-radius: 20px;
+  border-radius: var(--radio-xl);
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: var(--sombra-tarjeta);
 }
 
 /* Portada y Avatar */
 .portada-contenedor {
   position: relative;
-  height: 120px;
-  background: linear-gradient(135deg, rgba(74,44,143,0.5), rgba(219,39,119,0.3));
+  height: 130px;
+  background: var(--gradiente-marca-3);
   border-bottom: 1px solid var(--borde-sutil);
+}
+/* Brillo radial sutil sobre la portada para dar profundidad */
+.portada-contenedor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.28), transparent 60%);
+  pointer-events: none;
 }
 .foto-perfil {
   position: absolute;
   bottom: -40px;
   left: 50%;
   transform: translateX(-50%);
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
   border: 4px solid var(--fondo-tarjeta);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.9rem;
   font-weight: 800;
+  letter-spacing: -0.01em;
   color: #fff;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 22px rgba(168, 85, 247, 0.45), var(--sombra-glow);
   overflow: visible; /* para el boton flotante */
 }
 .foto-img {
@@ -360,43 +383,59 @@ async function guardarSeguridad() {
 .btn-editar-foto {
   position: absolute;
   bottom: 0; right: -5px;
-  background: var(--fondo-tarjeta-alt);
-  border: 1px solid var(--borde-sutil);
-  border-radius: 50%;
-  width: 28px; height: 28px;
+  background: var(--morado-brillante);
+  border: 2px solid var(--fondo-tarjeta);
+  border-radius: var(--radio-full);
+  width: 30px; height: 30px;
+  color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: 0.8rem;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-  transition: 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  transition: var(--trans-normal);
 }
+.btn-editar-foto:hover { background: var(--morado-hover); transform: scale(1.08); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.55); }
 .btn-editar-foto:active { transform: scale(0.9); }
+.btn-editar-foto:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.4);
+}
 
 .info-principal {
   text-align: center;
-  margin-top: 45px;
-  padding: 0 1rem 1.5rem 1rem;
+  margin-top: 48px;
+  padding: 0 var(--esp-4) var(--esp-5) var(--esp-4);
   border-bottom: 1px solid var(--borde-sutil);
 }
 .info-principal h3 {
-  font-size: 1.2rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.35rem;
   font-weight: 700;
-  margin-bottom: 2px;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+  text-wrap: balance;
 }
 .correo {
   font-size: 0.85rem;
   color: var(--texto-secundario);
+  letter-spacing: 0.01em;
 }
 
 /* Formularios */
 .formulario-perfil {
-  padding: 1.5rem;
+  padding: var(--esp-5);
+}
+/* Separador entre secciones del formulario (reemplaza margenes en linea) */
+.formulario-perfil + .formulario-perfil {
+  border-top: 1px solid var(--borde-sutil);
 }
 .subtitulo-form {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--morado-brillante);
-  margin-bottom: 1rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--morado-hover);
+  margin-bottom: var(--esp-4);
 }
 
 .grupo-campo {
@@ -406,9 +445,10 @@ async function guardarSeguridad() {
   margin-bottom: 1rem;
 }
 .grupo-campo label {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--texto-secundario);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 .texto-ayuda {
   font-size: 0.85rem;
@@ -417,13 +457,14 @@ async function guardarSeguridad() {
   line-height: 1.4;
 }
 .campo {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: #fff;
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
+  padding: 11px 14px;
+  border-radius: var(--radio-md);
+  color: var(--texto-principal);
+  font-family: var(--fuente-principal);
   font-size: 0.9rem;
-  transition: 0.3s;
+  transition: var(--trans-rapida);
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -431,52 +472,80 @@ async function guardarSeguridad() {
 /* Estilo para las opciones del select en navegadores que lo permitan */
 .campo option {
   background: var(--fondo-app);
-  color: #fff;
+  color: var(--texto-principal);
+}
+.campo:hover {
+  border-color: var(--borde-activo);
 }
 .campo:focus {
   outline: none;
   border-color: var(--morado-brillante);
-  background: rgba(255,255,255,0.05);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+.campo::placeholder {
+  color: var(--texto-desactivado);
 }
 
 .btn-guardar {
   width: 100%;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   color: #fff;
   border: none;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radio-full);
   font-weight: 600;
   cursor: pointer;
-  margin-top: 0.5rem;
-  transition: 0.2s;
+  margin-top: var(--esp-2);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.3);
+  transition: var(--trans-normal);
 }
+.btn-guardar:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236, 72, 153, 0.4), var(--glow-morado); }
 .btn-guardar:active { transform: scale(0.97); }
+.btn-guardar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.4), 0 6px 18px rgba(168, 85, 247, 0.3);
+}
+.btn-guardar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 .btn-secundario {
-  background: var(--fondo-tarjeta-alt);
-  border: 1px solid var(--borde-sutil);
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-hover);
+  box-shadow: none;
+}
+.btn-secundario:hover {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: var(--morado-brillante);
   color: var(--texto-principal);
+  box-shadow: none;
 }
 
 .campo-editable {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  padding: 10px 12px;
-  border-radius: 12px;
-  min-height: 42px;
-  transition: all 0.3s ease;
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
+  padding: 10px 14px;
+  border-radius: var(--radio-md);
+  min-height: 44px;
+  transition: var(--trans-normal);
+}
+.campo-editable:hover {
+  border-color: var(--borde-activo);
 }
 .campo-editable.editando-activo {
   border-color: var(--morado-brillante);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 8px rgba(155, 89, 182, 0.4);
+  background: rgba(168, 85, 247, 0.1);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
 }
 .campo-editable span {
   flex: 1;
-  color: #fff;
+  color: var(--texto-principal);
   font-size: 0.95rem;
 }
 .campo-editable .campo {
@@ -494,14 +563,24 @@ async function guardarSeguridad() {
   background: transparent;
   border: none;
   cursor: pointer;
+  color: var(--texto-secundario);
   font-size: 1.1rem;
-  opacity: 0.7;
-  transition: 0.2s;
+  opacity: 0.8;
+  transition: var(--trans-rapida);
   padding: 5px;
 }
 .btn-lapiz:hover {
   opacity: 1;
+  color: var(--morado-hover);
   transform: scale(1.1);
+}
+.btn-lapiz:active { transform: scale(0.92); }
+.btn-lapiz:focus-visible {
+  outline: none;
+  opacity: 1;
+  color: var(--morado-hover);
+  border-radius: var(--radio-sm);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.3);
 }
 
 .acciones-form {
@@ -512,40 +591,62 @@ async function guardarSeguridad() {
 .btn-cancelar {
   flex: 1;
   background: transparent;
-  border: 1px solid var(--texto-secundario);
+  border: 1px solid var(--borde-sutil);
   color: var(--texto-secundario);
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radio-full);
   font-weight: 600;
   cursor: pointer;
-  transition: 0.2s;
+  transition: var(--trans-normal);
 }
 .btn-cancelar:hover {
-  background: rgba(255,255,255,0.05);
-  color: #fff;
+  background: rgba(168, 85, 247, 0.08);
+  border-color: var(--borde-activo);
+  color: var(--texto-principal);
 }
+.btn-cancelar:active { transform: scale(0.97); }
+.btn-cancelar:focus-visible {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+}
+.btn-cancelar:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-guardar-inline {
   flex: 1;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   color: #fff;
   border: none;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radio-full);
   font-weight: 600;
   cursor: pointer;
-  transition: 0.2s;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.3);
+  transition: var(--trans-normal);
 }
+.btn-guardar-inline:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236, 72, 153, 0.4), var(--glow-morado); }
 .btn-guardar-inline:active { transform: scale(0.97); }
+.btn-guardar-inline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.4), 0 6px 18px rgba(168, 85, 247, 0.3);
+}
+.btn-guardar-inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 .mensaje {
   text-align: center;
   font-size: 0.85rem;
-  margin-top: 10px;
-  padding: 8px;
-  border-radius: 8px;
+  font-weight: 500;
+  margin-top: var(--esp-3);
+  padding: 10px 12px;
+  border-radius: var(--radio-md);
+  animation: subirEntrada 0.35s var(--ease-suave) both;
 }
-.exito { background: rgba(46,204,113,0.1); color: var(--color-exito); }
-.error { background: rgba(231,76,60,0.1); color: var(--color-error); }
+.exito { background: rgba(34, 197, 94, 0.12); color: var(--color-exito); border: 1px solid rgba(34, 197, 94, 0.3); }
+.error { background: rgba(239, 68, 68, 0.12); color: var(--color-error); border: 1px solid rgba(239, 68, 68, 0.3); }
 
 /* ===== Responsividad ===== */
 
@@ -589,6 +690,20 @@ async function guardarSeguridad() {
   .btn-cancelar,
   .btn-guardar-inline {
     min-width: 120px;
+  }
+}
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .mensaje {
+    animation: none;
+  }
+  .btn-guardar:hover,
+  .btn-guardar-inline:hover,
+  .btn-cancelar:active,
+  .btn-editar-foto:hover,
+  .btn-lapiz:hover {
+    transform: none;
   }
 }
 </style>

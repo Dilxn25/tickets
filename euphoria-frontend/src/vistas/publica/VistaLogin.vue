@@ -7,19 +7,20 @@
       <div class="orbe orbe-3"></div>
     </div>
 
-    <div class="login-contenedor fade-in">
+    <div class="login-contenedor">
       <!-- Logo y bienvenida -->
       <div class="login-cabecera">
         <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo" />
       </div>
 
-      <div class="tabs-auth">
-        <button :class="['tab-btn', !esRegistro ? 'activo' : '']" @click="esRegistro = false; error = ''">Iniciar Sesión</button>
-        <button :class="['tab-btn', esRegistro ? 'activo' : '']" @click="esRegistro = true; error = ''">Registrarme</button>
+      <div class="tabs-auth" role="tablist">
+        <button type="button" role="tab" :aria-selected="!esRegistro" :class="['tab-btn', !esRegistro ? 'activo' : '']" @click="esRegistro = false; error = ''">Iniciar sesión</button>
+        <button type="button" role="tab" :aria-selected="esRegistro" :class="['tab-btn', esRegistro ? 'activo' : '']" @click="esRegistro = true; error = ''">Registrarme</button>
+        <span class="tab-indicador" :class="{ 'a-derecha': esRegistro }"></span>
       </div>
 
       <!-- Formulario -->
-      <form class="login-form" @submit.prevent="manejarSubmit">
+      <form class="login-form escalonar" :key="esRegistro ? 'reg' : 'log'" @submit.prevent="manejarSubmit">
         
         <template v-if="esRegistro">
           <div class="grupo-campo">
@@ -31,7 +32,7 @@
             <input v-model="formulario.apellidos" type="text" class="campo" placeholder="Tus apellidos" required pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ ]+" title="Solo letras permitidas" />
           </div>
           <div class="grupo-campo">
-            <label class="etiqueta">Pregunta de Seguridad</label>
+            <label class="etiqueta">Pregunta de seguridad</label>
             <select v-model="formulario.pregunta_seguridad" class="campo" required>
               <option value="" disabled>Selecciona una pregunta...</option>
               <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
@@ -41,36 +42,40 @@
             </select>
           </div>
           <div class="grupo-campo">
-            <label class="etiqueta">Respuesta Secreta</label>
+            <label class="etiqueta">Respuesta secreta</label>
             <input v-model="formulario.respuesta_seguridad" type="text" class="campo" placeholder="Escribe tu respuesta..." required />
           </div>
         </template>
 
         <div class="grupo-campo">
           <label class="etiqueta">Correo electrónico</label>
-          <input
-            v-model="formulario.correo"
-            type="email"
-            class="campo"
-            placeholder="tu@correo.com"
-            required
-            autocomplete="email"
-          />
+          <div class="campo-icono-izq">
+            <svg class="icono-campo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+            <input
+              v-model="formulario.correo"
+              type="email"
+              class="campo con-icono-izq"
+              placeholder="tu@correo.com"
+              required
+              autocomplete="email"
+            />
+          </div>
         </div>
 
         <div class="grupo-campo">
           <label class="etiqueta">Contraseña</label>
           <div class="campo-icono">
+            <svg class="icono-campo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
             <input
               v-model="formulario.password"
               :type="mostrarPassword ? 'text' : 'password'"
-              class="campo"
+              class="campo con-icono-izq"
               placeholder="••••••••"
               required
               minlength="6"
               autocomplete="current-password"
             />
-            <button type="button" class="ojo" @click="mostrarPassword = !mostrarPassword">
+            <button type="button" class="ojo" :aria-label="mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'" @click="mostrarPassword = !mostrarPassword">
               {{ mostrarPassword ? 'Ocultar' : 'Ver' }}
             </button>
           </div>
@@ -80,10 +85,10 @@
         </div>
 
         <!-- Error / Éxito -->
-        <div v-if="error" class="alerta-error">{{ error }}</div>
-        <div v-if="mensajeExito" class="alerta-exito">{{ mensajeExito }}</div>
+        <div v-if="error" class="alerta-error" role="alert" aria-live="assertive">{{ error }}</div>
+        <div v-if="mensajeExito" class="alerta-exito" role="status" aria-live="polite">{{ mensajeExito }}</div>
 
-        <button type="submit" class="btn btn-primario btn-lg w-full" :disabled="cargando">
+        <button type="submit" class="btn btn-primario btn-lg w-full brillo-hover boton-ingreso" :disabled="cargando">
           <span v-if="cargando" class="spinner"></span>
           <span v-else>{{ esRegistro ? 'Crear mi cuenta' : 'Ingresar' }}</span>
         </button>
@@ -92,19 +97,19 @@
       <!-- Nota amigable -->
       <div class="demo-accesos">
         <p class="demo-titulo">¿Necesitas ayuda con tu cuenta?</p>
-        <p style="font-size: 0.75rem; text-align: center; margin-top: 5px;">
+        <p class="ayuda-contacto">
           <a href="mailto:araucodilan@gmail.com" class="link-contacto">Contactar al administrador</a>
         </p>
       </div>
 
-      <p class="footer-texto">EUPHORIA &copy; 2026 · Todos los derechos reservados</p>
+      <p class="footer-texto">Euphoria &copy; 2026 · Todos los derechos reservados</p>
     </div>
 
     <!-- Modal Recuperar Contraseña -->
-    <div v-if="modalRecuperar" class="modal-overlay fade-in">
+    <div v-if="modalRecuperar" class="modal-overlay fade-in" role="dialog" aria-modal="true" aria-labelledby="titulo-recuperar">
       <div class="modal-recuperar">
-        <button class="btn-cerrar" @click="cerrarRecuperacion">×</button>
-        <h3>Recuperar Contraseña</h3>
+        <button class="btn-cerrar" aria-label="Cerrar" @click="cerrarRecuperacion">×</button>
+        <h3 id="titulo-recuperar">Recuperar contraseña</h3>
         
         <!-- Paso 1: Correo -->
         <div v-if="pasoRecuperacion === 1">
@@ -122,12 +127,12 @@
           <div class="pregunta-box">{{ preguntaRecuperacion }}</div>
           
           <div class="grupo-campo mb-3">
-            <label class="etiqueta">Tu Respuesta</label>
+            <label class="etiqueta">Tu respuesta</label>
             <input v-model="respuestaRecuperacion" type="text" class="campo w-full" placeholder="Escribe tu respuesta..." />
           </div>
-          
+
           <div class="grupo-campo mb-3">
-            <label class="etiqueta">Nueva Contraseña</label>
+            <label class="etiqueta">Nueva contraseña</label>
             <input v-model="nuevaPasswordRec" type="password" class="campo w-full" placeholder="Mínimo 6 caracteres" />
           </div>
 
@@ -137,8 +142,8 @@
         </div>
 
         <!-- Error / Exito de Recuperación -->
-        <div v-if="errorRecuperacion" class="alerta-error mt-3">{{ errorRecuperacion }}</div>
-        <div v-if="exitoRecuperacion" class="alerta-exito mt-3">{{ exitoRecuperacion }}</div>
+        <div v-if="errorRecuperacion" class="alerta-error mt-3" role="alert" aria-live="assertive">{{ errorRecuperacion }}</div>
+        <div v-if="exitoRecuperacion" class="alerta-exito mt-3" role="status" aria-live="polite">{{ exitoRecuperacion }}</div>
       </div>
     </div>
   </div>
@@ -348,8 +353,9 @@ async function restablecerPassword() {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.35;
-  animation: flotarOrbe 8s ease-in-out infinite;
+  opacity: 0.4;
+  mix-blend-mode: screen;
+  animation: flotarOrbe 9s ease-in-out infinite;
 }
 .orbe-1 { width: 500px; height: 500px; background: var(--morado-profundo); top: -100px; left: -100px; }
 .orbe-2 { width: 400px; height: 400px; background: var(--morado-medio);    bottom: -80px; right: -80px; animation-delay: -3s; }
@@ -357,22 +363,48 @@ async function restablecerPassword() {
 
 @keyframes flotarOrbe {
   0%,100% { transform: translate(0,0) scale(1); }
-  50%      { transform: translate(20px,-20px) scale(1.05); }
+  33%     { transform: translate(24px,-26px) scale(1.08); }
+  66%     { transform: translate(-18px,14px) scale(0.96); }
 }
 
 /* Contenedor del login */
+@property --angulo { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
 .login-contenedor {
   width: 100%;
-  max-width: 420px;
-  background: var(--glass-fondo);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  max-width: 430px;
+  /* Tarjeta opaca y oscura: garantiza legibilidad del texto sin depender
+     de la imagen de fondo (antes usaba --glass-fondo al 35% y las letras
+     apagadas se perdían sobre el fondo brillante). */
+  background: linear-gradient(160deg, rgba(27, 16, 64, 0.97), rgba(16, 9, 38, 0.98));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-xl);
   padding: 2.5rem 2rem;
   box-shadow: var(--sombra-modal), var(--sombra-glow);
   position: relative;
   z-index: 1;
+  isolation: isolate;
+  animation: entradaCard 0.65s var(--ease-suave) both;
+}
+/* Aura de color giratoria detrás de la tarjeta */
+.login-contenedor::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--angulo),
+    var(--morado-brillante), var(--rosa-acento), var(--morado-claro), var(--rosa-suave), var(--morado-brillante));
+  filter: blur(18px);
+  opacity: 0.55;
+  z-index: -1;
+  animation: girarAura 9s linear infinite;
+}
+@keyframes girarAura { to { --angulo: 360deg; } }
+@keyframes entradaCard {
+  from { opacity: 0; transform: translateY(26px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .login-cabecera { text-align: center; margin-bottom: 2rem; }
@@ -383,7 +415,11 @@ async function restablecerPassword() {
   object-fit: contain;
   display: block;
   margin: 0 auto;
-  filter: drop-shadow(0 0 10px rgba(155,89,182,0.5));
+  animation: pulsoLogo 4.5s ease-in-out infinite;
+}
+@keyframes pulsoLogo {
+  0%,100% { filter: drop-shadow(0 0 10px rgba(168,85,247,0.5)); }
+  50%     { filter: drop-shadow(0 0 24px rgba(236,72,153,0.72)); }
 }
 
 /* Tabs */
@@ -391,7 +427,18 @@ async function restablecerPassword() {
   display: flex;
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--borde-sutil);
+  position: relative;
 }
+.tab-indicador {
+  position: absolute;
+  bottom: -1px; left: 0;
+  width: 50%; height: 2px;
+  background: var(--gradiente-marca);
+  border-radius: 2px;
+  box-shadow: var(--glow-rosa);
+  transition: transform 0.4s var(--ease-rebote);
+}
+.tab-indicador.a-derecha { transform: translateX(100%); }
 .tab-btn {
   flex: 1;
   background: none;
@@ -401,25 +448,64 @@ async function restablecerPassword() {
   cursor: pointer;
   font-weight: 600;
   font-size: 0.9rem;
-  transition: var(--trans-rapida);
+  letter-spacing: -0.01em;
+  transition: color 0.2s var(--ease-suave);
   border-bottom: 2px solid transparent;
+  border-radius: var(--radio-sm) var(--radio-sm) 0 0;
 }
 .tab-btn.activo {
-  color: var(--morado-brillante);
-  border-bottom-color: var(--morado-brillante);
+  color: var(--morado-hover);
 }
 .tab-btn:hover:not(.activo) {
   color: var(--texto-principal);
 }
+.tab-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5);
+}
 
 /* Formulario */
 .login-form { display: flex; flex-direction: column; gap: 1.1rem; margin-bottom: 1.5rem; }
-.grupo-campo { display: flex; flex-direction: column; gap: 6px; }
-.etiqueta { font-size: 0.82rem; color: var(--texto-secundario); font-weight: 500; }
+.grupo-campo { display: flex; flex-direction: column; gap: 7px; }
+.etiqueta {
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding-left: 2px;
+}
 
 .campo-icono { position: relative; }
 .campo-icono .campo { padding-right: 60px; }
 .campo option { background: var(--fondo-app); color: #fff; }
+
+/* Iconos dentro de los campos */
+.campo-icono-izq { position: relative; }
+.icono-campo {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; color: var(--texto-desactivado);
+  pointer-events: none; transition: color 0.25s var(--ease-suave); z-index: 2;
+}
+.con-icono-izq { padding-left: 44px; }
+.campo-icono-izq:focus-within .icono-campo,
+.campo-icono:focus-within .icono-campo { color: var(--morado-hover); }
+
+/* Foco con brillo (armonía con el tema violeta) */
+.login-form .campo:focus {
+  border-color: var(--morado-brillante);
+  background: rgba(46, 26, 102, 0.85);
+  box-shadow: 0 0 0 3px rgba(168,85,247,0.18), 0 0 18px rgba(168,85,247,0.28);
+}
+
+/* Autofill de Chrome: conservar el tema oscuro (evita el fondo blanco) */
+.campo:-webkit-autofill,
+.campo:-webkit-autofill:hover,
+.campo:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--texto-principal);
+  -webkit-box-shadow: 0 0 0 1000px rgba(40, 22, 90, 0.95) inset;
+  caret-color: var(--texto-principal);
+  transition: background-color 9999s ease-out 0s;
+}
 .ojo {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
   background: var(--fondo-tarjeta-alt);
@@ -427,29 +513,64 @@ async function restablecerPassword() {
   border: 1px solid var(--borde-sutil);
   cursor: pointer;
   font-size: 0.75rem;
-  padding: 4px 8px;
+  font-weight: 600;
+  padding: 5px 10px;
   border-radius: var(--radio-sm);
-  transition: var(--trans-rapida);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
 }
-.ojo:hover { background: var(--fondo-burbuja); color: var(--texto-principal); }
+.ojo:hover {
+  background: rgba(168, 85, 247, 0.18);
+  color: var(--texto-principal);
+  border-color: var(--borde-activo);
+}
+.ojo:active { transform: translateY(-50%) scale(0.94); }
+.ojo:focus-visible {
+  outline: none;
+  color: var(--texto-principal);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5);
+}
+
+/* Botón Ingresar con gradiente animado */
+.boton-ingreso {
+  background: linear-gradient(120deg,
+    var(--morado-medio) 0%, var(--morado-brillante) 35%, var(--rosa-acento) 55%, var(--morado-brillante) 75%, var(--morado-medio) 100%);
+  background-size: 220% 100%;
+  animation: desplazarGrad 6s linear infinite;
+  letter-spacing: 0.02em;
+}
+@keyframes desplazarGrad { to { background-position: 220% 0; } }
+.boton-ingreso:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.55), var(--glow-morado);
+}
 
 .alerta-error {
   background: rgba(231,76,60,0.1);
   border: 1px solid rgba(231,76,60,0.3);
   color: var(--color-error);
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: var(--radio-md);
   font-size: 0.85rem;
+  line-height: 1.4;
   text-align: center;
+  text-wrap: pretty;
+  animation: alertaEntra 0.3s var(--ease-suave) both;
 }
 .alerta-exito {
   background: rgba(46,204,113,0.1);
   border: 1px solid rgba(46,204,113,0.3);
   color: var(--color-exito);
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: var(--radio-md);
   font-size: 0.85rem;
+  line-height: 1.4;
   text-align: center;
+  text-wrap: pretty;
+  animation: alertaEntra 0.3s var(--ease-suave) both;
+}
+@keyframes alertaEntra {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .w-full { width: 100%; justify-content: center; }
@@ -469,7 +590,8 @@ async function restablecerPassword() {
   padding-top: 1.2rem;
   margin-bottom: 1.2rem;
 }
-.demo-titulo { text-align: center; font-size: 0.75rem; color: var(--texto-desactivado); margin-bottom: 0.75rem; }
+.demo-titulo { text-align: center; font-size: 0.78rem; color: var(--texto-secundario); margin-bottom: 0.35rem; letter-spacing: 0.01em; }
+.ayuda-contacto { font-size: 0.75rem; text-align: center; }
 .demo-botones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .demo-btn {
   background: var(--fondo-tarjeta-alt);
@@ -483,19 +605,25 @@ async function restablecerPassword() {
 }
 .demo-btn:hover { border-color: var(--morado-brillante); color: var(--texto-principal); }
 
-.footer-texto { text-align: center; font-size: 0.72rem; color: var(--texto-desactivado); }
+.footer-texto { text-align: center; font-size: 0.72rem; color: var(--texto-desactivado); letter-spacing: 0.02em; }
 
 /* Link Olvido / Contacto */
 .link-olvido { text-align: right; margin-top: 8px; }
 .link-olvido a {
-  font-size: 0.8rem; color: var(--morado-brillante); text-decoration: none; font-weight: 500;
+  font-size: 0.8rem; color: var(--morado-brillante); text-decoration: none; font-weight: 600;
+  border-radius: var(--radio-sm);
+  transition: color 0.2s ease;
 }
-.link-olvido a:hover { text-decoration: underline; }
+.link-olvido a:hover { color: var(--morado-hover); text-decoration: underline; text-underline-offset: 3px; }
+.link-olvido a:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5); }
 
 .link-contacto {
-  color: var(--rosa-acento); text-decoration: none; font-weight: 600; transition: 0.2s;
+  color: var(--rosa-acento); text-decoration: none; font-weight: 600;
+  border-radius: var(--radio-sm);
+  transition: text-shadow 0.2s ease, color 0.2s ease;
 }
-.link-contacto:hover { text-shadow: 0 0 8px var(--rosa-acento); }
+.link-contacto:hover { color: var(--rosa-suave); text-shadow: 0 0 8px var(--rosa-acento); }
+.link-contacto:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.5); }
 
 /* Modal Recuperar */
 .modal-overlay {
@@ -504,22 +632,53 @@ async function restablecerPassword() {
 }
 .modal-recuperar {
   background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
-  border-radius: 20px; padding: 2rem; max-width: 350px; width: 100%;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5); position: relative;
+  border-radius: var(--radio-xl); padding: 2rem; max-width: 350px; width: 100%;
+  box-shadow: var(--sombra-modal), 0 0 40px rgba(168, 85, 247, 0.18);
+  position: relative;
+  animation: modalEntra 0.35s var(--ease-suave) both;
+}
+@keyframes modalEntra {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .btn-cerrar {
-  position: absolute; top: 15px; right: 15px; background: none; border: none;
-  color: var(--texto-secundario); font-size: 1.5rem; cursor: pointer;
+  position: absolute; top: 12px; right: 12px;
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  background: none; border: none; border-radius: var(--radio-full);
+  color: var(--texto-secundario); font-size: 1.4rem; line-height: 1; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
 }
-.modal-recuperar h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--texto-principal); }
-.desc { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.5rem; line-height: 1.4; }
+.btn-cerrar:hover { background: rgba(168, 85, 247, 0.15); color: var(--texto-principal); }
+.btn-cerrar:active { transform: scale(0.92); }
+.btn-cerrar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5); }
+.modal-recuperar h3 {
+  font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;
+  color: var(--texto-principal); letter-spacing: -0.02em;
+}
+.desc { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.5rem; line-height: 1.5; text-wrap: pretty; }
 .pregunta-box {
-  background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.3);
-  padding: 12px; border-radius: 12px; color: var(--rosa-acento); font-weight: 600;
-  font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center;
+  background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.32);
+  padding: 12px 14px; border-radius: var(--radio-md); color: var(--morado-hover); font-weight: 600;
+  font-size: 0.9rem; line-height: 1.4; margin-bottom: 1.5rem; text-align: center; text-wrap: pretty;
 }
 .mb-3 { margin-bottom: 1rem; }
 .mt-3 { margin-top: 1rem; }
+
+/* ===== ACCESIBILIDAD: MOVIMIENTO REDUCIDO ===== */
+@media (prefers-reduced-motion: reduce) {
+  .orbe,
+  .login-contenedor,
+  .login-contenedor::after,
+  .logo,
+  .boton-ingreso,
+  .modal-recuperar,
+  .alerta-error,
+  .alerta-exito {
+    animation: none !important;
+  }
+  .tab-indicador { transition: none; }
+}
 
 /* ===== RESPONSIVIDAD ===== */
 

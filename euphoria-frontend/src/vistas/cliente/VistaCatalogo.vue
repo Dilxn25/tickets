@@ -11,6 +11,36 @@
       </div>
     </div>
 
+    <!-- Destacados: carrusel horizontal deslizable -->
+    <div v-if="!busqueda && !cargando && destacados.length" class="destacados-seccion">
+      <div class="destacados-cab">
+        <h2 class="destacados-titulo">Destacados</h2>
+        <span class="destacados-hint">
+          Desliza
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </span>
+      </div>
+      <div class="carrusel escalonar">
+        <article v-for="p in destacados" :key="'dest-' + p.id_producto" class="destacado-card brillo-hover" @click="abrirDetalle(p)">
+          <div class="destacado-img">
+            <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
+            <div v-else class="placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            </div>
+            <span v-if="p.estado_promocion" class="badge promo">Promo</span>
+            <span v-else-if="p.es_combo" class="badge combo">Combo</span>
+          </div>
+          <div class="destacado-info">
+            <h3 class="destacado-nom">{{ p.nombre_producto }}</h3>
+            <div class="precios">
+              <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
+              <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+
     <!-- Categorías Horizontales -->
     <div class="categorias-scroll">
       <button 
@@ -33,16 +63,29 @@
 
     <!-- Lista de Productos -->
     <div class="productos-contenedor">
-      <div v-if="cargando" class="cargando-estado">
-        <div class="spinner"></div>
+      <div v-if="cargando" class="grid-productos skeleton-grid" aria-hidden="true">
+        <div v-for="n in 6" :key="'sk-' + n" class="skeleton-card">
+          <div class="sk-img"></div>
+          <div class="sk-body">
+            <div class="sk-linea sk-linea-larga"></div>
+            <div class="sk-linea sk-linea-corta"></div>
+            <div class="sk-fila">
+              <div class="sk-precio"></div>
+              <div class="sk-boton"></div>
+            </div>
+          </div>
+        </div>
       </div>
       
-      <div v-else-if="productosFiltrados.length === 0" class="vacio-estado">
-        <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-        <p>No encontramos lo que buscas</p>
+      <div v-else-if="productosFiltrados.length === 0" class="vacio-estado aparecer-subir">
+        <div class="vacio-icono-halo">
+          <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </div>
+        <p class="vacio-titulo">Sin resultados por ahora</p>
+        <p class="vacio-sub">Prueba con otro nombre o cambia de categoría.</p>
       </div>
-      
-      <div v-else class="grid-productos">
+
+      <div v-else class="grid-productos escalonar">
         <div v-for="p in productosFiltrados" :key="p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
           <!-- Insignias -->
           <div class="insignias">
@@ -66,7 +109,7 @@
                 <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
                 <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
               </div>
-              <button class="btn-agregar" @click.stop="agregarAlCarrito(p)">
+              <button class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
             </div>
@@ -123,15 +166,15 @@
       <!-- Panel Flotante de Carrito Detallado -->
       <div v-if="tiendaCarrito.totalItems > 0 && mostrarMiniCarrito" class="panel-carrito-flotante">
         <div class="cabecera-panel">
-          <h4>Tu Pedido</h4>
-          <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+          <h4>Tu pedido</h4>
+          <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel" aria-label="Ocultar el pedido"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
         <div class="lista-items-panel">
           <div v-for="item in tiendaCarrito.items" :key="item.id" class="item-panel">
             <div class="control-cantidad-mini">
-              <button class="btn-mini-cant" @click="tiendaCarrito.disminuirCantidad(item.id)">-</button>
+              <button class="btn-mini-cant" aria-label="Quitar uno" @click="tiendaCarrito.disminuirCantidad(item.id)">-</button>
               <span class="cant-panel">{{ item.cantidad }}</span>
-              <button class="btn-mini-cant" @click="tiendaCarrito.aumentarCantidad(item.id)">+</button>
+              <button class="btn-mini-cant" aria-label="Agregar uno" @click="tiendaCarrito.aumentarCantidad(item.id)">+</button>
             </div>
             <span class="nom-panel">{{ item.nombre }}</span>
             <span class="prec-panel">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</span>
@@ -139,7 +182,7 @@
         </div>
         <div class="pie-panel">
           <div class="total-panel">Total: <strong>Bs. {{ tiendaCarrito.total.toFixed(2) }}</strong></div>
-          <button class="btn-ir-pagar" @click="$router.push('/cliente/carrito')">A Pagar →</button>
+          <button class="btn-ir-pagar" @click="$router.push('/cliente/carrito')">Ir a pagar →</button>
         </div>
       </div>
       
@@ -197,6 +240,11 @@ async function cargarDatos() {
 onMounted(() => {
   cargarDatos()
 })
+
+// Productos destacados (promos y combos) para el carrusel horizontal.
+const destacados = computed(() =>
+  productos.value.filter(p => (p.estado_promocion || p.es_combo) && p.stock_actual > 0).slice(0, 10)
+)
 
 const productosFiltrados = computed(() => {
   return productos.value.filter(p => {
@@ -272,17 +320,22 @@ async function agregarAlCarrito(producto) {
   margin-bottom: 1.5rem;
 }
 .titulo-hola {
-  font-size: 1.8rem;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.75rem, 6vw, 2.15rem);
   font-weight: 800;
-  margin-bottom: 0.2rem;
-  background: linear-gradient(135deg, #fff, var(--texto-secundario));
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin-bottom: 0.25rem;
+  text-wrap: balance;
+  background: var(--gradiente-texto);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .subtitulo {
   color: var(--texto-secundario);
   font-size: 0.95rem;
-  margin-bottom: 1.2rem;
+  margin-bottom: var(--esp-5);
 }
 
 .buscador-contenedor {
@@ -299,20 +352,27 @@ async function agregarAlCarrito(producto) {
 }
 .buscador-input {
   width: 100%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 20px;
-  padding: 12px 16px 12px 42px;
-  color: #fff;
+  background: var(--fondo-input, rgba(255,255,255,0.05));
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-full);
+  padding: 12px 16px 12px 44px;
+  color: var(--texto-principal);
   font-size: 0.95rem;
-  transition: all 0.3s ease;
+  transition: background var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal);
 }
+.buscador-input::placeholder { color: var(--texto-desactivado); }
+.buscador-contenedor:hover .buscador-input {
+  border-color: var(--borde-activo);
+}
+.buscador-contenedor:hover .icono-buscar { color: var(--texto-secundario); }
 .buscador-input:focus {
   outline: none;
-  background: rgba(255,255,255,0.08);
+  background: rgba(168,85,247,0.08);
   border-color: var(--morado-brillante);
-  box-shadow: 0 0 15px rgba(155,89,182,0.3);
+  box-shadow: var(--anillo-foco);
 }
+.buscador-input:focus + .icono-buscar,
+.buscador-contenedor:focus-within .icono-buscar { color: var(--morado-hover); }
 
 /* Categorías Horizontales */
 .categorias-scroll {
@@ -329,21 +389,68 @@ async function agregarAlCarrito(producto) {
 .cat-btn {
   white-space: nowrap;
   background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--borde-sutil);
   color: var(--texto-secundario);
   padding: 8px 18px;
-  border-radius: 20px;
+  border-radius: var(--radio-full);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
+.cat-btn:hover {
+  color: var(--texto-principal);
+  border-color: var(--borde-activo);
+  background: rgba(168,85,247,0.1);
+}
+.cat-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+}
+.cat-btn:active { transform: scale(0.96); }
 .cat-btn.activo {
-  background: var(--morado-brillante);
+  background: var(--gradiente-marca);
   color: #fff;
-  border-color: var(--morado-brillante);
-  box-shadow: 0 4px 10px rgba(155,89,182,0.4);
+  border-color: transparent;
+  box-shadow: var(--glow-morado);
 }
+.cat-btn.activo:hover { color: #fff; }
+
+/* Destacados (carrusel horizontal deslizable) */
+.destacados-seccion { margin-bottom: var(--esp-6); }
+.destacados-cab { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--esp-3); }
+.destacados-titulo { font-family: var(--fuente-titulo); font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; }
+.destacados-hint { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--texto-desactivado); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+.destacados-hint svg { width: 13px; height: 13px; }
+.carrusel {
+  display: flex;
+  gap: var(--esp-3);
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.carrusel::-webkit-scrollbar { display: none; }
+.destacado-card {
+  flex: 0 0 auto;
+  width: 160px;
+  scroll-snap-align: start;
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.25s var(--ease-suave), border-color 0.2s ease, box-shadow 0.25s ease;
+}
+.destacado-card:hover { transform: translateY(-4px); border-color: var(--borde-activo); box-shadow: var(--sombra-glow); }
+.destacado-card:active { transform: scale(0.98); }
+.destacado-img { position: relative; height: 110px; background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.destacado-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s var(--ease-suave); }
+.destacado-card:hover .destacado-img img { transform: scale(1.06); }
+.destacado-img .badge { position: absolute; top: 8px; left: 8px; }
+.destacado-info { padding: 10px 12px 12px; }
+.destacado-nom { font-size: 0.88rem; font-weight: 700; line-height: 1.25; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Grid Productos */
 .grid-productos {
@@ -353,17 +460,23 @@ async function agregarAlCarrito(producto) {
 }
 
 .tarjeta-producto {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 24px;
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-xl);
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.25s var(--ease-suave), border-color 0.2s ease, box-shadow 0.25s ease;
 }
-.tarjeta-producto:active { transform: scale(0.97); }
+.tarjeta-producto:hover {
+  transform: translateY(-4px);
+  border-color: var(--borde-activo);
+  box-shadow: var(--sombra-tarjeta), var(--sombra-glow);
+}
+.tarjeta-producto:hover .imagen-box img { transform: scale(1.05); }
+.tarjeta-producto:active { transform: scale(0.98); }
 
 .insignias {
   position: absolute;
@@ -372,11 +485,12 @@ async function agregarAlCarrito(producto) {
   z-index: 2;
 }
 .badge {
-  font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 10px; backdrop-filter: blur(4px);
+  font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: var(--radio-full); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.16);
 }
-.badge.promo { background: rgba(219,39,119,0.8); color: #fff; }
-.badge.combo { background: rgba(52,152,219,0.8); color: #fff; }
+.badge.promo { background: rgba(236,72,153,0.82); color: #fff; }
+.badge.combo { background: rgba(139,92,246,0.82); color: #fff; }
 
 .imagen-box {
   height: 140px;
@@ -386,6 +500,7 @@ async function agregarAlCarrito(producto) {
 }
 .imagen-box img {
   width: 100%; height: 100%; object-fit: cover;
+  transition: transform 0.4s var(--ease-suave);
 }
 .placeholder { 
   width: 40px; height: 40px; color: var(--texto-desactivado); opacity: 0.5;
@@ -403,46 +518,83 @@ async function agregarAlCarrito(producto) {
   display: flex; flex-direction: column; flex: 1;
 }
 .nombre {
-  font-size: 0.95rem; font-weight: 700; margin-bottom: 2px;
-  line-height: 1.2;
+  font-size: 0.95rem; font-weight: 700; margin-bottom: 3px;
+  line-height: 1.25;
+  color: var(--texto-principal);
 }
 .categoria {
-  font-size: 0.75rem; color: var(--morado-brillante); margin-bottom: 10px;
+  font-size: 0.72rem; color: var(--morado-hover); margin-bottom: 12px;
+  font-weight: 600; letter-spacing: 0.01em;
 }
 .precio-fila {
   margin-top: auto;
   display: flex; justify-content: space-between; align-items: flex-end;
 }
-.precios { display: flex; flex-direction: column; }
+.precios { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
 .precio-tachado { font-size: 0.7rem; color: var(--texto-desactivado); text-decoration: line-through; }
-.precio-final { font-size: 1.1rem; font-weight: 800; color: var(--rosa-acento); }
+.precio-final { font-size: 1.15rem; font-weight: 800; color: var(--rosa-acento); letter-spacing: -0.01em; }
 
 .btn-agregar {
-  background: #fff;
-  color: var(--fondo-app);
+  background: var(--gradiente-marca);
+  color: #fff;
   border: none;
-  width: 32px; height: 32px;
-  border-radius: 50%;
+  width: 34px; height: 34px;
+  border-radius: var(--radio-full);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(255,255,255,0.2);
-  transition: transform 0.2s;
+  box-shadow: var(--glow-morado);
+  transition: transform var(--trans-rapida), box-shadow var(--trans-normal);
+  flex-shrink: 0;
 }
-.btn-agregar:hover { transform: scale(1.1); }
+.btn-agregar:hover { box-shadow: var(--glow-rosa); }
+.btn-agregar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-agregar:active { transform: scale(0.9); }
 .btn-agregar svg { width: 18px; height: 18px; }
 
 /* Estados */
-.cargando-estado, .vacio-estado {
+.vacio-estado {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 3rem 1rem; color: var(--texto-secundario);
+  padding: 3.5rem 1rem 3rem; color: var(--texto-secundario); text-align: center;
 }
-.spinner {
-  width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1);
-  border-top-color: var(--morado-brillante); border-radius: 50%;
-  animation: girar 1s linear infinite;
+.vacio-icono-halo {
+  width: 72px; height: 72px; border-radius: var(--radio-full);
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(168,85,247,0.18), transparent 70%);
+  border: 1px solid var(--borde-sutil);
+  margin-bottom: var(--esp-4);
 }
-@keyframes girar { to { transform: rotate(360deg); } }
-.vacio-icono { width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5; }
+.vacio-icono { width: 34px; height: 34px; color: var(--morado-hover); }
+.vacio-titulo { font-size: 1.02rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 4px; }
+.vacio-sub { font-size: 0.85rem; color: var(--texto-secundario); max-width: 30ch; }
+
+/* Loading: esqueletos con la forma de las tarjetas */
+.skeleton-card {
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-xl);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.sk-img { height: 140px; }
+.sk-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.sk-fila { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.sk-linea { height: 12px; border-radius: var(--radio-sm); }
+.sk-linea-larga { width: 80%; }
+.sk-linea-corta { width: 45%; height: 10px; }
+.sk-precio { width: 56px; height: 18px; border-radius: var(--radio-sm); }
+.sk-boton { width: 34px; height: 34px; border-radius: var(--radio-full); }
+.sk-img, .sk-linea, .sk-precio, .sk-boton {
+  background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(168,85,247,0.14) 50%, rgba(255,255,255,0.04) 70%);
+  background-size: 200% 100%;
+  animation: brilloEsqueleto 1.3s ease-in-out infinite;
+}
+@keyframes brilloEsqueleto {
+  0% { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-img, .sk-linea, .sk-precio, .sk-boton { animation: none; }
+}
 
 /* Modal Alerta Custom */
 .modal-alerta {
@@ -450,18 +602,22 @@ async function agregarAlCarrito(producto) {
   z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .modal-contenido {
-  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
-  border-radius: 20px; padding: 2rem; text-align: center; max-width: 320px; width: 100%;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  background: var(--gradiente-sutil); border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl); padding: 2rem; text-align: center; max-width: 320px; width: 100%;
+  box-shadow: var(--sombra-modal);
 }
 .icono-alerta { width: 48px; height: 48px; color: var(--color-alerta); margin: 0 auto 1rem auto; }
 .modal-contenido h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--color-alerta); }
 .modal-contenido p { font-size: 0.9rem; color: var(--texto-secundario); margin-bottom: 1.5rem; line-height: 1.5; }
 .btn-entendido {
-  background: var(--morado-brillante); color: #fff; border: none; padding: 10px 24px;
-  border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s; width: 100%;
+  background: var(--gradiente-marca); color: #fff; border: none; padding: 11px 24px;
+  border-radius: var(--radio-full); font-weight: 700; cursor: pointer; width: 100%;
+  box-shadow: var(--glow-morado);
+  transition: box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
-.btn-entendido:active { transform: scale(0.95); }
+.btn-entendido:hover { box-shadow: var(--glow-rosa); }
+.btn-entendido:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-entendido:active { transform: scale(0.96); }
 
 /* Modal Detalle Producto */
 .modal-detalle {
@@ -470,33 +626,44 @@ async function agregarAlCarrito(producto) {
 }
 .detalle-contenido {
   position: relative;
-  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
-  border-radius: 20px; overflow: hidden; max-width: 360px; width: 100%;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  background: var(--gradiente-sutil); border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl); overflow: hidden; max-width: 360px; width: 100%;
+  box-shadow: var(--sombra-modal);
   max-height: 85vh; display: flex; flex-direction: column;
 }
 .btn-cerrar-detalle {
   position: absolute; top: 10px; right: 10px; z-index: 2;
-  background: rgba(0,0,0,0.5); border: none; color: #fff;
-  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem;
+  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.14); color: #fff;
+  width: 34px; height: 34px; border-radius: var(--radio-full); cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+  transition: background var(--trans-normal), transform var(--trans-rapida);
 }
+.btn-cerrar-detalle:hover { background: rgba(0,0,0,0.7); }
+.btn-cerrar-detalle:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-cerrar-detalle:active { transform: scale(0.92); }
 .detalle-imagen {
   height: 200px; background: rgba(0,0,0,0.2);
   display: flex; align-items: center; justify-content: center;
 }
 .detalle-imagen img { width: 100%; height: 100%; object-fit: cover; }
-.detalle-cuerpo { padding: 1.2rem; overflow-y: auto; }
-.detalle-nombre { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.2rem; }
-.detalle-categoria { font-size: 0.8rem; color: var(--morado-brillante); margin-bottom: 0.8rem; }
+.detalle-cuerpo { padding: 1.3rem; overflow-y: auto; }
+.detalle-nombre { font-family: var(--fuente-titulo); font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; margin-bottom: 0.25rem; text-wrap: balance; }
+.detalle-categoria { font-size: 0.78rem; font-weight: 600; color: var(--morado-hover); margin-bottom: 0.85rem; }
 .detalle-descripcion { font-size: 0.9rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
-.detalle-combo { margin-bottom: 1rem; }
-.detalle-combo-titulo { font-size: 0.85rem; font-weight: 700; color: var(--texto-principal); }
-.detalle-combo ul { margin: 0.4rem 0 0 1rem; padding: 0; }
-.detalle-combo li { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 2px; }
-.detalle-precio-fila {
-  display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;
+.detalle-combo {
+  margin-bottom: 1rem; padding: 0.85rem 1rem;
+  background: rgba(168,85,247,0.08); border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
 }
-.detalle-agregar { width: auto; padding: 10px 20px; }
+.detalle-combo-titulo { font-size: 0.82rem; font-weight: 700; color: var(--morado-hover); text-transform: uppercase; letter-spacing: 0.05em; }
+.detalle-combo ul { margin: 0.5rem 0 0 1.1rem; padding: 0; }
+.detalle-combo li { font-size: 0.87rem; color: var(--texto-secundario); margin-bottom: 3px; }
+.detalle-precio-fila {
+  display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;
+  padding-top: 0.85rem; border-top: 1px solid var(--borde-sutil);
+}
+.detalle-agregar { width: auto; padding: 11px 22px; }
 .detalle-agregar:disabled { opacity: 0.6; cursor: default; }
 
 /* Panel Flotante Carrito */
@@ -507,9 +674,9 @@ async function agregarAlCarrito(producto) {
   width: min(320px, calc(100vw - 40px));
   max-width: 320px;
   background: var(--fondo-tarjeta);
-  border: 1px solid var(--morado-brillante);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(157,78,221,0.2);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-modal), var(--sombra-glow);
   z-index: 100000;
   display: flex;
   flex-direction: column;
@@ -517,7 +684,7 @@ async function agregarAlCarrito(producto) {
 }
 
 .cabecera-panel {
-  background: linear-gradient(to right, var(--morado-brillante), var(--azul-profundo));
+  background: var(--gradiente-marca);
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -527,7 +694,13 @@ async function agregarAlCarrito(producto) {
 .cabecera-panel h4 { margin: 0; font-weight: 700; font-size: 1rem; }
 .btn-ocultar-panel {
   background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--radio-full);
+  transition: background var(--trans-normal), transform var(--trans-rapida);
 }
+.btn-ocultar-panel:hover { background: rgba(255,255,255,0.18); }
+.btn-ocultar-panel:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255,255,255,0.4); }
+.btn-ocultar-panel:active { transform: scale(0.9); }
 
 .lista-items-panel {
   max-height: 200px;
@@ -550,17 +723,24 @@ async function agregarAlCarrito(producto) {
 .control-cantidad-mini {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
+  gap: 2px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-sm);
   padding: 2px;
 }
 .btn-mini-cant {
-  background: none; border: none; color: white; cursor: pointer; font-weight: bold; padding: 0 4px;
+  background: none; border: none; color: var(--texto-principal); cursor: pointer;
+  font-weight: bold; font-size: 0.95rem; line-height: 1;
+  width: 20px; height: 20px; border-radius: var(--radio-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--trans-rapida), color var(--trans-rapida);
 }
-.cant-panel { font-weight: 800; color: var(--morado-brillante); min-width: 15px; text-align: center; }
+.btn-mini-cant:hover { background: rgba(168,85,247,0.3); color: #fff; }
+.btn-mini-cant:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.cant-panel { font-weight: 800; color: var(--morado-hover); min-width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 .nom-panel { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
-.prec-panel { font-weight: 700; }
+.prec-panel { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .pie-panel {
   padding: 12px 16px;
@@ -569,14 +749,17 @@ async function agregarAlCarrito(producto) {
   justify-content: space-between;
   align-items: center;
 }
-.total-panel { font-size: 0.9rem; color: var(--texto-secundario); }
+.total-panel { font-size: 0.9rem; color: var(--texto-secundario); font-variant-numeric: tabular-nums; }
 .total-panel strong { font-size: 1.1rem; color: var(--texto-principal); }
 
 .btn-ir-pagar {
-  background: var(--morado-brillante);
-  color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700;
-  cursor: pointer; transition: transform 0.2s;
+  background: var(--gradiente-marca);
+  color: white; border: none; padding: 9px 18px; border-radius: var(--radio-full); font-weight: 700;
+  cursor: pointer; box-shadow: var(--glow-morado);
+  transition: box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
+.btn-ir-pagar:hover { box-shadow: var(--glow-rosa); }
+.btn-ir-pagar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-ir-pagar:active { transform: scale(0.95); }
 
 /* Botón Reabrir */
@@ -584,19 +767,41 @@ async function agregarAlCarrito(producto) {
   position: fixed;
   bottom: 80px;
   right: 20px;
-  background: var(--morado-brillante);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gradiente-marca);
   color: white;
   border: none;
   padding: 12px 20px;
-  border-radius: 30px;
+  border-radius: var(--radio-full);
   font-weight: 700;
   font-size: 1rem;
-  box-shadow: 0 5px 15px rgba(157,78,221,0.4);
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--glow-morado);
   z-index: 100000;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
-.btn-reabrir-carrito:active { transform: scale(0.95); }
+.btn-reabrir-carrito:hover { box-shadow: var(--glow-rosa); transform: translateY(-2px); }
+.btn-reabrir-carrito:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-reabrir-carrito:active { transform: scale(0.96); }
+
+/* Respeta la preferencia de menos movimiento: sin desplazamientos ni zoom en hover */
+@media (prefers-reduced-motion: reduce) {
+  .destacado-card,
+  .tarjeta-producto,
+  .destacado-img img,
+  .imagen-box img,
+  .btn-reabrir-carrito {
+    transition: none;
+  }
+  .destacado-card:hover,
+  .tarjeta-producto:hover { transform: none; }
+  .destacado-card:hover .destacado-img img,
+  .tarjeta-producto:hover .imagen-box img { transform: none; }
+  .btn-reabrir-carrito:hover { transform: none; }
+}
 
 /* Tablet: mantiene la retícula fluida y evita que las tarjetas queden demasiado anchas */
 @media (min-width: 481px) and (max-width: 1024px) {

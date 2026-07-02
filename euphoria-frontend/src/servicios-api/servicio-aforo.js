@@ -14,9 +14,11 @@ export const servicioAforo = {
     return api.get(`/aforo/evento/${idEvento}`)
   },
 
-  /** Validar el ingreso escaneando el QR (token firmado) o un código manual */
-  async validar({ token, codigo }) {
-    return api.post('/aforo/validar', { token, codigo })
+  /** Validar/consultar el ingreso. { token|codigo, consultar?, cantidad? }
+   *  consultar:true → solo devuelve el estado (cupos) sin admitir a nadie.
+   *  cantidad → personas que ingresan en esta tanda (QR multi-uso). */
+  async validar({ token, codigo, consultar, cantidad }) {
+    return api.post('/aforo/validar', { token, codigo, consultar, cantidad })
   },
 
   /** Registrar la salida (libera aforo) */

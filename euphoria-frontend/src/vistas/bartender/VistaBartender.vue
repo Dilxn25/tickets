@@ -3,10 +3,11 @@
     <!-- Header: Estadísticas rápidas -->
     <header class="bartender-header">
       <div class="header-left">
-        <h1 class="header-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg> Euphoria Bar Station</h1>
-        
+        <h1 class="header-titulo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg> Euphoria bar station</h1>
+        <p class="header-sub">Prepara y despacha los pedidos de la barra en tiempo real.</p>
+
         <nav class="bartender-tabs">
-          <button :class="{ activo: pestana === 'pendientes' }" @click="cambiarPestana('pendientes')">En Cola</button>
+          <button :class="{ activo: pestana === 'pendientes' }" @click="cambiarPestana('pendientes')">En cola</button>
           <button :class="{ activo: pestana === 'historial' }" @click="cambiarPestana('historial')">Historial</button>
         </nav>
       </div>
@@ -20,7 +21,7 @@
           <span class="stat-numero">{{ comandasEnPreparacion }}</span>
           <span class="stat-etiq">En preparación</span>
         </div>
-        <button class="btn-refresh" @click="cargarComandas(true)" :class="{'girar': cargando}">
+        <button class="btn-refresh hover-crecer" @click="cargarComandas(true)" :class="{'girar': cargando}" title="Actualizar lista" aria-label="Actualizar lista de pedidos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
         </button>
       </div>
@@ -33,18 +34,25 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           {{ errorCarga }}
         </div>
-        <div v-if="cargando && primerCarga && comandas.length === 0" class="mensaje-vacio">
-          Cargando pedidos...
+        <div v-if="cargando && primerCarga && comandas.length === 0" class="skeleton-grid" aria-hidden="true">
+          <div class="comanda-skeleton" v-for="n in 3" :key="n">
+            <div class="sk-line sk-titulo"></div>
+            <div class="sk-bloque"></div>
+            <div class="sk-line sk-corta"></div>
+            <div class="sk-line"></div>
+            <div class="sk-line"></div>
+            <div class="sk-boton"></div>
+          </div>
         </div>
-        
-        <div v-else-if="comandas.length === 0" class="mensaje-vacio fade-in">
+
+        <div v-else-if="comandas.length === 0" class="mensaje-vacio aparecer-subir">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" width="60" height="60" style="margin-bottom:10px; stroke: var(--color-exito);"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           <h3>No hay pedidos pendientes</h3>
-          <p>¡Buen trabajo! La barra está al día.</p>
+          <p>Buen trabajo. La barra está al día.</p>
         </div>
 
         <!-- Lista de Comandas (Tarjetas) -->
-        <div v-else class="comandas-grid">
+        <div v-else class="comandas-grid escalonar">
           <transition-group name="list">
             <div v-for="comanda in comandas" :key="comanda.id_comanda" class="comanda-card">
               
@@ -52,7 +60,7 @@
                 <div class="comanda-id">Orden #{{ comanda.id_comanda }}</div>
                 <div class="comanda-tiempo" :class="{'tiempo-critico': minutosTranscurridos(comanda.fecha_registro) > 10}">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  Hace {{ minutosTranscurridos(comanda.fecha_registro) }} min
+                  Hace <span class="tiempo-num">{{ minutosTranscurridos(comanda.fecha_registro) }}</span> min
                 </div>
               </div>
 
@@ -98,15 +106,15 @@
                   <span v-if="procesandoId === comanda.id_comanda">Procesando...</span>
                   <span v-else>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Empezar a Preparar
+                    Empezar a preparar
                   </span>
                 </button>
 
-                <button v-if="comanda.estado_despacho === 'Preparando'" class="btn-completar" @click="cambiarEstado(comanda.id_comanda, 'Listo')" :disabled="procesandoId === comanda.id_comanda">
+                <button v-if="comanda.estado_despacho === 'Preparando'" class="btn-completar brillo-hover" @click="cambiarEstado(comanda.id_comanda, 'Listo')" :disabled="procesandoId === comanda.id_comanda">
                   <span v-if="procesandoId === comanda.id_comanda">Procesando...</span>
                   <span v-else>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    Marcar como Listo
+                    Marcar como listo
                   </span>
                 </button>
               </div>
@@ -129,16 +137,22 @@
           </div>
         </div>
 
-        <div v-if="cargandoHistorial" class="mensaje-vacio">
-          Buscando historial de fecha seleccionada...
+        <div v-if="cargandoHistorial" class="skeleton-grid" aria-hidden="true">
+          <div class="comanda-skeleton" v-for="n in 3" :key="n">
+            <div class="sk-line sk-titulo"></div>
+            <div class="sk-bloque"></div>
+            <div class="sk-line sk-corta"></div>
+            <div class="sk-line"></div>
+          </div>
         </div>
-        
-        <div v-else-if="historial.length === 0" class="mensaje-vacio">
+
+        <div v-else-if="historial.length === 0" class="mensaje-vacio aparecer-subir">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" width="56" height="56" style="margin-bottom:10px; stroke: var(--morado-hover);"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           <h3>Aún no hay pedidos en esta fecha</h3>
           <p>Los pedidos que se prepararon aparecerán aquí.</p>
         </div>
-        
-        <div v-else class="historial-grid">
+
+        <div v-else class="historial-grid escalonar">
           <transition-group name="list">
             <div v-for="comanda in historial" :key="comanda.id_comanda" class="historial-card">
               
@@ -337,7 +351,7 @@ onUnmounted(() => {
 
 <style scoped>
 .bartender-container {
-  padding: 20px;
+  padding: var(--esp-5);
   max-width: 1200px;
   margin: 0 auto;
   min-height: calc(100vh - 60px);
@@ -348,71 +362,97 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 30px;
-  border-bottom: 2px solid rgba(255,255,255,0.05);
-  padding-bottom: 15px;
+  margin-bottom: var(--esp-6);
+  border-bottom: 1px solid var(--borde-sutil);
+  padding-bottom: var(--esp-4);
 }
 
 .header-titulo {
-  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.6rem, 3vw, 2.15rem);
   font-weight: 800;
-  margin: 0 0 5px 0;
-  background: linear-gradient(90deg, var(--rosa-acento), var(--morado-medio));
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-wrap: balance;
+  margin: 0 0 var(--esp-2) 0;
+  background: var(--gradiente-marca);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
+  color: transparent;
 }
+.header-titulo svg { color: var(--morado-hover); -webkit-text-fill-color: initial; flex-shrink: 0; }
 
 .header-sub {
   color: var(--texto-secundario);
-  margin: 0;
-  font-size: 0.95rem;
+  margin: 0 0 var(--esp-4) 0;
+  font-size: 0.92rem;
+  max-width: 52ch;
+  text-wrap: pretty;
 }
 
 .stats-panel {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: var(--esp-3);
 }
 
 .stat-card {
-  background: rgba(114, 9, 183, 0.1);
-  border: 1px solid rgba(114, 9, 183, 0.3);
-  padding: 10px 20px;
-  border-radius: 12px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  padding: var(--esp-3) var(--esp-5);
+  border-radius: var(--radio-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: var(--trans-normal);
 }
+.stat-card:hover { border-color: var(--borde-activo); }
 
 .stat-numero {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--rosa-acento);
+  font-family: var(--fuente-titulo);
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--rosa-suave);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-etiq {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--texto-secundario);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
 }
 
 .btn-refresh {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: white;
-  width: 45px;
-  height: 45px;
-  border-radius: 12px;
+  background: rgba(168,85,247,0.1);
+  border: 1px solid var(--borde-sutil);
+  color: var(--texto-principal);
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radio-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s;
+  transition: var(--trans-normal);
 }
 
 .btn-refresh:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.2);
+  border-color: var(--borde-activo);
+  color: var(--morado-hover);
+}
+.btn-refresh:active { transform: scale(0.94); }
+.btn-refresh:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+  border-color: var(--borde-activo);
 }
 
 .girar svg {
@@ -425,30 +465,40 @@ onUnmounted(() => {
 }
 
 .mensaje-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 60px 20px;
+  padding: 72px 24px 60px;
   color: var(--texto-secundario);
-  background: rgba(255,255,255,0.02);
-  border-radius: 20px;
-  border: 1px dashed rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.03);
+  border-radius: var(--radio-xl);
+  border: 1px dashed var(--borde-sutil);
 }
 
 .mensaje-vacio h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 10px;
+  font-family: var(--fuente-titulo);
+  color: var(--texto-principal);
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--esp-2);
+}
+.mensaje-vacio p {
+  margin: 0;
+  max-width: 42ch;
+  text-wrap: pretty;
 }
 
 .aviso-error {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
   color: var(--color-error);
-  background: rgba(239, 71, 111, 0.1);
-  border: 1px solid rgba(239, 71, 111, 0.25);
-  padding: 12px 16px;
-  border-radius: 12px;
-  margin-bottom: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: var(--esp-3) var(--esp-4);
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-5);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -456,62 +506,69 @@ onUnmounted(() => {
 .comandas-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
-  gap: 20px;
+  gap: var(--esp-5);
 }
 
 .comanda-card {
-  background: var(--fondo-tarjeta);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 16px;
-  padding: 20px;
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: var(--esp-5);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: var(--sombra-tarjeta);
+  transition: transform var(--trans-normal), box-shadow var(--trans-normal), border-color var(--trans-normal);
 }
 
 .comanda-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 40px rgba(114, 9, 183, 0.15);
-  border-color: rgba(114, 9, 183, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.45), var(--sombra-glow);
+  border-color: var(--borde-activo);
 }
 
 .comanda-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: var(--esp-4);
+  padding-bottom: var(--esp-4);
+  border-bottom: 1px solid var(--borde-sutil);
 }
 
 .comanda-id {
+  font-family: var(--fuente-titulo);
   font-weight: 800;
   font-size: 1.2rem;
-  color: white;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
 
 .comanda-tiempo {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--texto-secundario);
-  background: rgba(255,255,255,0.05);
+  background: rgba(168,85,247,0.1);
+  border: 1px solid var(--borde-sutil);
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: var(--radio-full);
+  transition: color var(--trans-normal), background var(--trans-normal), border-color var(--trans-normal);
 }
+.tiempo-num { font-variant-numeric: tabular-nums; font-weight: 700; }
 
 .tiempo-critico {
   color: var(--color-error);
-  background: rgba(239, 71, 111, 0.1);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .comanda-destino {
-  background: rgba(0,0,0,0.2);
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 15px;
+  background: rgba(14,8,33,0.4);
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-4);
 }
 
 .destino-row {
@@ -530,29 +587,31 @@ onUnmounted(() => {
 }
 
 .destino-val {
-  color: white;
+  color: var(--texto-principal);
   text-align: right;
 }
 
 .mesa-badge {
-  background: var(--rosa-acento);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  background: var(--gradiente-marca);
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: var(--radio-full);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .comanda-productos {
   flex-grow: 1;
-  margin-bottom: 20px;
+  margin-bottom: var(--esp-5);
 }
 
 .prod-titulo {
-  font-size: 0.9rem;
+  font-size: 0.72rem;
   color: var(--texto-secundario);
-  margin-bottom: 10px;
+  margin-bottom: var(--esp-3);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
 }
 
 .prod-lista {
@@ -564,27 +623,35 @@ onUnmounted(() => {
 .prod-lista li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
-  padding: 8px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-2);
+  padding: var(--esp-2) var(--esp-3);
+  background: rgba(168,85,247,0.06);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
+  transition: background var(--trans-normal), border-color var(--trans-normal);
+}
+.prod-lista li:last-child { margin-bottom: 0; }
+.prod-lista li:hover {
+  background: rgba(168,85,247,0.12);
+  border-color: var(--borde-activo);
 }
 
 .prod-cant {
-  background: var(--morado-medio);
-  color: white;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: var(--gradiente-marca);
+  color: #fff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radio-sm);
   font-size: 0.9rem;
-  min-width: 30px;
+  min-width: 32px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .prod-nombre {
   font-size: 1rem;
-  color: white;
+  color: var(--texto-principal);
   line-height: 1.3;
 }
 
@@ -594,46 +661,66 @@ onUnmounted(() => {
 
 .btn-preparar {
   width: 100%;
-  background: var(--color-alerta);
-  color: #000;
-  border: none;
-  padding: 12px;
-  border-radius: 8px;
-  font-weight: 800;
+  background: rgba(245, 158, 11, 0.16);
+  color: var(--color-alerta);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--trans-normal);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--esp-2);
 }
 
 .btn-preparar:hover:not(:disabled) {
-  background: #e6a500;
-  transform: scale(1.02);
+  background: var(--color-alerta);
+  color: #1A0F3D;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
 }
+.btn-preparar:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.25);
+}
+.btn-preparar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+}
+.btn-preparar:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .btn-completar {
   width: 100%;
-  background: var(--color-exito);
-  color: #000;
+  background: var(--gradiente-marca);
+  color: #fff;
   border: none;
-  padding: 12px;
-  border-radius: 8px;
-  font-weight: 800;
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--trans-normal);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--esp-2);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.3);
 }
 
 .btn-completar:hover:not(:disabled) {
-  background: #05b586;
-  transform: scale(1.02);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45), var(--glow-morado);
+}
+.btn-completar:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 4px 14px rgba(236, 72, 153, 0.35);
+}
+.btn-completar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.4), var(--glow-morado);
 }
 
 .btn-completar:disabled {
@@ -753,67 +840,82 @@ onUnmounted(() => {
 /* Pestañas */
 .bartender-tabs {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: var(--esp-2);
+  margin-top: var(--esp-1);
 }
 .bartender-tabs button {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.08);
+  border: 1px solid var(--borde-sutil);
   color: var(--texto-secundario);
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: var(--esp-2) var(--esp-4);
+  border-radius: var(--radio-md);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: var(--trans-normal);
   font-weight: 600;
 }
 .bartender-tabs button:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.16);
+  color: var(--texto-principal);
+}
+.bartender-tabs button:active { transform: scale(0.97); }
+.bartender-tabs button:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
 }
 .bartender-tabs button.activo {
-  background: var(--morado-medio);
-  color: white;
-  border-color: var(--morado-medio);
+  background: var(--gradiente-marca);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
 }
 
 /* Filtros de Fecha Historial */
 .filtros-historial {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-5);
   align-items: center;
 }
 .btn-filtro {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.08);
+  border: 1px solid var(--borde-sutil);
   color: var(--texto-secundario);
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: var(--esp-3) var(--esp-5);
+  border-radius: var(--radio-md);
   cursor: pointer;
-  transition: all 0.3s;
-  font-weight: bold;
+  transition: var(--trans-normal);
+  font-weight: 600;
 }
 .btn-filtro:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(168,85,247,0.16);
+  color: var(--texto-principal);
+}
+.btn-filtro:active { transform: scale(0.97); }
+.btn-filtro:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
 }
 .btn-filtro.activo {
-  background: linear-gradient(90deg, var(--rosa-acento), var(--morado-medio));
-  color: white;
+  background: var(--gradiente-marca);
+  color: #fff;
   border: none;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
 }
 
 .date-picker-container {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  padding: 8px 15px;
-  border-radius: 8px;
-  transition: all 0.3s;
+  gap: var(--esp-3);
+  background: rgba(168,85,247,0.08);
+  border: 1px solid var(--borde-sutil);
+  padding: var(--esp-2) var(--esp-4);
+  border-radius: var(--radio-md);
+  transition: var(--trans-normal);
 }
-.date-picker-container.activo {
-  border-color: var(--rosa-acento);
-  box-shadow: 0 0 10px rgba(247, 37, 133, 0.3);
+.date-picker-container.activo,
+.date-picker-container:focus-within {
+  border-color: var(--borde-activo);
+  box-shadow: var(--sombra-glow);
 }
 .date-picker-container svg {
   color: var(--texto-secundario);
@@ -824,7 +926,7 @@ onUnmounted(() => {
 .date-picker {
   background: transparent;
   border: none;
-  color: white;
+  color: var(--texto-principal);
   font-family: inherit;
   font-size: 1rem;
   outline: none;
@@ -843,39 +945,41 @@ onUnmounted(() => {
 .historial-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
-  gap: 20px;
+  gap: var(--esp-5);
 }
 
 .historial-card {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 16px;
-  padding: 20px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: var(--esp-5);
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: var(--trans-normal);
 }
 .historial-card:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255,255,255,0.1);
+  border-color: var(--borde-activo);
   transform: translateY(-3px);
+  box-shadow: var(--sombra-tarjeta);
 }
 
 .hist-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  padding-bottom: 12px;
-  margin-bottom: 15px;
+  border-bottom: 1px solid var(--borde-sutil);
+  padding-bottom: var(--esp-3);
+  margin-bottom: var(--esp-4);
 }
 .hist-orden {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
+  font-family: var(--fuente-titulo);
   font-size: 1.1rem;
   font-weight: 800;
-  color: white;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
 .hist-orden svg {
   width: 18px; height: 18px;
@@ -884,88 +988,148 @@ onUnmounted(() => {
 .hist-estado {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--esp-1);
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: bold;
+  border-radius: var(--radio-full);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 .hist-estado svg {
   width: 14px; height: 14px;
 }
 .est-completada {
-  background: rgba(6, 214, 160, 0.1);
+  background: rgba(34, 197, 94, 0.12);
   color: var(--color-exito);
-  border: 1px solid rgba(6, 214, 160, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
 .est-listo {
-  background: rgba(247, 37, 133, 0.1);
-  color: var(--rosa-acento);
-  border: 1px solid rgba(247, 37, 133, 0.2);
+  background: rgba(236, 72, 153, 0.12);
+  color: var(--rosa-suave);
+  border: 1px solid rgba(236, 72, 153, 0.25);
 }
 .est-cancelada {
-  background: rgba(239, 71, 111, 0.1);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--color-error);
-  border: 1px solid rgba(239, 71, 111, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .hist-info {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 20px;
-  background: rgba(0,0,0,0.2);
-  padding: 12px;
-  border-radius: 8px;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-5);
+  background: rgba(14,8,33,0.4);
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
 }
 .info-bloque {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--esp-1);
 }
 .info-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--texto-secundario);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
 }
 .info-valor {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: white;
+  gap: var(--esp-1);
+  color: var(--texto-principal);
   font-size: 0.9rem;
 }
 .info-valor svg {
   width: 14px; height: 14px;
-  color: var(--rosa-acento);
+  color: var(--rosa-suave);
 }
 
 .hist-prods {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--esp-2);
 }
 .hist-prod-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(255,255,255,0.03);
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: var(--esp-3);
+  background: rgba(168,85,247,0.06);
+  border: 1px solid var(--borde-sutil);
+  padding: var(--esp-2) var(--esp-3);
+  border-radius: var(--radio-md);
 }
 .hp-cant {
-  background: var(--morado-medio);
-  color: white;
-  font-weight: 800;
-  font-size: 0.85rem;
+  background: var(--gradiente-marca);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
   padding: 2px 8px;
-  border-radius: 4px;
-  min-width: 25px;
+  border-radius: var(--radio-sm);
+  min-width: 26px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .hp-nom {
-  color: white;
+  color: var(--texto-principal);
   font-size: 0.95rem;
+}
+
+/* Skeletons de carga (misma forma que las tarjetas) */
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: var(--esp-5);
+}
+.comanda-skeleton {
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: var(--esp-5);
+  box-shadow: var(--sombra-tarjeta);
+}
+.sk-line,
+.sk-bloque,
+.sk-boton {
+  background: linear-gradient(90deg,
+    rgba(168,85,247,0.08) 25%,
+    rgba(168,85,247,0.18) 37%,
+    rgba(168,85,247,0.08) 63%);
+  background-size: 400% 100%;
+  border-radius: var(--radio-sm);
+  animation: skShimmer 1.4s ease infinite;
+}
+.sk-line { height: 12px; margin-bottom: var(--esp-3); }
+.sk-titulo { height: 20px; width: 45%; margin-bottom: var(--esp-4); }
+.sk-corta { width: 60%; }
+.sk-bloque { height: 56px; border-radius: var(--radio-md); margin-bottom: var(--esp-4); }
+.sk-boton { height: 44px; border-radius: var(--radio-md); margin-top: var(--esp-4); }
+
+@keyframes skShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Respeto por usuarios con movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  .comanda-card,
+  .historial-card,
+  .btn-preparar,
+  .btn-completar,
+  .btn-refresh,
+  .bartender-tabs button,
+  .btn-filtro {
+    transition: none;
+  }
+  .comanda-card:hover,
+  .historial-card:hover,
+  .btn-preparar:hover:not(:disabled),
+  .btn-completar:hover:not(:disabled) {
+    transform: none;
+  }
+  .girar svg { animation: none; }
+  .sk-line, .sk-bloque, .sk-boton { animation: none; }
+  .list-enter-active, .list-leave-active { transition: none; }
 }
 </style>

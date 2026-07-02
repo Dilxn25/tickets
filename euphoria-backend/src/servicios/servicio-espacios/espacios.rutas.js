@@ -30,7 +30,7 @@ router.get('/eventos/:idEvento/zonas', async (req, res) => {
 // POST /api/espacios/zonas — crear zona (Admin)
 router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
   try {
-    const { id_evento, nombre_zona, capacidad_maxima, precio_entrada_base, proporcion } = req.body
+    const { id_evento, nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general } = req.body
     if (!id_evento || !nombre_zona) {
       return res.status(400).json({ error: 'Evento y nombre de zona son requeridos' })
     }
@@ -41,6 +41,7 @@ router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
         capacidad_maxima: Number(capacidad_maxima) || 0,
         precio_entrada_base: Number(precio_entrada_base) || 0,
         proporcion: proporcion != null ? Number(proporcion) : null,
+        es_general: !!es_general,
       },
     })
     res.status(201).json(zona)
@@ -54,7 +55,7 @@ router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
 router.put('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
   try {
     const id_zona = Number(req.params.id)
-    const { nombre_zona, capacidad_maxima, precio_entrada_base, proporcion } = req.body
+    const { nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general } = req.body
     const zona = await prisma.zona.update({
       where: { id_zona },
       data: {
@@ -62,6 +63,7 @@ router.put('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
         ...(capacidad_maxima !== undefined && { capacidad_maxima: Number(capacidad_maxima) }),
         ...(precio_entrada_base !== undefined && { precio_entrada_base: Number(precio_entrada_base) }),
         ...(proporcion !== undefined && { proporcion: proporcion == null ? null : Number(proporcion) }),
+        ...(es_general !== undefined && { es_general: !!es_general }),
       },
     })
     res.json(zona)

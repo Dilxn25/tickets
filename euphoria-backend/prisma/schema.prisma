@@ -112,7 +112,8 @@ model entrada {
   id_mesa           Int?
   qr_acceso         String           @unique(map: "ENTRADA_qr_acceso_key") @db.VarChar(255)
   codigo_ingreso    String?          @unique @db.VarChar(50)
-  cantidad_personas Int              @default(1)
+  cantidad_personas  Int             @default(1)
+  cantidad_ingresada Int             @default(0)
   monto_pagado      Decimal?         @db.Decimal(10, 2)
   estado_validacion Boolean          @default(false)
   fecha_reserva     DateTime         @default(now())
@@ -134,6 +135,7 @@ model evento {
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime?
   estado            String    @db.VarChar(20)
+  aforo_total       Int?
   zona              zona[]
 }
 
@@ -272,6 +274,7 @@ model zona {
   capacidad_maxima    Int
   precio_entrada_base Decimal          @db.Decimal(10, 2)
   proporcion          Float?
+  es_general          Boolean          @default(false)
   entrada             entrada[]
   mesa_espacio        mesa_espacio[]
   registro_aforo      registro_aforo[]

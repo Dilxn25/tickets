@@ -2,11 +2,11 @@
   <div class="vista-ventas fade-in">
     <div class="vista-cabecera">
       <div>
-        <h2 class="vista-titulo">Gestión de Ventas</h2>
+        <h2 class="vista-titulo">Gestión de ventas</h2>
         <p class="vista-subtitulo">Monitorea todas las comandas, transacciones y comprobantes de pago</p>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <span v-if="actualizando" style="font-size: 0.85rem; color: var(--texto-secundario);">Actualizando...</span>
+      <div class="cabecera-acciones">
+        <span v-if="actualizando" class="indicador-actualizando"><span class="punto-vivo"></span>Actualizando</span>
         <button v-if="ventaSeleccionada" class="btn btn-secundario" @click="ventaSeleccionada = null">Cerrar</button>
       </div>
     </div>
@@ -27,14 +27,20 @@
       </div>
 
       <div class="tarjeta tabla-wrapper">
-        <div v-if="cargando" style="padding: 2rem; text-align: center; color: var(--texto-secundario);">
-          Cargando ventas...
+        <div v-if="cargando" class="estado-carga">
+          <div class="fila-esqueleto" v-for="n in 6" :key="n">
+            <span class="esqueleto" style="width: 12%"></span>
+            <span class="esqueleto" style="width: 22%"></span>
+            <span class="esqueleto" style="width: 18%"></span>
+            <span class="esqueleto" style="width: 14%"></span>
+            <span class="esqueleto" style="width: 16%"></span>
+          </div>
         </div>
-        <table v-else class="tabla">
+        <table v-else class="tabla responsiva">
           <thead><tr>
             <th>ID</th>
             <th>Cliente</th>
-            <th>Atendido Por</th>
+            <th>Atendido por</th>
             <th>Monto</th>
             <th>Pago</th>
             <th>Estado</th>
@@ -43,17 +49,26 @@
           </tr></thead>
           <tbody>
             <tr v-if="!ventasFiltradas.length">
-              <td colspan="8" class="celda-vacia">Sin resultados</td>
+              <td colspan="8" class="celda-vacia">
+                <div class="estado-vacio">
+                  <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 3h18v4H3zM5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"></path>
+                    <path d="M9 12h6"></path>
+                  </svg>
+                  <p class="estado-vacio-titulo">Sin ventas por aquí</p>
+                  <span class="estado-vacio-texto">Ajusta los filtros o espera nuevas comandas.</span>
+                </div>
+              </td>
             </tr>
             <tr v-for="venta in ventasFiltradas" :key="venta.id_comanda" class="fila-tabla">
-              <td class="texto-fuerte">#{{ venta.id_comanda }}</td>
-              <td class="texto-sec">{{ venta.cliente_nombre }}</td>
-              <td class="texto-sec">{{ venta.mesero_nombre }}</td>
-              <td><span class="badge badge-exito">Bs. {{ venta.monto_total.toFixed(2) }}</span></td>
-              <td><span class="badge" :class="getBadgeClasePago(venta.metodo_pago)">{{ venta.metodo_pago }}</span></td>
-              <td><span class="badge" :class="getBadgeClaseEstado(venta.estado)">{{ venta.estado }}</span></td>
-              <td class="texto-sec">{{ formatearFecha(venta.fecha_comanda) }}</td>
-              <td>
+              <td class="texto-fuerte sin-label">#{{ venta.id_comanda }}</td>
+              <td class="texto-sec" data-label="Cliente">{{ venta.cliente_nombre }}</td>
+              <td class="texto-sec" data-label="Atendido por">{{ venta.mesero_nombre }}</td>
+              <td data-label="Monto"><span class="badge badge-exito">Bs. {{ venta.monto_total.toFixed(2) }}</span></td>
+              <td data-label="Pago"><span class="badge" :class="getBadgeClasePago(venta.metodo_pago)">{{ venta.metodo_pago }}</span></td>
+              <td data-label="Estado"><span class="badge" :class="getBadgeClaseEstado(venta.estado)">{{ venta.estado }}</span></td>
+              <td class="texto-sec" data-label="Fecha">{{ formatearFecha(venta.fecha_comanda) }}</td>
+              <td class="sin-label">
                 <div class="acciones">
                   <button class="btn btn-sm btn-primario" @click="abrirDetalle(venta)">Ver</button>
                 </div>
@@ -86,7 +101,7 @@
         <div class="detalle-grid">
           <!-- Información de la Comanda -->
           <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Información de Comanda</h4>
+            <h4 class="seccion-titulo">Información de comanda</h4>
             <div class="campo-detalle">
               <span class="etiqueta">ID Comanda:</span>
               <span class="valor código">#{{ ventaSeleccionada.id_comanda }}</span>
@@ -116,7 +131,7 @@
 
           <!-- Información del Mesero -->
           <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Atendido Por (Mesero/Personal)</h4>
+            <h4 class="seccion-titulo">Atendido por (mesero/personal)</h4>
             <div class="campo-detalle">
               <span class="etiqueta">Nombre:</span>
               <span class="valor">{{ ventaSeleccionada.mesero_nombre }}</span>
@@ -129,7 +144,7 @@
 
           <!-- Información del Pago -->
           <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Detalles del Pago</h4>
+            <h4 class="seccion-titulo">Detalles del pago</h4>
             <div class="campo-detalle">
               <span class="etiqueta">Método:</span>
               <span class="valor badge" :class="getBadgeClasePago(ventaSeleccionada.metodo_pago)">
@@ -157,9 +172,9 @@
           <table class="tabla-detalles">
             <thead><tr>
               <th>Producto</th>
-              <th>Cantidad</th>
-              <th>Precio Unitario</th>
-              <th>Subtotal</th>
+              <th class="centro">Cantidad</th>
+              <th class="derecha">Precio unitario</th>
+              <th class="derecha">Subtotal</th>
             </tr></thead>
             <tbody>
               <tr v-for="prod in ventaSeleccionada.productos_detalles" :key="prod.id_producto_comanda">
@@ -174,7 +189,7 @@
 
         <!-- Comprobante de Pago -->
         <div v-if="ventaSeleccionada.url_comprobante" class="detalle-seccion">
-          <h4 class="seccion-titulo">Comprobante de Pago</h4>
+          <h4 class="seccion-titulo">Comprobante de pago</h4>
           <div class="comprobante-container">
             <img v-if="esImagen(ventaSeleccionada.url_comprobante)" 
                  :src="ventaSeleccionada.url_comprobante" 
@@ -195,7 +210,7 @@
 
         <!-- Detalles de la Transacción -->
         <div v-if="ventaSeleccionada.bancarizacion" class="detalle-seccion">
-          <h4 class="seccion-titulo">Transacción Bancaria</h4>
+          <h4 class="seccion-titulo">Transacción bancaria</h4>
           <div class="campo-detalle">
             <span class="etiqueta">ID Bancarización:</span>
             <span class="valor código">{{ ventaSeleccionada.bancarizacion }}</span>
@@ -210,10 +225,10 @@
         <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
           <button class="btn btn-secundario" @click="ventaSeleccionada = null">Volver</button>
           <button v-if="ventaSeleccionada.estado === 'Pendiente'" class="btn btn-exito" @click="marcarCompletada" :disabled="cambiandoEstado">
-            Marcar Completada
+            Marcar completada
           </button>
           <button v-if="ventaSeleccionada.estado !== 'Cancelada'" class="btn btn-peligro" @click="cancelarVenta" :disabled="cambiandoEstado">
-            Cancelar Venta
+            Cancelar venta
           </button>
         </div>
       </div>
@@ -425,7 +440,7 @@ async function cancelarVenta() {
 
 <style scoped>
 .vista-ventas {
-  padding: 2rem;
+  padding: var(--esp-6);
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -434,50 +449,94 @@ async function cancelarVenta() {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-6);
+  flex-wrap: wrap;
 }
 
 .vista-titulo {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-family: var(--fuente-titulo);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--texto-principal);
   margin: 0;
 }
 
 .vista-subtitulo {
   color: var(--texto-secundario);
-  margin: 0.5rem 0 0 0;
-  font-size: 0.95rem;
+  margin: 6px 0 0 0;
+  font-size: 0.9rem;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.cabecera-acciones {
+  display: flex;
+  gap: var(--esp-3);
+  align-items: center;
+}
+
+.indicador-actualizando {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--morado-hover);
+  padding: 5px 12px;
+  border-radius: var(--radio-full);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--borde-sutil);
+}
+
+.punto-vivo {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radio-full);
+  background: var(--morado-hover);
+  box-shadow: 0 0 8px rgba(192, 132, 252, 0.8);
+  animation: latido 1.4s ease-in-out infinite;
+}
+
+@keyframes latido {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
 }
 
 .filtros-barra {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-5);
   flex-wrap: wrap;
 }
 
+/* Campos con la estética global (tema oscuro) */
 .campo {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--borde-claro);
+  padding: 12px 16px;
+  border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-md);
-  font-size: 0.95rem;
-  font-family: inherit;
-  background: var(--fondo-tarjeta);
+  font-size: 0.9rem;
+  font-family: var(--fuente-principal);
+  background: var(--fondo-input);
   color: var(--texto-principal);
+  transition: var(--trans-rapida);
 }
+
+.campo::placeholder { color: var(--texto-desactivado); }
 
 .campo:focus {
   outline: none;
-  border-color: var(--color-primario);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco);
 }
 
+/* Superficie de tarjeta / tabla */
 .tarjeta {
-  background: var(--fondo-tarjeta);
+  background: var(--gradiente-sutil);
   border-radius: var(--radio-lg);
-  border: 1px solid var(--borde-claro);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid var(--borde-sutil);
+  box-shadow: 0 4px 24px rgba(26, 15, 61, 0.45);
 }
 
 .tabla-wrapper {
@@ -492,131 +551,232 @@ async function cancelarVenta() {
 }
 
 .tabla th {
-  background: var(--fondo-hover);
-  padding: 1rem;
+  background: rgba(168, 85, 247, 0.08);
+  padding: 15px 16px;
   text-align: left;
   font-weight: 600;
-  color: var(--texto-principal);
-  border-bottom: 2px solid var(--borde-claro);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--texto-secundario);
+  border-bottom: 1px solid var(--borde-sutil);
 }
 
 .tabla td {
-  padding: 1rem;
-  border-bottom: 1px solid var(--borde-claro);
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--borde-sutil);
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
 
+.tabla tbody tr:last-child td { border-bottom: none; }
+
+.fila-tabla {
+  transition: background var(--trans-rapida), box-shadow var(--trans-rapida);
+}
 .fila-tabla:hover {
-  background: var(--fondo-hover);
+  background: rgba(168, 85, 247, 0.09);
+  box-shadow: inset 3px 0 0 var(--morado-brillante);
 }
 
 .celda-vacia {
   text-align: center;
-  color: var(--texto-secundario);
-  padding: 2rem !important;
+  color: var(--texto-desactivado);
+  padding: var(--esp-7) !important;
 }
 
+.estado-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.estado-vacio svg { color: var(--morado-claro); opacity: 0.85; margin-bottom: var(--esp-2); }
+
+.estado-vacio-titulo {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--texto-principal);
+}
+
+.estado-vacio-texto {
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+}
+
+/* Esqueleto de carga (respeta la forma final de la tabla) */
+.estado-carga {
+  padding: var(--esp-3) var(--esp-4);
+}
+
+.fila-esqueleto {
+  display: flex;
+  gap: var(--esp-5);
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.fila-esqueleto:last-child { border-bottom: none; }
+
+.esqueleto {
+  height: 12px;
+  border-radius: var(--radio-full);
+  background: linear-gradient(
+    90deg,
+    rgba(168, 85, 247, 0.08) 25%,
+    rgba(168, 85, 247, 0.2) 50%,
+    rgba(168, 85, 247, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: brillar 1.4s ease-in-out infinite;
+}
+
+@keyframes brillar {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Badges tematizados (tema oscuro, estados con rgba) */
 .badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radio-sm);
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--radio-full);
+  font-size: 0.76rem;
   font-weight: 600;
+  letter-spacing: 0.1px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
 }
 
 .badge-exito {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(34, 197, 94, 0.14);
+  color: var(--color-exito);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .badge-error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--color-error);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .badge-advertencia {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--color-alerta);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .badge-info {
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--color-info);
+  border-color: rgba(56, 189, 248, 0.3);
 }
 
 .badge-primaria {
-  background: #e9d5ff;
-  color: #6b21a8;
+  background: rgba(168, 85, 247, 0.16);
+  color: var(--morado-hover);
+  border-color: var(--borde-sutil);
 }
 
 .badge-sec {
-  background: var(--fondo-hover);
+  background: rgba(168, 85, 247, 0.08);
   color: var(--texto-secundario);
+  border-color: var(--borde-sutil);
 }
 
 .badge-grande {
-  font-size: 1rem;
-  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  padding: 8px 16px;
 }
 
 .acciones {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--esp-2);
 }
 
+/* Botones locales alineados a la marca */
 .btn {
-  padding: 0.5rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  border-radius: var(--radio-md);
-  font-weight: 600;
+  border-radius: var(--radio-full);
+  font-family: var(--fuente-principal);
+  font-weight: 500;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s;
+  font-size: 0.9rem;
+  transition: var(--trans-normal);
+  white-space: nowrap;
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
 .btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 6px 14px;
+  font-size: 0.8rem;
 }
 
 .btn-primario {
-  background: var(--color-primario);
-  color: white;
+  background: var(--gradiente-marca);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.35);
 }
 
 .btn-primario:hover:not(:disabled) {
-  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45), var(--glow-morado);
 }
 
 .btn-secundario {
-  background: var(--fondo-hover);
-  color: var(--texto-principal);
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-hover);
 }
 
 .btn-secundario:hover:not(:disabled) {
-  background: var(--borde-claro);
+  background: rgba(168, 85, 247, 0.16);
+  border-color: var(--morado-brillante);
+  color: var(--texto-principal);
+  transform: translateY(-2px);
 }
 
 .btn-peligro {
-  background: var(--color-error);
-  color: white;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--color-error);
 }
 
 .btn-peligro:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--color-error);
+  color: #fff;
 }
 
 .btn-exito {
-  background: var(--color-exito);
-  color: white;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: var(--color-exito);
 }
 
 .btn-exito:hover:not(:disabled) {
-  background: #059669;
+  background: var(--color-exito);
+  color: #062e16;
 }
 
 .texto-fuerte {
@@ -631,51 +791,69 @@ async function cancelarVenta() {
 
 /* Detalle de Venta */
 .detalle-venta {
-  padding: 2rem;
+  padding: var(--esp-6);
 }
 
 .detalle-cabecera {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 2px solid var(--borde-claro);
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-6);
+  padding-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--borde-sutil);
+  flex-wrap: wrap;
 }
 
 .detalle-cabecera h3 {
   margin: 0;
-  font-size: 1.5rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.4rem;
+  font-weight: 800;
   color: var(--texto-principal);
 }
 
 .detalle-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: var(--esp-5);
+  margin-bottom: var(--esp-5);
 }
 
 .detalle-seccion {
-  margin-bottom: 2rem;
+  margin-bottom: var(--esp-6);
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: var(--esp-5);
+  transition: border-color var(--trans-normal);
 }
 
+.detalle-grid .detalle-seccion:hover {
+  border-color: var(--borde-activo);
+}
+
+.detalle-grid .detalle-seccion { margin-bottom: 0; }
+
 .seccion-titulo {
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
+  margin: 0 0 var(--esp-4) 0;
+  font-family: var(--fuente-titulo);
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--texto-principal);
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--borde-claro);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--borde-sutil);
 }
 
 .campo-detalle {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--fondo-hover);
+  gap: var(--esp-4);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borde-sutil);
 }
+.campo-detalle:last-child { border-bottom: none; }
 
 .etiqueta {
   color: var(--texto-secundario);
@@ -687,37 +865,47 @@ async function cancelarVenta() {
   color: var(--texto-principal);
   font-weight: 500;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .valor.código {
   font-family: 'Monaco', 'Courier New', monospace;
   font-size: 0.8rem;
-  background: var(--fondo-hover);
-  padding: 0.25rem 0.5rem;
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--morado-hover);
+  padding: 3px 8px;
   border-radius: var(--radio-sm);
 }
 
 .tabla-detalles {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1rem;
+  margin-top: var(--esp-3);
   font-size: 0.9rem;
 }
 
 .tabla-detalles th {
-  background: var(--fondo-hover);
-  padding: 0.75rem;
+  background: rgba(168, 85, 247, 0.06);
+  padding: 12px;
   text-align: left;
   font-weight: 600;
-  color: var(--texto-principal);
-  border-bottom: 2px solid var(--borde-claro);
-  font-size: 0.85rem;
+  color: var(--texto-secundario);
+  border-bottom: 1px solid var(--borde-sutil);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
 .tabla-detalles td {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--borde-claro);
+  padding: 12px;
+  border-bottom: 1px solid var(--borde-sutil);
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
+
+.tabla-detalles tbody tr { transition: background var(--trans-rapida); }
+.tabla-detalles tbody tr:hover { background: rgba(168, 85, 247, 0.06); }
+.tabla-detalles tbody tr:last-child td { border-bottom: none; }
 
 .tabla-detalles .centro {
   text-align: center;
@@ -731,10 +919,11 @@ async function cancelarVenta() {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding: 1.5rem;
-  background: var(--fondo-hover);
+  gap: var(--esp-4);
+  margin-top: var(--esp-3);
+  padding: var(--esp-5);
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-md);
 }
 
@@ -742,22 +931,22 @@ async function cancelarVenta() {
   max-width: 100%;
   max-height: 400px;
   border-radius: var(--radio-md);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: var(--sombra-tarjeta);
 }
 
 .comprobante-pdf {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  padding: 2rem;
+  gap: var(--esp-4);
+  padding: var(--esp-6);
   background: var(--fondo-tarjeta);
   border-radius: var(--radio-md);
-  border: 2px dashed var(--borde-claro);
+  border: 2px dashed var(--borde-sutil);
 }
 
 .comprobante-pdf svg {
-  color: var(--texto-secundario);
+  color: var(--morado-hover);
 }
 
 .comprobante-pdf p {
@@ -781,63 +970,93 @@ async function cancelarVenta() {
   }
 }
 
+/* Entrada escalonada de las secciones del detalle */
+.detalle-grid .detalle-seccion {
+  animation: subirSeccion 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.detalle-grid .detalle-seccion:nth-child(1) { animation-delay: 0.02s; }
+.detalle-grid .detalle-seccion:nth-child(2) { animation-delay: 0.08s; }
+.detalle-grid .detalle-seccion:nth-child(3) { animation-delay: 0.14s; }
+.detalle-grid .detalle-seccion:nth-child(4) { animation-delay: 0.20s; }
+
+@keyframes subirSeccion {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .detalle-grid .detalle-seccion,
+  .punto-vivo,
+  .esqueleto {
+    animation: none;
+  }
+  .fila-tabla,
+  .btn,
+  .detalle-seccion,
+  .tabla-detalles tbody tr {
+    transition: none;
+  }
+}
+
 @media (max-width: 1024px) {
   .vista-ventas {
-    padding: 1.5rem;
+    padding: var(--esp-5);
   }
-  
+
   .detalle-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .tabla {
     font-size: 0.85rem;
   }
-  
+
   .btn {
-    padding: 0.4rem 0.8rem;
+    padding: 8px 16px;
     font-size: 0.8rem;
   }
 }
 
 @media (max-width: 640px) {
   .vista-ventas {
-    padding: 1rem;
+    padding: var(--esp-4);
   }
-  
+
   .vista-cabecera {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--esp-4);
   }
-  
+
   .filtros-barra {
     flex-direction: column;
   }
-  
+
   .campo {
     width: 100%;
   }
-  
+
   .tabla {
     font-size: 0.75rem;
   }
-  
+
   .tabla th, .tabla td {
-    padding: 0.5rem;
+    padding: 10px;
   }
-  
+
   .detalle-cabecera {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .acciones {
     flex-direction: column;
     width: 100%;
   }
-  
+
   .acciones .btn {
     width: 100%;
+    justify-content: center;
   }
 }
 </style>

@@ -1,20 +1,20 @@
 <template>
   <div class="contenedor-billetera">
-    <h1 class="titulo-principal-billetera">Billetera de {{ usuario }}</h1>
+    <h1 class="titulo-principal-billetera aparecer-subir">Billetera de {{ usuario }}</h1>
 
     <div class="billetera-layout-grid">
       <!-- Columna Izquierda: Tarjeta y Acciones -->
       <div class="panel-izquierdo">
         <!-- TARJETA PRINCIPAL TYPE BILLETERA/CREDITO -->
-        <div class="tarjeta-billetera">
+        <div class="tarjeta-billetera hover-elevar aparecer-subir">
           <!-- Fila Superior -->
           <div class="fila-superior">
             <div class="grupo-saldo">
-              <p class="etiqueta-pequena">SALDO</p>
+              <p class="etiqueta-pequena">Saldo disponible</p>
               <p class="valor-grande">Bs. {{ formatoMoneda(saldo) }}</p>
             </div>
             <div class="grupo-marca">
-              <img src="@/activos/imagenes/logo-euphoria.png" alt="euphoria" class="img-logo" />
+              <img src="@/activos/imagenes/logo-euphoria.png" alt="Logotipo de Euphoria" class="img-logo" />
             </div>
           </div>
 
@@ -23,10 +23,10 @@
           <!-- Fila Inferior -->
           <div class="fila-inferior">
             <div class="columna-pin">
-              <p class="etiqueta-pequena">PIN</p>
+              <p class="etiqueta-pequena">PIN transaccional</p>
               <div class="pin-display-flex">
                 <span class="pin-oculto-nuevo">••••</span>
-                <span class="pin-estado">{{ tienePin ? 'Configurado' : 'Sin configurar' }}</span>
+                <span class="pin-estado" :class="{ 'pin-estado-activo': tienePin }">{{ tienePin ? 'Configurado' : 'Sin configurar' }}</span>
               </div>
             </div>
 
@@ -39,14 +39,14 @@
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                Recargar Saldo
+                Recargar saldo
               </button>
             </div>
           </div>
         </div>
 
     <!-- Acciones para Generar QRs (Pago) -->
-    <div class="acciones-billetera">
+    <div class="acciones-billetera escalonar aparecer-subir">
       <button class="btn-abrir-recarga btn-pagar" @click="mostrarQRRapido('sin_pin')" type="button">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -55,7 +55,7 @@
           <path d="M7 17h.01"></path>
           <path d="M17 17h.01"></path>
         </svg>
-        QR Público
+        QR público
       </button>
       <button class="btn-abrir-recarga btn-pagar btn-privado" @click="mostrarQRRapido('con_pin')" type="button">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -66,7 +66,7 @@
           <path d="M17 17h.01"></path>
           <rect x="10" y="10" width="4" height="4" rx="1" ry="1"></rect>
         </svg>
-        QR Privado
+        QR privado
       </button>
     </div>
 
@@ -75,10 +75,17 @@
       <!-- Columna Derecha: Historial -->
       <div class="panel-derecho">
         <!-- HISTORIAL RECARGAS -->
-        <div class="seccion-historial">
-      <h2>Historial de Recargas</h2>
+        <div class="seccion-historial aparecer-subir">
+      <h2>Historial de recargas</h2>
       <div v-if="historial.length === 0" class="historial-vacio">
-        <p>No hay recargas realizadas aún</p>
+        <div class="icono-vacio">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+            <path d="M2 10h20"></path>
+          </svg>
+        </div>
+        <p class="titulo-vacio">Aún no tienes recargas</p>
+        <p class="subtitulo-vacio">Cuando recargues tu saldo, cada movimiento aparecerá aquí.</p>
       </div>
       <div v-else class="tabla-historial">
         <div class="fila-encabezado">
@@ -110,7 +117,7 @@
     <div v-if="modalCambiarPin" class="modal-overlay" @click.self="abrirModalCambiarPin">
       <div class="modal-cambiar-pin">
         <div class="modal-header">
-          <h2>Cambiar PIN Transaccional</h2>
+          <h2>Cambiar PIN transaccional</h2>
           <button class="btn-cerrar" @click="abrirModalCambiarPin" type="button">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -168,7 +175,7 @@
     <div v-if="modalRecarga" class="modal-overlay" @click.self="abrirModalRecarga">
       <div class="modal-recarga">
         <div class="modal-header">
-          <h2>Recargar Saldo</h2>
+          <h2>Recargar saldo</h2>
           <button class="btn-cerrar" @click="abrirModalRecarga" type="button">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -178,10 +185,10 @@
         </div>
         <div class="modal-body">
           <!-- QR Predeterminado -->
-          <div class="info-recarga-paso">Paso 1: Escanea el QR para transferir</div>
+          <div class="info-recarga-paso"><span class="num-paso">1</span> Escanea el QR para transferir</div>
           <div class="subseccion-qr-predeterminado">
             <div class="contenedor-qr-default">
-              <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="QR Predeterminado" class="qr-imagen" />
+              <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR para transferir el pago a Euphoria" class="qr-imagen" />
               <button class="btn-ampliar-qr" @click="ampliarQRDefault" type="button">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
@@ -189,13 +196,13 @@
                   <line x1="11" y1="8" x2="11" y2="14"></line>
                   <line x1="8" y1="11" x2="14" y2="11"></line>
                 </svg>
-                Ver Grande
+                Ver grande
               </button>
             </div>
           </div>
 
           <!-- Monto Input -->
-          <div class="info-recarga-paso">Paso 2: Ingresa el monto transferido</div>
+          <div class="info-recarga-paso"><span class="num-paso">2</span> Ingresa el monto transferido</div>
           <div class="campo-monto">
             <div class="input-monto" :class="{ 'input-monto-error': errorMonto, 'input-monto-valido': montoIngresado >= 10 && !errorMonto }">
               <span class="prefijo">Bs.</span>
@@ -222,7 +229,7 @@
           </div>
 
           <!-- Subir Comprobante -->
-          <div class="info-recarga-paso">Paso 3: Sube tu comprobante para validarlo</div>
+          <div class="info-recarga-paso"><span class="num-paso">3</span> Sube tu comprobante para validarlo</div>
           <div class="campo-comprobante">
             <div class="zona-carga" @click="triggerUpload">
               <svg v-if="!archivoComprobante" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -230,7 +237,7 @@
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
-              <p v-if="!archivoComprobante">Haz clic para buscar imagen</p>
+              <p v-if="!archivoComprobante">Haz clic para buscar una imagen</p>
               
               <div v-else class="vista-previa-comprobante" @click.stop>
                 <div class="info-archivo">
@@ -303,14 +310,14 @@
           </svg>
         </button>
         <div v-if="qrAmpliado === 'sin_pin'" class="contenedor-qr-identificador">
-          <img :src="datosQR.qr_sin_pin.imagen" alt="QR Sin PIN Ampliado" class="qr-modal-imagen" />
+          <img :src="datosQR.qr_sin_pin.imagen" alt="Código QR de pago público ampliado" class="qr-modal-imagen" />
           <p class="qr-identificador">ID: {{ datosQR.qr_sin_pin.identificador }}</p>
         </div>
         <div v-else-if="qrAmpliado === 'con_pin'" class="contenedor-qr-identificador">
-          <img :src="datosQR.qr_con_pin.imagen" alt="QR Con PIN Ampliado" class="qr-modal-imagen" />
+          <img :src="datosQR.qr_con_pin.imagen" alt="Código QR de pago privado ampliado" class="qr-modal-imagen" />
           <p class="qr-identificador">ID: {{ datosQR.qr_con_pin.identificador }}</p>
         </div>
-        <img v-else src="@/activos/imagenes/QRPago euphoria.jpeg" alt="QR Predeterminado Ampliado" class="qr-modal-imagen" />
+        <img v-else src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR de pago a Euphoria ampliado" class="qr-modal-imagen" />
       </div>
     </div>
 
@@ -318,7 +325,7 @@
     <div v-if="recargaSeleccionada" class="modal-overlay" @click.self="recargaSeleccionada = null">
       <div class="modal-detalles">
         <div class="modal-header">
-          <h2>Detalle de Recarga</h2>
+          <h2>Detalle de recarga</h2>
           <button class="btn-cerrar" @click="recargaSeleccionada = null" type="button">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -327,11 +334,11 @@
           </button>
         </div>
         <div class="modal-body">
-          <div class="detalle-fila"><strong>Estado:</strong> <span :class="['badge', `badge-${recargaSeleccionada.estado}`]">{{ recargaSeleccionada.estado }}</span></div>
-          <div class="detalle-fila"><strong>Monto:</strong> Bs. {{ Number(recargaSeleccionada.monto || 0).toFixed(2) }}</div>
-          <div class="detalle-fila"><strong>ID Transacción OCR:</strong> <span class="texto-resaltado">{{ recargaSeleccionada.numero_transaccion }}</span></div>
-          <div class="detalle-fila"><strong>Fecha Solicitud:</strong> {{ formatoFecha(recargaSeleccionada.fecha_solicitud) }}</div>
-          <div class="detalle-fila"><strong>Fecha Confirmación:</strong> {{ recargaSeleccionada.fecha_confirmacion ? formatoFecha(recargaSeleccionada.fecha_confirmacion) : 'No confirmada' }}</div>
+          <div class="detalle-fila"><strong>Estado</strong> <span :class="['badge', `badge-${recargaSeleccionada.estado}`]">{{ recargaSeleccionada.estado }}</span></div>
+          <div class="detalle-fila"><strong>Monto</strong> Bs. {{ Number(recargaSeleccionada.monto || 0).toFixed(2) }}</div>
+          <div class="detalle-fila"><strong>ID de transacción OCR</strong> <span class="texto-resaltado">{{ recargaSeleccionada.numero_transaccion }}</span></div>
+          <div class="detalle-fila"><strong>Fecha de solicitud</strong> {{ formatoFecha(recargaSeleccionada.fecha_solicitud) }}</div>
+          <div class="detalle-fila"><strong>Fecha de confirmación</strong> {{ recargaSeleccionada.fecha_confirmacion ? formatoFecha(recargaSeleccionada.fecha_confirmacion) : 'No confirmada' }}</div>
         </div>
       </div>
     </div>
@@ -345,7 +352,7 @@
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
         </div>
-        <h2 style="color: white; margin-top: 1rem;">¡Recarga Exitosa!</h2>
+        <h2 style="color: white; margin-top: 1rem;">Recarga completada</h2>
         <p style="color: var(--texto-secundario); margin: 1rem 0;">{{ mensajeExito }}</p>
         <button class="btn-pildora" @click="modalExito = false" type="button" style="margin-top: 1rem; width: 100%;">
           Entendido
@@ -710,7 +717,8 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
-  padding-top: 3rem;
+  padding-top: 2rem;
+  padding-bottom: 96px;
 }
 
 .billetera-layout-grid {
@@ -728,26 +736,30 @@ onUnmounted(() => {
 }
 
 .titulo-principal-billetera {
-  font-size: 1.5rem;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.7rem, 4vw, 2.1rem);
   font-weight: 800;
   text-align: center;
   color: var(--texto-principal);
-  margin-bottom: 1.5rem;
-  letter-spacing: -0.5px;
+  margin-bottom: 1.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  text-wrap: balance;
 }
 
 /* TARJETA BILLETERA */
 .tarjeta-billetera {
   position: relative;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
   width: 100%;
   padding: 2.5rem;
-  border-radius: 24px;
-  background: linear-gradient(135deg, rgba(26,26,46,0.9) 0%, rgba(22,33,62,0.95) 100%);
-  border: 1px solid rgba(157, 78, 221, 0.4);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border-radius: var(--radio-xl);
+  background:
+    radial-gradient(120% 120% at 100% 0%, rgba(236,72,153,0.28), transparent 55%),
+    var(--gradiente-marca-3);
+  border: 1px solid var(--borde-activo);
+  box-shadow: 0 18px 44px rgba(19, 6, 48, 0.55), var(--glow-morado), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
   overflow: hidden;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
@@ -761,7 +773,7 @@ onUnmounted(() => {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(157,78,221,0.15) 0%, transparent 60%);
+  background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 55%);
   transform: rotate(30deg);
   pointer-events: none;
 }
@@ -825,10 +837,21 @@ onUnmounted(() => {
 }
 
 .pin-estado {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--texto-secundario);
-  letter-spacing: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radio-full);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+
+.pin-estado-activo {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
 }
 
 .btn-ojo-nuevo {
@@ -855,34 +878,56 @@ onUnmounted(() => {
 }
 
 .btn-pildora {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: white;
   padding: 0.5rem 1.2rem;
-  border-radius: 20px;
+  border-radius: var(--radio-full);
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.3s;
+  transition: var(--trans-normal);
   backdrop-filter: blur(5px);
   width: 100%;
   justify-content: center;
 }
 
 .btn-pildora:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
 }
 
+.btn-pildora:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-pildora:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.btn-pildora-resaltado {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--morado-medio);
+  border-color: transparent;
+  font-weight: 700;
+}
+.btn-pildora-resaltado:hover {
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(19, 6, 48, 0.35);
+}
+
 .etiqueta-pequena {
-  color: var(--texto-secundario);
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 2px;
-  margin: 0 0 0.3rem 0;
+  letter-spacing: 0.12em;
+  margin: 0 0 0.4rem 0;
 }
 
 .valor-grande {
@@ -890,7 +935,9 @@ onUnmounted(() => {
   font-weight: 800;
   color: white;
   margin: 0;
-  letter-spacing: -1px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 12px rgba(19, 6, 48, 0.35);
 }
 
 /* RESPONSIVIDAD TARJETA */
@@ -925,16 +972,16 @@ onUnmounted(() => {
 .btn-abrir-recarga {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
+  border: 1px solid var(--borde-sutil);
   color: var(--texto-principal);
-  padding: 1rem 2rem;
-  border-radius: 12px;
-  font-size: 1.1rem;
+  padding: 0.9rem 1.6rem;
+  border-radius: var(--radio-md);
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: var(--trans-normal);
 }
 
 .btn-pagar {
@@ -951,14 +998,25 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
+.btn-abrir-recarga:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-abrir-recarga:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
 .btn-pagar:hover {
   border-color: var(--verde-fresco);
-  background: rgba(30, 215, 96, 0.1);
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: 0 8px 22px rgba(34, 197, 94, 0.15);
 }
 
 .btn-privado:hover {
   border-color: var(--rojo-coral);
-  background: rgba(235, 87, 87, 0.1);
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 8px 22px rgba(239, 68, 68, 0.15);
 }
 
 /* MODALES GLOBALES */
@@ -988,7 +1046,19 @@ onUnmounted(() => {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 20px rgba(157, 78, 221, 0.3);
+  box-shadow: 0 24px 70px rgba(7, 3, 20, 0.8), 0 0 26px rgba(168, 85, 247, 0.3);
+  animation: modalAparece 0.28s var(--ease-suave) both;
+}
+
+@keyframes modalAparece {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-cambiar-pin,
+  .modal-recarga,
+  .modal-detalles { animation: none; }
 }
 
 .modal-header {
@@ -1011,15 +1081,26 @@ onUnmounted(() => {
   border: none;
   color: var(--texto-secundario);
   cursor: pointer;
-  padding: 0;
+  padding: 0.35rem;
+  border-radius: var(--radio-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.3s;
+  transition: var(--trans-normal);
 }
 
 .btn-cerrar:hover {
   color: var(--texto-principal);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-cerrar:active {
+  transform: scale(0.92);
+}
+
+.btn-cerrar:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
 }
 
 .modal-body {
@@ -1060,7 +1141,18 @@ onUnmounted(() => {
 
 .btn-guardar:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(157, 78, 221, 0.3);
+  box-shadow: 0 10px 24px rgba(168, 85, 247, 0.35);
+}
+
+.btn-guardar:active:not(:disabled),
+.btn-cancelar:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-guardar:focus-visible,
+.btn-cancelar:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
 }
 
 .btn-guardar:disabled {
@@ -1119,17 +1211,35 @@ onUnmounted(() => {
 }
 
 .info-recarga-paso {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   font-weight: 600;
-  color: var(--morado-brillante);
-  margin-bottom: 0.5rem;
+  color: var(--texto-principal);
+  margin-bottom: 0.6rem;
   font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0;
+}
+
+.num-paso {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.35);
 }
 
 .input-pin:focus {
   outline: none;
   border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
 }
 
 /* Ajuste de inputs de PIN en pantallas muy pequeñas */
@@ -1223,6 +1333,12 @@ onUnmounted(() => {
   border: 1px solid var(--borde-color);
   border-radius: 8px;
   overflow: hidden;
+  transition: border-color var(--trans-normal), box-shadow var(--trans-normal);
+}
+
+.input-monto:focus-within {
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
 }
 
 .prefijo {
@@ -1277,7 +1393,11 @@ onUnmounted(() => {
 
 .zona-carga:hover {
   border-color: var(--morado-brillante);
-  background: rgba(157, 78, 221, 0.05);
+  background: rgba(157, 78, 221, 0.08);
+}
+
+.zona-carga:active {
+  transform: scale(0.995);
 }
 
 .zona-carga svg {
@@ -1454,18 +1574,30 @@ onUnmounted(() => {
 }
 
 .btn-detalles {
-  background: rgba(255,255,255,0.05);
-  color: var(--morado-brillante);
-  border: 1px solid var(--morado-brillante);
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
+  background: rgba(168,85,247,0.1);
+  color: var(--morado-hover);
+  border: 1px solid var(--borde-activo);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radio-full);
   cursor: pointer;
   font-size: 0.8rem;
-  transition: all 0.3s;
+  font-weight: 600;
+  transition: var(--trans-normal);
 }
 .btn-detalles:hover {
-  background: var(--morado-brillante);
+  background: var(--gradiente-marca);
+  border-color: transparent;
   color: white;
+  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.3);
+}
+
+.btn-detalles:active {
+  transform: scale(0.96);
+}
+
+.btn-detalles:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
 }
 
 .columna-acciones {
@@ -1512,18 +1644,22 @@ onUnmounted(() => {
 
 .detalle-fila {
   padding: 0.8rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   font-size: 0.95rem;
-  color: var(--texto-secundario);
+  color: var(--texto-principal);
 }
 .detalle-fila:last-child {
   border-bottom: none;
 }
 .detalle-fila strong {
-  color: var(--texto-principal);
+  color: var(--texto-secundario);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 .texto-resaltado {
   background: rgba(255,255,255,0.05);
@@ -1536,23 +1672,61 @@ onUnmounted(() => {
 
 /* HISTORIAL */
 .seccion-historial h2 {
-  font-size: 1.3rem;
-  margin-bottom: 1.5rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin-bottom: 1.25rem;
+  color: var(--texto-principal);
+  text-wrap: balance;
 }
 
 .historial-vacio {
   background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 12px;
-  padding: 3rem;
+  border: 1px dashed var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: 3.5rem 2rem;
   text-align: center;
   color: var(--texto-secundario);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icono-vacio {
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-full);
+  margin-bottom: 0.75rem;
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid var(--borde-sutil);
+}
+
+.titulo-vacio {
+  margin: 0;
+  color: var(--texto-principal);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.subtitulo-vacio {
+  margin: 0;
+  font-size: 0.9rem;
+  max-width: 34ch;
+  line-height: 1.5;
+  color: var(--texto-secundario);
+  text-wrap: pretty;
 }
 
 .tabla-historial {
   background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 12px;
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
   overflow: hidden;
 }
 
@@ -1560,11 +1734,14 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr 1.5fr 1fr 1fr 0.8fr;
   gap: 1rem;
-  background: rgba(157, 78, 221, 0.1);
+  background: rgba(168, 85, 247, 0.1);
   padding: 1rem 1.5rem;
-  font-weight: 600;
-  color: var(--texto-principal);
-  border-bottom: 1px solid var(--borde-color);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--texto-secundario);
+  border-bottom: 1px solid var(--borde-sutil);
 }
 
 .fila-historial {
@@ -1572,8 +1749,12 @@ onUnmounted(() => {
   grid-template-columns: 1fr 1.5fr 1fr 1fr 0.8fr;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--borde-sutil);
   align-items: center;
+  transition: background var(--trans-rapida);
+}
+.fila-historial:hover {
+  background: rgba(168, 85, 247, 0.06);
 }
 
 .fila-historial:last-child {
@@ -1640,6 +1821,7 @@ onUnmounted(() => {
 .columna-monto {
   color: var(--texto-principal);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .badge {
@@ -1715,6 +1897,15 @@ onUnmounted(() => {
   background: var(--color-error);
   color: white;
   transform: scale(1.1);
+}
+
+.btn-eliminar-archivo:active {
+  transform: scale(0.95);
+}
+
+.btn-eliminar-archivo:focus-visible {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
 }
 
 .contenedor-qr-identificador {
@@ -1819,6 +2010,15 @@ onUnmounted(() => {
 .btn-ampliar-qr:hover {
   background: var(--morado-brillante);
   transform: translateX(-50%) scale(1.05);
+}
+
+.btn-ampliar-qr:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+.btn-ampliar-qr:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
 }
 
 .icono-check-valido {

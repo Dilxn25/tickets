@@ -22,13 +22,14 @@ function estadoAforo(porcentaje) {
   return 'ok'
 }
 
-// Aforo actual de una zona = suma de personas de las entradas ya validadas (dentro)
+// Aforo actual de una zona = suma de personas realmente ingresadas (por tandas).
+// Con el QR multi-uso, una entrada puede tener 3 de 8 dentro; contamos ingresados.
 async function aforoActualZona(id_zona, tx = prisma) {
   const r = await tx.entrada.aggregate({
-    where: { id_zona, estado_validacion: true },
-    _sum: { cantidad_personas: true },
+    where: { id_zona },
+    _sum: { cantidad_ingresada: true },
   })
-  return r._sum.cantidad_personas || 0
+  return r._sum.cantidad_ingresada || 0
 }
 
 // Resuelve la entrada a partir del cuerpo: token QR (firmado) o codigo de ingreso manual.
@@ -82,25 +83,61 @@ function resumenZona(zona, aforo) {
 
 // ---------- VALIDAR INGRESO ----------
 
-// POST /api/aforo/validar — el recepcionista escanea el QR y registra el ingreso
-// Body: { token } (QR firmado) o { codigo } (codigo de ingreso manual)
+// POST /api/aforo/validar — el recepcionista escanea el QR y registra el ingreso.
+// QR MULTI-USO POR TANDAS: una entrada vale para N personas (ej. mesa de 8) y se
+// puede usar varias veces hasta completar N (ej. entran 3 ahora y 5 despues).
+// Body: { token } | { codigo }  y opcional { cantidad } = personas que entran ahora.
 router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
   try {
     const entrada = await resolverEntrada(req.body)
 
-    if (entrada.estado_validacion) {
+    const total = entrada.cantidad_personas
+    const yaAdentro = entrada.cantidad_ingresada || 0
+    const restantes = total - yaAdentro
+
+    // Modo CONSULTA: solo devuelve el estado de la entrada, sin admitir a nadie.
+    // Permite al recepcionista ver cuántos cupos quedan y elegir cuántos entran.
+    if (req.body.consultar) {
+      return res.json({
+        consulta: true,
+        cliente: `${entrada.usuario.nombres} ${entrada.usuario.apellidos}`,
+        cantidad_personas: total,
+        cantidad_ingresada: yaAdentro,
+        restantes,
+        completo: restantes <= 0,
+        mesa: entrada.mesa_espacio ? entrada.mesa_espacio.numero_nombre : null,
+        zona: entrada.zona.nombre_zona,
+        id_zona: entrada.id_zona,
+        evento: entrada.zona.evento ? entrada.zona.evento.nombre_evento : null,
+      })
+    }
+
+    // Si ya ingresaron todos los cupos de esta entrada
+    if (restantes <= 0) {
       return res.status(409).json({
-        error: 'Esta entrada ya fue validada (la persona ya ingreso).',
+        error: `Esta entrada ya ingresó completa (${yaAdentro}/${total}).`,
         ya_ingreso: true,
         cliente: `${entrada.usuario.nombres} ${entrada.usuario.apellidos}`,
+        cantidad_personas: total,
+        cantidad_ingresada: yaAdentro,
+      })
+    }
+
+    // Cuántas personas entran en esta tanda (por defecto, todas las restantes)
+    let cantidad = req.body.cantidad != null ? parseInt(req.body.cantidad) : restantes
+    if (!Number.isFinite(cantidad) || cantidad < 1) cantidad = 1
+    if (cantidad > restantes) {
+      return res.status(400).json({
+        error: `Solo quedan ${restantes} cupo(s) en esta entrada.`,
+        cantidad_personas: total,
+        cantidad_ingresada: yaAdentro,
+        restantes,
       })
     }
 
     const capacidad = entrada.zona.capacidad_maxima || 0
     const aforoPrevio = await aforoActualZona(entrada.id_zona)
-
-    // Si la zona ya esta llena, no se deja pasar (proteccion de aforo)
-    if (capacidad > 0 && aforoPrevio + entrada.cantidad_personas > capacidad) {
+    if (capacidad > 0 && aforoPrevio + cantidad > capacidad) {
       return res.status(409).json({
         error: `Aforo lleno en ${entrada.zona.nombre_zona}. No se puede validar el ingreso.`,
         aforo_lleno: true,
@@ -109,13 +146,18 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
       })
     }
 
-    // Validacion atomica: marcar ingreso SOLO si sigue sin validar (evita doble escaneo)
+    // Incremento ATÓMICO: solo suma si aún caben (evita doble escaneo simultáneo).
     await prisma.$transaction(async (tx) => {
-      const marca = await tx.entrada.updateMany({
-        where: { id_entrada: entrada.id_entrada, estado_validacion: false },
-        data: { estado_validacion: true },
-      })
-      if (marca.count === 0) throw { status: 409, error: 'La entrada ya fue validada en otro punto.' }
+      const inc = await tx.$executeRaw`
+        UPDATE entrada SET cantidad_ingresada = cantidad_ingresada + ${cantidad}
+        WHERE id_entrada = ${entrada.id_entrada}
+          AND cantidad_ingresada + ${cantidad} <= cantidad_personas`
+      if (inc === 0) throw { status: 409, error: 'Otro punto registró ingresos; vuelve a escanear.' }
+
+      // estado_validacion = true cuando ya ingresaron todos los cupos
+      await tx.$executeRaw`
+        UPDATE entrada SET estado_validacion = (cantidad_ingresada >= cantidad_personas)
+        WHERE id_entrada = ${entrada.id_entrada}`
 
       await tx.registro_aforo.create({
         data: {
@@ -128,16 +170,19 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
       })
     })
 
-    const aforoNuevo = aforoPrevio + entrada.cantidad_personas
+    const nuevoIngresado = yaAdentro + cantidad
+    const aforoNuevo = aforoPrevio + cantidad
     const resumen = resumenZona(entrada.zona, aforoNuevo)
-
-    // Tiempo real: avisar a los paneles de aforo (admin/recepcion)
     if (global.io) global.io.emit('aforo_actualizado', resumen)
 
     res.json({
-      mensaje: 'Ingreso validado',
+      mensaje: nuevoIngresado >= total ? 'Ingreso completo' : 'Ingreso parcial registrado',
       cliente: `${entrada.usuario.nombres} ${entrada.usuario.apellidos}`,
-      personas: entrada.cantidad_personas,
+      personas: cantidad,                 // entraron en esta tanda
+      cantidad_personas: total,           // capacidad total del QR
+      cantidad_ingresada: nuevoIngresado, // total acumulado dentro
+      restantes: total - nuevoIngresado,  // cupos que aún quedan en el QR
+      completo: nuevoIngresado >= total,
       mesa: entrada.mesa_espacio ? entrada.mesa_espacio.numero_nombre : null,
       evento: entrada.zona.evento ? entrada.zona.evento.nombre_evento : null,
       aforo: resumen,
@@ -166,14 +211,15 @@ router.post('/salida', soloRoles('Recepcionista', 'Administrador'), async (req, 
       entrada = await resolverEntrada(req.body)
     }
 
-    if (!entrada.estado_validacion) {
-      return res.status(409).json({ error: 'Esta entrada no esta marcada como dentro.' })
+    if ((entrada.cantidad_ingresada || 0) <= 0) {
+      return res.status(409).json({ error: 'Esta entrada no tiene personas marcadas como dentro.' })
     }
 
     await prisma.$transaction(async (tx) => {
+      // Registra la salida del grupo: libera todos los cupos ingresados de esta entrada.
       const marca = await tx.entrada.updateMany({
-        where: { id_entrada: entrada.id_entrada, estado_validacion: true },
-        data: { estado_validacion: false },
+        where: { id_entrada: entrada.id_entrada, cantidad_ingresada: { gt: 0 } },
+        data: { cantidad_ingresada: 0, estado_validacion: false },
       })
       if (marca.count === 0) throw { status: 409, error: 'La salida ya fue registrada.' }
 

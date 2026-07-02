@@ -1,16 +1,16 @@
 <template>
   <div class="vista-usuarios fade-in">
-    <div class="vista-cabecera">
+    <div class="vista-cabecera aparecer-subir">
       <div>
-        <h2 class="vista-titulo">Administración de Usuarios</h2>
+        <h2 class="vista-titulo">Administración de usuarios</h2>
         <p class="vista-subtitulo">Gestiona los accesos y roles del sistema</p>
       </div>
-      <div style="display: flex; gap: 10px;">
-        <button class="btn btn-secundario" @click="abrirModalRoles()">Gestionar Roles</button>
-        <button class="btn btn-primario" @click="abrirModal()">+ Nuevo Usuario</button>
+      <div class="cabecera-acciones">
+        <button class="btn btn-secundario hover-crecer" @click="abrirModalRoles()">Gestionar roles</button>
+        <button class="btn btn-primario brillo-hover hover-crecer" @click="abrirModal()">+ Nuevo usuario</button>
       </div>
     </div>
-    <div class="filtros-barra">
+    <div class="filtros-barra aparecer-subir">
       <div class="buscador-wrap" style="max-width:300px; position:relative; flex:1 1 auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--texto-secundario); pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input v-model="busqueda" class="campo" placeholder="Buscar..." style="width:100%; padding-left:38px;" />
@@ -25,27 +25,35 @@
         <option value="inactivo">inactivo</option>
       </select>
     </div>
-    <div class="tarjeta tabla-wrapper">
-      <table class="tabla">
+    <div class="tarjeta tabla-wrapper aparecer-subir">
+      <table class="tabla responsiva">
         <thead><tr>
           <th>Usuario</th><th>CI/Carnet</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th>
         </tr></thead>
         <tbody>
           <tr v-if="!usuariosFiltrados.length">
-            <td colspan="6" class="celda-vacia">Sin resultados</td>
+            <td colspan="6" class="celda-vacia">
+              <div class="estado-vacio">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line>
+                </svg>
+                <p class="estado-vacio-titulo">No hay usuarios que coincidan</p>
+                <span class="estado-vacio-texto">Ajusta la búsqueda o los filtros para ver más resultados.</span>
+              </div>
+            </td>
           </tr>
-          <tr v-for="u in listaPaginada" :key="u.id_usuario" class="fila-tabla">
-            <td>
+          <tr v-for="u in listaPaginada" :key="u.id_usuario" class="fila-tabla fila-entra">
+            <td class="sin-label">
               <div class="usuario-celda">
                 <div class="avatar-tabla">{{ iniciales(u) }}</div>
                 <span class="nombre-tabla">{{ u.nombres }} {{ u.apellidos }}</span>
               </div>
             </td>
-            <td class="texto-sec">{{ u.ci_carnet || '-' }}</td>
-            <td class="texto-sec">{{ u.correo }}</td>
-            <td><span class="badge badge-info">{{ u.rol }}</span></td>
-            <td><span :class="u.estado_cuenta==='activo'?'badge badge-exito':'badge badge-error'">{{ u.estado_cuenta }}</span></td>
-            <td>
+            <td class="texto-sec celda-mono" data-label="CI/Carnet">{{ u.ci_carnet || '—' }}</td>
+            <td class="texto-sec" data-label="Correo">{{ u.correo }}</td>
+            <td data-label="Rol"><span class="badge badge-info">{{ u.rol }}</span></td>
+            <td data-label="Estado"><span :class="u.estado_cuenta==='activo'?'badge badge-exito con-punto':'badge badge-error con-punto'">{{ u.estado_cuenta }}</span></td>
+            <td class="sin-label">
               <div class="acciones">
                 <button class="btn btn-sm btn-secundario" @click="abrirModal(u)">Editar</button>
                 <button
@@ -75,7 +83,7 @@
       <div v-if="modalAbierto" class="modal-fondo" @click.self="cerrarModal">
         <div class="modal fade-in">
           <div class="modal-cabecera">
-            <h3>{{ usuarioEditando ? 'Editar Usuario' : 'Nuevo Usuario' }}</h3>
+            <h3>{{ usuarioEditando ? 'Editar usuario' : 'Nuevo usuario' }}</h3>
             <button class="btn-x" @click="cerrarModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <form class="modal-form" @submit.prevent="guardarUsuario">
@@ -97,7 +105,7 @@
             </div>
             <div class="grupo-campo" v-if="!usuarioEditando"><label class="etiqueta">Contraseña *</label><input v-model="form.password" type="password" class="campo" required minlength="6" /></div>
             <div class="modal-footer" :style="{ justifyContent: usuarioEditando ? 'space-between' : 'flex-end' }">
-              <button v-if="usuarioEditando" type="button" class="btn btn-peligro" @click="iniciarReseteo">Resetear Contraseña</button>
+              <button v-if="usuarioEditando" type="button" class="btn btn-peligro" @click="iniciarReseteo">Resetear contraseña</button>
               <div style="display:flex; gap:0.75rem;">
                 <button type="button" class="btn btn-secundario" @click="cerrarModal">Cancelar</button>
                 <button type="submit" class="btn btn-primario">{{ usuarioEditando ? 'Guardar' : 'Crear' }}</button>
@@ -113,7 +121,7 @@
       <div v-if="modalRolesAbierto" class="modal-fondo" @click.self="modalRolesAbierto=false">
         <div class="modal fade-in" style="max-width:400px">
           <div class="modal-cabecera">
-            <h3>Gestionar Roles</h3>
+            <h3>Gestionar roles</h3>
             <button class="btn-x" @click="modalRolesAbierto=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div style="padding:1.5rem">
@@ -121,8 +129,8 @@
               <input v-model="nuevoRolNombre" class="campo" placeholder="Nuevo rol..." />
               <button class="btn btn-primario" @click="crearRol">Añadir</button>
             </div>
-            <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:8px;">
-              <li v-for="r in rolesDb" :key="r.id_rol" style="display:flex; justify-content:space-between; align-items:center; background:var(--fondo-tarjeta-alt); padding:8px 12px; border-radius:var(--radio-md);">
+            <ul class="escalonar" style="list-style:none; padding:0; display:flex; flex-direction:column; gap:8px;">
+              <li v-for="r in rolesDb" :key="r.id_rol" class="fila-rol" style="display:flex; justify-content:space-between; align-items:center; background:var(--fondo-tarjeta-alt); padding:8px 12px; border-radius:var(--radio-md);">
                 <span>{{ r.nombre_rol }}</span>
                 <button class="btn btn-sm btn-peligro" @click="eliminarRol(r)">Eliminar</button>
               </li>
@@ -142,14 +150,14 @@
             </svg>
           </div>
           <div style="padding:0 1.5rem 1.5rem 1.5rem;">
-            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¡Acción Crítica!</h3>
+            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">Acción crítica</h3>
             <p style="color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
-              Estás a punto de bloquear a un <strong>ADMINISTRADOR</strong> ({{ adminABanear?.nombres }}).
-              Esto le impedirá el acceso total al sistema. ¿Estás absolutamente seguro?
+              Estás a punto de bloquear a un <strong>administrador</strong> ({{ adminABanear?.nombres }}).
+              Esto le impedirá el acceso total al sistema. ¿Deseas continuar?
             </p>
             <div style="display:flex; gap:10px; justify-content:center;">
               <button class="btn btn-secundario" style="flex:1;" @click="modalAlertaAdmin=false">Cancelar</button>
-              <button class="btn btn-peligro" style="flex:1;" @click="confirmarBanAdmin">Sí, Bloquear</button>
+              <button class="btn btn-peligro" style="flex:1;" @click="confirmarBanAdmin">Sí, bloquear</button>
             </div>
           </div>
         </div>
@@ -166,13 +174,13 @@
             </svg>
           </div>
           <div style="padding:0 1.5rem 1.5rem 1.5rem;">
-            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¿Resetear Contraseña?</h3>
+            <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¿Resetear contraseña?</h3>
             <p style="color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
               La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a una contraseña temporal que el usuario deberá cambiar en su primer inicio de sesión. ¿Estás seguro?
             </p>
             <div style="display:flex; gap:10px; justify-content:center;">
               <button class="btn btn-secundario" style="flex:1;" @click="modalAlertaReset=false">Cancelar</button>
-              <button class="btn btn-primario" style="flex:1; background: var(--color-alerta); color: #000;" @click="confirmarReseteo">Sí, Resetear</button>
+              <button class="btn btn-primario" style="flex:1; background: var(--color-alerta); color: #000;" @click="confirmarReseteo">Sí, resetear</button>
             </div>
           </div>
         </div>
@@ -330,32 +338,45 @@ async function eliminarRol(rol) {
 
 <style scoped>
 .vista-cabecera { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; gap:1rem; flex-wrap:wrap; }
-.vista-titulo   { font-size:1.4rem; margin-bottom:.2rem; }
-.vista-subtitulo { color:var(--texto-secundario); font-size:.85rem; }
-.filtros-barra  { display:flex; gap:.75rem; margin-bottom:1.2rem; flex-wrap:wrap; }
-.tabla-wrapper  { padding:0; overflow-x:auto; }
+.vista-titulo   { font-family:var(--fuente-titulo); font-size:1.75rem; font-weight:800; letter-spacing:-0.03em; line-height:1.1; margin-bottom:.3rem; text-wrap:balance; }
+.vista-subtitulo { color:var(--texto-secundario); font-size:.9rem; line-height:1.5; }
+.cabecera-acciones { display:flex; gap:.625rem; flex-wrap:wrap; }
+.filtros-barra  { display:flex; gap:.75rem; margin-bottom:1.2rem; flex-wrap:wrap; align-items:center; background:var(--glass-fondo); border:1px solid var(--glass-borde); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); padding:var(--esp-3); border-radius:var(--radio-lg); }
+.tabla-wrapper  { padding:0; overflow-x:auto; border-radius:var(--radio-lg); }
 .tabla          { width:100%; border-collapse:collapse; min-width:600px; }
-.tabla th       { padding:12px 16px; text-align:left; font-size:.75rem; color:var(--texto-desactivado); font-weight:600; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--borde-sutil); }
-.tabla td       { padding:12px 16px; }
-.fila-tabla     { border-bottom:1px solid var(--borde-sutil); transition:var(--trans-rapida); }
+.tabla th       { padding:15px 16px; text-align:left; font-size:.7rem; color:var(--texto-desactivado); font-weight:700; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--borde-sutil); background:linear-gradient(180deg, rgba(168,85,247,.1), rgba(168,85,247,.04)); position:sticky; top:0; z-index:1; }
+.tabla td       { padding:13px 16px; }
+.fila-tabla     { border-bottom:1px solid var(--borde-sutil); transition:background-color .2s var(--ease-suave), box-shadow .2s ease; }
 .fila-tabla:last-child  { border-bottom:none; }
-.fila-tabla:hover       { background:rgba(74,44,143,.15); }
-.celda-vacia    { text-align:center; color:var(--texto-desactivado); padding:3rem; }
-.usuario-celda  { display:flex; align-items:center; gap:10px; }
-.avatar-tabla   { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--morado-brillante),var(--rosa-acento)); display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; color:#fff; flex-shrink:0; }
-.nombre-tabla   { font-size:.88rem; font-weight:500; }
+.fila-tabla:hover       { background:rgba(168,85,247,.08); box-shadow:inset 3px 0 0 var(--morado-brillante); }
+.celda-vacia    { text-align:center; color:var(--texto-desactivado); padding:3.5rem 1.5rem; }
+.estado-vacio   { display:flex; flex-direction:column; align-items:center; gap:.6rem; }
+.estado-vacio svg { color:var(--morado-brillante); opacity:.7; }
+.estado-vacio-titulo { color:var(--texto-secundario); font-size:.95rem; font-weight:600; }
+.estado-vacio-texto  { color:var(--texto-desactivado); font-size:.82rem; max-width:34ch; line-height:1.5; }
+.usuario-celda  { display:flex; align-items:center; gap:11px; }
+.avatar-tabla   { width:36px; height:36px; border-radius:50%; background:var(--gradiente-marca); display:flex; align-items:center; justify-content:center; font-size:.74rem; font-weight:700; letter-spacing:.02em; color:#fff; flex-shrink:0; box-shadow:0 2px 10px rgba(168,85,247,.4), inset 0 1px 0 rgba(255,255,255,.18); transition:transform .2s var(--ease-rebote), box-shadow .2s ease; }
+.fila-tabla:hover .avatar-tabla { transform:scale(1.08); box-shadow:0 4px 16px rgba(236,72,153,.45), inset 0 1px 0 rgba(255,255,255,.22); }
+.nombre-tabla   { font-size:.9rem; font-weight:600; letter-spacing:-.01em; }
 .texto-sec      { color:var(--texto-secundario); font-size:.85rem; }
+.celda-mono     { font-variant-numeric:tabular-nums; letter-spacing:.01em; }
+.con-punto      { display:inline-flex; align-items:center; gap:6px; }
+.con-punto::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; flex-shrink:0; }
 .acciones       { display:flex; gap:6px; }
+.acciones .btn:active { transform:translateY(1px); }
+.btn-x:focus-visible, .acciones .btn:focus-visible, .cabecera-acciones .btn:focus-visible { outline:2px solid var(--morado-brillante); outline-offset:2px; }
+.fila-rol       { transition:background-color .2s var(--ease-suave), transform .2s var(--ease-suave); }
+.fila-rol:hover { background:rgba(168,85,247,.16) !important; transform:translateX(2px); }
 .modal-fondo    { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; padding:1rem; }
 .modal          { background:var(--fondo-tarjeta); border:1px solid var(--borde-sutil); border-radius:var(--radio-xl); width:100%; max-width:520px; box-shadow:var(--sombra-modal); max-height:90dvh; overflow-y:auto; }
 .modal-cabecera { display:flex; justify-content:space-between; align-items:center; padding:1.2rem 1.5rem; border-bottom:1px solid var(--borde-sutil); }
-.modal-cabecera h3 { font-size:1.1rem; }
-.btn-x          { background:none; border:none; color:var(--texto-secundario); font-size:1.1rem; cursor:pointer; }
-.btn-x:hover    { color:var(--color-error); }
+.modal-cabecera h3 { font-size:1.15rem; font-weight:700; letter-spacing:-.01em; }
+.btn-x          { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:none; border:none; border-radius:var(--radio-sm); color:var(--texto-secundario); font-size:1.1rem; cursor:pointer; transition:color .2s ease, background-color .2s ease, transform .2s var(--ease-rebote); }
+.btn-x:hover    { color:var(--color-error); background:rgba(239,68,68,.12); transform:rotate(90deg); }
 .modal-form     { padding:1.5rem; display:flex; flex-direction:column; gap:1rem; }
 .form-fila      { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 .grupo-campo    { display:flex; flex-direction:column; gap:6px; }
-.etiqueta       { font-size:.8rem; color:var(--texto-secundario); font-weight:500; }
+.etiqueta       { font-size:.8rem; color:var(--texto-secundario); font-weight:600; letter-spacing:.01em; }
 .modal-footer   { display:flex; justify-content:flex-end; gap:.75rem; padding-top:.5rem; flex-wrap:wrap; }
 
 /* Tablet: 481px - 1024px */
@@ -380,4 +401,9 @@ async function eliminarRol(rol) {
 
 /* Se mantiene el breakpoint original para no romper diseños intermedios */
 @media(max-width:500px) { .form-fila { grid-template-columns:1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fila-tabla, .avatar-tabla, .fila-tabla:hover .avatar-tabla,
+  .btn-x, .btn-x:hover, .fila-rol, .fila-rol:hover, .acciones .btn { transition:none; transform:none; }
+}
 </style>

@@ -16,6 +16,13 @@ api.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // Si el cuerpo es FormData (subida de archivos), eliminar el Content-Type JSON
+  // por defecto para que el navegador ponga 'multipart/form-data' con su boundary.
+  // Sin esto, las imágenes (foto de perfil, productos, eventos, comprobantes) no
+  // llegan al backend y req.file queda vacío.
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
   return config
 }, error => Promise.reject(error))
 

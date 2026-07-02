@@ -6,6 +6,9 @@
         <img src="@/activos/imagenes/logo-euphoria.png" alt="Euphoria" class="logo-img" />
       </div>
       <div class="acciones-usuario">
+        <button class="btn-reservas-top" @click="irMisReservas" title="Mis reservas" type="button" aria-label="Mis reservas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="5" x2="13" y2="19" stroke-dasharray="2 2"></line></svg>
+        </button>
         <div class="user-avatar" @click="irPerfil" title="Mi perfil">
           <img v-if="urlFoto" :src="urlFoto" class="avatar-img" alt="Perfil" />
           <span v-else>{{ iniciales }}</span>
@@ -91,6 +94,10 @@ function irPerfil() {
   router.push('/cliente/perfil')
 }
 
+function irMisReservas() {
+  router.push('/cliente/mis-reservas')
+}
+
 function cerrarSesion() {
   modalLogout.value = true
 }
@@ -117,10 +124,12 @@ function confirmarCerrarSesion() {
 /* Header Navbar */
 .navbar-top {
   height: 70px;
-  background: rgba(26, 17, 40, 0.85);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(26, 17, 40, 0.82);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid var(--borde-sutil);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+              0 6px 24px rgba(10, 6, 26, 0.35);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -138,7 +147,12 @@ function confirmarCerrarSesion() {
   height: 38px;
   width: auto;
   object-fit: contain;
-  filter: drop-shadow(0 0 8px rgba(155, 89, 182, 0.6));
+  filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.55));
+  transition: filter var(--trans-normal), transform var(--trans-normal);
+}
+.logo-contenedor:hover .logo-img {
+  filter: drop-shadow(0 0 16px rgba(192, 132, 252, 0.7));
+  transform: translateY(-1px);
 }
 
 .acciones-usuario {
@@ -146,40 +160,85 @@ function confirmarCerrarSesion() {
   align-items: center;
   gap: 10px;
 }
+.btn-reservas-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--borde-sutil);
+  color: var(--morado-hover);
+  cursor: pointer;
+  transition: transform var(--trans-normal), background var(--trans-normal),
+              border-color var(--trans-normal), color var(--trans-normal),
+              box-shadow var(--trans-normal);
+}
+.btn-reservas-top svg { width: 20px; height: 20px; }
+.btn-reservas-top:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--borde-activo);
+  color: var(--texto-principal);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.28);
+}
+.btn-reservas-top:active { transform: scale(0.94); }
+.btn-reservas-top:focus-visible {
+  outline: none;
+  border-color: var(--morado-hover);
+  box-shadow: var(--glow-morado);
+}
+
 .btn-salir-top {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radio-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
   color: var(--color-error);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform var(--trans-normal), background var(--trans-normal),
+              border-color var(--trans-normal), color var(--trans-normal),
+              box-shadow var(--trans-normal);
 }
 .btn-salir-top svg { width: 20px; height: 20px; }
 .btn-salir-top:hover {
   background: var(--color-error);
+  border-color: var(--color-error);
   color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
 }
 .btn-salir-top:active { transform: scale(0.94); }
+.btn-salir-top:focus-visible {
+  outline: none;
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
 
 .user-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 0.9rem;
+  letter-spacing: 0.01em;
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  transition: transform 0.2s;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  transition: transform var(--trans-normal), box-shadow var(--trans-normal);
+}
+.user-avatar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(236, 72, 153, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
 }
 .user-avatar:active {
   transform: scale(0.95);
@@ -212,19 +271,22 @@ function confirmarCerrarSesion() {
   left: 0;
   right: 0;
   height: 70px;
-  background: rgba(26, 17, 40, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--fondo-navbar);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-top: 1px solid var(--borde-sutil);
   display: flex;
   justify-content: space-around;
   align-items: center;
   padding-bottom: env(safe-area-inset-bottom);
   z-index: 50;
-  box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
+              0 -10px 34px rgba(139, 92, 246, 0.14),
+              0 -4px 18px rgba(10, 6, 26, 0.5);
 }
 
 .tab-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -232,10 +294,20 @@ function confirmarCerrarSesion() {
   color: var(--texto-secundario);
   text-decoration: none;
   gap: 4px;
-  transition: var(--trans-rapida);
+  transition: color var(--trans-normal), transform var(--trans-normal);
   flex: 1;
   min-width: 0;
   height: 100%;
+}
+.tab-item:hover { color: var(--texto-principal); }
+.tab-item:hover .icono { transform: translateY(-2px); }
+.tab-item:active { transform: scale(0.94); }
+.tab-item:focus-visible {
+  outline: none;
+  color: var(--morado-hover);
+}
+.tab-item:focus-visible .icono {
+  filter: drop-shadow(var(--glow-morado));
 }
 
 .tab-item span {
@@ -245,36 +317,57 @@ function confirmarCerrarSesion() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: var(--trans-normal);
 }
 
 .icono {
   width: 24px;
   height: 24px;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.3s var(--ease-rebote), filter var(--trans-normal);
 }
 
+/* Item activo bien marcado: color morado-hover, glow y barra superior */
 .tab-item.activo {
-  color: var(--rosa-acento);
+  color: var(--morado-hover);
+}
+.tab-item.activo span {
+  font-weight: 700;
 }
 .tab-item.activo .icono {
-  transform: scale(1.15) translateY(-2px);
-  filter: drop-shadow(0 0 8px rgba(219,39,119,0.6));
+  transform: scale(1.18) translateY(-2px);
+  filter: drop-shadow(var(--glow-morado));
+}
+.tab-item.activo::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  width: 28px;
+  height: 3px;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  box-shadow: var(--sombra-glow);
 }
 
 /* Modal Cerrar Sesión */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+  position: fixed; inset: 0; background: rgba(8, 4, 20, 0.72);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .modal-logout {
-  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
-  border-radius: 20px; padding: 2rem; text-align: center; max-width: 300px; width: 100%;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  background: var(--gradiente-sutil); border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-xl); padding: 2rem; text-align: center; max-width: 320px; width: 100%;
+  box-shadow: var(--sombra-modal), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  animation: modal-entrar 0.3s var(--ease-suave) both;
+}
+@keyframes modal-entrar {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .icono-logout {
   width: 68px;
   height: 68px;
-  margin: 0 auto 1rem;
+  margin: 0 auto 1.15rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -282,19 +375,26 @@ function confirmarCerrarSesion() {
   background: rgba(239, 68, 68, 0.12);
   color: var(--color-error);
   border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.22);
 }
 .icono-logout svg { width: 30px; height: 30px; }
-.modal-logout h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--texto-principal); }
-.modal-logout p { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.5rem; }
-.modal-acciones { display: flex; gap: 10px; }
+.modal-logout h3 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.5rem; color: var(--texto-principal); }
+.modal-logout p { font-size: 0.9rem; line-height: 1.5; color: var(--texto-secundario); margin-bottom: 1.75rem; }
+.modal-acciones { display: flex; gap: 12px; }
 .btn-cancelar {
   flex: 1; background: var(--fondo-tarjeta-alt); color: var(--texto-secundario);
-  border: 1px solid var(--borde-sutil); padding: 10px; border-radius: 12px; font-weight: 600;
+  border: 1px solid var(--borde-sutil); padding: 11px; border-radius: var(--radio-md);
+  font-weight: 600; cursor: pointer; transition: var(--trans-normal);
 }
+.btn-cancelar:hover { border-color: var(--borde-activo); color: var(--texto-principal); transform: translateY(-1px); }
+.btn-cancelar:focus-visible { outline: none; border-color: var(--morado-hover); box-shadow: var(--glow-morado); }
 .btn-confirmar {
-  flex: 1; background: rgba(231,76,60,0.15); color: var(--color-error);
-  border: 1px solid rgba(231,76,60,0.3); padding: 10px; border-radius: 12px; font-weight: 600;
+  flex: 1; background: rgba(239, 68, 68, 0.15); color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.3); padding: 11px; border-radius: var(--radio-md);
+  font-weight: 600; cursor: pointer; transition: var(--trans-normal);
 }
+.btn-confirmar:hover { background: var(--color-error); border-color: var(--color-error); color: #fff; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3); }
+.btn-confirmar:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35); }
 .btn-cancelar:active, .btn-confirmar:active { transform: scale(0.95); }
 
 @media (min-width: 768px) {
@@ -370,6 +470,7 @@ function confirmarCerrarSesion() {
     gap: 0.5rem;
     border-radius: var(--radio-xl, 24px);
     border: 1px solid var(--borde-sutil);
+    box-shadow: var(--sombra-tarjeta), var(--sombra-glow);
   }
   .tab-item {
     flex: 1 1 auto;
@@ -377,8 +478,30 @@ function confirmarCerrarSesion() {
     max-width: 110px;
     border-radius: var(--radio-md, 10px);
   }
+  .tab-item.activo {
+    background: rgba(168, 85, 247, 0.12);
+  }
+  .tab-item.activo::before {
+    top: 6px;
+  }
   .tab-item span {
     font-size: 0.75rem;
+  }
+}
+
+/* Respeto de accesibilidad: sin movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .modal-logout {
+    animation: none;
+  }
+  .logo-contenedor:hover .logo-img,
+  .btn-reservas-top:hover,
+  .btn-salir-top:hover,
+  .user-avatar:hover,
+  .tab-item:hover .icono,
+  .btn-cancelar:hover,
+  .btn-confirmar:hover {
+    transform: none;
   }
 }
 </style>

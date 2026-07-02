@@ -28,7 +28,7 @@
       </div>
 
       <!-- Navegación -->
-      <nav class="sidebar-nav-area">
+      <nav class="sidebar-nav-area escalonar">
         <RouterLink
           v-for="item in menuItems"
           :key="item.ruta"
@@ -153,15 +153,19 @@ function cerrar() {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  background: rgba(10, 4, 26, 0.62);
+  backdrop-filter: blur(3px);
   z-index: 40;
+  animation: fadeIn 0.25s ease forwards;
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar-euphoria {
   width: var(--ancho-sidebar);
-  background: var(--fondo-sidebar);
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(168, 85, 247, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(236, 72, 153, 0.05), transparent 34%),
+    var(--fondo-sidebar);
   border-right: 1px solid var(--borde-sutil);
   display: flex;
   flex-direction: column;
@@ -173,6 +177,7 @@ function cerrar() {
   z-index: 50;
   overflow: hidden;
   flex-shrink: 0;
+  box-shadow: 1px 0 0 var(--borde-sutil), 10px 0 40px rgba(88, 28, 135, 0.28);
 }
 
 .sidebar-angosto { width: 72px; }
@@ -200,6 +205,7 @@ function cerrar() {
 
 /* ─── Logo ──────────────────────────────────────────────────────────────── */
 .sidebar-logo-area {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,11 +214,23 @@ function cerrar() {
   border-bottom: 1px solid var(--borde-sutil);
   flex-shrink: 0;
 }
+/* Halo neón sutil detrás del logo */
+.sidebar-logo-area::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.55), transparent);
+}
 .sidebar-logo-img {
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 0 8px rgba(155, 89, 182, 0.45));
-  transition: all 0.3s ease;
+  filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.5));
+  transition: transform 0.3s var(--ease-suave), height 0.3s ease, filter 0.3s ease;
+}
+.sidebar-logo-img:hover {
+  transform: scale(1.04);
+  filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.6));
 }
 .sidebar-logo-grande { height: 44px; width: auto; max-width: 180px; }
 .sidebar-logo-chico  { height: 32px; width: auto; }
@@ -222,33 +240,59 @@ function cerrar() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 1rem 0.6rem;
+  gap: 6px;
+  padding: var(--esp-4) var(--esp-3);
   overflow-y: auto;
 }
 .nav-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 11px 12px;
-  border-radius: 10px;
+  border-radius: var(--radio-md);
   color: var(--texto-secundario);
   font-size: 0.88rem;
   font-weight: 500;
-  transition: var(--trans-normal);
+  letter-spacing: -0.005em;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s var(--ease-suave);
   white-space: nowrap;
   text-decoration: none;
+  border: 1px solid transparent;
 }
 .nav-link:hover {
-  background: rgba(155, 89, 182, 0.1);
+  background: rgba(168, 85, 247, 0.12);
   color: var(--texto-principal);
+  border-color: var(--borde-sutil);
 }
-.nav-link-activo {
-  background: linear-gradient(135deg, rgba(74,44,143,0.25), rgba(194,24,91,0.15));
-  color: var(--texto-principal);
-  border-left: 3px solid var(--morado-brillante);
-  padding-left: 9px;
+.nav-link:hover .nav-link-icono { transform: translateY(-1px); }
+.nav-link:active { transform: scale(0.985); }
+.nav-link:focus-visible {
+  outline: 2px solid var(--morado-brillante);
+  outline-offset: 2px;
 }
+.nav-link-activo,
+.nav-link-activo:hover {
+  background: var(--gradiente-marca);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.38), var(--sombra-glow);
+}
+/* Barra indicadora del enlace activo */
+.nav-link-activo::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: var(--radio-full);
+  background: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+}
+.sidebar-angosto .nav-link-activo::before { display: none; }
+.nav-link-activo .nav-link-icono { color: #fff; }
 .nav-link-icono {
   display: flex;
   align-items: center;
@@ -256,8 +300,12 @@ function cerrar() {
   width: 20px;
   flex-shrink: 0;
   color: inherit;
+  transition: transform 0.2s var(--ease-suave);
 }
 .nav-link-texto { flex: 1; }
+
+/* Centrar iconos cuando el sidebar está colapsado */
+.sidebar-angosto .nav-link { justify-content: center; padding-left: 12px; padding-right: 12px; }
 
 /* ─── Footer sidebar ────────────────────────────────────────────────────── */
 .sidebar-footer-area {
@@ -271,7 +319,10 @@ function cerrar() {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 4px;
+  padding: 8px;
+  border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid var(--borde-sutil);
 }
 .sidebar-avatar {
   width: 36px;
@@ -286,6 +337,7 @@ function cerrar() {
   color: #fff;
   flex-shrink: 0;
   overflow: hidden;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25), 0 2px 10px rgba(168, 85, 247, 0.3);
 }
 .avatar-img {
   width: 100%;
@@ -325,9 +377,14 @@ function cerrar() {
   font-family: var(--fuente-principal);
 }
 .btn-salir:hover {
-  background: rgba(231, 76, 60, 0.12);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--color-error);
-  border-color: rgba(231, 76, 60, 0.35);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.btn-salir:active { transform: scale(0.985); }
+.btn-salir:focus-visible {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
 }
 
 /* ─── Contenido principal ───────────────────────────────────────────────── */
@@ -368,13 +425,20 @@ function cerrar() {
   transition: var(--trans-rapida);
   flex-shrink: 0;
 }
-.btn-hamburger:hover { background: var(--fondo-tarjeta-alt); }
+.btn-hamburger:hover { background: rgba(168, 85, 247, 0.14); color: var(--morado-brillante); }
+.btn-hamburger:active { transform: scale(0.94); }
+.btn-hamburger:focus-visible {
+  outline: 2px solid var(--morado-brillante);
+  outline-offset: 2px;
+}
 .navbar-titulo {
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
   color: var(--texto-principal);
   margin: 0;
   font-family: var(--fuente-titulo);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -431,5 +495,17 @@ function cerrar() {
   .vista-admin { padding: 0.75rem; }
   /* ocultar la etiqueta "En línea" en pantallas muy chicas, dejar el punto */
   .badge-online { padding: 4px 8px; font-size: 0.7rem; }
+}
+
+/* ─── Movimiento reducido ────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-nav-area.escalonar > *,
+  .overlay,
+  .badge-online-punto { animation: none; }
+  .nav-link,
+  .nav-link-icono,
+  .btn-hamburger,
+  .btn-salir,
+  .sidebar-logo-img { transition: none; }
 }
 </style>

@@ -137,11 +137,20 @@ router.get('/eventos/:idEvento/zonas', async (req, res) => {
     const zonas = await prisma.zona.findMany({
       where: { id_evento },
       orderBy: { id_zona: 'asc' },
-      include: { mesa_espacio: { orderBy: { id_mesa: 'asc' } } },
+      include: {
+        mesa_espacio: { orderBy: { id_mesa: 'asc' } },
+        _count: { select: { entrada: true } }, // entradas vendidas (para zonas generales/de pie)
+      },
     })
     // Solo exponemos lo necesario para dibujar y decidir; no filtramos elementos
     // decorativos (pared/barra/escenario) porque el cliente los necesita para ubicarse.
-    res.json(zonas)
+    // Para zonas generales (campo/de pie) agregamos cuántas entradas quedan.
+    const salida = zonas.map(z => ({
+      ...z,
+      vendidas: z._count?.entrada || 0,
+      disponibles_general: z.es_general ? Math.max(0, z.capacidad_maxima - (z._count?.entrada || 0)) : null,
+    }))
+    res.json(salida)
   } catch (error) {
     console.error('Error obteniendo zonas del evento:', error)
     res.status(500).json({ error: 'Error al obtener el mapa del evento' })
@@ -156,26 +165,28 @@ router.post('/mesa', async (req, res) => {
   try {
     const id_usuario = req.usuario.id
     const id_mesa = Number(req.body.id_mesa)
-    const cantidad_personas = Math.max(1, Number(req.body.cantidad_personas) || 1)
     const { pin } = req.body
 
     if (!id_mesa) return res.status(400).json({ error: 'Falta la mesa a reservar' })
 
-    // 1. Traer la mesa con su zona (para precio y validaciones)
+    // 1. Traer el elemento con su zona (para precio y validaciones)
     const mesa = await prisma.mesa_espacio.findUnique({
       where: { id_mesa },
       include: { zona: true },
     })
     if (!mesa) return res.status(404).json({ error: 'La mesa no existe' })
-    if (mesa.tipo_elemento !== 'mesa' || !mesa.es_seleccionable) {
+    // Reservables: MESA (se compra completa, QR para toda su capacidad) o SILLA (1 persona)
+    const esMesa = mesa.tipo_elemento === 'mesa'
+    const esSilla = mesa.tipo_elemento === 'silla'
+    if ((!esMesa && !esSilla) || !mesa.es_seleccionable) {
       return res.status(400).json({ error: 'Ese elemento no es reservable' })
     }
     if (mesa.estado_ocupacion !== 'libre') {
-      return res.status(409).json({ error: 'Esa mesa ya fue reservada. Elige otra.' })
+      return res.status(409).json({ error: 'Ese lugar ya fue reservado. Elige otro.' })
     }
-    if (cantidad_personas > mesa.capacidad_sillas && mesa.capacidad_sillas > 0) {
-      return res.status(400).json({ error: `La mesa admite hasta ${mesa.capacidad_sillas} personas` })
-    }
+    // La mesa se compra COMPLETA: el QR vale para toda su capacidad (ej. 8).
+    // La silla es individual (1 persona).
+    const cantidad_personas = esMesa ? Math.max(1, mesa.capacidad_sillas || 1) : 1
 
     // 2. Precio: el de la mesa si tiene, si no el base de la zona
     const precio = Number(mesa.precio != null ? mesa.precio : mesa.zona.precio_entrada_base)
@@ -287,6 +298,109 @@ router.post('/mesa', async (req, res) => {
   } catch (error) {
     console.error('Error reservando mesa:', error)
     res.status(500).json({ error: 'Error al procesar la reserva' })
+  }
+})
+
+// POST /api/reservas/campo — comprar una ENTRADA GENERAL / DE PIE (campo).
+// Body: { id_zona, pin? }. La zona debe ser general (es_general=true); vende
+// entradas de 1 persona hasta su capacidad. Paga con billetera de forma atomica.
+router.post('/campo', async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const id_zona = Number(req.body.id_zona)
+    const { pin } = req.body
+    if (!id_zona) return res.status(400).json({ error: 'Falta la zona general' })
+
+    const zona = await prisma.zona.findUnique({ where: { id_zona }, include: { evento: true } })
+    if (!zona) return res.status(404).json({ error: 'La zona no existe' })
+    if (!zona.es_general) return res.status(400).json({ error: 'Esta zona no vende entradas generales' })
+    if (zona.evento?.estado === 'finalizado') return res.status(400).json({ error: 'El evento ya finalizó' })
+
+    // Cupos: cada entrada general es de 1 persona
+    const vendidas = await prisma.entrada.count({ where: { id_zona } })
+    if (vendidas >= zona.capacidad_maxima) {
+      return res.status(409).json({ error: 'Entradas de pie agotadas para esta zona.' })
+    }
+
+    const precio = Number(zona.precio_entrada_base)
+    if (!(precio >= 0)) return res.status(400).json({ error: 'La zona no tiene un precio válido' })
+
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
+    if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+
+    if (billetera.pin_transaccional) {
+      if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
+      const bcrypt = require('bcryptjs')
+      const pinValido = await bcrypt.compare(String(pin), billetera.pin_transaccional)
+      if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
+    }
+
+    if (Number(billetera.saldo_actual) < precio) {
+      return res.status(400).json({ error: 'Saldo insuficiente para esta entrada' })
+    }
+
+    const codigo = generarCodigoEntrada(id_usuario)
+
+    let entradaCreada
+    try {
+      entradaCreada = await prisma.$transaction(async (tx) => {
+        // Cobro condicional (evita saldo negativo)
+        if (precio > 0) {
+          const descuento = await tx.billetera.updateMany({
+            where: { id_billetera: billetera.id_billetera, saldo_actual: { gte: precio } },
+            data: { saldo_actual: { decrement: precio }, ultima_actualizacion: new Date() },
+          })
+          if (descuento.count === 0) throw new Error('SALDO_INSUFICIENTE')
+        }
+
+        // Cupo condicional: solo si aún quedan entradas de pie
+        const cupo = await tx.$executeRaw`
+          INSERT INTO entrada (id_usuario, id_zona, qr_acceso, codigo_ingreso, cantidad_personas, cantidad_ingresada, monto_pagado, estado_validacion, fecha_reserva)
+          SELECT ${id_usuario}, ${id_zona}, ${codigo}, ${codigo.slice(-12).toUpperCase()}, 1, 0, ${precio}, false, NOW()
+          FROM DUAL WHERE (SELECT COUNT(*) FROM entrada WHERE id_zona = ${id_zona}) < ${zona.capacidad_maxima}`
+        if (cupo === 0) throw new Error('CAMPO_AGOTADO')
+
+        const creada = await tx.entrada.findFirst({ where: { qr_acceso: codigo } })
+
+        if (precio > 0) {
+          await tx.transaccion.create({
+            data: {
+              id_billetera: billetera.id_billetera,
+              id_responsable: id_usuario,
+              tipo_operacion: 'Reserva',
+              monto: precio,
+              fecha_hora: new Date(),
+            },
+          })
+        }
+        return creada
+      })
+    } catch (e) {
+      if (e.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'Saldo insuficiente para esta entrada' })
+      if (e.message === 'CAMPO_AGOTADO') return res.status(409).json({ error: 'Entradas de pie agotadas para esta zona.' })
+      throw e
+    }
+
+    const imagenQR = await generarImagenQREntrada(entradaCreada)
+    const combos = await obtenerCombosSugeridos(3)
+
+    res.status(201).json({
+      mensaje: 'Entrada de pie confirmada',
+      entrada: {
+        id_entrada: entradaCreada.id_entrada,
+        codigo_ingreso: entradaCreada.codigo_ingreso,
+        cantidad_personas: 1,
+        monto_pagado: precio,
+        mesa: null,
+        zona: zona.nombre_zona,
+      },
+      qr: imagenQR,
+      saldo_restante: Number(billetera.saldo_actual) - precio,
+      combos_sugeridos: combos,
+    })
+  } catch (error) {
+    console.error('Error comprando entrada de pie:', error)
+    res.status(500).json({ error: 'Error al procesar la entrada de pie' })
   }
 })
 

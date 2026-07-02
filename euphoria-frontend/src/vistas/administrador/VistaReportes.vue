@@ -1,14 +1,15 @@
 <template>
   <div class="vista-reportes fade-in">
     <div class="vista-cabecera">
-      <div>
+      <div class="vista-cabecera-info">
         <h2 class="vista-titulo">Reportes</h2>
+        <p class="vista-subtitulo">Panorama en vivo de ventas, personal, inventario y billetera digital</p>
       </div>
-      <div class="cabecera-acciones" style="display: flex; gap: 12px; align-items: center;">
-        <span class="badge-tiempo-real" style="margin-right: 0;">
+      <div class="cabecera-acciones">
+        <span class="badge-tiempo-real">
           <span class="punto-verde animate-pulse">●</span> Actualizado en vivo
         </span>
-        <button class="btn-sincronizar" style="background: linear-gradient(135deg, var(--morado-brillante), var(--color-info)); margin: 0; padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-weight: 700; border-radius: 12px;" @click="exportarPDF">
+        <button class="btn-sincronizar brillo-hover" @click="exportarPDF">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar PDF
         </button>
@@ -246,7 +247,7 @@
     </div>
 
     <!-- 2. TARJETAS DE RESUMEN (AHORA SEGUNDO) -->
-    <div class="grid-resumen fade-in">
+    <div class="grid-resumen fade-in escalonar">
       <div class="tarjeta-estadistica bg-clientes" @click="abrirModal('clientes')">
         <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
         <div class="info-est">
@@ -308,7 +309,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
       </div>
       <div class="alerta-contenido">
-        <h4>¡Alerta de Inventario Crítico!</h4>
+        <h4>Inventario crítico</h4>
+        <p class="alerta-subtexto">Productos por debajo del umbral de reposición ({{ UMBRAL_STOCK_BAJO }} uds.)</p>
         <div class="alerta-productos-lista">
           <span v-for="prod in productosBajoStock" :key="prod.id_producto" class="alerta-producto-badge">
             <span class="punto-alerta"></span>
@@ -509,7 +511,7 @@
       </div>
 
       <!-- KPIs de Billetera (mismas tarjetas que el diseño de la imagen) -->
-      <div class="grid-kpi-billetera">
+      <div class="grid-kpi-billetera escalonar">
         <div class="kbi-card kbi-morado">
           <div class="kbi-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
@@ -1457,10 +1459,37 @@ function formatearFecha(isoStr) {
   flex-wrap: wrap;
   gap: 15px;
 }
+.vista-cabecera-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vista-titulo {
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.7rem, 2.4vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0;
+  background: var(--gradiente-texto);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--texto-principal);
+}
+.vista-subtitulo {
+  font-size: 0.9rem;
+  color: var(--texto-secundario);
+  font-weight: 500;
+  margin: 0;
+  max-width: 60ch;
+  text-wrap: pretty;
+}
 .cabecera-acciones {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 .badge-tiempo-real {
   display: inline-flex;
@@ -1481,26 +1510,38 @@ function formatearFecha(isoStr) {
   font-size: 0.9rem;
 }
 .btn-sincronizar {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   border: none;
   color: #fff;
-  padding: 10px 18px;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border-radius: var(--radio-md);
   font-weight: 700;
   font-size: 0.9rem;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(170, 59, 255, 0.25);
+  transition: transform 0.25s var(--ease-suave), box-shadow 0.25s ease, filter 0.2s ease;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.3);
+}
+.btn-sincronizar svg {
+  transition: transform 0.25s var(--ease-suave);
 }
 .btn-sincronizar:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(170, 59, 255, 0.4);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.45), var(--glow-rosa);
+  filter: saturate(1.08);
+}
+.btn-sincronizar:hover svg {
+  transform: translateY(2px);
 }
 .btn-sincronizar:active {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.97);
+}
+.btn-sincronizar:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco), 0 4px 16px rgba(168, 85, 247, 0.3);
 }
 .animar-giro svg {
   animation: spin 1s linear infinite;
@@ -1540,7 +1581,15 @@ function formatearFecha(isoStr) {
 .tarjeta-estadistica:hover {
   transform: translateY(-6px);
   border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 18px 40px rgba(10, 4, 20, 0.5), var(--sombra-glow);
+}
+.tarjeta-estadistica:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: var(--anillo-foco);
+}
+.tarjeta-estadistica:active {
+  transform: translateY(-2px) scale(0.99);
 }
 .bg-clientes { border-left: 4px solid var(--color-info); }
 .bg-personal { border-left: 4px solid var(--morado-claro); }
@@ -1585,6 +1634,8 @@ function formatearFecha(isoStr) {
   font-size: 2rem;
   color: #fff;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   margin: 0 0 4px;
 }
 .info-est p {
@@ -1650,6 +1701,10 @@ function formatearFecha(isoStr) {
 .btn-cerrar-fs:active {
   transform: scale(0.97);
 }
+.btn-cerrar-fs:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.35);
+}
 
 .modal-fs-body {
   padding: 40px;
@@ -1697,11 +1752,21 @@ function formatearFecha(isoStr) {
 .btn-preset:hover {
   border-color: var(--borde-activo);
   color: var(--texto-principal);
+  transform: translateY(-1px);
+}
+.btn-preset:active {
+  transform: translateY(0) scale(0.97);
+}
+.btn-preset:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+  color: var(--texto-principal);
 }
 .btn-preset.activo {
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+  background: var(--gradiente-marca);
   border-color: transparent;
   color: #fff;
+  box-shadow: 0 3px 12px rgba(168, 85, 247, 0.3);
 }
 .filtro-rango-personalizado {
   display: flex;
@@ -1777,6 +1842,13 @@ function formatearFecha(isoStr) {
   background: var(--morado-medio);
   color: #fff;
 }
+.btn-limpiar-filtro:active {
+  transform: scale(0.97);
+}
+.btn-limpiar-filtro:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+}
 .input-filtro {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
@@ -1789,9 +1861,13 @@ function formatearFecha(isoStr) {
   transition: border-color 0.2s;
   cursor: pointer;
 }
+.input-filtro:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
 .input-filtro:focus {
   border-color: var(--morado-brillante);
   background: rgba(255,255,255,0.1);
+  box-shadow: var(--anillo-foco);
 }
 
 /* TABLA PREMIUM */
@@ -1906,8 +1982,8 @@ function formatearFecha(isoStr) {
 }
 .tarjeta-grafico:hover {
   transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.5);
+  border-color: rgba(168, 85, 247, 0.22);
+  box-shadow: 0 18px 48px rgba(10, 4, 20, 0.55), 0 0 24px rgba(168, 85, 247, 0.12);
   background: rgba(255, 255, 255, 0.03);
 }
 .grafico-header {
@@ -1928,12 +2004,13 @@ function formatearFecha(isoStr) {
   font-weight: 800;
   color: #fff;
   margin: 0;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.01em;
 }
 .subtexto-grafico {
   font-size: 0.8rem;
   color: var(--texto-secundario);
   font-weight: 500;
+  text-wrap: pretty;
 }
 .grafico-contenido {
   display: flex;
@@ -1959,6 +2036,8 @@ function formatearFecha(isoStr) {
 .categoria-monto {
   color: #fff;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 .barra-pista {
   width: 100%;
@@ -2054,6 +2133,12 @@ function formatearFecha(isoStr) {
 .alerta-contenido p {
   font-size: 0.88rem;
   color: var(--texto-secundario);
+  margin: 0;
+}
+.alerta-subtexto {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
   margin: 0;
 }
 .alerta-productos-lista {
@@ -2230,7 +2315,8 @@ function formatearFecha(isoStr) {
 .l-valores {
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
 }
 
 /* STOCK INDICADORES */
@@ -2496,6 +2582,15 @@ function formatearFecha(isoStr) {
 .btn-ver-historial:hover {
   background: var(--morado-brillante);
   color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
+}
+.btn-ver-historial:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn-ver-historial:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
 }
 
 /* GRID DE KPIs */
@@ -2526,8 +2621,9 @@ function formatearFecha(isoStr) {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .kbi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  transform: translateY(-3px);
+  border-color: rgba(168, 85, 247, 0.2);
+  box-shadow: 0 12px 28px rgba(10, 4, 20, 0.4), 0 0 18px rgba(168, 85, 247, 0.1);
 }
 .kbi-morado { border-left-color: var(--morado-brillante); }
 .kbi-verde  { border-left-color: var(--color-exito); }
@@ -2564,6 +2660,8 @@ function formatearFecha(isoStr) {
   font-weight: 900;
   color: white;
   line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* GRID GRAFICOS BILLETERA */
@@ -2679,6 +2777,27 @@ function formatearFecha(isoStr) {
     flex-direction: column;
     gap: 12px;
     padding: 16px;
+  }
+}
+
+/* ============================================
+   ACCESIBILIDAD: respetar reduce-motion.
+   Desactiva pulsos perpetuos y animaciones de entrada/dibujo
+   sin afectar la funcionalidad ni el layout.
+============================================ */
+@media (prefers-reduced-motion: reduce) {
+  .alerta-stock-bajo,
+  .punto-alerta,
+  .linea-tendencia-neon,
+  .torta-sector,
+  .barra-progreso,
+  .columna-barra-progreso,
+  .modal-fullscreen {
+    animation: none !important;
+    transition: none !important;
+  }
+  .linea-tendencia-neon {
+    stroke-dashoffset: 0 !important;
   }
 }
 </style>

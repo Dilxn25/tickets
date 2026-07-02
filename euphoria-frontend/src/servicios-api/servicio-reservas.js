@@ -25,6 +25,15 @@ export const servicioReservas = {
     return api.post('/reservas/mesa', { id_mesa, cantidad_personas, pin })
   },
 
+  /**
+   * Comprar una entrada general / de pie (campo) en una zona general.
+   * @param {number} id_zona
+   * @param {string} [pin] - solo si la billetera tiene PIN configurado
+   */
+  async comprarCampo(id_zona, pin) {
+    return api.post('/reservas/campo', { id_zona, pin })
+  },
+
   /** Reservas del cliente con su QR */
   async misReservas() {
     return api.get('/reservas/mias')

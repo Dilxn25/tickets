@@ -10,8 +10,8 @@
           </svg>
         </button>
         <div class="modal-qr-monto" v-if="montoActual">Bs. {{ montoActual }}</div>
-        <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="QR Pago Euphoria" class="qr-imagen-grande" />
-        <p class="modal-qr-hint">Muestra este QR al cliente para que escanee</p>
+        <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR de pago de Euphoria" class="qr-imagen-grande" />
+        <p class="modal-qr-hint">Muestra este QR al cliente para que lo escanee</p>
       </div>
     </div>
 
@@ -48,15 +48,15 @@
     </div>
 
     <!-- Pestañas de navegación -->
-    <div class="tabs-cajero scroll-tabs">
-      <button :class="['tab-btn', { activo: tabActiva === 'recargar' }]" @click="tabActiva = 'recargar'">
+    <div class="tabs-cajero scroll-tabs escalonar">
+      <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'recargar' }]" @click="tabActiva = 'recargar'">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
         Recargar
       </button>
-      <button :class="['tab-btn', { activo: tabActiva === 'abrir' }]" @click="tabActiva = 'abrir'">
+      <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'abrir' }]" @click="tabActiva = 'abrir'">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
           <circle cx="8.5" cy="7" r="4"></circle>
@@ -65,14 +65,14 @@
         </svg>
         Nueva Billetera
       </button>
-      <button :class="['tab-btn', { activo: tabActiva === 'consultar' }]" @click="tabActiva = 'consultar'">
+      <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'consultar' }]" @click="tabActiva = 'consultar'">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
         Consultar
       </button>
-      <button :class="['tab-btn', { activo: tabActiva === 'historial' }]" @click="tabActiva = 'historial'">
+      <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'historial' }]" @click="tabActiva = 'historial'">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
           <polyline points="12 6 12 12 16 14"></polyline>
@@ -96,7 +96,7 @@
             </svg>
           </div>
           <div>
-            <h2 class="card-titulo">Nueva Billetera</h2>
+            <h2 class="card-titulo">Nueva billetera</h2>
             <p class="card-subtitulo">CI o número de teléfono</p>
           </div>
         </div>
@@ -109,7 +109,7 @@
                 <rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line>
                 <line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              CI o Teléfono
+              CI o teléfono
             </label>
             <input v-model="nuevoId" type="text" placeholder="72285280" required @input="verificarIdentificador" autocomplete="off" />
             <p v-if="errorIdExiste" class="error-texto" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
@@ -125,7 +125,7 @@
           <div v-if="!camaraAbrirActiva" style="margin-bottom:0.5rem;">
             <button type="button" class="btn-accion-secundario" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:0.65rem;" @click="iniciarCamaraAbrir">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR del Cliente
+              Escanear QR del cliente
             </button>
           </div>
           <div v-show="camaraAbrirActiva" style="margin-bottom:1rem;">
@@ -148,7 +148,7 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);" @click="detenerCamaraAbrir">Detener Cámara</button>
+            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);box-shadow:none;" @click="detenerCamaraAbrir">Detener Cámara</button>
           </div>
 
 
@@ -158,7 +158,7 @@
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              PIN de Seguridad (Opcional)
+              PIN de seguridad (opcional)
             </label>
             <input v-model="nuevoPin" type="password" maxlength="4" pattern="\d{4}" placeholder="Ej: 1234 (Por defecto será 1234)" autocomplete="new-password" @input="nuevoPin = nuevoPin.replace(/\D/g, '')" />
             <p v-if="nuevoPin && nuevoPin.length !== 4" class="error-texto" style="margin-top: 0.3rem;">El PIN debe tener exactamente 4 dígitos.</p>
@@ -204,7 +204,7 @@
                 <line x1="12" y1="1" x2="12" y2="23"></line>
                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
               </svg>
-              Saldo Inicial
+              Saldo inicial
             </label>
             <div :class="['input-con-icono', { 'input-valido': nuevoMonto >= 10, 'input-error': nuevoMonto > 0 && nuevoMonto < 10 }]">
               <span class="prefijo">Bs.</span>
@@ -222,7 +222,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line>
               </svg>
-              Método de Pago
+              Método de pago
             </label>
             <div class="selector-metodo">
               <button type="button" :class="['btn-metodo', { seleccionado: nuevoMetodo === 'efectivo' }]" @click="nuevoMetodo = 'efectivo'">Efectivo</button>
@@ -297,11 +297,11 @@
             <div v-show="camaraComprobanteAbrirActiva" style="margin-top:0.75rem;">
               <div class="qr-scanner-wrapper"><div id="reader-comprobante-abrir"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteAbrirDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteAbrirDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteAbrirDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Detectado</p></div></div></div>
               <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:var(--color-exito);border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('abrir')">
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--color-exito);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('abrir')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                   Tomar Foto
                 </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteAbrir">Cancelar</button>
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteAbrir">Cancelar</button>
               </div>
             </div>
 
@@ -353,11 +353,11 @@
             </button>
           </div>
 
-          <button type="submit" class="btn-accion-principal btn-exito" :disabled="cargandoAbrir || errorIdExiste || (nuevoPin && nuevoPin.length !== 4) || (nuevoMetodo === 'qr' && !ocrExitoso) || (nuevoMetodo === 'efectivo' && vuelto < 0)">
+          <button type="submit" class="btn-accion-principal btn-exito brillo-hover" :disabled="cargandoAbrir || errorIdExiste || (nuevoPin && nuevoPin.length !== 4) || (nuevoMetodo === 'qr' && !ocrExitoso) || (nuevoMetodo === 'efectivo' && vuelto < 0)">
             <svg v-if="!cargandoAbrir" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            {{ cargandoAbrir ? 'Creando...' : 'Crear Billetera' }}
+            {{ cargandoAbrir ? 'Creando...' : 'Crear billetera' }}
           </button>
         </form>
 
@@ -377,7 +377,7 @@
             </svg>
           </div>
           <div>
-            <h2 class="card-titulo">Recargar Saldo</h2>
+            <h2 class="card-titulo">Recargar saldo</h2>
             <p class="card-subtitulo">Código, teléfono o correo del cliente</p>
           </div>
         </div>
@@ -388,7 +388,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              CI o Teléfono del Cliente
+              CI o teléfono del cliente
             </label>
             <input
               v-model="busquedaCliente"
@@ -414,7 +414,7 @@
           <div v-if="!camaraRecargaActiva" style="margin-bottom:0.5rem;">
             <button type="button" class="btn-accion-secundario" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:0.65rem;" @click="iniciarCamaraRecarga">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR de Billetera
+              Escanear QR de billetera
             </button>
           </div>
           <div v-show="camaraRecargaActiva" style="margin-bottom:1rem;">
@@ -437,7 +437,7 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);" @click="detenerCamaraRecarga">Detener Cámara</button>
+            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);box-shadow:none;" @click="detenerCamaraRecarga">Detener Cámara</button>
           </div>
 
           <div v-if="clienteSeleccionado" class="cliente-chip">
@@ -479,7 +479,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line>
               </svg>
-              Método de Pago
+              Método de pago
             </label>
             <div class="selector-metodo">
               <button type="button" :class="['btn-metodo', { seleccionado: metodoPago === 'efectivo' }]" @click="metodoPago = 'efectivo'">
@@ -565,11 +565,11 @@
             <div v-show="camaraComprobanteRecargarActiva" style="margin-top:0.75rem;">
               <div class="qr-scanner-wrapper"><div id="reader-comprobante-recargar"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteRecargarDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteRecargarDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteRecargarDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Comprobante detectado</p></div></div></div>
               <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(6,214,160,0.12);border:1px solid rgba(6,214,160,0.3);color:var(--color-exito);border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('recargar')">
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--color-exito);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('recargar')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                   Tomar Foto
                 </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,71,111,0.12);border:1px solid rgba(239,71,111,0.3);color:var(--color-error);border-radius:8px;cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteRecargar">Cancelar</button>
+                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteRecargar">Cancelar</button>
               </div>
             </div>
 
@@ -627,12 +627,12 @@
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
               <line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            Busca y selecciona un cliente antes de continuar
+            Busca y selecciona un cliente antes de continuar.
           </div>
 
           <button
             type="submit"
-            class="btn-accion-principal"
+            class="btn-accion-principal brillo-hover"
             :disabled="cargando || !clienteSeleccionado || !montoRecarga || montoRecarga < 10 || (metodoPago === 'qr' && !ocrExitoso) || (metodoPago === 'efectivo' && vuelto < 0)"
           >
             {{ cargando ? 'Procesando...' : 'Recargar' }}
@@ -654,16 +654,16 @@
             </svg>
           </div>
           <div>
-            <h2 class="card-titulo">Consultar Cuenta</h2>
-            <p class="card-subtitulo">Busca por CI o Teléfono para ver detalles</p>
+            <h2 class="card-titulo">Consultar cuenta</h2>
+            <p class="card-subtitulo">Busca por CI o teléfono para ver los detalles</p>
           </div>
         </div>
 
         <form @submit.prevent="consultarBilletera" class="formulario-cajero">
           <div class="grupo-input buscador-cliente-wrap">
-            <label>CI o Teléfono del Cliente</label>
-            <input 
-              v-model="busquedaConsulta" 
+            <label>CI o teléfono del cliente</label>
+            <input
+              v-model="busquedaConsulta"
               type="text" 
               placeholder="Ej: 72285280" 
               @input="buscarClienteConsulta"
@@ -684,16 +684,16 @@
 
           <!-- Separador con opción de escanear QR -->
           <div style="display: flex; align-items: center; gap: 10px; margin: 0.5rem 0;">
-            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
-            <span style="font-size:0.75rem; color:rgba(255,255,255,0.4);">o</span>
-            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+            <div style="flex:1; height:1px; background:var(--borde-sutil);"></div>
+            <span style="font-size:0.75rem; color:var(--texto-secundario);">o</span>
+            <div style="flex:1; height:1px; background:var(--borde-sutil);"></div>
           </div>
 
           <!-- Botón escanear QR de billetera -->
           <div v-if="!camaraCajeroActiva" style="margin-bottom: 0.5rem;">
             <button type="button" class="btn-accion-secundario" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:0.7rem;" @click="iniciarCamaraCajero">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR de Billetera
+              Escanear QR de billetera
             </button>
           </div>
 
@@ -720,7 +720,7 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="btn-accion-principal" style="width:100%; margin-top:10px; background: rgba(239,71,111,0.15); border: 1px solid rgba(239,71,111,0.3); color: var(--color-error);" @click="detenerCamaraCajero">
+            <button type="button" class="btn-accion-principal" style="width:100%; margin-top:10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--color-error); box-shadow:none;" @click="detenerCamaraCajero">
               Detener Cámara
             </button>
           </div>
@@ -740,22 +740,22 @@
             </button>
           </div>
 
-          <button type="submit" class="btn-accion-principal" :disabled="cargandoConsulta || !clienteConsultaSeleccionado">
+          <button type="submit" class="btn-accion-principal brillo-hover" :disabled="cargandoConsulta || !clienteConsultaSeleccionado">
             <svg v-if="!cargandoConsulta" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
             <span v-else class="loader-pequeno"></span>
-            {{ cargandoConsulta ? 'Buscando...' : 'Ver Detalles de Cuenta' }}
+            {{ cargandoConsulta ? 'Buscando...' : 'Ver detalles de cuenta' }}
           </button>
         </form>
 
         <p v-if="errorConsulta" class="error-texto" style="margin-top: 1rem; text-align: center;">{{ errorConsulta }}</p>
 
-        <div v-if="resultadoConsulta" class="resultado-consulta" style="margin-top: 2rem; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; text-align: center;">
-          <h3 style="color: white; margin-bottom: 0.5rem;">{{ resultadoConsulta.nombres }} {{ resultadoConsulta.apellidos }}</h3>
+        <div v-if="resultadoConsulta" class="resultado-consulta" style="margin-top: 2rem; background: rgba(168,85,247,0.06); border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); padding: 1.5rem; text-align: center;">
+          <h3 style="color: var(--texto-principal); font-family: var(--fuente-titulo); margin-bottom: 0.5rem;">{{ resultadoConsulta.nombres }} {{ resultadoConsulta.apellidos }}</h3>
           <p style="color: var(--texto-secundario); margin-bottom: 1.5rem;">Saldo Actual: <strong style="color: var(--color-exito); font-size: 1.2rem;">Bs. {{ resultadoConsulta.saldo.toFixed(2) }}</strong></p>
           
-          <div style="background: white; padding: 1rem; border-radius: 16px; display: inline-block; margin-bottom: 1rem;">
+          <div style="background: white; padding: 1rem; border-radius: var(--radio-lg); display: inline-block; margin-bottom: 1rem;">
             <img v-if="qrConsultaBase64" :src="qrConsultaBase64" alt="QR Público" style="width: 200px; height: 200px;" />
           </div>
           <div class="codigo-gigante" style="font-size: 1.2rem; word-break: break-all;">{{ resultadoConsulta.qr_publico }}</div>
@@ -801,7 +801,7 @@
     <div v-if="tabActiva === 'historial'" class="panel-contenido anim-fade">
       <div class="tarjeta-modulo modulo-ancho">
         <div class="header-pendientes">
-          <h2>Historial de Transacciones</h2>
+          <h2>Historial de transacciones</h2>
           
           <div class="filtros-historial" style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
             <div class="selector-metodo" style="flex: 1; min-width: 250px;">
@@ -822,11 +822,14 @@
         
         <div v-if="cargandoHistorial" class="cargando-estado">Cargando transacciones...</div>
         <div v-else-if="transaccionesHistorial.length === 0" class="estado-vacio">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          <p>No hay transacciones registradas.</p>
+          <div class="estado-vacio-icono">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+          <p class="estado-vacio-titulo">Todavía no hay transacciones</p>
+          <p class="estado-vacio-sub">Las recargas y aperturas de billetera aparecerán aquí en cuanto registres la primera.</p>
         </div>
 
         <div v-else class="lista-pendientes">
@@ -899,11 +902,11 @@
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
           </div>
-          <h2 style="color: white; margin: 1rem 0 0.5rem; font-size: 1.5rem;">¡Billetera Creada!</h2>
+          <h2 style="color: var(--texto-principal); font-family: var(--fuente-titulo); margin: 1rem 0 0.5rem; font-size: 1.5rem;">Billetera creada</h2>
           <p style="color: var(--texto-secundario); margin: 0 0 1.5rem;">La cuenta está lista para usarse.</p>
         </div>
         
-        <div class="qr-generado-box" style="background: white; padding: 1rem; border-radius: 16px; display: inline-block; margin-bottom: 1rem; box-shadow: 0 0 20px rgba(157,78,221,0.3);">
+        <div class="qr-generado-box" style="background: white; padding: 1rem; border-radius: var(--radio-lg); display: inline-block; margin-bottom: 1rem; box-shadow: 0 0 20px rgba(168,85,247,0.35);">
           <img v-if="qrBase64" :src="qrBase64" alt="QR del Cliente" style="width: 250px; height: 250px; display: block;" />
         </div>
         
@@ -915,7 +918,7 @@
           Muestra esta pantalla al cliente para que tome una foto al QR.
         </p>
         
-        <div class="credenciales-resumen" style="background: rgba(255,255,255,0.05); padding: 1.2rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: left; border: 1px solid rgba(255,255,255,0.1);">
+        <div class="credenciales-resumen" style="background: rgba(168,85,247,0.06); padding: 1.2rem; border-radius: var(--radio-lg); margin-bottom: 1.5rem; text-align: left; border: 1px solid var(--borde-sutil);">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem;">
             <span style="color: var(--texto-secundario);">Correo:</span>
             <strong style="color: white;">{{ credencialesGeneradas.credenciales.correo }}</strong>
@@ -1607,12 +1610,12 @@ onMounted(() => {
 .cajero-badge {
   width: 52px;
   height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
+  border-radius: var(--radio-lg);
+  background: var(--gradiente-marca);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 20px rgba(157,78,221,0.4);
+  box-shadow: 0 6px 20px rgba(168,85,247,0.4), inset 0 1px 0 rgba(255,255,255,0.22);
   flex-shrink: 0;
 }
 
@@ -1625,10 +1628,13 @@ onMounted(() => {
 }
 
 .cajero-titulo-visual {
-  font-size: 1.4rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.45rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   color: var(--texto-principal);
-  background: linear-gradient(90deg, #fff, var(--morado-brillante));
+  background: linear-gradient(90deg, var(--texto-principal), var(--morado-brillante));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1647,31 +1653,36 @@ onMounted(() => {
 .card-icon-grande {
   width: 64px;
   height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--color-exito), var(--color-exito));
+  border-radius: var(--radio-lg);
+  background: linear-gradient(135deg, var(--color-exito), #16A34A);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(6,214,160,0.3);
+  box-shadow: 0 8px 24px rgba(34,197,94,0.3), inset 0 1px 0 rgba(255,255,255,0.22);
   flex-shrink: 0;
 }
 
 .card-icon-morado {
-  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
-  box-shadow: 0 8px 24px rgba(157,78,221,0.3);
+  background: var(--gradiente-marca);
+  box-shadow: 0 8px 24px rgba(168,85,247,0.3), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
 .card-titulo {
   margin: 0;
-  font-size: 1.4rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.45rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   color: var(--texto-principal);
+  text-wrap: balance;
 }
 
 .card-subtitulo {
-  margin: 0.2rem 0 0;
+  margin: 0.3rem 0 0;
   color: var(--texto-secundario);
   font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 /* Labels con iconos */
@@ -1697,28 +1708,41 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.8rem 0.5rem;
-  border-radius: 10px;
-  border: 1px solid var(--borde-color);
-  background: rgba(255,255,255,0.03);
+  padding: 0.9rem 0.5rem;
+  min-height: 68px;
+  justify-content: center;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil);
+  background: rgba(168,85,247,0.05);
   color: var(--texto-secundario);
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 600;
-  transition: all 0.2s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .btn-ubicacion:hover {
-  border-color: rgba(157,78,221,0.4);
-  background: rgba(157,78,221,0.08);
+  border-color: var(--borde-activo);
+  background: rgba(168,85,247,0.1);
   color: var(--texto-principal);
+  transform: translateY(-2px);
+}
+
+.btn-ubicacion:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-ubicacion:focus-visible {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.35));
 }
 
 .btn-ubicacion.seleccionado {
   border-color: var(--morado-brillante);
-  background: rgba(157,78,221,0.15);
-  color: white;
-  box-shadow: 0 0 0 2px rgba(157,78,221,0.2);
+  background: rgba(168,85,247,0.16);
+  color: var(--texto-principal);
+  box-shadow: 0 0 0 2px rgba(168,85,247,0.25), var(--sombra-glow);
 }
 
 /* Selector de Método */
@@ -1729,27 +1753,43 @@ onMounted(() => {
 }
 
 .btn-metodo {
-  padding: 0.7rem;
-  border-radius: 8px;
-  border: 1px solid var(--borde-color);
-  background: rgba(255,255,255,0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.85rem;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil);
+  background: rgba(168,85,247,0.05);
   color: var(--texto-secundario);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
-  transition: all 0.2s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .btn-metodo:hover {
-  border-color: rgba(157,78,221,0.4);
-  background: rgba(157,78,221,0.08);
+  border-color: var(--borde-activo);
+  background: rgba(168,85,247,0.1);
   color: var(--texto-principal);
+  transform: translateY(-2px);
+}
+
+.btn-metodo:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-metodo:focus-visible {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.35));
 }
 
 .btn-metodo.seleccionado {
-  border-color: var(--morado-brillante);
-  background: rgba(157,78,221,0.2);
-  color: white;
+  border-color: transparent;
+  background: var(--gradiente-marca);
+  color: var(--texto-principal);
+  box-shadow: var(--sombra-glow), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 /* Alerta resultado */
@@ -1794,22 +1834,22 @@ onMounted(() => {
 }
 
 .modal-exito {
-  background: var(--fondo-app);
-  border: 1px solid rgba(6,214,160,0.3);
-  border-radius: 20px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid rgba(34,197,94,0.3);
+  border-radius: var(--radio-xl);
   padding: 2.5rem 2rem;
   max-width: 380px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(6,214,160,0.1);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(34,197,94,0.1);
 }
 
 .modal-icono-exito {
   width: 72px;
   height: 72px;
-  border-radius: 50%;
-  background: rgba(6,214,160,0.1);
-  border: 2px solid rgba(6,214,160,0.3);
+  border-radius: var(--radio-full);
+  background: rgba(34,197,94,0.1);
+  border: 2px solid rgba(34,197,94,0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1817,6 +1857,7 @@ onMounted(() => {
 }
 
 .modal-exito h3 {
+  font-family: var(--fuente-titulo);
   font-size: 1.3rem;
   font-weight: 800;
   color: var(--texto-principal);
@@ -1830,8 +1871,8 @@ onMounted(() => {
 }
 
 .modal-detalle {
-  background: rgba(255,255,255,0.05);
-  border-radius: 10px;
+  background: rgba(168,85,247,0.08);
+  border-radius: var(--radio-md);
   padding: 0.8rem 1rem;
   font-family: monospace;
   font-size: 0.85rem;
@@ -1845,9 +1886,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(239,71,111,0.1);
-  border: 1px solid rgba(239,71,111,0.3);
-  border-radius: 8px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: var(--radio-md);
   padding: 0.7rem 1rem;
   color: var(--color-error);
   font-size: 0.9rem;
@@ -1869,9 +1910,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255,209,102,0.08);
-  border: 1px solid rgba(255,209,102,0.25);
-  border-radius: 8px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: var(--radio-md);
   padding: 0.7rem 1rem;
   color: var(--color-alerta);
   font-size: 0.85rem;
@@ -1888,12 +1929,12 @@ onMounted(() => {
   top: 100%;
   left: 0;
   right: 0;
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 10px;
+  background: var(--fondo-tarjeta-alt);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-md);
   z-index: 50;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), var(--sombra-glow);
   margin-top: 4px;
 }
 
@@ -1903,12 +1944,12 @@ onMounted(() => {
   gap: 0.8rem;
   padding: 0.8rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  transition: background 0.15s;
+  border-bottom: 1px solid var(--borde-sutil);
+  transition: background 0.15s var(--ease-suave, ease), padding-left 0.15s var(--ease-suave, ease);
 }
 
 .resultado-item:last-child { border-bottom: none; }
-.resultado-item:hover { background: rgba(157,78,221,0.1); }
+.resultado-item:hover { background: rgba(168,85,247,0.12); padding-left: 1.25rem; }
 
 .resultado-info {
   display: flex;
@@ -1924,6 +1965,7 @@ onMounted(() => {
 .resultado-sub {
   font-size: 0.8rem;
   color: var(--texto-secundario);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Chip cliente seleccionado */
@@ -1931,9 +1973,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  background: rgba(6,214,160,0.08);
-  border: 1px solid rgba(6,214,160,0.25);
-  border-radius: 10px;
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: var(--radio-md);
   padding: 0.8rem 1rem;
   margin-bottom: 0.5rem;
 }
@@ -1956,9 +1998,9 @@ onMounted(() => {
 }
 
 .chip-cerrar {
-  background: rgba(239,71,111,0.1);
+  background: rgba(239,68,68,0.1);
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radio-full);
   width: 28px;
   height: 28px;
   display: flex;
@@ -1973,9 +2015,9 @@ onMounted(() => {
 
 /* Calculadora vuelto */
 .calculadora-vuelto {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
+  background: rgba(168,85,247,0.05);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
   padding: 1rem;
 }
 
@@ -1984,17 +2026,18 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 0.8rem;
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   font-weight: 700;
   font-size: 1rem;
   margin-top: 0.8rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.vuelto-ok { background: rgba(6,214,160,0.1); color: var(--color-exito); }
-.vuelto-error { background: rgba(239,71,111,0.1); color: var(--color-error); }
+.vuelto-ok { background: rgba(34,197,94,0.12); color: var(--color-exito); }
+.vuelto-error { background: rgba(239,68,68,0.12); color: var(--color-error); }
 
 /* === QR SCANNER OVERLAY === */
-.qr-scanner-wrapper { position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #000; }
+.qr-scanner-wrapper { position: relative; width: 100%; border-radius: var(--radio-lg); overflow: hidden; background: #000; border: 1px solid var(--borde-activo); }
 .qr-scanner-wrapper #reader-cajero { width: 100%; height: 260px; }
 .qr-scanner-wrapper #reader-cajero__dashboard_section_csr,
 .qr-scanner-wrapper #reader-cajero__status_span { display: none !important; }
@@ -2004,28 +2047,30 @@ onMounted(() => {
 .qr-overlay-side { flex: 1; background: rgba(0,0,0,0.55); }
 .qr-overlay-bottom { display: flex; align-items: flex-start; justify-content: center; padding-top: 8px; }
 .qr-viewfinder { width: 200px; height: 200px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(6,214,160,0.5); }
+.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(34,197,94,0.5); }
 .qr-viewfinder-vertical { width: 180px; height: 260px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder-vertical.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(6,214,160,0.5); }
+.qr-viewfinder-vertical.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(34,197,94,0.5); }
 .corner { position: absolute; width: 20px; height: 20px; border-color: #fff; border-style: solid; transition: border-color 0.3s ease; }
 .qr-viewfinder.qr-detected .corner, .qr-viewfinder-vertical.qr-detected .corner { border-color: var(--color-exito); }
 .corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
 .corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
 .corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
 .corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--color-exito), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(157,78,221,0.8); animation: scan-move 1.8s ease-in-out infinite; }
+.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--rosa-acento), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(168,85,247,0.8); animation: scan-move 1.8s ease-in-out infinite; }
 @keyframes scan-move { 0% { top: 10px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: calc(100% - 10px); opacity: 0; } }
 .qr-hint { color: rgba(255,255,255,0.75); font-size: 0.75rem; text-align: center; margin: 0; padding: 0 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 .qr-hint-ok { color: var(--color-exito); font-weight: 700; font-size: 0.82rem; }
-.btn-accion-secundario { background: rgba(157,78,221,0.12); border: 1px solid rgba(157,78,221,0.35); color: var(--morado-brillante); border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: 0.2s; }
-.btn-accion-secundario:hover { background: rgba(157,78,221,0.22); }
+.btn-accion-secundario { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.35); color: var(--morado-hover); border-radius: var(--radio-md); cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease); }
+.btn-accion-secundario:hover { background: rgba(168,85,247,0.22); border-color: var(--borde-activo); transform: translateY(-2px); }
+.btn-accion-secundario:active { transform: translateY(0) scale(0.98); }
+.btn-accion-secundario:focus-visible { outline: none; border-color: var(--morado-brillante); box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.35)); }
 
 /* Flujo QR */
 .flujo-qr {
-  border: 1px solid rgba(157,78,221,0.2);
-  border-radius: 12px;
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
   padding: 1.2rem;
-  background: rgba(157,78,221,0.04);
+  background: rgba(168,85,247,0.05);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -2051,9 +2096,9 @@ onMounted(() => {
 .qr-imagen-wrap {
   position: relative;
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: var(--radio-lg);
   overflow: hidden;
-  border: 2px solid rgba(157,78,221,0.25);
+  border: 2px solid rgba(168,85,247,0.25);
   width: 180px;
   height: 180px;
   transition: border-color 0.2s;
@@ -2110,24 +2155,24 @@ onMounted(() => {
 
 /* Modal QR ampliado */
 .modal-qr-ampliado {
-  background: var(--fondo-app);
-  border: 1px solid rgba(157,78,221,0.3);
-  border-radius: 20px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl);
   padding: 2rem 1.5rem;
   max-width: 420px;
   width: 90%;
   text-align: center;
   position: relative;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 40px rgba(157,78,221,0.15);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 40px rgba(168,85,247,0.15);
 }
 
 .modal-qr-cerrar {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: rgba(255,255,255,0.06);
+  background: rgba(168,85,247,0.1);
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radio-full);
   width: 36px;
   height: 36px;
   display: flex;
@@ -2139,7 +2184,7 @@ onMounted(() => {
 }
 
 .modal-qr-cerrar:hover {
-  background: rgba(239,71,111,0.15);
+  background: rgba(239,68,68,0.15);
   color: var(--color-error);
 }
 
@@ -2148,14 +2193,15 @@ onMounted(() => {
   font-weight: 900;
   color: var(--morado-brillante);
   margin-bottom: 1rem;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .qr-imagen-grande {
   width: 100%;
   max-width: 320px;
-  border-radius: 12px;
-  border: 2px solid rgba(157,78,221,0.3);
+  border-radius: var(--radio-lg);
+  border: 2px solid rgba(168,85,247,0.3);
 }
 
 .modal-qr-hint {
@@ -2182,23 +2228,33 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--borde-color);
-  border-radius: 8px;
-  padding: 0.7rem 1.2rem;
+  background: rgba(168,85,247,0.06);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
+  padding: 0.8rem 1.2rem;
   color: var(--texto-secundario);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
   flex: 1;
   justify-content: center;
 }
 
 .btn-cargar-archivo:hover {
+  border-color: var(--borde-activo);
+  color: var(--texto-principal);
+  background: rgba(168,85,247,0.12);
+  transform: translateY(-2px);
+}
+
+.btn-cargar-archivo:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-cargar-archivo:focus-within {
   border-color: var(--morado-brillante);
-  color: white;
-  background: rgba(157,78,221,0.1);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.3));
 }
 
 .input-oculto { display: none; }
@@ -2213,7 +2269,8 @@ onMounted(() => {
   width: 100%;
   max-height: 150px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil);
 }
 
 .btn-quitar-archivo {
@@ -2238,18 +2295,18 @@ onMounted(() => {
   gap: 0.5rem;
   margin-top: 0.8rem;
   padding: 0.6rem 0.8rem;
-  border-radius: 8px;
+  border-radius: var(--radio-md);
   font-size: 0.9rem;
   font-weight: 600;
 }
 
 .estado-ocr.cargando { color: var(--texto-secundario); }
-.estado-ocr.exito { background: rgba(6,214,160,0.1); color: var(--color-exito); }
-.estado-ocr.error-ocr { background: rgba(255,209,102,0.1); color: var(--color-alerta); }
+.estado-ocr.exito { background: rgba(34,197,94,0.1); color: var(--color-exito); }
+.estado-ocr.error-ocr { background: rgba(245,158,11,0.1); color: var(--color-alerta); }
 
 .estado-ocr.exito-detallado {
-  background: rgba(6,214,160,0.08);
-  border: 1px solid rgba(6,214,160,0.3);
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.3);
   display: flex;
   align-items: flex-start;
   gap: 0.8rem;
@@ -2273,7 +2330,7 @@ onMounted(() => {
 }
 
 .exito-sub {
-  color: rgba(6,214,160,0.8);
+  color: rgba(34,197,94,0.85);
   font-size: 0.8rem;
   font-weight: 500;
 }
@@ -2295,12 +2352,13 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid var(--borde-sutil);
   backdrop-filter: blur(10px);
   color: var(--texto-secundario);
-  padding: 0.8rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.85rem 1.5rem;
+  min-height: 48px;
+  border-radius: var(--radio-lg);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -2309,14 +2367,27 @@ onMounted(() => {
 }
 
 .tab-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(168, 85, 247, 0.12);
+  border-color: var(--borde-activo);
+  color: var(--texto-principal);
+  transform: translateY(-2px);
+}
+
+.tab-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.tab-btn:focus-visible {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.4));
 }
 
 .tab-btn.activo {
-  background: linear-gradient(135deg, var(--morado-brillante), var(--morado-medio));
-  color: white;
-  border-color: rgba(157, 78, 221, 0.5);
-  box-shadow: 0 8px 20px rgba(157, 78, 221, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  background: var(--gradiente-marca);
+  color: var(--texto-principal);
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
   transform: translateY(-2px);
 }
 
@@ -2340,16 +2411,20 @@ onMounted(() => {
 }
 
 .tarjeta-modulo {
-  background: var(--fondo-tarjeta);
-  border-radius: 16px;
-  padding: 2rem;
-  border: 1px solid var(--borde-color);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  background: var(--gradiente-sutil, var(--fondo-tarjeta));
+  border-radius: var(--radio-xl);
+  padding: 2rem 2rem 2.25rem;
+  border: 1px solid var(--borde-sutil);
+  box-shadow: var(--sombra-tarjeta, 0 18px 44px -12px rgba(26,15,61,0.7)), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .tarjeta-modulo h2 {
   margin-top: 0;
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--texto-principal);
+  text-wrap: balance;
 }
 
 .texto-ayuda {
@@ -2374,21 +2449,31 @@ onMounted(() => {
 
 .grupo-input input, .grupo-input select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--borde-color);
-  padding: 0.8rem 1rem;
-  border-radius: 8px;
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radio-md);
   color: var(--texto-principal);
   font-size: 1rem;
+  transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease), box-shadow var(--trans-rapida, 0.15s) var(--ease-suave, ease);
+}
+
+.grupo-input input:hover:not(:focus), .grupo-input select:hover:not(:focus) {
+  border-color: var(--borde-activo);
+}
+
+.grupo-input input::placeholder {
+  color: var(--texto-secundario);
+  opacity: 0.7;
 }
 
 .select-premium {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(255,255,255,0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239D4EDD' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 1rem center;
-  border: 1px solid var(--borde-color);
+  background: var(--fondo-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A855F7' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 1rem center;
+  border: 1px solid var(--borde-sutil);
   padding: 0.8rem 3rem 0.8rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radio-md);
   color: var(--texto-principal);
   font-size: 1rem;
   width: 100%;
@@ -2399,17 +2484,17 @@ onMounted(() => {
 .select-premium:focus {
   outline: none;
   border-color: var(--morado-brillante);
-  box-shadow: 0 0 0 2px rgba(157,78,221,0.2);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.25));
 }
 
 .input-valido {
   border-color: var(--color-exito) !important;
-  box-shadow: 0 0 0 2px rgba(6,214,160,0.15);
+  box-shadow: 0 0 0 2px rgba(34,197,94,0.18);
 }
 
 .input-error {
   border-color: var(--color-error) !important;
-  box-shadow: 0 0 0 2px rgba(239,71,111,0.15);
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.18);
 }
 
 .icono-check {
@@ -2429,10 +2514,11 @@ onMounted(() => {
 .input-con-icono {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--borde-color);
-  border-radius: 8px;
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
   overflow: hidden;
+  transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease), box-shadow var(--trans-rapida, 0.15s) var(--ease-suave, ease);
 }
 
 .input-con-icono .prefijo {
@@ -2449,26 +2535,28 @@ onMounted(() => {
 
 .input-con-icono:focus-within {
   border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.25));
 }
 
 .grupo-input input:focus, .grupo-input select:focus {
   outline: none;
   border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.25));
 }
 
 .btn-exito {
-  background: linear-gradient(135deg, var(--color-exito), var(--color-exito));
+  background: linear-gradient(135deg, var(--color-exito), #16A34A);
 }
 .btn-exito:hover:not(:disabled) {
-  background: var(--color-exito);
+  background: linear-gradient(135deg, #34D77A, var(--color-exito));
 }
 
 .alerta-credenciales {
   margin-top: 2rem;
-  background: rgba(6, 214, 160, 0.1);
-  border: 1px solid rgba(6, 214, 160, 0.3);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
   padding: 1.5rem;
-  border-radius: 12px;
+  border-radius: var(--radio-lg);
   text-align: center;
 }
 
@@ -2484,25 +2572,28 @@ onMounted(() => {
   color: var(--texto-principal);
   letter-spacing: 3px;
   margin: 1rem 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--borde-sutil);
   padding: 1rem;
-  border-radius: 12px;
+  border-radius: var(--radio-lg);
   user-select: all;
+  font-variant-numeric: tabular-nums;
 }
 
 .btn-secundario {
-  background: rgba(255,255,255,0.1);
-  color: white;
-  border: none;
+  background: rgba(168,85,247,0.12);
+  color: var(--texto-principal);
+  border: 1px solid var(--borde-sutil);
   padding: 0.8rem 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radio-md);
   cursor: pointer;
   margin-top: 1rem;
-  transition: all 0.3s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .btn-secundario:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(168,85,247,0.22);
+  border-color: var(--borde-activo);
 }
 
 /* Buscador Ágil */
@@ -2518,12 +2609,18 @@ onMounted(() => {
 .buscador-agil {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--borde-color);
+  background: var(--fondo-input);
+  border: 1px solid var(--borde-sutil);
   padding: 0.5rem 1rem;
-  border-radius: 20px;
+  border-radius: var(--radio-full);
   width: 100%;
   max-width: 350px;
+  transition: border-color var(--trans-rapida, 0.15s) var(--ease-suave, ease);
+}
+
+.buscador-agil:focus-within {
+  border-color: var(--morado-brillante);
+  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.25));
 }
 
 .buscador-agil svg {
@@ -2540,38 +2637,90 @@ onMounted(() => {
 }
 
 .btn-accion-principal {
-  background: var(--morado-brillante);
-  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--gradiente-marca);
+  color: var(--texto-principal);
   border: none;
   padding: 1rem;
-  border-radius: 8px;
+  min-height: 52px;
+  border-radius: var(--radio-md);
   font-size: 1.1rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all var(--trans-normal, 0.3s) var(--ease-suave, ease);
+  box-shadow: 0 6px 18px rgba(168,85,247,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
   margin-top: 1rem;
 }
 
 .btn-accion-principal:hover:not(:disabled) {
-  background: var(--morado-medio);
   transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(168,85,247,0.5), var(--sombra-glow), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+.btn-accion-principal:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.btn-accion-principal:focus-visible {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(168,85,247,0.35), 0 0 0 3px rgba(168,85,247,0.45);
 }
 
 .btn-accion-principal:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* Lista Pendientes */
 .estado-vacio {
   text-align: center;
-  padding: 3rem 1rem;
+  padding: 3.5rem 1.5rem 4rem;
   color: var(--texto-secundario);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.estado-vacio-icono {
+  width: 68px;
+  height: 68px;
+  border-radius: var(--radio-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--morado-brillante);
+  background: rgba(168,85,247,0.1);
+  border: 1px solid var(--borde-sutil);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  margin-bottom: 0.75rem;
+}
+
+.estado-vacio-titulo {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+}
+
+.estado-vacio-sub {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--texto-secundario);
+  text-wrap: pretty;
 }
 
 .estado-vacio svg {
-  color: var(--color-exito);
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .lista-pendientes {
@@ -2584,10 +2733,19 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.03);
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  background: rgba(168,85,247,0.05);
   padding: 1rem;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radio-lg);
+  border: 1px solid var(--borde-sutil);
+  transition: border-color var(--trans-normal, 0.2s) var(--ease-suave, ease), transform var(--trans-normal, 0.2s) var(--ease-suave, ease), box-shadow var(--trans-normal, 0.2s) var(--ease-suave, ease);
+}
+
+.item-pendiente:hover {
+  border-color: var(--borde-activo);
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-glow);
 }
 
 .info-principal {
@@ -2596,6 +2754,7 @@ onMounted(() => {
   display: flex;
   gap: 1rem;
   align-items: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .fecha {
@@ -2615,36 +2774,42 @@ onMounted(() => {
 }
 
 .btn-aprobar {
-  background: rgba(6, 214, 160, 0.15);
+  background: rgba(34, 197, 94, 0.15);
   color: var(--color-exito);
-  border: 1px solid rgba(6, 214, 160, 0.3);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 0.55rem 1rem;
+  border-radius: var(--radio-sm);
   cursor: pointer;
   font-weight: 600;
-  transition: all 0.3s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .btn-aprobar:hover {
   background: var(--color-exito);
-  color: #000;
+  color: #1A0F3D;
 }
 
+.btn-aprobar:active { transform: scale(0.97); }
+.btn-aprobar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(34,197,94,0.5); }
+
 .btn-rechazar {
-  background: rgba(239, 71, 111, 0.15);
+  background: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
-  border: 1px solid rgba(239, 71, 111, 0.3);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.55rem 1rem;
+  border-radius: var(--radio-sm);
   cursor: pointer;
   font-weight: 600;
-  transition: all 0.3s;
+  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
 }
 
 .btn-rechazar:hover {
   background: var(--color-error);
-  color: #fff;
+  color: var(--texto-principal);
 }
+
+.btn-rechazar:active { transform: scale(0.97); }
+.btn-rechazar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(239,68,68,0.5); }
 
 @media (max-width: 768px) {
   .vista-cajero {
@@ -2812,6 +2977,34 @@ onMounted(() => {
   /* Chip cliente */
   .cliente-chip {
     flex-wrap: nowrap;
+  }
+}
+
+/* Respeta la preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade,
+  .scan-line,
+  .spin {
+    animation: none !important;
+  }
+  .tab-btn,
+  .btn-metodo,
+  .btn-ubicacion,
+  .btn-accion-principal,
+  .btn-accion-secundario,
+  .btn-cargar-archivo,
+  .item-pendiente,
+  .resultado-item {
+    transition: none;
+  }
+  .tab-btn:hover,
+  .btn-metodo:hover,
+  .btn-ubicacion:hover,
+  .btn-accion-principal:hover:not(:disabled),
+  .btn-accion-secundario:hover,
+  .btn-cargar-archivo:hover,
+  .item-pendiente:hover {
+    transform: none;
   }
 }
 </style>

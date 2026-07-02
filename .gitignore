@@ -30,6 +30,10 @@ env/
 # ---- Backups de base de datos (datos sensibles, NO subir) ----
 generados/backups/
 
+# ---- Credenciales de prueba (contrasenas, NO subir) ----
+generados/CREDENCIALES*.txt
+**/CREDENCIALES*.txt
+
 # ---- Logs y temporales ----
 *.log
 npm-debug.log*
@@ -45,3 +49,10 @@ Thumbs.db
 *.swp
 .vscode/*
 !.vscode/extensions.json
+
+# ---- Skills de diseno instaladas (reinstalables con skills-lock.json) ----
+.agents/
+.claude/skills/
+
+# ---- Artefactos de Playwright (capturas/snapshots de pruebas) ----
+.playwright-mcp/

@@ -19,9 +19,9 @@
       </div>
     </div>
 
-    <div class="columnas">
+    <div class="columnas escalonar">
       <!-- Escáner -->
-      <section class="tarjeta escaner">
+      <section class="tarjeta escaner hover-elevar">
         <h2 class="tarjeta-titulo">Escanear entrada</h2>
 
         <div v-if="camaraActiva" class="reader-wrap">
@@ -40,6 +40,35 @@
           <button class="btn-primario" type="submit" :disabled="procesando || !codigoManual.trim()">Validar</button>
         </form>
 
+        <!-- Panel de ingreso por tandas (QR multi-uso) -->
+        <transition name="fade">
+          <div v-if="pendiente" class="tanda">
+            <div class="tanda-cab">
+              <b>{{ pendiente.cliente }}</b>
+              <span class="tanda-zona">{{ pendiente.mesa ? 'Mesa ' + pendiente.mesa + ' · ' : '' }}{{ pendiente.zona }}</span>
+            </div>
+            <div class="tanda-cupos">
+              <span>Cupos del QR: <b>{{ pendiente.cantidad_personas }}</b></span>
+              <span>Ya adentro: <b>{{ pendiente.cantidad_ingresada }}</b></span>
+              <span class="tanda-rest">Quedan: <b>{{ pendiente.restantes }}</b></span>
+            </div>
+            <div class="tanda-fila">
+              <span class="tanda-lbl">¿Cuántas personas entran ahora?</span>
+              <div class="stepper">
+                <button type="button" @click="pendiente.cantidad = Math.max(1, pendiente.cantidad - 1)" aria-label="Menos">−</button>
+                <span>{{ pendiente.cantidad }}</span>
+                <button type="button" @click="pendiente.cantidad = Math.min(pendiente.restantes, pendiente.cantidad + 1)" aria-label="Más">+</button>
+              </div>
+            </div>
+            <div class="tanda-acciones">
+              <button class="btn-sec" type="button" @click="pendiente = null">Cancelar</button>
+              <button class="btn-primario" type="button" :disabled="procesando" @click="confirmarIngreso">
+                Registrar ingreso de {{ pendiente.cantidad }}
+              </button>
+            </div>
+          </div>
+        </transition>
+
         <!-- Resultado -->
         <transition name="fade">
           <div v-if="resultado" class="resultado" :class="resultado.tipo">
@@ -56,7 +85,7 @@
       </section>
 
       <!-- Aforo en vivo -->
-      <section class="tarjeta aforo">
+      <section class="tarjeta aforo hover-elevar">
         <div class="aforo-cab">
           <h2 class="tarjeta-titulo">Aforo en vivo</h2>
           <div class="total-badge" :class="estadoTotal">
@@ -66,7 +95,11 @@
 
         <div v-if="cargando" class="cargando"><div class="spinner"></div></div>
 
-        <div v-else-if="!zonas.length" class="vacio">Este evento no tiene zonas configuradas.</div>
+        <div v-else-if="!zonas.length" class="vacio">
+          <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"></path></svg>
+          <b>Sin zonas configuradas</b>
+          <span>Este evento todavía no tiene zonas para controlar el aforo.</span>
+        </div>
 
         <div v-else class="lista-zonas">
           <div v-for="z in zonas" :key="z.id_zona" class="zona">
@@ -102,6 +135,7 @@ const cargando = ref(true)
 const codigoManual = ref('')
 const procesando = ref(false)
 const resultado = ref(null)
+const pendiente = ref(null)
 
 const camaraActiva = ref(false)
 let scanner = null
@@ -134,21 +168,57 @@ function mostrarResultado(tipo, titulo, detalle) {
   setTimeout(() => { if (resultado.value && resultado.value.titulo === titulo) resultado.value = null }, 6000)
 }
 
-async function enviarValidacion(payload) {
+// Paso 1: consultar el QR/código (sin admitir) para ver cuántos cupos quedan.
+async function consultarEntrada(payload) {
+  procesando.value = true
+  resultado.value = null
+  try {
+    const r = await servicioAforo.validar({ ...payload, consultar: true })
+    if (r.completo) {
+      mostrarResultado('error', 'Ya ingresó completa',
+        `${r.cliente} · ${r.cantidad_ingresada}/${r.cantidad_personas} ya ingresaron`)
+      pendiente.value = null
+      return
+    }
+    // Deja lista la tanda de ingreso para que el recepcionista elija cuántos entran
+    pendiente.value = {
+      payload,
+      cliente: r.cliente,
+      mesa: r.mesa,
+      zona: r.zona,
+      evento: r.evento,
+      cantidad_personas: r.cantidad_personas,
+      cantidad_ingresada: r.cantidad_ingresada,
+      restantes: r.restantes,
+      cantidad: r.restantes, // por defecto, entran todos los que faltan
+    }
+  } catch (err) {
+    const data = err?.response?.data || err
+    mostrarResultado('error', 'No válida', data?.error || 'No se pudo leer la entrada')
+    pendiente.value = null
+  } finally {
+    procesando.value = false
+  }
+}
+
+// Paso 2: confirmar el ingreso de la cantidad elegida (QR multi-uso por tandas).
+async function confirmarIngreso() {
+  if (!pendiente.value) return
+  const { payload, cantidad } = pendiente.value
   procesando.value = true
   try {
-    const r = await servicioAforo.validar(payload)
+    const r = await servicioAforo.validar({ ...payload, cantidad })
     const a = r.aforo
-    mostrarResultado('ok', 'Ingreso validado',
-      `${r.cliente} · ${r.personas} persona(s)${r.mesa ? ' · Mesa ' + r.mesa : ''} · ${a.nombre_zona} ${a.aforo_actual}/${a.capacidad}`)
-    // Actualiza la zona localmente (el socket también lo hará para otros)
+    mostrarResultado('ok', r.completo ? 'Ingreso completo' : 'Ingreso parcial',
+      `${r.cliente} · entraron ${r.personas} (${r.cantidad_ingresada}/${r.cantidad_personas})${r.mesa ? ' · Mesa ' + r.mesa : ''} · ${a.nombre_zona} ${a.aforo_actual}/${a.capacidad}`)
     const i = zonas.value.findIndex(z => z.id_zona === a.id_zona)
     if (i >= 0) zonas.value[i] = { ...zonas.value[i], ...a }
     recomputarTotales()
+    pendiente.value = null
   } catch (err) {
     const data = err?.response?.data || err
-    mostrarResultado('error', data?.aforo_lleno ? 'Aforo lleno' : (data?.ya_ingreso ? 'Ya ingresó' : 'No válida'),
-      data?.error || 'No se pudo validar la entrada')
+    mostrarResultado('error', data?.aforo_lleno ? 'Aforo lleno' : 'No se pudo validar',
+      data?.error || 'No se pudo registrar el ingreso')
   } finally {
     procesando.value = false
   }
@@ -164,7 +234,7 @@ function recomputarTotales() {
 function validarCodigo() {
   const c = codigoManual.value.trim()
   if (!c) return
-  enviarValidacion({ codigo: c })
+  consultarEntrada({ codigo: c })
   codigoManual.value = ''
 }
 
@@ -176,7 +246,7 @@ function iniciarCamara() {
     const onDetect = (texto) => {
       // Evita reenviar el mismo QR en ráfaga
       detenerCamara()
-      enviarValidacion({ token: texto })
+      consultarEntrada({ token: texto })
     }
     scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, onDetect, () => {})
       .catch(() => {
@@ -227,87 +297,132 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.vista-recep { padding: 1.5rem; max-width: 1100px; margin: 0 auto; width: 100%; }
+.vista-recep { padding: var(--esp-5); max-width: 1100px; margin: 0 auto; width: 100%; }
 
-.encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
-.titulo { font-size: 1.6rem; font-weight: 800; color: var(--texto-principal); }
-.subtitulo { font-size: 0.88rem; color: var(--texto-secundario); }
+.encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-6); flex-wrap: wrap; }
+.titulo { font-family: var(--fuente-titulo); font-size: 1.75rem; font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance; background: var(--gradiente-texto); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+.subtitulo { font-size: 0.9rem; color: var(--texto-secundario); margin-top: var(--esp-1); }
 .selector-evento {
   background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
-  padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; font-weight: 600; min-width: 200px;
+  padding: 10px 14px; border-radius: var(--radio-md); font-size: 0.9rem; font-weight: 600; min-width: 200px;
+  transition: var(--trans-rapida); cursor: pointer;
 }
+.selector-evento:hover { border-color: var(--borde-activo); }
+.selector-evento:focus { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); outline: none; }
 
 /* Alertas */
-.alertas { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.2rem; }
-.alerta { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; }
+.alertas { display: flex; flex-direction: column; gap: var(--esp-2); margin-bottom: var(--esp-5); }
+.alerta { display: flex; align-items: center; gap: var(--esp-3); padding: var(--esp-3) var(--esp-4); border-radius: var(--radio-md); font-size: 0.85rem; animation: subirEntrada 0.4s var(--ease-suave) both; }
 .alerta svg { width: 20px; height: 20px; flex-shrink: 0; }
-.alerta.alerta { background: rgba(234,179,8,0.12); border: 1px solid rgba(234,179,8,0.35); color: #eab308; }
-.alerta.lleno { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; }
+.alerta.alerta { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.35); color: var(--color-alerta); }
+.alerta.lleno { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: var(--color-error); box-shadow: 0 0 22px rgba(239,68,68,0.18); }
 
-.columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.columnas { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-5); }
 @media (max-width: 860px) { .columnas { grid-template-columns: 1fr; } }
 
-.tarjeta { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: 18px; padding: 1.3rem; }
-.tarjeta-titulo { font-size: 1.05rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 1rem; }
+.tarjeta { position: relative; background: var(--gradiente-sutil); border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); padding: var(--esp-5); box-shadow: var(--sombra-tarjeta); }
+.tarjeta::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(160deg, rgba(168,85,247,0.28), transparent 55%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; opacity: 0.6; }
+.tarjeta-titulo { font-family: var(--fuente-titulo); font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--texto-principal); margin-bottom: var(--esp-4); }
 
 /* Escáner */
 .btn-camara {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento)); color: #fff;
-  border: none; padding: 14px; border-radius: 14px; font-size: 0.95rem; font-weight: 700;
-  box-shadow: 0 4px 15px rgba(219,39,119,0.3); cursor: pointer;
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: var(--esp-3);
+  background: var(--gradiente-marca); color: #fff;
+  border: none; padding: var(--esp-4); border-radius: var(--radio-md); font-size: 0.95rem; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(168,85,247,0.35); cursor: pointer; transition: var(--trans-normal);
 }
+.btn-camara:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236,72,153,0.45), var(--glow-morado); }
+.btn-camara:active { transform: translateY(0) scale(0.99); box-shadow: 0 4px 12px rgba(168,85,247,0.3); }
+.btn-camara:focus-visible { outline: none; box-shadow: 0 6px 18px rgba(168,85,247,0.35), var(--anillo-foco); }
 .btn-camara svg { width: 22px; height: 22px; }
-.reader-wrap { display: flex; flex-direction: column; gap: 10px; }
-.reader { width: 100%; border-radius: 14px; overflow: hidden; background: #000; }
-.btn-sec { background: var(--fondo-app); border: 1px solid var(--borde-sutil); color: var(--texto-secundario); padding: 10px; border-radius: 12px; font-weight: 600; cursor: pointer; }
+.reader-wrap { display: flex; flex-direction: column; gap: var(--esp-3); }
+.reader { width: 100%; border-radius: var(--radio-md); overflow: hidden; background: #000; border: 1px solid var(--borde-sutil); }
+.btn-sec { background: rgba(168,85,247,0.08); border: 1px solid var(--borde-activo); color: var(--morado-hover); padding: var(--esp-3); border-radius: var(--radio-md); font-weight: 600; cursor: pointer; transition: var(--trans-normal); }
+.btn-sec:hover { background: rgba(168,85,247,0.16); color: var(--texto-principal); }
+.btn-sec:active { transform: scale(0.98); }
+.btn-sec:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
-.separador { display: flex; align-items: center; text-align: center; color: var(--texto-secundario); font-size: 0.78rem; margin: 1rem 0; }
+.separador { display: flex; align-items: center; text-align: center; color: var(--texto-secundario); font-size: 0.78rem; margin: var(--esp-4) 0; }
 .separador::before, .separador::after { content: ''; flex: 1; height: 1px; background: var(--borde-sutil); }
 .separador span { padding: 0 12px; }
 
-.form-codigo { display: flex; gap: 8px; }
-.input-codigo { flex: 1; background: var(--fondo-app); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 11px 14px; border-radius: 12px; font-size: 0.95rem; letter-spacing: 1px; text-transform: uppercase; }
-.btn-primario { background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento)); color: #fff; border: none; padding: 11px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; }
-.btn-primario:disabled { opacity: 0.6; }
+.form-codigo { display: flex; gap: var(--esp-2); }
+.input-codigo { flex: 1; background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 11px 14px; border-radius: var(--radio-md); font-size: 0.95rem; font-variant-numeric: tabular-nums; letter-spacing: 1px; text-transform: uppercase; transition: var(--trans-rapida); outline: none; }
+.input-codigo::placeholder { color: var(--texto-desactivado); letter-spacing: 0.5px; }
+.input-codigo:hover { border-color: var(--borde-activo); }
+.input-codigo:focus { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
+.btn-primario { background: var(--gradiente-marca); color: #fff; border: none; padding: 11px 22px; border-radius: var(--radio-md); font-weight: 700; cursor: pointer; transition: var(--trans-normal); box-shadow: 0 6px 18px rgba(168,85,247,0.3); }
+.btn-primario:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236,72,153,0.45); }
+.btn-primario:active:not(:disabled) { transform: translateY(0) scale(0.99); box-shadow: 0 4px 12px rgba(168,85,247,0.3); }
+.btn-primario:focus-visible { outline: none; box-shadow: 0 6px 18px rgba(168,85,247,0.3), var(--anillo-foco); }
+.btn-primario:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Resultado */
-.resultado { display: flex; align-items: center; gap: 12px; margin-top: 1rem; padding: 12px 14px; border-radius: 14px; }
+/* Panel de ingreso por tandas (QR multi-uso) */
+.tanda { margin-top: var(--esp-4); padding: var(--esp-4); border-radius: var(--radio-lg); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-activo); box-shadow: 0 0 26px rgba(168,85,247,0.14); display: flex; flex-direction: column; gap: var(--esp-3); }
+.tanda-cab { display: flex; flex-direction: column; gap: 2px; }
+.tanda-cab b { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; color: var(--texto-principal); }
+.tanda-zona { font-size: 0.82rem; color: var(--texto-secundario); }
+.tanda-cupos { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.82rem; color: var(--texto-secundario); font-variant-numeric: tabular-nums; }
+.tanda-cupos b { color: var(--texto-principal); }
+.tanda-rest b { color: var(--morado-hover); }
+.tanda-fila { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); flex-wrap: wrap; padding-top: var(--esp-2); border-top: 1px solid var(--borde-sutil); }
+.tanda-lbl { font-size: 0.85rem; color: var(--texto-principal); font-weight: 600; }
+.stepper { display: flex; align-items: center; gap: 14px; }
+.stepper button { width: 36px; height: 36px; border-radius: var(--radio-md); background: var(--fondo-app); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-size: 1.2rem; font-weight: 700; line-height: 1; cursor: pointer; transition: var(--trans-rapida); }
+.stepper button:hover { border-color: var(--borde-activo); background: rgba(168,85,247,0.14); color: var(--morado-hover); }
+.stepper button:active { transform: scale(0.92); }
+.stepper button:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.stepper span { min-width: 24px; text-align: center; font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; color: var(--texto-principal); }
+.tanda-acciones { display: flex; gap: var(--esp-3); }
+.tanda-acciones .btn-primario, .tanda-acciones .btn-sec { flex: 1; }
+
+.resultado { display: flex; align-items: center; gap: var(--esp-3); margin-top: var(--esp-4); padding: var(--esp-3) var(--esp-4); border-radius: var(--radio-md); }
 .resultado.ok { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); }
 .resultado.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.35); }
-.res-icono { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.resultado.ok .res-icono { background: rgba(34,197,94,0.2); color: #22c55e; }
-.resultado.error .res-icono { background: rgba(239,68,68,0.2); color: #ef4444; }
+.res-icono { width: 40px; height: 40px; border-radius: var(--radio-full); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.resultado.ok .res-icono { background: rgba(34,197,94,0.2); color: var(--color-exito); }
+.resultado.error .res-icono { background: rgba(239,68,68,0.2); color: var(--color-error); }
 .res-icono svg { width: 22px; height: 22px; }
 .res-texto b { color: var(--texto-principal); font-size: 0.95rem; }
-.res-texto p { color: var(--texto-secundario); font-size: 0.82rem; margin-top: 2px; }
+.res-texto p { color: var(--texto-secundario); font-size: 0.82rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
 /* Aforo */
-.aforo-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-.total-badge { font-size: 1rem; font-weight: 800; padding: 6px 14px; border-radius: 999px; }
-.total-badge.ok { background: rgba(155,89,182,0.18); color: var(--morado-brillante); }
-.total-badge.alerta { background: rgba(234,179,8,0.15); color: #eab308; }
-.total-badge.lleno { background: rgba(239,68,68,0.15); color: #ef4444; }
+.aforo-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-4); }
+.total-badge { font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; padding: 6px 14px; border-radius: var(--radio-full); transition: var(--trans-normal); }
+.total-badge.ok { background: rgba(168,85,247,0.18); color: var(--morado-hover); }
+.total-badge.alerta { background: rgba(245,158,11,0.15); color: var(--color-alerta); }
+.total-badge.lleno { background: rgba(239,68,68,0.15); color: var(--color-error); }
 
 .cargando { display: flex; justify-content: center; padding: 2rem; }
-.spinner { width: 34px; height: 34px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--morado-brillante); border-radius: 50%; animation: girar 1s linear infinite; }
+.spinner { width: 34px; height: 34px; border: 4px solid var(--borde-sutil); border-top-color: var(--morado-brillante); border-radius: var(--radio-full); animation: girar 1s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
-.vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1.5rem; }
+.vacio { display: flex; flex-direction: column; align-items: center; gap: var(--esp-2); color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: var(--esp-6) var(--esp-4); }
+.vacio-icono { width: 42px; height: 42px; color: var(--morado-brillante); opacity: 0.65; margin-bottom: var(--esp-1); }
+.vacio b { color: var(--texto-principal); font-size: 0.95rem; font-weight: 700; }
+.vacio span { max-width: 34ch; text-wrap: balance; }
 
-.lista-zonas { display: flex; flex-direction: column; gap: 1rem; }
-.zona-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.lista-zonas { display: flex; flex-direction: column; gap: var(--esp-4); }
+.zona { animation: subirEntrada 0.4s var(--ease-suave) both; }
+.zona-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-1); }
 .zona-nombre { font-size: 0.9rem; font-weight: 600; color: var(--texto-principal); }
-.zona-num { font-size: 0.85rem; font-weight: 700; }
-.zona-num.ok { color: var(--morado-brillante); }
-.zona-num.alerta { color: #eab308; }
-.zona-num.lleno { color: #ef4444; }
-.barra { height: 10px; background: var(--fondo-app); border-radius: 999px; overflow: hidden; }
-.barra-relleno { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
-.barra-relleno.ok { background: linear-gradient(90deg, var(--morado-brillante), var(--rosa-acento)); }
-.barra-relleno.alerta { background: linear-gradient(90deg, #eab308, #f59e0b); }
-.barra-relleno.lleno { background: linear-gradient(90deg, #ef4444, #dc2626); }
-.zona-pct { font-size: 0.72rem; color: var(--texto-secundario); display: block; text-align: right; margin-top: 2px; }
+.zona-num { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.zona-num.ok { color: var(--morado-hover); }
+.zona-num.alerta { color: var(--color-alerta); }
+.zona-num.lleno { color: var(--color-error); }
+.barra { height: 10px; background: var(--fondo-app); border: 1px solid var(--borde-sutil); border-radius: var(--radio-full); overflow: hidden; }
+.barra-relleno { height: 100%; border-radius: var(--radio-full); transition: width 0.5s var(--ease-suave); }
+.barra-relleno.ok { background: var(--gradiente-marca); box-shadow: 0 0 12px rgba(168,85,247,0.4); }
+.barra-relleno.alerta { background: linear-gradient(90deg, var(--color-alerta), #f59e0b); box-shadow: 0 0 12px rgba(245,158,11,0.35); }
+.barra-relleno.lleno { background: linear-gradient(90deg, var(--color-error), #dc2626); box-shadow: 0 0 12px rgba(239,68,68,0.4); }
+.zona-pct { font-size: 0.72rem; color: var(--texto-secundario); font-variant-numeric: tabular-nums; display: block; text-align: right; margin-top: var(--esp-1); }
 
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s var(--ease-suave); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .alerta, .zona { animation: none; }
+  .btn-camara:hover, .btn-primario:hover:not(:disabled), .btn-camara:active, .btn-primario:active:not(:disabled), .stepper button:active { transform: none; }
+  .barra-relleno { transition: none; }
+}
 </style>
