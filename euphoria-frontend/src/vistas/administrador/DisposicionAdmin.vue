@@ -121,8 +121,11 @@ const esMovil      = computed(() => anchoVentana.value <= 768)
 const colapsado    = ref(esMovil.value)
 
 function actualizarAncho() {
+  // Solo forzar el estado cuando se CRUZA el breakpoint móvil; antes,
+  // cualquier resize reseteaba el colapsado que el usuario había elegido
+  const eraMovil = esMovil.value
   anchoVentana.value = window.innerWidth
-  colapsado.value = esMovil.value
+  if (esMovil.value !== eraMovil) colapsado.value = esMovil.value
 }
 onMounted(()   => window.addEventListener('resize', actualizarAncho))
 onUnmounted(() => window.removeEventListener('resize', actualizarAncho))
@@ -209,10 +212,15 @@ function cerrar() {
 
 .sidebar-angosto { width: 76px; }
 
-/* Tablet: sidebar como drawer flotante, ancho acotado */
+/* Tablet: sidebar como drawer flotante, ancho acotado.
+   OJO: la regla de colapsado debe seguir ganando aquí, si no el botón
+   hamburguesa "no cierra" (solo cambiaban los iconos). */
 @media (min-width: 769px) and (max-width: 1024px) {
   .sidebar-euphoria {
     width: min(var(--ancho-sidebar), 240px);
+  }
+  .sidebar-euphoria.sidebar-angosto {
+    width: 76px;
   }
 }
 

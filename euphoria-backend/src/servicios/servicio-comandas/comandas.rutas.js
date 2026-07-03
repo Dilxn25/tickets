@@ -529,6 +529,18 @@ router.get('/', verificarToken, async (req, res) => {
     if (req.query.metodo) whereClause.metodo_pago = req.query.metodo
     if (req.query.cajero) whereClause.id_mesero = Number(req.query.cajero)
 
+    // Filtro por EVENTO: ventas dentro de la ventana horaria del evento
+    // (incluye barra; pisa el rango desde/hasta si ambos vienen)
+    if (req.query.evento) {
+      const ev = await prisma.evento.findUnique({ where: { id_evento: Number(req.query.evento) } })
+      if (ev) {
+        whereClause.fecha_registro = {
+          gte: ev.fecha_hora_inicio,
+          lte: ev.fecha_hora_fin || new Date()
+        }
+      }
+    }
+
     const incluir = {
       detalle_comanda: {
         include: {
@@ -576,17 +588,26 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
   try {
     const cond = ["c.estado_despacho <> 'Cancelada'"]
     const params = []
-    if (req.query.desde) {
-      const [y, m, d] = req.query.desde.split('-').map(Number)
-      cond.push('c.fecha_registro >= ?'); params.push(new Date(y, m - 1, d, 0, 0, 0))
-    }
-    if (req.query.hasta) {
-      const [y, m, d] = req.query.hasta.split('-').map(Number)
-      cond.push('c.fecha_registro <= ?'); params.push(new Date(y, m - 1, d, 23, 59, 59, 999))
+    if (req.query.evento) {
+      // Reporte POR EVENTO: la ventana horaria del evento define sus ventas
+      const ev = await prisma.evento.findUnique({ where: { id_evento: Number(req.query.evento) } })
+      if (ev) {
+        cond.push('c.fecha_registro >= ?'); params.push(ev.fecha_hora_inicio)
+        cond.push('c.fecha_registro <= ?'); params.push(ev.fecha_hora_fin || new Date())
+      }
+    } else {
+      if (req.query.desde) {
+        const [y, m, d] = req.query.desde.split('-').map(Number)
+        cond.push('c.fecha_registro >= ?'); params.push(new Date(y, m - 1, d, 0, 0, 0))
+      }
+      if (req.query.hasta) {
+        const [y, m, d] = req.query.hasta.split('-').map(Number)
+        cond.push('c.fecha_registro <= ?'); params.push(new Date(y, m - 1, d, 23, 59, 59, 999))
+      }
     }
     const W = 'WHERE ' + cond.join(' AND ')
 
-    const [totales, porMetodo, porCategoria, ranking, porMesero, tendencia] = await Promise.all([
+    const [totales, porMetodo, porCategoria, ranking, porMesero, tendencia, porDia, porHora] = await Promise.all([
       prisma.$queryRawUnsafe(
         `SELECT COUNT(DISTINCT c.id_comanda) num, COALESCE(SUM(d.subtotal),0) ingresos
          FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}`, ...params),
@@ -605,7 +626,7 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
          JOIN producto p ON p.id_producto=d.id_producto ${W}
          GROUP BY p.id_producto, p.nombre_producto ORDER BY veces DESC LIMIT 20`, ...params),
       prisma.$queryRawUnsafe(
-        `SELECT CONCAT(u.nombres,' ',COALESCE(u.apellidos,'')) nombre, COALESCE(SUM(d.subtotal),0) total
+        `SELECT CONCAT(u.nombres,' ',COALESCE(u.apellidos,'')) nombre, COUNT(DISTINCT c.id_comanda) cantidad, COALESCE(SUM(d.subtotal),0) total
          FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda
          JOIN usuario u ON u.id_usuario=c.id_mesero ${W}
          GROUP BY c.id_mesero, nombre ORDER BY total DESC LIMIT 10`, ...params),
@@ -613,6 +634,16 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
         `SELECT c.id_comanda, c.fecha_registro, COALESCE(SUM(d.subtotal),0) total
          FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}
          GROUP BY c.id_comanda, c.fecha_registro ORDER BY c.fecha_registro DESC LIMIT 7`, ...params),
+      // Ventas por día (últimos 14 días con actividad) para el gráfico de columnas
+      prisma.$queryRawUnsafe(
+        `SELECT DATE_FORMAT(c.fecha_registro, '%Y-%m-%d') dia, COUNT(DISTINCT c.id_comanda) cantidad, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}
+         GROUP BY dia ORDER BY dia DESC LIMIT 14`, ...params),
+      // Ingresos por hora del día (para detectar las horas pico del local)
+      prisma.$queryRawUnsafe(
+        `SELECT HOUR(c.fecha_registro) hora, COUNT(DISTINCT c.id_comanda) cantidad, COALESCE(SUM(d.subtotal),0) total
+         FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda ${W}
+         GROUP BY hora ORDER BY total DESC`, ...params),
     ])
 
     // Los BigInt/Decimal de MySQL se normalizan a Number
@@ -622,8 +653,10 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
       por_metodo:   porMetodo.map(r => ({ metodo: r.metodo, cantidad: num(r.cantidad), total: num(r.total) })),
       por_categoria: porCategoria.map(r => ({ categoria: r.categoria, total: num(r.total) })),
       ranking_productos: ranking.map(r => ({ id_producto: num(r.id_producto), nombre: r.nombre_producto, veces: num(r.veces), ingresos: num(r.ingresos) })),
-      por_mesero:   porMesero.map(r => ({ nombre: r.nombre, total: num(r.total) })),
+      por_mesero:   porMesero.map(r => ({ nombre: r.nombre, cantidad: num(r.cantidad), total: num(r.total) })),
       tendencia:    tendencia.map(r => ({ id_comanda: num(r.id_comanda), total: num(r.total), fecha: r.fecha_registro })),
+      por_dia:      porDia.map(r => ({ dia: r.dia, cantidad: num(r.cantidad), total: num(r.total) })).reverse(),
+      por_hora:     porHora.map(r => ({ hora: num(r.hora), cantidad: num(r.cantidad), total: num(r.total) })),
     })
   } catch (error) {
     console.error('Error en resumen de ventas:', error)

@@ -33,22 +33,70 @@
         <div class="rango-fecha"><BaseFecha v-model="filtroDesde" placeholder="Inicio" :max="filtroHasta || ''" @update:model-value="cambioFechaManual" /></div>
         <label class="etiqueta-filtro">Hasta</label>
         <div class="rango-fecha"><BaseFecha v-model="filtroHasta" placeholder="Hoy" :min="filtroDesde || ''" @update:model-value="cambioFechaManual" /></div>
+        <label class="etiqueta-filtro">Evento</label>
+        <div class="filtro-evento">
+          <BaseSelect :model-value="eventoFiltro" :options="opcionesEventos" placeholder="Todos los eventos" @update:model-value="cambioEvento" />
+        </div>
       </div>
     </div>
 
-    <!-- 1. SECCIÓN DE GRÁFICOS PREMIUM (AHORA PRIMERO) -->
-    <div class="rep-seccion-head">
-      <h3 class="rep-seccion-titulo">Analítica en vivo</h3>
-      <span class="rep-seccion-sub">Ventas, personal y métodos de cobro</span>
-      <span class="rep-seccion-linea"></span>
+    <!-- Aviso de filtro por evento activo -->
+    <div v-if="eventoFiltro" class="chip-evento-activo fade-in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      Reporte del evento: <strong>{{ nombreEventoFiltro }}</strong>
+      <button class="btn-limpiar-filtro" @click="cambioEvento('')">Quitar filtro</button>
     </div>
-    <div class="grid-graficos fade-in">
+
+    <!-- BARRA DE PESTAÑAS (híbrido: pestañas + denso + dos columnas) -->
+    <nav class="rep-tabs" role="tablist">
+      <button v-for="t in pestanas" :key="t.id" class="rep-tab" :class="{ activo: pestana === t.id }"
+              role="tab" :aria-selected="pestana === t.id" @click="pestana = t.id">{{ t.nombre }}</button>
+    </nav>
+
+    <!-- ============ PESTAÑA: GENERAL ============ -->
+    <div v-if="pestana === 'general'" class="rep-panel fade-in">
+      <!-- Franja compacta de KPIs -->
+      <div class="grid-resumen rep-kpis-strip escalonar">
+        <div class="tarjeta-estadistica bg-clientes" @click="abrirModal('clientes')">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+          <div class="info-est"><h3>Clientes</h3><h2>{{ stats.clientes }}</h2><p>Ver detalles</p></div>
+        </div>
+        <div class="tarjeta-estadistica bg-personal" @click="pestana = 'personal'">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
+          <div class="info-est"><h3>Personal</h3><h2>{{ stats.personal }}</h2><p>Ver desempeño</p></div>
+        </div>
+        <div class="tarjeta-estadistica bg-ventas" @click="pestana = 'ventas'">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+          <div class="info-est"><h3>Ventas Totales</h3><h2>Bs. {{ stats.ingresosTotales.toFixed(2) }}</h2><p>Ver transacciones</p></div>
+        </div>
+        <div class="tarjeta-estadistica bg-productos" @click="pestana = 'productos'">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg></div>
+          <div class="info-est"><h3>Inventario</h3><h2>{{ stats.productos }}</h2><p>Ver ranking</p></div>
+        </div>
+        <div class="tarjeta-estadistica bg-eventos" @click="pestana = 'eventos'">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+          <div class="info-est"><h3>Eventos</h3><h2>{{ stats.eventos }}</h2><p>Ver por evento</p></div>
+        </div>
+        <div class="tarjeta-estadistica bg-asistencia" @click="pestana = 'eventos'">
+          <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
+          <div class="info-est"><h3>Asistencia</h3><h2>{{ stats.asistencia }}</h2><p>Personas ingresadas</p></div>
+        </div>
+      </div>
+
+      <!-- Dos columnas densas -->
+      <div class="rep-dos-col">
+        <div class="rep-col-main">
+          <div class="rep-seccion-head">
+            <h3 class="rep-seccion-titulo">Analítica en vivo</h3>
+            <span class="rep-seccion-sub">Ventas y categorías</span>
+            <span class="rep-seccion-linea"></span>
+          </div>
       <!-- 1. Tendencia de Ventas (Gráfico 2D vectorizado en neon) -->
       <div class="tarjeta-grafico">
         <div class="grafico-header">
           <div class="grafico-header-info">
-            <h3 class="grafico-titulo">Tendencia de Ventas 2D</h3>
-            <span class="subtexto-grafico">Curva de ingresos cronológica de las últimas comandas cobradas</span>
+            <h3 class="grafico-titulo">Tendencia de Ventas</h3>
+            <span class="subtexto-grafico">Curva de ingresos de las últimas comandas cobradas</span>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
         </div>
@@ -116,7 +164,9 @@
           </div>
         </div>
       </div>
+        </div><!-- /rep-col-main -->
 
+        <div class="rep-col-side">
       <!-- 3. Torta de Métodos de Pago -->
       <div class="tarjeta-grafico">
         <div class="grafico-header">
@@ -148,22 +198,11 @@
                       :stroke-dashoffset="-((porcentajeEfectivo + porcentajeQR) * 3.14159)"
                       class="torta-sector" />
 
-              <!-- Etiquetas textuales sobre la torta -->
-              <g v-if="porcentajeEfectivo > 15">
-                <text x="100" y="60" fill="#fff" font-size="14" font-weight="900" text-anchor="middle" class="texto-nodo-grafico">
-                  {{ porcentajeEfectivo }}% Efectivo
-                </text>
-              </g>
-              <g v-if="porcentajeQR > 15">
-                <text x="150" y="125" fill="#fff" font-size="14" font-weight="900" text-anchor="middle" class="texto-nodo-grafico">
-                  {{ porcentajeQR }}% QR
-                </text>
-              </g>
-              <g v-if="porcentajeBilletera > 15">
-                <text x="50" y="125" fill="#fff" font-size="14" font-weight="900" text-anchor="middle" class="texto-nodo-grafico">
-                  {{ porcentajeBilletera }}% Billetera
-                </text>
-              </g>
+              <!-- Sin etiquetas sobre la torta: se solapaban entre sectores;
+                   los porcentajes van en la leyenda de la derecha -->
+              <circle cx="100" cy="100" r="30" fill="var(--fondo-tarjeta)" />
+              <text x="100" y="96" fill="#fff" font-size="13" font-weight="900" text-anchor="middle" class="texto-nodo-grafico">{{ conteoEfectivo + conteoQR + conteoBilletera }}</text>
+              <text x="100" y="112" fill="rgba(255,255,255,0.55)" font-size="8" font-weight="700" text-anchor="middle" class="texto-nodo-grafico">COBROS</text>
             </svg>
           </div>
           <div class="anillos-leyenda">
@@ -249,15 +288,433 @@
           </div>
         </div>
       </div>
+
+      <!-- Mini-resumen de billetera (atajo a la pestaña) -->
+      <div class="tarjeta-grafico rep-mini-billetera" role="button" tabindex="0"
+           @click="pestana = 'billetera'" @keyup.enter="pestana = 'billetera'">
+        <div class="grafico-header">
+          <div class="grafico-header-info">
+            <h3 class="grafico-titulo">Billetera Digital</h3>
+            <span class="subtexto-grafico">Resumen — toca para ver todo</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+        </div>
+        <div class="rep-mini-kpis">
+          <div class="rep-mini-kpi"><span class="rmk-label">Saldo circulante</span><span class="rmk-valor">Bs. {{ (reporteBilletera.billeteras?.saldo_circulante ?? 0).toFixed(2) }}</span></div>
+          <div class="rep-mini-kpi"><span class="rmk-label">Recargas</span><span class="rmk-valor">{{ reporteBilletera.recargas?.total_operaciones ?? 0 }}</span></div>
+          <div class="rep-mini-kpi"><span class="rmk-label">Consumido</span><span class="rmk-valor">Bs. {{ (reporteBilletera.uso_billetera?.monto_consumido ?? 0).toFixed(0) }}</span></div>
+          <div class="rep-mini-kpi"><span class="rmk-label">Pedidos con billetera</span><span class="rmk-valor">{{ reporteBilletera.uso_billetera?.pedidos_pagados ?? 0 }}</span></div>
+        </div>
+      </div>
+
+      <!-- Alerta de inventario crítico -->
+      <div v-if="productosBajoStock.length > 0" class="alerta-stock-bajo">
+        <div class="alerta-icono">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </div>
+        <div class="alerta-contenido">
+          <h4>Inventario crítico</h4>
+          <p class="alerta-subtexto">Bajo el umbral de reposición ({{ UMBRAL_STOCK_BAJO }} uds.)</p>
+          <div class="alerta-productos-lista">
+            <span v-for="prod in productosBajoStock" :key="prod.id_producto" class="alerta-producto-badge">
+              <span class="punto-alerta"></span>
+              <strong>{{ prod.nombre_producto }}</strong>: {{ prod.stock_actual }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+        </div><!-- /rep-col-side -->
+      </div><!-- /rep-dos-col -->
+    </div><!-- /panel general -->
+
+    <!-- ============ PESTAÑA: VENTAS ============ -->
+    <div v-if="pestana === 'ventas'" class="rep-panel fade-in">
+      <div class="rep-kpis-inline escalonar">
+        <div class="kbi-card kbi-verde">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Ingresos del periodo</span><span class="kbi-valor">Bs. {{ stats.ingresosTotales.toFixed(2) }}</span></div>
+        </div>
+        <div class="kbi-card kbi-morado">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Cobros realizados</span><span class="kbi-valor">{{ totalCobros }}</span></div>
+        </div>
+        <div class="kbi-card kbi-azul">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Ticket promedio</span><span class="kbi-valor">Bs. {{ ticketPromedio.toFixed(2) }}</span></div>
+        </div>
+        <div class="kbi-card kbi-amarillo">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Método principal</span><span class="kbi-valor">{{ metodoTop }}</span></div>
+        </div>
+      </div>
+      <div class="rep-dos-col">
+        <div class="rep-col-main rep-col-lista">
+      <div class="tarjeta-grafico">
+        <div class="grafico-header">
+          <div class="grafico-header-info">
+            <h3 class="grafico-titulo">Últimas Ventas</h3>
+            <span class="subtexto-grafico">Las 8 más recientes del periodo — el detalle completo se abre aparte</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        </div>
+        <div class="tabla-contenedor">
+          <table class="tabla-admin">
+            <thead>
+              <tr><th>ID</th><th>Fecha y Hora</th><th>Cliente</th><th>Atendido Por</th><th>Método Pago</th><th>Total (Bs)</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="venta in ventas.slice(0, 8)" :key="venta.id_comanda">
+                <td>#{{ venta.id_comanda }}</td>
+                <td>{{ formatearFecha(venta.fecha_registro) }}</td>
+                <td>
+                  <span v-if="venta.usuario_comanda_id_clienteTousuario">{{ venta.usuario_comanda_id_clienteTousuario.nombres }}</span>
+                  <span v-else class="texto-sutil">Sin registro / Barra</span>
+                </td>
+                <td>{{ venta.usuario_comanda_id_meseroTousuario?.nombres || '—' }}</td>
+                <td><span :class="['badge-pago', venta.metodo_pago.toLowerCase().replace(' ', '-')]">{{ venta.metodo_pago }}</span></td>
+                <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (venta.subtotal || 0).toFixed(2) }}</td>
+              </tr>
+              <tr v-if="ventas.length === 0"><td colspan="6" class="texto-centro">No hay ventas registradas en este periodo.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rep-ver-mas">
+          <span>Mostrando 8 de {{ ventasTotal }} comandas</span>
+          <button class="btn-ver-historial" @click="abrirModal('ventas')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+            Ver detalle completo
+          </button>
+        </div>
+      </div>
+        </div><!-- /col-main ventas -->
+
+        <div class="rep-col-side">
+          <!-- Ventas por día -->
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Ventas por Día</h3>
+                <span class="subtexto-grafico">Últimos {{ dias7.length }} días con actividad</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            </div>
+            <div class="grafico-contenido-columnas">
+              <div v-if="dias7.length" class="contenedor-columnas">
+                <div v-for="d in dias7" :key="d.dia" class="columna-item">
+                  <span class="columna-valor-tooltip">{{ montoCorto(d.total) }}</span>
+                  <div class="columna-barra-pista">
+                    <div class="columna-barra-progreso" :style="{ height: (d.total / maxDiaTotal * 100) + '%', background: 'linear-gradient(180deg, var(--rosa-acento), var(--morado-brillante))' }">
+                      <div class="columna-brillo"></div>
+                    </div>
+                  </div>
+                  <span class="columna-nombre-eje">{{ etiquetaDia(d.dia) }}</span>
+                </div>
+              </div>
+              <div v-else class="texto-sutil texto-centro" style="padding:24px 0">Sin ventas en este periodo.</div>
+            </div>
+          </div>
+
+          <!-- Horas pico -->
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Horas Pico</h3>
+                <span class="subtexto-grafico">Franjas horarias que más facturan</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="grafico-contenido">
+              <div v-for="h in topHoras" :key="h.hora" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ String(h.hora).padStart(2, '0') }}:00 – {{ String((h.hora + 1) % 24).padStart(2, '0') }}:00</span>
+                  <span class="categoria-monto">Bs. {{ montoCorto(h.total) }} · {{ h.cantidad }} com.</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{ width: (h.total / maxHoraTotal * 100) + '%', background: 'var(--gradiente-marca)' }"></div>
+                </div>
+              </div>
+              <div v-if="topHoras.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">Sin datos horarios.</div>
+            </div>
+          </div>
+        </div><!-- /col-side ventas -->
+      </div><!-- /dos-col ventas -->
     </div>
 
-    <!-- 2. TARJETAS DE RESUMEN (AHORA SEGUNDO) -->
-    <div class="rep-seccion-head">
-      <h3 class="rep-seccion-titulo">Resumen operativo</h3>
-      <span class="rep-seccion-sub">Toca una tarjeta para ver el detalle</span>
-      <span class="rep-seccion-linea"></span>
+    <!-- ============ PESTAÑA: PERSONAL ============ -->
+    <div v-if="pestana === 'personal'" class="rep-panel fade-in">
+      <div class="rep-kpis-inline escalonar">
+        <div class="kbi-card kbi-morado">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="12" cy="8" r="6"></circle><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Mejor desempeño</span><span class="kbi-valor">{{ topMesero ? topMesero.nombre.split(' ')[0] : '—' }}</span></div>
+        </div>
+        <div class="kbi-card kbi-verde">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Cobrado por el líder</span><span class="kbi-valor">Bs. {{ topMesero ? topMesero.total.toFixed(2) : '0.00' }}</span></div>
+        </div>
+        <div class="kbi-card kbi-azul">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Promedio por mesero</span><span class="kbi-valor">Bs. {{ promedioMesero.toFixed(2) }}</span></div>
+        </div>
+        <div class="kbi-card kbi-rosa">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Equipo registrado</span><span class="kbi-valor">{{ stats.personal }}</span></div>
+        </div>
+      </div>
+      <div class="rep-dos-col">
+        <div class="rep-col-main">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Desempeño del Personal</h3>
+                <span class="subtexto-grafico">Ingresos cobrados por mesero</span>
+              </div>
+              <div class="rep-filtro-inline" style="min-width:200px">
+                <BaseSelect v-model="meseroSel" :options="opcionesMeseros" placeholder="Todos los meseros" />
+              </div>
+            </div>
+            <div class="grafico-contenido">
+              <!-- Participación total en una sola barra apilada -->
+              <div v-if="!meseroSel && datosMeseros.length > 1" class="rep-stack">
+                <div v-for="m in datosMeseros" :key="'s' + m.nombre" class="rep-stack-seg"
+                     :style="{ width: Math.max(m.participacion, 2) + '%', background: m.color }"
+                     :title="`${m.nombre}: ${m.participacion}%`"></div>
+              </div>
+              <div v-for="m in meserosFiltrados" :key="m.nombre" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ m.nombre }}</span>
+                  <span class="categoria-monto">Bs. {{ m.total.toFixed(2) }}</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{ width: (m.total / maxMeseroTotal * 100) + '%', background: m.color }"></div>
+                </div>
+                <div class="rep-sub-barra">
+                  <span>{{ m.cantidad }} comandas</span>
+                  <span>Ticket prom. Bs. {{ m.cantidad ? (m.total / m.cantidad).toFixed(2) : '0.00' }}</span>
+                  <span>{{ m.participacion }}% del total</span>
+                </div>
+              </div>
+              <div v-if="meserosFiltrados.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">Sin ventas por mesero en este periodo.</div>
+            </div>
+          </div>
+        </div>
+        <div class="rep-col-side">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Equipo</h3>
+                <span class="subtexto-grafico">{{ listadoPersonal.length }} personas registradas</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-admin">
+                <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th></tr></thead>
+                <tbody>
+                  <tr v-for="u in listadoPersonal.slice(0, 5)" :key="u.id_usuario">
+                    <td style="font-weight:600;">{{ u.nombres }} {{ u.apellidos }}</td>
+                    <td>{{ u.rol }}</td>
+                    <td><span :class="['badge-pago', u.estado_cuenta === 'activo' ? 'activo' : 'finalizado']">{{ u.estado_cuenta }}</span></td>
+                  </tr>
+                  <tr v-if="listadoPersonal.length === 0"><td colspan="3" class="texto-centro">Sin personal registrado.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="listadoPersonal.length > 5" class="rep-ver-mas">
+              <span>5 de {{ listadoPersonal.length }}</span>
+              <button class="btn-ver-historial" @click="abrirModal('personal')">Ver todo el personal</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="grid-resumen fade-in escalonar">
+
+    <!-- ============ PESTAÑA: PRODUCTOS ============ -->
+    <div v-if="pestana === 'productos'" class="rep-panel fade-in">
+      <div class="rep-kpis-inline escalonar">
+        <div class="kbi-card kbi-morado">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Productos en inventario</span><span class="kbi-valor">{{ stats.productos }}</span></div>
+        </div>
+        <div class="kbi-card kbi-verde">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Unidades vendidas</span><span class="kbi-valor">{{ unidadesVendidas }}</span></div>
+        </div>
+        <div class="kbi-card kbi-amarillo">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Más vendido</span><span class="kbi-valor kbi-valor-texto">{{ productoTop ? productoTop.nombre_producto : '—' }}</span></div>
+        </div>
+        <div class="kbi-card kbi-rojo">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Stock crítico</span><span class="kbi-valor">{{ productosBajoStock.length }}</span></div>
+        </div>
+      </div>
+      <div class="rep-dos-col">
+        <div class="rep-col-main rep-col-lista">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Ranking de Productos</h3>
+                <span class="subtexto-grafico">De más a menos vendidos en el periodo</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-admin">
+                <thead>
+                  <tr><th style="width:60px; text-align:center;">#</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Vendido</th><th>Ingresos (Bs)</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(prod, idx) in listadoProductosRanking.slice(0, 5)" :key="prod.id_producto">
+                    <td style="font-weight:800; text-align:center;" :style="idx < 3 ? 'color:var(--color-alerta)' : 'color:rgba(255,255,255,0.4)'">{{ idx + 1 }}</td>
+                    <td style="font-weight:700; color:var(--texto-principal);">{{ prod.nombre_producto }}</td>
+                    <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
+                    <td><span :class="['stock-indicador', prod.stock_actual < UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">{{ prod.stock_actual }}</span></td>
+                    <td style="font-weight:700; color:var(--morado-brillante);">{{ prod.vecesVendido }} uds.</td>
+                    <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (prod.ingresosGenerados || 0).toFixed(2) }}</td>
+                  </tr>
+                  <tr v-if="listadoProductosRanking.length === 0"><td colspan="6" class="texto-centro">No hay productos registrados.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="listadoProductosRanking.length > 5" class="rep-ver-mas">
+              <span>Top 5 de {{ listadoProductosRanking.length }} productos</span>
+              <button class="btn-ver-historial" @click="abrirModal('productos')">Ver ranking completo</button>
+            </div>
+          </div>
+        </div>
+        <div class="rep-col-side">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Top 5 por Ingresos</h3>
+                <span class="subtexto-grafico">Los que más dinero generan</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="grafico-contenido">
+              <div v-for="(p, i) in top5Ingresos" :key="p.id_producto" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ p.nombre_producto }}</span>
+                  <span class="categoria-monto">Bs. {{ (p.ingresosGenerados || 0).toFixed(0) }}</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{
+                    width: ((p.ingresosGenerados || 0) / maxIngresoProd * 100) + '%',
+                    background: ['var(--morado-brillante)','var(--rosa-acento)','var(--color-info)','var(--color-exito)','var(--color-alerta)'][i]
+                  }"></div>
+                </div>
+              </div>
+              <div v-if="top5Ingresos.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">Sin ventas en este periodo.</div>
+            </div>
+          </div>
+          <div v-if="productosBajoStock.length > 0" class="alerta-stock-bajo">
+            <div class="alerta-icono">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <div class="alerta-contenido">
+              <h4>Reponer pronto</h4>
+              <p class="alerta-subtexto">Bajo el umbral de {{ UMBRAL_STOCK_BAJO }} uds.</p>
+              <div class="alerta-productos-lista">
+                <span v-for="prod in productosBajoStock" :key="prod.id_producto" class="alerta-producto-badge">
+                  <span class="punto-alerta"></span>
+                  <strong>{{ prod.nombre_producto }}</strong>: {{ prod.stock_actual }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PESTAÑA: EVENTOS ============ -->
+    <div v-if="pestana === 'eventos'" class="rep-panel fade-in">
+      <div class="rep-dos-col">
+        <div class="rep-col-main rep-col-lista">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Reporte por Evento</h3>
+                <span class="subtexto-grafico">Asistencia y ventas estimadas de cada evento</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-admin">
+                <thead>
+                  <tr><th>Evento</th><th>Fecha Inicio</th><th>Estado</th><th>Asistencia</th><th>Ventas Estimadas</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="ev in listadoEventos.slice(0, 5)" :key="ev.id_evento">
+                    <td style="font-weight:600; color:var(--morado-brillante);">{{ ev.nombre_evento }}</td>
+                    <td>{{ formatearFecha(ev.fecha_hora_inicio) }}</td>
+                    <td><span :class="['badge-pago', ev.estado]">{{ ev.estado }}</span></td>
+                    <td style="font-weight:600;">{{ ev.asistenciaReal || 0 }} pers.</td>
+                    <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (ev.ventasReales || 0).toFixed(2) }}</td>
+                    <td><button class="btn-ver-historial btn-mini" @click="verVentasDeEvento(ev)">Qué se vendió</button></td>
+                  </tr>
+                  <tr v-if="listadoEventos.length === 0"><td colspan="6" class="texto-centro">No hay eventos registrados.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="listadoEventos.length > 5" class="rep-ver-mas">
+              <span>5 de {{ listadoEventos.length }} eventos</span>
+              <button class="btn-ver-historial" @click="abrirModal('eventos')">Ver todos los eventos</button>
+            </div>
+          </div>
+        </div>
+        <div class="rep-col-side">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Ventas por Evento</h3>
+                <span class="subtexto-grafico">Comparativa de facturación</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="grafico-contenido">
+              <div v-for="(ev, i) in listadoEventos" :key="'v' + ev.id_evento" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ ev.nombre_evento }}</span>
+                  <span class="categoria-monto">Bs. {{ (ev.ventasReales || 0).toFixed(0) }}</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{
+                    width: ((ev.ventasReales || 0) / maxVentasEvento * 100) + '%',
+                    background: ['var(--morado-brillante)','var(--rosa-acento)','var(--color-info)','var(--color-exito)','var(--color-alerta)'][i % 5]
+                  }"></div>
+                </div>
+              </div>
+              <div v-if="listadoEventos.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">Sin eventos.</div>
+            </div>
+          </div>
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Asistencia por Evento</h3>
+                <span class="subtexto-grafico">Personas que ingresaron</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <div class="grafico-contenido">
+              <div v-for="ev in listadoEventos" :key="'a' + ev.id_evento" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ ev.nombre_evento }}</span>
+                  <span class="categoria-monto">{{ ev.asistenciaReal || 0 }} pers.</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{ width: ((ev.asistenciaReal || 0) / maxAsistEvento * 100) + '%', background: 'var(--color-info)' }"></div>
+                </div>
+              </div>
+              <div v-if="listadoEventos.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">Sin eventos.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloque de KPIs antiguo desactivado (ahora vive en la pestaña General) -->
+    <div v-if="false" class="grid-resumen fade-in escalonar">
       <div class="tarjeta-estadistica bg-clientes" @click="abrirModal('clientes')">
         <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
         <div class="info-est">
@@ -313,8 +770,8 @@
       </div>
     </div>
 
-    <!-- 3. Alerta de Inventario Crítico / Stock Bajo (AHORA TERCERO Y SUPER LIMPIO) -->
-    <div v-if="productosBajoStock.length > 0" class="alerta-stock-bajo fade-in">
+    <!-- Alerta antigua desactivada (ahora vive en la pestaña General) -->
+    <div v-if="false" class="alerta-stock-bajo fade-in">
       <div class="alerta-icono">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
       </div>
@@ -482,7 +939,7 @@
                     </span>
                     <span v-else class="texto-sutil">Sin registro / Barra</span>
                   </td>
-                  <td>{{ venta.usuario_comanda_id_meseroTousuario.nombres }}</td>
+                  <td>{{ venta.usuario_comanda_id_meseroTousuario?.nombres || '—' }}</td>
                   <td>
                     <span :class="['badge-pago', venta.metodo_pago.toLowerCase().replace(' ', '-')]">
                       {{ venta.metodo_pago }}
@@ -498,8 +955,9 @@
           </div>
           <Paginacion
             :total="ventasTotal" :pagina="ventasPagina" :limite="ventasLimite"
+            :opciones="[20, 40, 50, 100]"
             @update:pagina="irPaginaVentas"
-            @update:limite="l => { ventasLimite = l; cambiarLimiteVentas() }"
+            @update:limite="cambiarPorPagina"
           />
         </div>
       </div>
@@ -508,7 +966,7 @@
     <!-- ====================================================
          SECCIÓN: REPORTE DE BILLETERA DIGITAL
     ==================================================== -->
-    <div class="seccion-billetera fade-in">
+    <div v-if="pestana === 'billetera'" class="seccion-billetera fade-in">
       <div class="sb-cabecera">
         <div class="sb-titulo-area">
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--morado-brillante)" stroke-width="2" width="28" height="28"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
@@ -733,10 +1191,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 const notif = useNotificaciones()
 
@@ -804,6 +1263,7 @@ function presetFecha(tipo) {
     return `${y}-${m}-${dd}`
   }
   presetActivo.value = tipo
+  eventoFiltro.value = '' // los presets de fecha anulan el filtro por evento
   if (tipo === 'todo') {
     filtroDesde.value = ''
     filtroHasta.value = ''
@@ -824,6 +1284,7 @@ function presetFecha(tipo) {
 
 function cambioFechaManual() {
   presetActivo.value = ''
+  eventoFiltro.value = ''
   aplicarFiltros()
 }
 
@@ -838,12 +1299,60 @@ const listadoClientes = ref([])
 const listadoPersonal = ref([])
 const listadoEventos = ref([])
 
+// Pestaña activa del dashboard (híbrido: pestañas + denso + dos columnas)
+const pestana = ref('general')
+const pestanas = [
+  { id: 'general', nombre: 'General' },
+  { id: 'ventas', nombre: 'Ventas' },
+  { id: 'productos', nombre: 'Productos' },
+  { id: 'personal', nombre: 'Personal' },
+  { id: 'billetera', nombre: 'Billetera' },
+  { id: 'eventos', nombre: 'Eventos' }
+]
+
+// Filtro por mesero (pestaña Personal): '' = todos
+const meseroSel = ref('')
+const opcionesMeseros = computed(() => [
+  { value: '', label: 'Todos los meseros' },
+  ...datosMeseros.value.map(m => ({ value: m.nombre, label: m.nombre }))
+])
+const meserosFiltrados = computed(() =>
+  meseroSel.value ? datosMeseros.value.filter(m => m.nombre === meseroSel.value) : datosMeseros.value
+)
+const maxMeseroTotal = computed(() =>
+  datosMeseros.value.length ? Math.max(...datosMeseros.value.map(m => m.total), 1) : 1
+)
+// Filtro GLOBAL por evento: al elegir uno, todo el resumen (KPIs, gráficos,
+// ranking, meseros, ventas) se recalcula con la ventana horaria del evento
+const eventoFiltro = ref('')
+const opcionesEventos = computed(() => [
+  { value: '', label: 'Todos los eventos' },
+  ...listadoEventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento }))
+])
+const nombreEventoFiltro = computed(() =>
+  listadoEventos.value.find(e => e.id_evento === eventoFiltro.value)?.nombre_evento || ''
+)
+function cambioEvento(v) {
+  eventoFiltro.value = v
+  presetActivo.value = v ? '' : presetActivo.value
+  cargarReportes(true)
+}
+// Desde una fila de la pestaña Eventos: filtra por ese evento y salta al ranking
+function verVentasDeEvento(ev) {
+  eventoFiltro.value = ev.id_evento
+  presetActivo.value = ''
+  pestana.value = 'productos' // el watch de pestaña recarga ya con el evento puesto
+}
+
 // Datos dinámicos para los gráficos interactivos
 const datosCategorias = ref([])
 const datosMetodos = ref([])
 const listadoProductosRanking = ref([])
 const productosBajoStock = ref([])
 const datosMeseros = ref([])
+// Agregados nuevos del backend: ventas por día y por hora (horas pico)
+const porDia = ref([])
+const porHora = ref([])
 
 // Concentric payment rings / torta variables
 const montoEfectivo = ref(0)
@@ -862,6 +1371,76 @@ const conteoBilletera = ref(0)
 const salesTrendPoints = ref('')
 const salesTrendFillPoints = ref('')
 const trendComandas = ref([])
+
+// KPIs derivados para las cabeceras de cada pestaña
+const totalCobros = computed(() => conteoEfectivo.value + conteoQR.value + conteoBilletera.value)
+const ticketPromedio = computed(() => totalCobros.value ? stats.value.ingresosTotales / totalCobros.value : 0)
+const metodoTop = computed(() => (datosMetodos.value[0]?.total ? datosMetodos.value[0].nombre : '—'))
+const topMesero = computed(() =>
+  datosMeseros.value.length ? datosMeseros.value.reduce((a, b) => (b.total > a.total ? b : a)) : null
+)
+const promedioMesero = computed(() => {
+  const arr = datosMeseros.value
+  if (!arr.length) return 0
+  return arr.reduce((a, m) => a + m.total, 0) / arr.length
+})
+const unidadesVendidas = computed(() =>
+  listadoProductosRanking.value.reduce((a, p) => a + (p.vecesVendido || 0), 0)
+)
+const productoTop = computed(() => listadoProductosRanking.value[0] || null)
+const top5Ingresos = computed(() =>
+  [...listadoProductosRanking.value]
+    .sort((a, b) => (b.ingresosGenerados || 0) - (a.ingresosGenerados || 0))
+    .slice(0, 5)
+)
+const maxIngresoProd = computed(() =>
+  top5Ingresos.value.length ? Math.max(...top5Ingresos.value.map(p => p.ingresosGenerados || 0), 1) : 1
+)
+
+// Ventas por día (columna) — últimos 7 días con actividad, y su tope para escalar
+const dias7 = computed(() => porDia.value.slice(-7))
+const maxDiaTotal = computed(() =>
+  dias7.value.length ? Math.max(...dias7.value.map(d => d.total), 1) : 1
+)
+// Horas pico — top 5 franjas horarias que más facturan (compacto)
+const topHoras = computed(() => porHora.value.slice(0, 5))
+const maxHoraTotal = computed(() =>
+  topHoras.value.length ? Math.max(...topHoras.value.map(h => h.total), 1) : 1
+)
+function etiquetaDia(iso) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-BO', { day: '2-digit', month: 'short' })
+}
+function montoCorto(v) {
+  return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)
+}
+
+// Ventas por evento (comparativa gráfica en la pestaña Eventos)
+const maxVentasEvento = computed(() =>
+  listadoEventos.value.length ? Math.max(...listadoEventos.value.map(e => e.ventasReales || 0), 1) : 1
+)
+const maxAsistEvento = computed(() =>
+  listadoEventos.value.length ? Math.max(...listadoEventos.value.map(e => e.asistenciaReal || 0), 1) : 1
+)
+
+// Tamaño de página de la tabla de ventas (accesible desde la cabecera de la tarjeta)
+const opcionesPorPagina = [
+  { value: 20, label: '20 por página' },
+  { value: 40, label: '40 por página' },
+  { value: 50, label: '50 por página' },
+  { value: 100, label: '100 por página' }
+]
+function cambiarPorPagina(v) {
+  ventasLimite.value = v
+  cambiarLimiteVentas()
+}
+
+// Al cambiar de pestaña se recaptura la información en silencio,
+// así cada panel muestra datos frescos sin esperar al intervalo
+watch(pestana, () => {
+  cargarReportes(true)
+  cargarReporteBilletera()
+})
 
 function abrirModal(tipo) {
   modalActivo.value = tipo
@@ -1260,6 +1839,7 @@ onMounted(() => {
   // Sincronización automática en vivo (endpoints ligeros/agregados)
   intervaloSync = setInterval(() => {
     cargarReportes(true) // modo silencioso para no parpadear la pantalla
+    cargarReporteBilletera() // antes no se refrescaba nunca en vivo
   }, 15000)
 })
 
@@ -1315,8 +1895,12 @@ async function cargarReportes(silencioso = false) {
     // 4. Ventas: agregados en SQL (rapido) + lista paginada
     try {
       const params = new URLSearchParams()
-      if (filtroDesde.value) params.append('desde', filtroDesde.value)
-      if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+      if (eventoFiltro.value) {
+        params.append('evento', eventoFiltro.value) // el evento manda sobre las fechas
+      } else {
+        if (filtroDesde.value) params.append('desde', filtroDesde.value)
+        if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+      }
       const qs = params.toString() ? `?${params.toString()}` : ''
 
       const resumen = await clienteHttp.get(`/comandas/resumen-ventas${qs}`)
@@ -1362,14 +1946,21 @@ async function cargarReportes(silencioso = false) {
         ingresosGenerados: iProd[p.id_producto] || 0
       })).sort((a, b) => b.vecesVendido - a.vecesVendido)
 
-      // Meseros
+      // Meseros (con conteo de comandas y participación sobre el total)
       const coloresMeseros = ['var(--color-info)', 'var(--morado-brillante)', 'var(--rosa-acento)', 'var(--color-exito)', 'var(--color-alerta)', 'var(--color-error)']
       const maxMes = Math.max(...resumen.por_mesero.map(m => m.total), 1)
+      const sumMes = resumen.por_mesero.reduce((a, m) => a + m.total, 0) || 1
       datosMeseros.value = resumen.por_mesero.map((m, idx) => ({
         nombre: m.nombre, total: m.total,
+        cantidad: m.cantidad || 0,
         porcentaje: Math.round(m.total / maxMes * 100),
+        participacion: Math.round(m.total / sumMes * 100),
         color: coloresMeseros[idx % coloresMeseros.length]
       }))
+
+      // Ventas por día y horas pico (gráficos de la pestaña Ventas)
+      porDia.value = resumen.por_dia || []
+      porHora.value = resumen.por_hora || []
 
       // Tendencia (grafico 2D)
       const ultimas = [...resumen.tendencia].reverse().map(t => ({ id_comanda: t.id_comanda, subtotal: t.total, fecha_registro: t.fecha }))
@@ -1411,8 +2002,12 @@ async function cargarReportes(silencioso = false) {
 async function cargarVentasPagina() {
   try {
     const params = new URLSearchParams()
-    if (filtroDesde.value) params.append('desde', filtroDesde.value)
-    if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    if (eventoFiltro.value) {
+      params.append('evento', eventoFiltro.value)
+    } else {
+      if (filtroDesde.value) params.append('desde', filtroDesde.value)
+      if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    }
     params.append('pagina', ventasPagina.value)
     params.append('limite', ventasLimite.value)
     const res = await clienteHttp.get(`/comandas?${params.toString()}`)
@@ -1463,6 +2058,212 @@ function formatearFecha(isoStr) {
 </script>
 
 <style scoped>
+/* ============================================
+   FASE 6: PESTAÑAS + DASHBOARD DENSO A DOS COLUMNAS
+============================================ */
+.rep-tabs {
+  display: flex;
+  gap: 6px;
+  /* Nunca se apilan en dos filas: si no caben, scroll horizontal */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-bottom: 22px;
+  padding: 6px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  border-radius: 16px;
+}
+.rep-tabs::-webkit-scrollbar { display: none; }
+.rep-tab {
+  flex: 1 0 auto;
+  min-width: max-content;
+  background: transparent;
+  border: none;
+  color: var(--texto-secundario);
+  padding: 10px 16px;
+  border-radius: 11px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rep-tab:hover { color: var(--texto-principal); background: var(--fondo-tarjeta-alt); }
+.rep-tab:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.rep-tab.activo {
+  background: var(--gradiente-marca);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
+}
+.rep-panel { margin-top: 4px; }
+
+/* Dos columnas maestras (principal ancha + lateral angosta) */
+.rep-dos-col {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 20px;
+  align-items: start;
+  margin-top: 18px;
+}
+.rep-col-main, .rep-col-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+@media (max-width: 1200px) {
+  .rep-dos-col { grid-template-columns: 1fr; }
+  /* Apilado: los gráficos van primero, las listas/tablas al final */
+  .rep-col-lista { order: 2; }
+}
+
+/* Franja compacta de KPIs (6 en una fila, densos) */
+.rep-kpis-strip {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+  gap: 12px !important;
+}
+.rep-kpis-strip .tarjeta-estadistica {
+  min-height: 0;
+  padding: 14px 16px;
+  gap: 12px;
+}
+.rep-kpis-strip .icono-est { width: 44px; height: 44px; }
+.rep-kpis-strip .icono-est svg { width: 22px; height: 22px; }
+.rep-kpis-strip .info-est h3 { font-size: 0.62rem; letter-spacing: 0.9px; margin-bottom: 3px; }
+.rep-kpis-strip .info-est h2 { font-size: 1.5rem; margin: 0 0 2px; }
+.rep-kpis-strip .bg-ventas .info-est h2 { font-size: 1.6rem; }
+.rep-kpis-strip .info-est p { font-size: 0.68rem; margin: 0; }
+/* Solo forzar 6 columnas cuando REALMENTE hay ancho (el sidebar come ~255px);
+   antes se activaba a 900px de ventana y los KPIs quedaban aplastados */
+@media (min-width: 1350px) {
+  .rep-kpis-strip { grid-template-columns: repeat(6, 1fr) !important; }
+}
+
+/* Filtros embebidos en el header de una tarjeta */
+.rep-filtro-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Mini-resumen de billetera (atajo) */
+.rep-mini-billetera { cursor: pointer; }
+.rep-mini-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rep-mini-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: var(--radio-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.rmk-label { font-size: 0.7rem; color: var(--texto-secundario); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.rmk-valor { font-size: 1.15rem; color: #fff; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Como pestaña, la sección billetera no necesita el gran margen superior */
+.rep-tabs ~ .seccion-billetera { margin-top: 18px; }
+
+/* Fila de KPIs compactos dentro de una pestaña (reusa el estilo kbi-card) */
+.rep-kpis-inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.rep-kpis-inline .kbi-card { padding: 14px 16px; }
+.rep-kpis-inline .kbi-icono { width: 42px; height: 42px; }
+.rep-kpis-inline .kbi-valor { font-size: 1.25rem; }
+.kbi-valor-texto {
+  font-size: 1rem !important;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Pie "ver más" de las listas compactas (top 5 + detalle en modal) */
+.rep-ver-mas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde-sutil);
+}
+.rep-ver-mas span {
+  color: var(--texto-secundario);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* Barra apilada de participación (100% = todos los meseros) */
+.rep-stack {
+  display: flex;
+  height: 16px;
+  border-radius: 9px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+}
+.rep-stack-seg {
+  height: 100%;
+  transition: width 0.9s var(--ease-suave);
+}
+
+@media (max-width: 768px) {
+  .rep-tab { padding: 9px 15px; }
+}
+
+/* Botón compacto para acciones dentro de tablas */
+.btn-mini { padding: 5px 12px !important; font-size: 0.76rem !important; white-space: nowrap; }
+
+/* Selector de evento en la barra de periodo */
+.filtro-evento { min-width: 210px; }
+
+/* Chip que avisa que el reporte está filtrado por un evento */
+.chip-evento-activo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(168, 85, 247, 0.10);
+  border: 1px solid rgba(168, 85, 247, 0.38);
+  color: var(--texto-principal);
+  font-size: 0.87rem;
+  font-weight: 600;
+}
+.chip-evento-activo svg { color: var(--morado-hover); flex-shrink: 0; }
+.chip-evento-activo strong { color: var(--morado-hover); }
+.chip-evento-activo .btn-limpiar-filtro { margin-left: auto; }
+
+/* Sub-línea informativa bajo la barra de cada mesero */
+.rep-sub-barra {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  font-variant-numeric: tabular-nums;
+}
+
 /* CABECERA Y ACCIONES — banner de vidrio premium */
 .vista-cabecera {
   position: relative;
@@ -2048,6 +2849,12 @@ function formatearFecha(isoStr) {
 .badge-pago.activo { background: rgba(46, 204, 113, 0.1); color: var(--color-exito); }
 .badge-pago.finalizado { background: rgba(231, 76, 60, 0.1); color: var(--color-error); }
 .badge-pago.planificado { background: rgba(241, 196, 15, 0.1); color: var(--color-alerta); }
+/* Estados de evento (español) */
+.badge-pago.planificacion { background: rgba(241, 196, 15, 0.1); color: var(--color-alerta); }
+.badge-pago.promocion { background: rgba(52, 152, 219, 0.1); color: var(--color-info); }
+.badge-pago.en_transcurso { background: rgba(168, 85, 247, 0.12); color: var(--morado-claro); }
+.badge-pago.lleno { background: rgba(236, 72, 153, 0.12); color: var(--rosa-acento); }
+.badge-pago.terminado { background: rgba(46, 204, 113, 0.1); color: var(--color-exito); }
 
 .texto-sutil {
   color: rgba(255,255,255,0.3);
