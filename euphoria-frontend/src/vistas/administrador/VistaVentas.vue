@@ -23,14 +23,31 @@
     <template v-if="!ventaSeleccionada">
       <div class="filtros-panel superficie">
         <div class="filtros-barra">
-          <label class="campo-busqueda">
-            <svg class="icono-busqueda" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
-            </svg>
-            <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar por cliente, comanda..." />
+          <label class="filtro-campo campo-busqueda-campo">
+            <span class="filtro-lbl">Buscar</span>
+            <span class="campo-busqueda">
+              <svg class="icono-busqueda" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+              </svg>
+              <input v-model="busqueda" class="campo campo-con-icono" placeholder="Cliente o # de comanda..." />
+            </span>
           </label>
-          <div style="flex:0 1 180px;min-width:150px"><BaseSelect v-model="filtroEstado" :options="opcionesEstadoVenta" placeholder="Todos los estados" /></div>
-          <input v-model="filtroFecha" type="date" class="campo" style="max-width:180px" />
+          <label class="filtro-campo" style="flex:0 1 160px;min-width:140px">
+            <span class="filtro-lbl">Estado</span>
+            <BaseSelect v-model="filtroEstado" :options="opcionesEstadoVenta" placeholder="Todos los estados" />
+          </label>
+          <label class="filtro-campo" style="flex:0 1 160px;min-width:140px">
+            <span class="filtro-lbl">Método de pago</span>
+            <BaseSelect v-model="filtroMetodo" :options="opcionesMetodo" placeholder="Todos los métodos" />
+          </label>
+          <label class="filtro-campo" style="flex:0 1 170px;min-width:150px">
+            <span class="filtro-lbl">Cajero</span>
+            <BaseSelect v-model="filtroCajero" :options="opcionesCajero" placeholder="Todos los cajeros" />
+          </label>
+          <label class="filtro-campo" style="flex:0 1 175px;min-width:150px">
+            <span class="filtro-lbl">Fecha</span>
+            <BaseFecha v-model="filtroFecha" placeholder="Cualquier fecha" />
+          </label>
         </div>
         <div class="filtros-meta">
           <span class="chip-conteo"><strong>{{ ventasTotal }}</strong> comandas</span>
@@ -274,6 +291,7 @@ import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
@@ -292,7 +310,22 @@ const ventaSeleccionada = ref(null)
 const busqueda = ref('')
 const filtroEstado = ref('')
 const filtroFecha = ref('')
+const filtroMetodo = ref('')
+const filtroCajero = ref('')
 const cargando = ref(false)
+
+// Opciones de filtro (métodos de pago y cajeros con ventas)
+const metodosDisponibles = ref([])
+const cajerosDisponibles = ref([])
+const opcionesMetodo = computed(() => [{ value: '', label: 'Todos los métodos' }, ...metodosDisponibles.value.map(m => ({ value: m, label: m }))])
+const opcionesCajero = computed(() => [{ value: '', label: 'Todos los cajeros' }, ...cajerosDisponibles.value.map(c => ({ value: c.id, label: c.nombre }))])
+async function cargarFiltros() {
+  try {
+    const f = await clienteHttp.get('/comandas/filtros')
+    metodosDisponibles.value = f.metodos || []
+    cajerosDisponibles.value = f.cajeros || []
+  } catch { /* silencioso */ }
+}
 const actualizando = ref(false)
 const cambiandoEstado = ref(false)
 
@@ -304,6 +337,7 @@ let intervaloActualizacion = null
 
 onMounted(() => {
   cargarVentas()
+  cargarFiltros()
   // Refresco en vivo (endpoint paginado y ligero)
   intervaloActualizacion = setInterval(() => {
     actualizarVentas()
@@ -329,7 +363,9 @@ function mapearComanda(cmd) {
     fecha_comanda: cmd.fecha_registro,
     monto_recibido: cmd.monto_recibido ? parseFloat(cmd.monto_recibido) : null,
     cambio_dado: cmd.cambio_dado ? parseFloat(cmd.cambio_dado) : null,
-    url_comprobante: cmd.comprobante_url,
+    // El comprobante_url se guarda con un sufijo "|TX:...|..."; la URL real de la
+    // imagen es la parte antes del "|TX:". Sin esto, el src de la imagen queda roto.
+    url_comprobante: cmd.comprobante_url ? cmd.comprobante_url.split('|TX:')[0] : null,
     qr_billetera: cmd.qr_billetera,
     bancarizacion: cmd.comprobante_url?.split('|TX:')?.[1]?.split('|')?.[0],
     productos_detalles: cmd.detalle_comanda.map(det => ({
@@ -348,6 +384,8 @@ function construirParams() {
   params.append('limite', limite.value)
   if (filtroEstado.value) params.append('estado', filtroEstado.value)
   if (filtroFecha.value) params.append('fecha', filtroFecha.value)
+  if (filtroMetodo.value) params.append('metodo', filtroMetodo.value)
+  if (filtroCajero.value) params.append('cajero', filtroCajero.value)
   return params.toString()
 }
 
@@ -374,7 +412,7 @@ function irPagina(n) { pagina.value = n; cargarVentas() }
 function cambiarLimite(l) { limite.value = l; pagina.value = 1; cargarVentas() }
 
 // Al cambiar filtros de servidor, volver a la página 1 y recargar
-watch([filtroEstado, filtroFecha], () => { pagina.value = 1; cargarVentas() })
+watch([filtroEstado, filtroFecha, filtroMetodo, filtroCajero], () => { pagina.value = 1; cargarVentas() })
 
 async function actualizarVentas() {
   if (cargando.value) return
@@ -445,7 +483,10 @@ function formatearFechaCompleta(fecha) {
 }
 
 function esImagen(url) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(url)
+  if (!url) return false
+  // Los comprobantes son imágenes (Cloudinary, a veces sin extensión) o PDF.
+  // Tratamos como imagen todo lo que no sea claramente un PDF.
+  return !/\.pdf(\?|$)/i.test(url)
 }
 
 async function marcarCompletada() {
@@ -589,9 +630,29 @@ async function cancelarVenta() {
 
 .filtros-barra {
   display: flex;
+  align-items: flex-end;
   gap: var(--esp-3);
   flex-wrap: wrap;
   flex: 1 1 auto;
+}
+
+.filtro-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.filtro-lbl {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texto-secundario);
+  padding-left: 2px;
+}
+.campo-busqueda-campo {
+  flex: 1 1 240px;
+  min-width: 190px;
+  max-width: 340px;
 }
 
 .filtros-meta {
@@ -643,8 +704,7 @@ async function cancelarVenta() {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 260px;
-  max-width: 340px;
+  width: 100%;
 }
 .icono-busqueda {
   position: absolute;
@@ -1261,7 +1321,14 @@ async function cancelarVenta() {
 
   .filtros-barra {
     flex-direction: column;
+    align-items: stretch;
     width: 100%;
+  }
+
+  .filtro-campo {
+    width: 100%;
+    flex: none !important;
+    max-width: none;
   }
 
   .filtros-meta {

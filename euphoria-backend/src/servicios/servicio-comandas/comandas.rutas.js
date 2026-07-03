@@ -480,6 +480,29 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
 })
 
 // GET /api/comandas (Para reportes del Admin)
+// GET /api/comandas/filtros — opciones para los filtros de ventas (métodos + cajeros con ventas)
+router.get('/filtros', verificarToken, async (req, res) => {
+  try {
+    const [metodos, meseros] = await Promise.all([
+      prisma.comanda.findMany({ distinct: ['metodo_pago'], select: { metodo_pago: true } }),
+      prisma.comanda.findMany({
+        distinct: ['id_mesero'],
+        select: { id_mesero: true, usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true } } },
+      }),
+    ])
+    res.json({
+      metodos: metodos.map(m => m.metodo_pago).filter(Boolean),
+      cajeros: meseros.map(m => ({
+        id: m.id_mesero,
+        nombre: `${m.usuario_comanda_id_meseroTousuario?.nombres || ''} ${m.usuario_comanda_id_meseroTousuario?.apellidos || ''}`.trim() || `Usuario ${m.id_mesero}`,
+      })),
+    })
+  } catch (error) {
+    console.error('Error obteniendo filtros de ventas:', error)
+    res.status(500).json({ error: 'Error al obtener filtros' })
+  }
+})
+
 router.get('/', verificarToken, async (req, res) => {
   try {
     let whereClause = {}
@@ -503,6 +526,8 @@ router.get('/', verificarToken, async (req, res) => {
       }
     }
     if (req.query.estado) whereClause.estado_despacho = req.query.estado
+    if (req.query.metodo) whereClause.metodo_pago = req.query.metodo
+    if (req.query.cajero) whereClause.id_mesero = Number(req.query.cajero)
 
     const incluir = {
       detalle_comanda: {
@@ -652,16 +677,70 @@ router.get('/mis-listos', verificarToken, async (req, res) => {
 // PATCH /api/comandas/:id/estado (Cambiar estado de una comanda)
 router.patch('/:id/estado', verificarToken, async (req, res) => {
   try {
-    const { id } = req.params
+    const id = parseInt(req.params.id)
     const { estado } = req.body
 
     if (!['Pendiente', 'Preparando', 'Listo', 'Completada', 'Cancelada'].includes(estado)) {
       return res.status(400).json({ error: 'Estado inválido. Usa: Pendiente, Preparando, Listo, Completada, Cancelada' })
     }
 
+    const actual = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      include: { detalle_comanda: true },
+    })
+    if (!actual) return res.status(404).json({ error: 'Comanda no encontrada' })
+
+    // CANCELACIÓN: repone stock y, si se pagó con billetera, reembolsa al cliente.
+    // Solo se ejecuta al pasar de un estado NO cancelado a Cancelada (evita doble reembolso).
+    if (estado === 'Cancelada' && actual.estado_despacho !== 'Cancelada') {
+      const total = actual.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
+      let reembolsado = false
+      await prisma.$transaction(async (tx) => {
+        // 1) Reponer stock de cada producto
+        for (const d of actual.detalle_comanda) {
+          await tx.producto.update({
+            where: { id_producto: d.id_producto },
+            data: { stock_actual: { increment: d.cantidad } },
+          })
+        }
+        // 2) Reembolso a la billetera si el pago fue con Billetera
+        if (actual.metodo_pago === 'Billetera' && actual.id_cliente && total > 0) {
+          const bill = await tx.billetera.findUnique({ where: { id_usuario: actual.id_cliente } })
+          if (bill) {
+            await tx.billetera.update({
+              where: { id_billetera: bill.id_billetera },
+              data: { saldo_actual: { increment: total }, ultima_actualizacion: new Date() },
+            })
+            await tx.transaccion.create({
+              data: {
+                id_billetera: bill.id_billetera,
+                id_comanda: actual.id_comanda,
+                id_responsable: req.usuario.id,
+                tipo_operacion: 'reembolso',
+                monto: total,
+                fecha_hora: new Date(),
+              },
+            })
+            reembolsado = true
+          }
+        }
+        // 3) Marcar cancelada
+        await tx.comanda.update({ where: { id_comanda: id }, data: { estado_despacho: 'Cancelada' } })
+      })
+
+      if (global.io && reembolsado) {
+        global.io.emit('billetera_actualizada', { id_usuario: actual.id_cliente })
+      }
+      const comanda = await prisma.comanda.findUnique({ where: { id_comanda: id } })
+      return res.json({
+        mensaje: 'Venta cancelada. Se repuso el stock' + (reembolsado ? ' y se reembolsó el saldo al cliente.' : '.'),
+        comanda,
+      })
+    }
+
     const comanda = await prisma.comanda.update({
-      where: { id_comanda: parseInt(id) },
-      data: { estado_despacho: estado }
+      where: { id_comanda: id },
+      data: { estado_despacho: estado },
     })
 
     // Emitir eventos por websocket

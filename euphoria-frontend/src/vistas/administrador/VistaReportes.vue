@@ -30,9 +30,9 @@
       </div>
       <div class="filtro-rango-personalizado">
         <label class="etiqueta-filtro">Desde</label>
-        <input type="date" class="input-filtro" v-model="filtroDesde" @change="cambioFechaManual" />
+        <div class="rango-fecha"><BaseFecha v-model="filtroDesde" placeholder="Inicio" :max="filtroHasta || ''" @update:model-value="cambioFechaManual" /></div>
         <label class="etiqueta-filtro">Hasta</label>
-        <input type="date" class="input-filtro" v-model="filtroHasta" @change="cambioFechaManual" />
+        <div class="rango-fecha"><BaseFecha v-model="filtroHasta" placeholder="Hoy" :min="filtroDesde || ''" @update:model-value="cambioFechaManual" /></div>
       </div>
     </div>
 
@@ -452,9 +452,9 @@
           <h2>Detalle General de Ventas (Comandas)</h2>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
             <label class="etiqueta-filtro">Desde</label>
-            <input type="date" class="input-filtro" v-model="filtroDesde" @change="cambioFechaManual" />
+            <div class="rango-fecha"><BaseFecha v-model="filtroDesde" placeholder="Inicio" :max="filtroHasta || ''" @update:model-value="cambioFechaManual" /></div>
             <label class="etiqueta-filtro">Hasta</label>
-            <input type="date" class="input-filtro" v-model="filtroHasta" @change="cambioFechaManual" />
+            <div class="rango-fecha"><BaseFecha v-model="filtroHasta" placeholder="Hoy" :min="filtroDesde || ''" @update:model-value="cambioFechaManual" /></div>
             <button v-if="filtroDesde || filtroHasta" class="btn-limpiar-filtro" @click="limpiarFiltroFechas">Limpiar</button>
             <button class="btn-cerrar-fs" @click="modalActivo = null">Cerrar</button>
           </div>
@@ -736,6 +736,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
+import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 const notif = useNotificaciones()
 
@@ -1893,6 +1894,7 @@ function formatearFecha(isoStr) {
   flex-wrap: wrap;
   margin-left: auto;
 }
+.rango-fecha { width: 165px; }
 
 /* Paginación */
 .paginacion-barra {
