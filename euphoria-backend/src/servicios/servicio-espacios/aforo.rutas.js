@@ -259,21 +259,54 @@ router.get('/evento/:idEvento', soloRoles('Recepcionista', 'Administrador'), asy
     const zonas = await prisma.zona.findMany({
       where: { id_evento },
       orderBy: { id_zona: 'asc' },
+      include: { mesa_espacio: true },
     })
 
     const detalle = await Promise.all(zonas.map(async (z) => {
-      const aforo = await aforoActualZona(z.id_zona)
-      return resumenZona(z, aforo)
+      const ocupado = await aforoActualZona(z.id_zona) // personas realmente dentro (ingresadas)
+      const resAgg = await prisma.entrada.aggregate({ where: { id_zona: z.id_zona }, _sum: { cantidad_personas: true } })
+      const reservado = resAgg._sum.cantidad_personas || 0 // cupos vendidos (con o sin ingresar)
+      const capacidad = z.capacidad_maxima || 0
+      const porcentaje = capacidad > 0 ? Math.round((ocupado / capacidad) * 100) : 0
+      return {
+        id_zona: z.id_zona,
+        id_evento: z.id_evento,
+        nombre_zona: z.nombre_zona,
+        es_general: z.es_general,
+        aforo_actual: ocupado,       // compat con el socket y el resumen actual
+        ocupado,
+        reservado,
+        capacidad,
+        porcentaje,
+        reservado_pct: capacidad > 0 ? Math.round((reservado / capacidad) * 100) : 0,
+        estado: estadoAforo(porcentaje),
+        disponibles: Math.max(0, capacidad - reservado),
+        proporcion: z.proporcion || 1.6,
+        // Layout para el preview del mapa en vivo (mesas coloreadas por estado).
+        mesas: (z.mesa_espacio || []).map(m => ({
+          id_mesa: m.id_mesa,
+          tipo_elemento: m.tipo_elemento,
+          numero_nombre: m.numero_nombre,
+          posicion_x: m.posicion_x, posicion_y: m.posicion_y,
+          ancho: m.ancho, alto: m.alto, rotacion: m.rotacion, forma: m.forma,
+          capacidad_sillas: m.capacidad_sillas,
+          estado_ocupacion: m.estado_ocupacion,
+          es_seleccionable: m.es_seleccionable,
+        })),
+      }
     }))
 
-    const aforo_total = detalle.reduce((s, z) => s + z.aforo_actual, 0)
+    const aforo_total = detalle.reduce((s, z) => s + z.ocupado, 0)
+    const reservado_total = detalle.reduce((s, z) => s + z.reservado, 0)
     const capacidad_total = detalle.reduce((s, z) => s + z.capacidad, 0)
     const porcentaje_total = capacidad_total > 0 ? Math.round((aforo_total / capacidad_total) * 100) : 0
 
     res.json({
       id_evento,
       aforo_total,
+      reservado_total,
       capacidad_total,
+      disponibles_total: Math.max(0, capacidad_total - reservado_total),
       porcentaje_total,
       estado_total: estadoAforo(porcentaje_total),
       zonas: detalle,

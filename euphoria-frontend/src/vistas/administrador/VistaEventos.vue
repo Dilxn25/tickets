@@ -44,6 +44,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono-busqueda"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input v-model="filtroBusqueda" class="campo campo-con-icono" placeholder="Buscar por nombre..." />
         </div>
+        <div class="select-estado"><BaseSelect v-model="filtroTipo" :options="opcionesFiltroTipo" placeholder="Todos los tipos" /></div>
         <div class="select-estado"><BaseSelect v-model="filtroEstado" :options="opcionesFiltroEstado" placeholder="Todos los estados" /></div>
       </div>
     </div>
@@ -79,8 +80,11 @@
         <div class="portada-contenedor">
           <img v-if="evento.url_portada" :src="evento.url_portada" class="portada-img" alt="Portada Evento" />
           <div v-else class="portada-placeholder">Sin portada</div>
-          <span :class="['badge-estado', 'estado-' + evento.estado]">
-            <i class="badge-punto" aria-hidden="true"></i>{{ evento.estado.toUpperCase() }}
+          <span class="badge-tipo" :style="estiloBadge(colorTipo(evento.tipo_evento))">
+            {{ etiquetaTipo(evento.tipo_evento) }}
+          </span>
+          <span class="badge-estado" :style="estiloBadge(colorEstado(evento.estado))">
+            <i class="badge-punto" aria-hidden="true"></i>{{ etiquetaEstado(evento.estado) }}
           </span>
         </div>
 
@@ -96,6 +100,7 @@
 
           <div class="acciones">
             <button class="btn btn-sm btn-secundario" @click="abrirModal(evento)">Editar</button>
+            <button class="btn btn-sm btn-secundario" @click="abrirPlanosEvento(evento)">Planos</button>
             <button class="btn btn-sm btn-primario" @click="iniciarCambioEstado(evento)">Estado</button>
           </div>
         </div>
@@ -131,10 +136,21 @@
           </div>
           
           <form class="modal-form" @submit.prevent="guardarEvento">
-            <div class="grupo-campo">
-              <label class="etiqueta">Nombre del evento *</label>
-              <input v-model="form.nombre_evento" class="campo" required placeholder="Ej. Fiesta Neón Sábado" />
+            <div class="form-fila">
+              <div class="grupo-campo">
+                <label class="etiqueta">Nombre del evento *</label>
+                <input v-model="form.nombre_evento" class="campo" required placeholder="Ej. Fiesta Neón Sábado" />
+              </div>
+              <div class="grupo-campo">
+                <label class="etiqueta">Tipo de evento</label>
+                <BaseSelect v-model="form.tipo_evento" :options="opcionesTipoForm" />
+              </div>
             </div>
+            <p class="tipo-ayuda">
+              <template v-if="form.tipo_evento === 'especial'">Evento con artista o temática (detalles en la descripción).</template>
+              <template v-else-if="form.tipo_evento === 'externo'">Evento en otra locación (indica dónde en la descripción).</template>
+              <template v-else>Noche normal del establecimiento (solo DJ).</template>
+            </p>
 
             <div class="form-fila">
               <div class="grupo-campo">
@@ -151,6 +167,8 @@
               <label class="etiqueta">Descripción</label>
               <textarea v-model="form.descripcion" class="campo textarea" rows="3" placeholder="Detalles del evento, artistas, temática..."></textarea>
             </div>
+
+            <p class="tipo-ayuda">Los planos del evento (pisos/áreas) se agregan después con el botón "Planos" en la tarjeta del evento.</p>
 
             <div class="grupo-campo">
               <label class="etiqueta">Imagen de portada (flyer)</label>
@@ -192,6 +210,9 @@
             
             <div style="margin-bottom: 1.5rem;"><BaseSelect v-model="nuevoEstadoSeleccionado" :options="opcionesNuevoEstado" placeholder="Selecciona un estado…" /></div>
 
+            <p class="nota-auto">
+              <strong>En transcurso</strong> y <strong>Terminado</strong> se activan solos según la fecha y hora. Normalmente solo pasas de <strong>Planificación</strong> a <strong>Promoción</strong> para publicar el evento.
+            </p>
             <p v-if="eventoExpirado" style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 1.5rem;">
               La fecha de este evento ya pasó: no puede reactivarse ni volver a planificarse.
             </p>
@@ -199,6 +220,53 @@
             <div style="display: flex; gap: 10px; justify-content: center;">
               <button class="btn btn-secundario" style="flex: 1;" @click="modalEstado=false">Cancelar</button>
               <button class="btn btn-primario" style="flex: 1;" @click="confirmarCambioEstado">Guardar Estado</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Planos del evento -->
+    <Teleport to="body">
+      <div v-if="modalPlanos" class="modal-fondo" @click.self="modalPlanos=false">
+        <div class="modal fade-in" style="max-width: 560px;">
+          <div class="modal-cabecera">
+            <h3>Planos de "{{ eventoPlanos?.nombre_evento }}"</h3>
+            <button class="btn-x" @click="modalPlanos=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+          </div>
+          <div class="modal-form">
+            <p class="pl-ayuda">Un evento puede tener varios planos (ej. Primer piso, Segundo piso). Cada plano trae su mapa; las áreas VIP/Campo se marcan con recuadros dentro del plano.</p>
+
+            <!-- Lista de planos ya agregados -->
+            <div v-if="planosDelEvento.length" class="pl-lista">
+              <div v-for="p in planosDelEvento" :key="p.id_zona" class="pl-item">
+                <div class="pl-item-info">
+                  <strong>{{ p.nombre }}</strong>
+                  <span class="pl-item-meta">Bs. {{ Number(p.precio_entrada_base).toFixed(2) }} · aforo {{ p.aforo }}</span>
+                </div>
+                <button class="btn btn-sm btn-peligro" @click="quitarPlanoDeEvento(p)">Quitar</button>
+              </div>
+            </div>
+            <p v-else class="pl-vacio">Este evento aún no tiene planos. Agrega el primero abajo.</p>
+
+            <!-- Agregar un plano -->
+            <div class="pl-agregar">
+              <span class="pl-agregar-tit">Agregar plano</span>
+              <div class="grupo-campo">
+                <label class="etiqueta">Plano (de la biblioteca)</label>
+                <BaseSelect v-model="formAgregar.id_plano" :options="opcionesPlano" placeholder="Elige un plano" />
+              </div>
+              <div class="form-fila">
+                <div class="grupo-campo">
+                  <label class="etiqueta">Nombre en el evento (opcional)</label>
+                  <input v-model="formAgregar.nombre" class="campo" placeholder="Ej. Primer piso" />
+                </div>
+                <div class="grupo-campo">
+                  <label class="etiqueta">Precio de entrada (Bs.)</label>
+                  <input v-model.number="formAgregar.precio_base" type="number" min="0" step="0.01" class="campo" placeholder="0.00" />
+                </div>
+              </div>
+              <button class="btn btn-primario" style="width:100%" @click="agregarPlanoAEvento">+ Agregar al evento</button>
             </div>
           </div>
         </div>
@@ -212,15 +280,48 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
 
+// Planos disponibles para asignar al evento (biblioteca de Planos).
+const planosDisponibles = ref([])
+const opcionesPlano = computed(() => planosDisponibles.value.map(p => ({ value: p.id_plantilla, label: p.nombre })))
+async function cargarPlanosDisponibles() {
+  try { planosDisponibles.value = await clienteHttp.get('/espacios/plantillas') } catch { planosDisponibles.value = [] }
+}
+
+// Modelo de la Fase 3: estados y tipos con su etiqueta y color.
+const ESTADOS = {
+  planificacion: { label: 'Planificación', color: '#8b8b96' },
+  promocion:     { label: 'Promoción',     color: '#a855f7' },
+  en_transcurso: { label: 'En transcurso', color: '#22c55e' },
+  lleno:         { label: 'Lleno',          color: '#f59e0b' },
+  terminado:     { label: 'Terminado',      color: '#6b7280' },
+}
+const ORDEN_ESTADOS = ['planificacion', 'promocion', 'en_transcurso', 'lleno', 'terminado']
+const TIPOS = {
+  estandar: { label: 'Estándar', color: '#a855f7' },
+  especial: { label: 'Especial', color: '#ec4899' },
+  externo:  { label: 'Externo',  color: '#06b6d4' },
+}
+const etiquetaEstado = (e) => ESTADOS[e]?.label || e
+const colorEstado    = (e) => ESTADOS[e]?.color || '#8b8b96'
+const etiquetaTipo   = (t) => TIPOS[t]?.label || 'Estándar'
+const colorTipo      = (t) => TIPOS[t]?.color || '#a855f7'
+// Badge legible sobre la portada: fondo oscuro translúcido + acento de color.
+const estiloBadge = (color) => ({ background: 'rgba(10, 6, 26, 0.72)', color, border: `1px solid ${color}66` })
+
 const opcionesFiltroEstado = [
   { value: '', label: 'Todos los estados' },
-  { value: 'activo', label: 'Activos' },
-  { value: 'planificado', label: 'Planificados' },
+  ...ORDEN_ESTADOS.map(s => ({ value: s, label: ESTADOS[s].label, color: ESTADOS[s].color })),
 ]
+const opcionesFiltroTipo = [
+  { value: '', label: 'Todos los tipos' },
+  ...Object.entries(TIPOS).map(([v, t]) => ({ value: v, label: t.label, color: t.color })),
+]
+const opcionesTipoForm = Object.entries(TIPOS).map(([v, t]) => ({ value: v, label: t.label, color: t.color }))
 
 // Estado
 const eventos = ref([])
@@ -228,6 +329,7 @@ const cargando = ref(false)
 const guardando = ref(false)
 const filtroBusqueda = ref('')
 const filtroEstado = ref('')
+const filtroTipo = ref('')
 const notificacionSistema = ref(null)
 
 // Modal
@@ -241,8 +343,60 @@ const form = reactive({
   nombre_evento: '',
   descripcion: '',
   fecha_hora_inicio: '',
-  fecha_hora_fin: ''
+  fecha_hora_fin: '',
+  tipo_evento: 'estandar',
 })
+
+// ── Gestión de planos del evento (un evento puede tener varios: pisos/áreas) ──
+const modalPlanos = ref(false)
+const eventoPlanos = ref(null)              // evento cuyos planos gestionamos
+const planosDelEvento = ref([])             // planos ya agregados (zonas)
+const cargandoPlanos = ref(false)
+const formAgregar = reactive({ id_plano: '', nombre: '', precio_base: 0 })
+
+async function abrirPlanosEvento(evento) {
+  eventoPlanos.value = evento
+  formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0
+  modalPlanos.value = true
+  await cargarPlanosDelEvento()
+}
+async function cargarPlanosDelEvento() {
+  if (!eventoPlanos.value) return
+  cargandoPlanos.value = true
+  try {
+    planosDelEvento.value = await clienteHttp.get(`/espacios/eventos/${eventoPlanos.value.id_evento}/planos`)
+  } catch { planosDelEvento.value = [] }
+  finally { cargandoPlanos.value = false }
+}
+async function agregarPlanoAEvento() {
+  if (!formAgregar.id_plano) { notif.advertencia('Elige un plano para agregar.'); return }
+  try {
+    await clienteHttp.post(`/espacios/eventos/${eventoPlanos.value.id_evento}/asignar-plano`, {
+      id_plantilla: formAgregar.id_plano,
+      precio_base: formAgregar.precio_base,
+      nombre: formAgregar.nombre,
+    })
+    formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0
+    await cargarPlanosDelEvento()
+    cargarEventos()
+    notif.exito('Plano agregado al evento')
+  } catch (e) { notif.error(e.error || 'No se pudo agregar el plano') }
+}
+async function quitarPlanoDeEvento(p) {
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: `Quitar "${p.nombre}"`,
+    mensaje: 'Se quitará este plano del evento (con su mapa). No afecta al plano en la biblioteca.',
+    textoConfirmar: 'Sí, quitar',
+  })
+  if (!ok) return
+  try {
+    await clienteHttp.delete(`/espacios/zonas/${p.id_zona}`)
+    await cargarPlanosDelEvento()
+    cargarEventos()
+    notif.exito('Plano quitado del evento')
+  } catch (e) { notif.error(e.error || 'No se pudo quitar (¿tiene reservas?)') }
+}
 
 const modalEstado = ref(false)
 const eventoParaEstado = ref(null)
@@ -268,6 +422,7 @@ async function cargarEventos() {
 
 onMounted(() => {
   cargarEventos()
+  cargarPlanosDisponibles()
 })
 
 // Filtros
@@ -275,7 +430,8 @@ const eventosFiltrados = computed(() => {
   return eventos.value.filter(e => {
     const matchNombre = e.nombre_evento.toLowerCase().includes(filtroBusqueda.value.toLowerCase())
     const matchEstado = filtroEstado.value ? e.estado === filtroEstado.value : true
-    return matchNombre && matchEstado
+    const matchTipo   = filtroTipo.value ? (e.tipo_evento || 'estandar') === filtroTipo.value : true
+    return matchNombre && matchEstado && matchTipo
   })
 })
 
@@ -284,8 +440,8 @@ const pestana = ref('actuales')
 const pagina = ref(1)
 const limite = ref(12)
 
-const eventosActuales = computed(() => eventosFiltrados.value.filter(e => e.estado !== 'finalizado'))
-const eventosPasados  = computed(() => eventosFiltrados.value.filter(e => e.estado === 'finalizado'))
+const eventosActuales = computed(() => eventosFiltrados.value.filter(e => e.estado !== 'terminado'))
+const eventosPasados  = computed(() => eventosFiltrados.value.filter(e => e.estado === 'terminado'))
 const listaActiva = computed(() => pestana.value === 'pasados' ? eventosPasados.value : eventosActuales.value)
 const eventosPaginados = computed(() => {
   const ini = (pagina.value - 1) * limite.value
@@ -296,7 +452,7 @@ function cambiarPestana(p) {
   pestana.value = p
   pagina.value = 1
 }
-watch([filtroBusqueda, filtroEstado], () => { pagina.value = 1 })
+watch([filtroBusqueda, filtroEstado, filtroTipo], () => { pagina.value = 1 })
 
 // Utilidades
 function formatearFecha(fechaStr) {
@@ -327,13 +483,15 @@ function abrirModal(evento = null) {
     form.descripcion = evento.descripcion || ''
     form.fecha_hora_inicio = formatearFechaParaInput(evento.fecha_hora_inicio)
     form.fecha_hora_fin = formatearFechaParaInput(evento.fecha_hora_fin)
+    form.tipo_evento = evento.tipo_evento || 'estandar'
   } else {
     form.nombre_evento = ''
     form.descripcion = ''
     form.fecha_hora_inicio = ''
     form.fecha_hora_fin = ''
+    form.tipo_evento = 'estandar'
   }
-  
+
   modalAbierto.value = true
 }
 
@@ -362,20 +520,22 @@ async function guardarEvento() {
     formData.append('descripcion', form.descripcion)
     formData.append('fecha_hora_inicio', form.fecha_hora_inicio)
     if (form.fecha_hora_fin) formData.append('fecha_hora_fin', form.fecha_hora_fin)
+    formData.append('tipo_evento', form.tipo_evento)
     
     if (archivoSeleccionado.value) {
       formData.append('imagen', archivoSeleccionado.value)
     }
 
-    if (eventoEditando.value) {
+    const editando = !!eventoEditando.value
+    if (editando) {
       await servicioEventos.editar(eventoEditando.value.id_evento, formData)
     } else {
       await servicioEventos.crear(formData)
     }
-    
+
     cerrarModal()
     cargarEventos()
-    notif.exito(eventoEditando.value ? 'Evento actualizado' : 'Evento creado')
+    notif.exito(editando ? 'Evento actualizado' : 'Evento creado')
   } catch (error) {
     notif.error('Error al guardar el evento: ' + (error.error || error.message))
   } finally {
@@ -407,18 +567,21 @@ function estadoDeshabilitado(destino) {
   if (!ev) return false
   // Siempre se permite conservar el estado actual.
   if (destino === ev.estado) return false
-  // No reactivar/replanificar un evento cuya fecha ya paso.
-  if (eventoExpirado.value && (destino === 'activo' || destino === 'planificado')) return true
-  // Un evento finalizado no debe volver a planificado/activo (cierre definitivo).
-  if (ev.estado === 'finalizado' && (destino === 'activo' || destino === 'planificado')) return true
+  // Un evento Terminado es cierre definitivo: no vuelve a un estado anterior.
+  if (ev.estado === 'terminado') return true
+  // Un evento cuya fecha ya pasó no puede volver a Planificación o Promoción.
+  if (eventoExpirado.value && (destino === 'planificacion' || destino === 'promocion')) return true
   return false
 }
 
-const opcionesNuevoEstado = computed(() => [
-  { value: 'planificado', label: 'Planificado', disabled: estadoDeshabilitado('planificado') },
-  { value: 'activo',      label: 'Activo',      disabled: estadoDeshabilitado('activo') },
-  { value: 'finalizado',  label: 'Finalizado',  disabled: estadoDeshabilitado('finalizado') },
-])
+const opcionesNuevoEstado = computed(() =>
+  ORDEN_ESTADOS.map(s => ({
+    value: s,
+    label: ESTADOS[s].label,
+    color: ESTADOS[s].color,
+    disabled: estadoDeshabilitado(s),
+  }))
+)
 
 async function confirmarCambioEstado() {
   if (!eventoParaEstado.value || !nuevoEstadoSeleccionado.value) return
@@ -635,9 +798,38 @@ async function confirmarCambioEstado() {
 }
 .badge-punto { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
 
-.estado-activo { background: rgba(34, 197, 94, 0.92); color: #052e16; }
-.estado-planificado { background: var(--gradiente-marca); color: #fff; }
-.estado-finalizado { background: rgba(124, 107, 160, 0.9); color: #fff; }
+/* Badge de tipo (arriba a la izquierda de la portada) */
+.badge-tipo {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: var(--radio-full);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.tipo-ayuda { font-size: 0.78rem; color: var(--texto-desactivado); margin: -0.35rem 0 0.15rem; line-height: 1.4; }
+.nota-auto { font-size: 0.78rem; line-height: 1.5; color: var(--texto-secundario); text-align: left; background: rgba(168,85,247,0.08); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); padding: 0.7rem 0.85rem; margin-bottom: 1.1rem; }
+.nota-auto strong { color: var(--texto-principal); }
+
+/* Modal Planos del evento */
+.pl-ayuda { font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
+.pl-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.1rem; }
+.pl-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: var(--radio-md); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); }
+.pl-item-info { display: flex; flex-direction: column; min-width: 0; }
+.pl-item-info strong { color: var(--texto-principal); }
+.pl-item-meta { font-size: 0.78rem; color: var(--texto-secundario); font-variant-numeric: tabular-nums; }
+.pl-vacio { font-size: 0.85rem; color: var(--texto-desactivado); font-style: italic; margin-bottom: 1.1rem; }
+.pl-agregar { border-top: 1px solid var(--borde-sutil); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.pl-agregar-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); text-transform: uppercase; letter-spacing: 0.05em; }
 
 .evento-info {
   padding: 1.25rem 1.4rem 1.4rem;

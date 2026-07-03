@@ -9,6 +9,27 @@ const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 
 router.use(verificarToken)
 
+// Un plano guarda su layout en layout_json. Soporta dos formatos:
+//  - Antiguo: un array de elementos (sin proporción).
+//  - Nuevo:   { proporcion, elementos }.
+// Devuelve siempre { proporcion, elementos } normalizado.
+function parseLayout(layout_json) {
+  let data
+  try { data = JSON.parse(layout_json) } catch { return { proporcion: 1.6, elementos: [] } }
+  if (Array.isArray(data)) return { proporcion: 1.6, elementos: data }
+  return {
+    proporcion: Number(data.proporcion) || 1.6,
+    elementos: Array.isArray(data.elementos) ? data.elementos : [],
+  }
+}
+// Serializa un layout de plano al formato nuevo.
+function serializarLayout(proporcion, elementos) {
+  return JSON.stringify({
+    proporcion: Number(proporcion) || 1.6,
+    elementos: Array.isArray(elementos) ? elementos : [],
+  })
+}
+
 // ---------- ZONAS ----------
 
 // GET /api/espacios/eventos/:idEvento/zonas — zonas de un evento (con sus elementos)
@@ -170,19 +191,35 @@ router.put('/zonas/:id/mapa', soloRoles('Administrador'), async (req, res) => {
 router.get('/plantillas', async (req, res) => {
   try {
     const plantillas = await prisma.plantilla_mapa.findMany({ orderBy: { fecha: 'desc' } })
-    // No mandamos el layout completo en el listado (puede ser grande)
-    res.json(plantillas.map(p => ({
-      id_plantilla: p.id_plantilla, nombre: p.nombre, descripcion: p.descripcion, fecha: p.fecha,
-    })))
+    // Incluimos el layout (proporción + elementos) para pintar la miniatura en la galería.
+    res.json(plantillas.map(p => {
+      const { proporcion, elementos } = parseLayout(p.layout_json)
+      return {
+        id_plantilla: p.id_plantilla, nombre: p.nombre, descripcion: p.descripcion, fecha: p.fecha,
+        proporcion, elementos,
+      }
+    }))
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener plantillas' })
   }
 })
 
-// POST /api/espacios/plantillas — guardar un mapa como plantilla reutilizable (Admin)
+// GET /api/espacios/plantillas/:id — un plano con su layout completo (para editarlo)
+router.get('/plantillas/:id', async (req, res) => {
+  try {
+    const p = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla: Number(req.params.id) } })
+    if (!p) return res.status(404).json({ error: 'Plano no encontrado' })
+    const { proporcion, elementos } = parseLayout(p.layout_json)
+    res.json({ id_plantilla: p.id_plantilla, nombre: p.nombre, descripcion: p.descripcion, proporcion, elementos })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener el plano' })
+  }
+})
+
+// POST /api/espacios/plantillas — crear un plano reutilizable (Admin)
 router.post('/plantillas', soloRoles('Administrador'), async (req, res) => {
   try {
-    const { nombre, descripcion, elementos } = req.body
+    const { nombre, descripcion, elementos, proporcion } = req.body
     if (!nombre || !Array.isArray(elementos)) {
       return res.status(400).json({ error: 'Nombre y elementos son requeridos' })
     }
@@ -190,13 +227,65 @@ router.post('/plantillas', soloRoles('Administrador'), async (req, res) => {
       data: {
         nombre: String(nombre).substring(0, 100),
         descripcion: descripcion || null,
-        layout_json: JSON.stringify(elementos),
+        layout_json: serializarLayout(proporcion, elementos),
       },
     })
-    res.status(201).json({ id_plantilla: plantilla.id_plantilla, mensaje: 'Plantilla guardada' })
+    res.status(201).json({ id_plantilla: plantilla.id_plantilla, mensaje: 'Plano guardado' })
   } catch (error) {
-    console.error('Error guardando plantilla:', error)
-    res.status(500).json({ error: 'Error al guardar la plantilla' })
+    console.error('Error guardando plano:', error)
+    res.status(500).json({ error: 'Error al guardar el plano' })
+  }
+})
+
+// PUT /api/espacios/plantillas/:id — actualizar un plano (Admin)
+router.put('/plantillas/:id', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const { nombre, descripcion, elementos, proporcion } = req.body
+    const actual = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla: id } })
+    if (!actual) return res.status(404).json({ error: 'Plano no encontrado' })
+
+    const layoutActual = parseLayout(actual.layout_json)
+    const data = {
+      ...(nombre !== undefined && { nombre: String(nombre).substring(0, 100) }),
+      ...(descripcion !== undefined && { descripcion: descripcion || null }),
+    }
+    // Si mandan elementos o proporción, reescribimos el layout.
+    if (Array.isArray(elementos) || proporcion !== undefined) {
+      data.layout_json = serializarLayout(
+        proporcion !== undefined ? proporcion : layoutActual.proporcion,
+        Array.isArray(elementos) ? elementos : layoutActual.elementos,
+      )
+    }
+    const actualizado = await prisma.plantilla_mapa.update({ where: { id_plantilla: id }, data })
+    res.json({ id_plantilla: actualizado.id_plantilla, mensaje: 'Plano guardado' })
+  } catch (error) {
+    console.error('Error actualizando plano:', error)
+    res.status(500).json({ error: 'Error al guardar el plano' })
+  }
+})
+
+// POST /api/espacios/plantillas/:id/duplicar — copia un plano con un nombre nuevo (Admin)
+router.post('/plantillas/:id/duplicar', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const original = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla: Number(req.params.id) } })
+    if (!original) return res.status(404).json({ error: 'Plano no encontrado' })
+
+    const nombre = (req.body?.nombre && String(req.body.nombre).trim())
+      ? String(req.body.nombre).trim().substring(0, 100)
+      : `${original.nombre} (copia)`.substring(0, 100)
+
+    const copia = await prisma.plantilla_mapa.create({
+      data: {
+        nombre,
+        descripcion: original.descripcion,
+        layout_json: original.layout_json, // mismo diseño, nuevo id
+      },
+    })
+    res.status(201).json({ id_plantilla: copia.id_plantilla, nombre: copia.nombre, mensaje: 'Plano duplicado' })
+  } catch (error) {
+    console.error('Error duplicando plano:', error)
+    res.status(500).json({ error: 'Error al duplicar el plano' })
   }
 })
 
@@ -208,8 +297,7 @@ router.post('/zonas/:id/aplicar-plantilla', soloRoles('Administrador'), async (r
     const plantilla = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla: Number(req.body.id_plantilla) } })
     if (!plantilla) return res.status(404).json({ error: 'Plantilla no encontrada' })
 
-    let elementos = []
-    try { elementos = JSON.parse(plantilla.layout_json) } catch { elementos = [] }
+    const { elementos } = parseLayout(plantilla.layout_json)
 
     await prisma.$transaction(async (tx) => {
       // Reemplaza el mapa actual de la zona por el de la plantilla (elementos nuevos)
@@ -252,6 +340,93 @@ router.delete('/plantillas/:id', soloRoles('Administrador'), async (req, res) =>
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Plantilla no encontrada' })
     res.status(500).json({ error: 'Error al eliminar la plantilla' })
+  }
+})
+
+// GET /api/espacios/eventos/:idEvento/planos — planos asignados al evento
+// (internamente son "zonas", pero al usuario se le muestran como planos).
+router.get('/eventos/:idEvento/planos', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const zonas = await prisma.zona.findMany({
+      where: { id_evento },
+      orderBy: { id_zona: 'asc' },
+      include: { mesa_espacio: { select: { tipo_elemento: true, capacidad_sillas: true } } },
+    })
+    res.json(zonas.map(z => ({
+      id_zona: z.id_zona,
+      nombre: z.nombre_zona,
+      precio_entrada_base: z.precio_entrada_base,
+      proporcion: z.proporcion,
+      aforo: z.mesa_espacio
+        .filter(m => m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla')
+        .reduce((a, m) => a + (m.capacidad_sillas || 0), 0),
+      elementos_total: z.mesa_espacio.length,
+    })))
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener los planos del evento' })
+  }
+})
+
+// POST /api/espacios/eventos/:idEvento/asignar-plano — AGREGA un plano al evento
+// (crea una "zona" con sus mesas). Un evento puede tener varios planos (pisos/áreas).
+// El precio de entrada se define aquí (el plano es solo layout). (Admin)
+router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const id_plantilla = Number(req.body.id_plantilla)
+    const precio_base = Number(req.body.precio_base) || 0
+    const nombre = (req.body.nombre && String(req.body.nombre).trim())
+      ? String(req.body.nombre).trim().substring(0, 50)
+      : null
+
+    const evento = await prisma.evento.findUnique({ where: { id_evento } })
+    if (!evento) return res.status(404).json({ error: 'Evento no encontrado' })
+    const plantilla = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla } })
+    if (!plantilla) return res.status(404).json({ error: 'Plano no encontrado' })
+
+    const { proporcion, elementos } = parseLayout(plantilla.layout_json)
+
+    const capacidad = elementos
+      .filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla')
+      .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
+
+    await prisma.$transaction(async (tx) => {
+      const zona = await tx.zona.create({
+        data: {
+          id_evento,
+          nombre_zona: (nombre || String(plantilla.nombre)).substring(0, 50),
+          capacidad_maxima: capacidad,
+          precio_entrada_base: precio_base,
+          proporcion: proporcion,
+          es_general: false,
+        },
+      })
+      for (const el of elementos) {
+        await tx.mesa_espacio.create({
+          data: {
+            id_zona: zona.id_zona,
+            estado_ocupacion: 'libre',
+            numero_nombre: String(el.numero_nombre || ''),
+            posicion_x: Number(el.posicion_x) || 0,
+            posicion_y: Number(el.posicion_y) || 0,
+            ancho: el.ancho != null ? Number(el.ancho) : null,
+            alto: el.alto != null ? Number(el.alto) : null,
+            rotacion: el.rotacion != null ? Number(el.rotacion) : null,
+            capacidad_sillas: Number(el.capacidad_sillas) || 0,
+            // Precio por elemento/área definido en el plano (Lounge 800, VIP 1500…).
+            precio: (el.precio != null && el.precio !== '') ? Number(el.precio) : null,
+            tipo_elemento: String(el.tipo_elemento || 'mesa').substring(0, 20),
+            es_seleccionable: el.es_seleccionable !== false,
+            forma: el.forma ? String(el.forma).substring(0, 20) : null,
+          },
+        })
+      }
+    })
+    res.json({ mensaje: 'Plano agregado al evento' })
+  } catch (error) {
+    console.error('Error agregando plano al evento:', error)
+    res.status(500).json({ error: 'Error al agregar el plano al evento' })
   }
 })
 

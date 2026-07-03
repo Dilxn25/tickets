@@ -35,7 +35,7 @@
             <!-- Etiqueta de estado sobre la imagen -->
             <div v-if="evento.estado" class="badge-activo-flotante">
               <span class="punto-vivo"></span>
-              {{ evento.estado.toUpperCase() }}
+              {{ evento.estado.replace(/_/g, ' ').toUpperCase() }}
             </div>
           </div>
         </div>

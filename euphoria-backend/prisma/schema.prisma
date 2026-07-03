@@ -134,7 +134,8 @@ model evento {
   url_portada       String?   @db.VarChar(255)
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime?
-  estado            String    @db.VarChar(20)
+  estado            String    @default("planificacion") @db.VarChar(20)
+  tipo_evento       String    @default("estandar") @db.VarChar(20)
   aforo_total       Int?
   zona              zona[]
 }

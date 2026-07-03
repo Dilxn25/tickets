@@ -3,72 +3,80 @@
     <header class="mapas-encabezado superficie">
       <div class="encabezado-fila">
         <div class="encabezado-texto">
-          <h2 class="vista-titulo">Mapa de espacios</h2>
+          <h2 class="vista-titulo">Planos</h2>
           <p class="vista-subtitulo">Arma el plano del local: arrastra mesas, sillas, barra y escenario sobre el lienzo.</p>
         </div>
         <div class="cabecera-acciones">
-          <button class="btn btn-secundario" :disabled="!zonaSel" @click="abrirGuardarPlantilla">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg>
-            Guardar plantilla
-          </button>
-          <button class="btn btn-secundario" :disabled="!zonaSel" @click="abrirPlantillas">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M4 4h6l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path></svg>
-            Cargar plantilla
-          </button>
-          <button class="btn btn-primario brillo-hover" :disabled="!zonaSel || guardando" @click="guardarMapa">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg>
-            {{ guardando ? 'Guardando...' : 'Guardar mapa' }}
-          </button>
+          <template v-if="modo === 'galeria'">
+            <button class="btn btn-primario brillo-hover" @click="nuevoPlano">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="btn-icono"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Nuevo plano
+            </button>
+          </template>
+          <template v-else>
+            <button class="btn btn-secundario" @click="volverGaleria">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="btn-icono"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              Volver
+            </button>
+            <button class="btn btn-secundario" :disabled="!planoSelId" @click="duplicarPlanoActual">Duplicar</button>
+            <button class="btn btn-peligro" :disabled="!planoSelId" @click="eliminarPlanoActual">Eliminar</button>
+            <button class="btn btn-primario brillo-hover" :disabled="guardando" @click="guardarPlano">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg>
+              {{ guardando ? 'Guardando...' : 'Guardar plano' }}
+            </button>
+          </template>
         </div>
       </div>
     </header>
 
-    <!-- Selección de evento y zona -->
-    <section class="barra-mapa superficie">
+    <!-- GALERÍA: todos los planos como tarjetas con miniatura -->
+    <div v-if="modo === 'galeria'">
+      <div v-if="!planos.length" class="estado-vacio-mapa">
+        <div class="vacio-icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="34" height="34"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"></path><path d="M9 3v15M15 6v15"></path></svg>
+        </div>
+        <p class="vacio-titulo">Aún no tienes planos</p>
+        <p class="vacio-texto">Crea tu primer plano del local con "Nuevo plano".</p>
+      </div>
+      <div v-else class="galeria-planos escalonar">
+        <article v-for="p in planos" :key="p.id_plantilla" class="plano-card hover-elevar" @click="editarPlano(p)">
+          <div class="plano-thumb" :style="{ aspectRatio: String(p.proporcion || 1.6) }">
+            <div v-for="(el, i) in (p.elementos || [])" :key="i" class="thumb-el" :class="'tipo-' + el.tipo_elemento" :style="estiloElemento(el)"></div>
+            <div v-if="!(p.elementos || []).length" class="thumb-vacio">Plano vacío</div>
+          </div>
+          <div class="plano-card-cuerpo">
+            <h3 class="plano-card-nom">{{ p.nombre }}</h3>
+            <p class="plano-card-meta">{{ resumenPlano(p) }}</p>
+          </div>
+          <div class="plano-card-acciones" @click.stop>
+            <button class="btn btn-sm btn-primario" @click="editarPlano(p)">Editar</button>
+            <button class="btn btn-sm btn-secundario" @click="duplicarPlano(p)">Duplicar</button>
+            <button class="btn btn-sm btn-peligro" @click="eliminarPlano(p)">Eliminar</button>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- EDITOR: barra (forma + aforo) -->
+    <section v-if="modo === 'editor'" class="barra-mapa superficie">
       <div class="campo-selector">
-        <label>Evento</label>
-        <BaseSelect v-model="eventoSel" :options="opcionesEvento" placeholder="Selecciona un evento" @update:model-value="cargarZonas" />
+        <label>Nombre</label>
+        <div class="plano-nombre-chip">{{ planoActual.nombre || 'Plano nuevo (sin guardar)' }}</div>
       </div>
-      <div class="campo-selector" v-if="eventoSel">
-        <label>Zona</label>
-        <BaseSelect v-model="zonaSelId" :options="opcionesZona" placeholder="Selecciona una zona" @update:model-value="seleccionarZona" />
-      </div>
-      <div class="grupo-zona" v-if="eventoSel">
-        <button class="btn btn-sm btn-secundario" @click="abrirNuevaZona">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="btn-icono"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nueva zona
-        </button>
-        <button v-if="zonaSel" class="btn btn-sm btn-secundario" @click="abrirEditarZona">Editar zona</button>
-      </div>
-      <div class="campo-selector" v-if="zonaSel">
+      <div class="campo-selector">
         <label>Forma del plano</label>
         <BaseSelect v-model="planoProporcion" :options="OPCIONES_PROPORCION" @update:model-value="cambiarProporcion" />
       </div>
-      <div v-if="zonaSel" class="panel-aforo">
+      <div class="panel-aforo">
         <div class="aforo-fila">
-          <span class="aforo-titulo">Aforo colocado</span>
-          <span class="aforo-valor" :class="{ excede: totalSillas > zonaSel.capacidad_maxima }">
-            {{ totalSillas }} <span class="aforo-sep">/</span> {{ zonaSel.capacidad_maxima }}
-          </span>
+          <span class="aforo-titulo">Aforo del plano</span>
+          <span class="aforo-valor">{{ totalSillas }} <span class="aforo-sep">personas</span></span>
         </div>
-        <div class="aforo-barra">
-          <div class="aforo-relleno" :class="{ excede: totalSillas > zonaSel.capacidad_maxima }" :style="{ width: pctAforo + '%' }"></div>
-        </div>
-        <span class="aforo-pie" :class="{ excede: totalSillas > zonaSel.capacidad_maxima }">
-          {{ totalSillas > zonaSel.capacidad_maxima ? 'Excede el aforo de la zona' : 'Precio base Bs ' + Number(zonaSel.precio_entrada_base).toFixed(2) }}
-        </span>
+        <span class="aforo-pie">Suma de la capacidad de mesas y sillas. Los precios se definen al asignar el plano a un evento.</span>
       </div>
     </section>
 
-    <div v-if="!zonaSel" class="estado-vacio-mapa">
-      <div class="vacio-icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="34" height="34"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"></path><path d="M9 3v15M15 6v15"></path></svg>
-      </div>
-      <p class="vacio-titulo">Empieza tu plano</p>
-      <p class="vacio-texto">Selecciona un evento y una zona (o crea una) para armar el mapa del local.</p>
-    </div>
-
-    <div v-else class="editor-grid">
+    <div v-if="modo === 'editor'" class="editor-grid">
       <!-- Barra de herramientas -->
       <div class="herramientas superficie escalonar">
         <span class="herramientas-titulo">Agregar</span>
@@ -154,11 +162,12 @@
             <input v-model.number="elSel.capacidad_sillas" type="number" min="0" class="campo" />
           </label>
 
+          <label class="prop-campo" v-if="permitePrecio(elSel.tipo_elemento)">
+            <span>Precio (Bs.)</span>
+            <input v-model.number="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="Ej. 800 (Lounge), 1500 (VIP)…" />
+          </label>
+
           <template v-if="elSel.tipo_elemento === 'mesa'">
-            <label class="prop-campo">
-              <span>Precio propio (opcional)</span>
-              <input v-model="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="usa el de la zona" />
-            </label>
             <label class="prop-check">
               <input type="checkbox" v-model="elSel.es_seleccionable" />
               <span>Reservable por el cliente</span>
@@ -169,93 +178,26 @@
         </template>
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
-          <p class="prop-ayuda">Mesas y sillas suman aforo. Barra, escenario y paredes son decorativos. Las áreas son recuadros con nombre (Campo, VIP, Piso 1) para marcar zonas visualmente; van detrás de todo y no cuentan aforo.</p>
+          <p class="prop-ayuda">Las áreas son recuadros con nombre y precio (Lounge, VIP, Campo…) para marcar y cotizar secciones. Mesas y sillas suman aforo y llevan su precio. Barra, escenario y paredes son decorativos.</p>
         </template>
       </div>
     </div>
 
-    <!-- Modal nueva zona -->
-    <Teleport to="body">
-      <div v-if="modalZona" class="modal-fondo" @click.self="modalZona = false">
-        <div class="modal fade-in">
-          <div class="modal-cabecera">
-            <h3>Nueva zona</h3>
-            <button class="btn-x" @click="modalZona = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-          </div>
-          <div class="modal-form">
-            <label class="prop-campo"><span>Nombre (Ej. VIP, Campo)</span><input v-model="formZona.nombre_zona" class="campo" /></label>
-            <label class="prop-campo"><span>Capacidad máxima (personas)</span><input v-model.number="formZona.capacidad_maxima" type="number" min="0" class="campo" /></label>
-            <label class="prop-campo"><span>Precio de entrada base (Bs)</span><input v-model.number="formZona.precio_entrada_base" type="number" min="0" step="0.01" class="campo" /></label>
-            <label class="prop-check"><input type="checkbox" v-model="formZona.es_general" /> Zona general / de pie (sin asientos; se vende como entrada general)</label>
-            <div class="modal-footer">
-              <button class="btn btn-secundario" @click="modalZona = false">Cancelar</button>
-              <button class="btn btn-primario" @click="crearZona">Crear zona</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal editar zona -->
-    <Teleport to="body">
-      <div v-if="modalEditarZona" class="modal-fondo" @click.self="modalEditarZona = false">
-        <div class="modal fade-in">
-          <div class="modal-cabecera">
-            <h3>Editar zona</h3>
-            <button class="btn-x" @click="modalEditarZona = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-          </div>
-          <div class="modal-form">
-            <label class="prop-campo"><span>Nombre</span><input v-model="formEditarZona.nombre_zona" class="campo" /></label>
-            <label class="prop-campo"><span>Capacidad máxima (personas)</span><input v-model.number="formEditarZona.capacidad_maxima" type="number" min="0" class="campo" /></label>
-            <label class="prop-campo"><span>Precio de entrada base (Bs)</span><input v-model.number="formEditarZona.precio_entrada_base" type="number" min="0" step="0.01" class="campo" /></label>
-            <label class="prop-check"><input type="checkbox" v-model="formEditarZona.es_general" /> Zona general / de pie (sin asientos; se vende como entrada general)</label>
-            <div class="modal-footer">
-              <button class="btn btn-secundario" @click="modalEditarZona = false">Cancelar</button>
-              <button class="btn btn-primario" @click="guardarEditarZona">Guardar cambios</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal guardar plantilla -->
+    <!-- Modal guardar plano nuevo -->
     <Teleport to="body">
       <div v-if="modalGuardarPlantilla" class="modal-fondo" @click.self="modalGuardarPlantilla = false">
         <div class="modal fade-in">
           <div class="modal-cabecera">
-            <h3>Guardar como plantilla</h3>
+            <h3>Guardar plano nuevo</h3>
             <button class="btn-x" @click="modalGuardarPlantilla = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div class="modal-form">
-            <label class="prop-campo"><span>Nombre de la plantilla</span><input v-model="formPlantilla.nombre" class="campo" placeholder="Ej. Local principal" /></label>
+            <label class="prop-campo"><span>Nombre del plano</span><input v-model="formPlantilla.nombre" class="campo" placeholder="Ej. Local principal" /></label>
             <label class="prop-campo"><span>Descripción (opcional)</span><input v-model="formPlantilla.descripcion" class="campo" /></label>
             <div class="modal-footer">
               <button class="btn btn-secundario" @click="modalGuardarPlantilla = false">Cancelar</button>
               <button class="btn btn-primario" @click="guardarPlantilla">Guardar</button>
             </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal cargar plantilla -->
-    <Teleport to="body">
-      <div v-if="modalPlantillas" class="modal-fondo" @click.self="modalPlantillas = false">
-        <div class="modal fade-in">
-          <div class="modal-cabecera">
-            <h3>Cargar plantilla</h3>
-            <button class="btn-x" @click="modalPlantillas = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-          </div>
-          <div class="modal-form">
-            <p v-if="plantillas.length === 0" class="prop-vacio">No hay plantillas guardadas todavía.</p>
-            <div v-for="p in plantillas" :key="p.id_plantilla" class="fila-plantilla">
-              <div>
-                <strong>{{ p.nombre }}</strong>
-                <span class="plantilla-desc">{{ p.descripcion }}</span>
-              </div>
-              <button class="btn btn-sm btn-primario" @click="aplicarPlantilla(p.id_plantilla)">Aplicar</button>
-            </div>
-            <p class="aviso">Aplicar una plantilla reemplaza el mapa actual de esta zona.</p>
           </div>
         </div>
       </div>
@@ -271,12 +213,12 @@ import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
 
-const eventos = ref([])
-const eventoSel = ref(null)
-const zonas = ref([])
-const zonaSelId = ref(null)
-const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
-const opcionesZona = computed(() => zonas.value.map(z => ({ value: z.id_zona, label: z.nombre_zona })))
+// Estado del editor de planos (independiente de eventos).
+const modo = ref('galeria')            // 'galeria' | 'editor'
+const planos = ref([])                 // lista con miniatura (elementos + proporcion)
+const planoSelId = ref(null)           // plano en edición (null = nuevo)
+const modoNuevo = ref(false)
+const planoActual = ref({ nombre: '', descripcion: '' })
 const OPCIONES_PROPORCION = [
   { value: 1.6, label: 'Horizontal' },
   { value: 2, label: 'Panorámico (ancho)' },
@@ -287,20 +229,13 @@ const OPCIONES_FORMA = [
   { value: 'redondo', label: 'Redondo' },
   { value: 'cuadrado', label: 'Cuadrado' },
 ]
-const zonaSel = ref(null)
 const elementos = ref([])
 const seleccionado = ref(null)
-const plantillas = ref([])
 const guardando = ref(false)
-// Proporción (ancho/alto) del plano de la zona. 1.6 = horizontal por defecto.
+// Proporción (ancho/alto) del plano. 1.6 = horizontal por defecto.
 const planoProporcion = ref(1.6)
 
-const modalZona = ref(false)
-const modalEditarZona = ref(false)
 const modalGuardarPlantilla = ref(false)
-const modalPlantillas = ref(false)
-const formZona = ref({ nombre_zona: '', capacidad_maxima: 0, precio_entrada_base: 0, es_general: false })
-const formEditarZona = ref({ nombre_zona: '', capacidad_maxima: 0, precio_entrada_base: 0, es_general: false })
 const formPlantilla = ref({ nombre: '', descripcion: '' })
 
 const lienzo = ref(null)
@@ -308,11 +243,6 @@ let contadorLocal = 0
 
 const elSel = computed(() => seleccionado.value != null ? elementos.value[seleccionado.value] : null)
 const totalSillas = computed(() => elementos.value.reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0))
-const pctAforo = computed(() => {
-  const cap = Number(zonaSel.value?.capacidad_maxima) || 0
-  if (!cap) return 0
-  return Math.min(100, Math.round((totalSillas.value / cap) * 100))
-})
 
 function tipoLabel(t) {
   return ({ mesa: 'Mesa', silla: 'Silla', barra: 'Barra', escenario: 'Escenario', pared: 'Pared', area: 'Área / Zona' })[t] || t
@@ -320,42 +250,53 @@ function tipoLabel(t) {
 
 // Qué elementos suman aforo (personas). Barra, escenario y pared son decorativos.
 function cuentaAforo(t) { return t === 'mesa' || t === 'silla' }
+// Qué elementos pueden llevar precio (secciones cotizables): mesas, sillas y áreas.
+function permitePrecio(t) { return t === 'mesa' || t === 'silla' || t === 'area' }
 
-async function cargarEventos() {
-  try {
-    const res = await clienteHttp.get('/eventos')
-    eventos.value = res.eventos || res || []
-  } catch (e) { console.warn(e) }
+async function cargarPlanos() {
+  try { planos.value = await clienteHttp.get('/espacios/plantillas') } catch { planos.value = [] }
 }
 
-async function cargarZonas() {
-  zonaSel.value = null; zonaSelId.value = null; elementos.value = []
-  if (!eventoSel.value) return
-  try {
-    zonas.value = await clienteHttp.get(`/espacios/eventos/${eventoSel.value}/zonas`)
-  } catch (e) { zonas.value = [] }
+// Resumen corto para la tarjeta de la galería.
+function resumenPlano(p) {
+  const els = p.elementos || []
+  const mesas = els.filter(e => e.tipo_elemento === 'mesa').length
+  const aforo = els.filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla')
+    .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
+  return `${mesas} mesa${mesas === 1 ? '' : 's'} · aforo ${aforo}`
 }
 
-async function seleccionarZona() {
+// Abre un plano de la galería en el editor.
+function editarPlano(p) {
+  planoSelId.value = p.id_plantilla
+  planoActual.value = { nombre: p.nombre, descripcion: p.descripcion || '' }
+  planoProporcion.value = Number(p.proporcion) || 1.6
+  elementos.value = (p.elementos || []).map(normalizar)
   seleccionado.value = null
-  if (!zonaSelId.value) return
-  try {
-    const res = await clienteHttp.get(`/espacios/zonas/${zonaSelId.value}/mapa`)
-    zonaSel.value = res.zona
-    planoProporcion.value = Number(res.zona?.proporcion) || 1.6
-    elementos.value = (res.elementos || []).map(normalizar)
-  } catch (e) { console.warn(e) }
+  modoNuevo.value = false
+  modo.value = 'editor'
 }
 
-// Cambia la proporción del plano y la guarda en la zona (el cliente verá lo mismo).
-async function cambiarProporcion() {
-  if (!zonaSel.value) return
-  zonaSel.value.proporcion = planoProporcion.value
-  // Al cambiar la forma del plano, reacomoda todo para que nada quede fuera.
+// Empieza un plano nuevo en blanco.
+function nuevoPlano() {
+  planoSelId.value = null
+  modoNuevo.value = true
+  planoActual.value = { nombre: '', descripcion: '' }
+  seleccionado.value = null
+  elementos.value = []
+  planoProporcion.value = 1.6
+  modo.value = 'editor'
+}
+
+// Vuelve a la galería y refresca la lista.
+async function volverGaleria() {
+  modo.value = 'galeria'
+  await cargarPlanos()
+}
+
+// Al cambiar la forma del plano, reacomoda todo para que nada quede fuera.
+function cambiarProporcion() {
   elementos.value.forEach(clampPosicion)
-  try {
-    await clienteHttp.put(`/espacios/zonas/${zonaSel.value.id_zona}`, { proporcion: planoProporcion.value })
-  } catch (e) { console.warn(e) }
 }
 
 // Los mapas guardados pueden traer ancho/alto/rotacion en null (datos previos).
@@ -371,47 +312,6 @@ function normalizar(e) {
     forma: e.forma || FORMA_DEFECTO[e.tipo_elemento] || null,
     _id: ++contadorLocal,
   }
-}
-
-function abrirNuevaZona() {
-  formZona.value = { nombre_zona: '', capacidad_maxima: 0, precio_entrada_base: 0, es_general: false }
-  modalZona.value = true
-}
-
-async function crearZona() {
-  if (!formZona.value.nombre_zona) return
-  try {
-    const zona = await clienteHttp.post('/espacios/zonas', { id_evento: eventoSel.value, ...formZona.value })
-    modalZona.value = false
-    await cargarZonas()
-    zonaSelId.value = zona.id_zona
-    await seleccionarZona()
-  } catch (e) { console.warn(e) }
-}
-
-function abrirEditarZona() {
-  if (!zonaSel.value) return
-  formEditarZona.value = {
-    nombre_zona: zonaSel.value.nombre_zona,
-    capacidad_maxima: Number(zonaSel.value.capacidad_maxima) || 0,
-    precio_entrada_base: Number(zonaSel.value.precio_entrada_base) || 0,
-    es_general: !!zonaSel.value.es_general,
-  }
-  modalEditarZona.value = true
-}
-
-async function guardarEditarZona() {
-  if (!zonaSel.value || !formEditarZona.value.nombre_zona) return
-  try {
-    await clienteHttp.put(`/espacios/zonas/${zonaSel.value.id_zona}`, { ...formEditarZona.value })
-    // Refleja los cambios en pantalla sin recargar todo
-    zonaSel.value.nombre_zona = formEditarZona.value.nombre_zona
-    zonaSel.value.capacidad_maxima = formEditarZona.value.capacidad_maxima
-    zonaSel.value.precio_entrada_base = formEditarZona.value.precio_entrada_base
-    const z = zonas.value.find(z => z.id_zona === zonaSel.value.id_zona)
-    if (z) { z.nombre_zona = formEditarZona.value.nombre_zona; z.capacidad_maxima = formEditarZona.value.capacidad_maxima; z.precio_entrada_base = formEditarZona.value.precio_entrada_base }
-    modalEditarZona.value = false
-  } catch (e) { notif.error(e.error || 'Error al editar la zona') }
 }
 
 const TAM_DEFECTO = { mesa: { ancho: 7, alto: 10 }, silla: { ancho: 4, alto: 6 }, barra: { ancho: 22, alto: 7 }, escenario: { ancho: 30, alto: 14 }, pared: { ancho: 24, alto: 3 }, area: { ancho: 42, alto: 45 } }
@@ -559,29 +459,32 @@ function estiloElemento(el) {
   return estilo
 }
 
-async function guardarMapa() {
-  if (!zonaSel.value) return
+// Serializa los elementos del plano (layout + precio por elemento/área).
+function elementosParaGuardar() {
+  return elementos.value.map(e => ({
+    tipo_elemento: e.tipo_elemento,
+    numero_nombre: e.numero_nombre,
+    posicion_x: e.posicion_x, posicion_y: e.posicion_y,
+    ancho: e.ancho, alto: e.alto, rotacion: e.rotacion,
+    capacidad_sillas: e.capacidad_sillas,
+    precio: (e.precio === '' || e.precio == null) ? null : Number(e.precio),
+    es_seleccionable: e.es_seleccionable,
+    forma: e.forma || null,
+  }))
+}
+
+async function guardarPlano() {
+  // Plano nuevo: pedimos nombre antes de crearlo.
+  if (planoSelId.value == null) { abrirGuardarPlantilla(); return }
   guardando.value = true
   try {
-    const payload = {
-      elementos: elementos.value.map(e => ({
-        id_mesa: e.id_mesa || undefined,
-        tipo_elemento: e.tipo_elemento,
-        numero_nombre: e.numero_nombre,
-        posicion_x: e.posicion_x, posicion_y: e.posicion_y,
-        ancho: e.ancho, alto: e.alto, rotacion: e.rotacion,
-        capacidad_sillas: e.capacidad_sillas,
-        precio: (e.precio === '' || e.precio == null) ? null : Number(e.precio),
-        es_seleccionable: e.es_seleccionable,
-        forma: e.forma || null,
-      })),
-    }
-    const res = await clienteHttp.put(`/espacios/zonas/${zonaSel.value.id_zona}/mapa`, payload)
-    elementos.value = (res.elementos || []).map(normalizar)
-    seleccionado.value = null
-    notif.exito('Mapa guardado')
+    await clienteHttp.put(`/espacios/plantillas/${planoSelId.value}`, {
+      proporcion: planoProporcion.value,
+      elementos: elementosParaGuardar(),
+    })
+    notif.exito('Plano guardado')
   } catch (e) {
-    notif.error(e.error || 'Error al guardar el mapa')
+    notif.error(e.error || 'Error al guardar el plano')
   } finally {
     guardando.value = false
   }
@@ -592,36 +495,101 @@ function abrirGuardarPlantilla() {
   modalGuardarPlantilla.value = true
 }
 async function guardarPlantilla() {
-  if (!formPlantilla.value.nombre) return
+  if (!formPlantilla.value.nombre) { notif.advertencia('Escribe un nombre para el plano.'); return }
   try {
-    await clienteHttp.post('/espacios/plantillas', {
+    const res = await clienteHttp.post('/espacios/plantillas', {
       nombre: formPlantilla.value.nombre,
       descripcion: formPlantilla.value.descripcion,
-      elementos: elementos.value.map(({ _id, id_mesa, ...resto }) => resto),
+      proporcion: planoProporcion.value,
+      elementos: elementosParaGuardar(),
     })
     modalGuardarPlantilla.value = false
-    notif.exito('Plantilla guardada')
-  } catch (e) { notif.error(e.error || 'Error al guardar la plantilla') }
+    // Deja el plano recién creado como el activo en el editor.
+    planoActual.value = { nombre: formPlantilla.value.nombre, descripcion: formPlantilla.value.descripcion }
+    planoSelId.value = res.id_plantilla
+    modoNuevo.value = false
+    await cargarPlanos()
+    notif.exito('Plano guardado')
+  } catch (e) { notif.error(e.error || 'Error al guardar el plano') }
 }
 
-async function abrirPlantillas() {
-  try { plantillas.value = await clienteHttp.get('/espacios/plantillas') } catch { plantillas.value = [] }
-  modalPlantillas.value = true
-}
-async function aplicarPlantilla(id_plantilla) {
+// Duplicar / eliminar un plano cualquiera (desde la galería o el editor).
+async function duplicarPlano(p) {
+  const base = p?.nombre || 'Plano'
+  const nombre = await notif.solicitar({
+    variante: 'normal',
+    titulo: 'Duplicar plano',
+    mensaje: `Se creará una copia de "${base}" con el mismo diseño.`,
+    etiqueta: 'Nombre del nuevo plano',
+    placeholder: `${base} (copia)`,
+    valorInicial: `${base} (copia)`,
+    textoConfirmar: 'Duplicar',
+    validar: (v) => (v && v.trim() ? null : 'Escribe un nombre para el plano.'),
+  })
+  if (nombre === null) return
   try {
-    await clienteHttp.post(`/espacios/zonas/${zonaSel.value.id_zona}/aplicar-plantilla`, { id_plantilla })
-    modalPlantillas.value = false
-    await seleccionarZona()
-    notif.exito('Plantilla aplicada')
-  } catch (e) { notif.error(e.error || 'Error al aplicar la plantilla') }
+    await clienteHttp.post(`/espacios/plantillas/${p.id_plantilla}/duplicar`, { nombre: nombre.trim() })
+    await cargarPlanos()
+    notif.exito('Plano duplicado')
+  } catch (e) { notif.error(e.error || 'No se pudo duplicar el plano') }
 }
 
-cargarEventos()
+async function eliminarPlano(p) {
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: `Eliminar "${p?.nombre || 'plano'}"`,
+    mensaje: 'Este plano guardado se eliminará. Los eventos que ya lo usaron no se ven afectados.',
+    textoConfirmar: 'Sí, eliminar',
+  })
+  if (!ok) return
+  try {
+    await clienteHttp.delete(`/espacios/plantillas/${p.id_plantilla}`)
+    // Si estábamos editando ese plano, volvemos a la galería.
+    if (planoSelId.value === p.id_plantilla) {
+      modo.value = 'galeria'; planoSelId.value = null; elementos.value = []
+    }
+    await cargarPlanos()
+    notif.exito('Plano eliminado')
+  } catch (e) { notif.error(e.error || 'No se pudo eliminar el plano') }
+}
+
+// Botones del editor: operan sobre el plano en edición.
+function duplicarPlanoActual() {
+  if (planoSelId.value != null) duplicarPlano({ id_plantilla: planoSelId.value, nombre: planoActual.value.nombre })
+}
+function eliminarPlanoActual() {
+  if (planoSelId.value != null) eliminarPlano({ id_plantilla: planoSelId.value, nombre: planoActual.value.nombre })
+}
+
+cargarPlanos()
 </script>
 
 <style scoped>
 .vista-mapas { max-width: 1500px; margin: 0 auto; }
+
+/* ── Galería de planos (tarjetas con miniatura, tipo Canva) ── */
+.galeria-planos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+.plano-card { display: flex; flex-direction: column; background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); overflow: hidden; cursor: pointer; transition: border-color .18s ease, transform .18s ease, box-shadow .3s ease; }
+.plano-card:hover { border-color: var(--borde-activo); box-shadow: var(--glow-morado); }
+.plano-thumb { position: relative; width: 100%; background:
+    linear-gradient(var(--borde-sutil) 1px, transparent 1px) 0 0 / 8% 8%,
+    linear-gradient(90deg, var(--borde-sutil) 1px, transparent 1px) 0 0 / 8% 8%,
+    rgba(10, 6, 26, 0.5);
+  border-bottom: 1px solid var(--borde-sutil); overflow: hidden; }
+.thumb-el { position: absolute; box-sizing: border-box; border: 1px solid transparent; }
+.thumb-el.tipo-mesa { background: rgba(168,85,247,0.32); border-color: rgba(168,85,247,0.65); }
+.thumb-el.tipo-silla { background: rgba(59,130,246,0.32); border-color: rgba(59,130,246,0.6); }
+.thumb-el.tipo-barra { background: rgba(236,72,153,0.28); border-color: rgba(236,72,153,0.55); }
+.thumb-el.tipo-escenario { background: rgba(245,158,11,0.24); border-color: rgba(245,158,11,0.5); }
+.thumb-el.tipo-pared { background: rgba(255,255,255,0.22); }
+.thumb-el.tipo-area { background: rgba(168,85,247,0.06); border: 1px dashed rgba(168,85,247,0.4); }
+.thumb-vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--texto-desactivado); font-size: 0.82rem; }
+.plano-card-cuerpo { padding: 12px 14px 6px; }
+.plano-card-nom { font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 700; color: var(--texto-principal); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plano-card-meta { font-size: 0.78rem; color: var(--texto-secundario); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.plano-card-acciones { display: flex; gap: 6px; padding: 10px 14px 14px; flex-wrap: wrap; }
+.plano-card-acciones .btn { flex: 1; min-width: 0; }
+.plano-nombre-chip { padding: 9px 13px; border-radius: var(--radio-md); background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Encabezado premium en vidrio ── */
 .mapas-encabezado { padding: clamp(1rem, 2.4vw, 1.4rem) clamp(1.1rem, 2.6vw, 1.6rem); margin-bottom: 1.1rem; }
@@ -787,6 +755,8 @@ select.campo { cursor: pointer; }
 .fila-plantilla:hover { border-color: var(--borde-activo); transform: translateX(2px); }
 .fila-plantilla strong { color: var(--texto-principal); }
 .plantilla-desc { display: block; color: var(--texto-secundario); font-size: 0.8rem; margin-top: 2px; }
+.plantilla-info { min-width: 0; flex: 1; }
+.plantilla-acciones { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .aviso { color: var(--texto-desactivado); font-size: 0.78rem; line-height: 1.5; text-wrap: pretty; }
 
 @media (max-width: 900px) {

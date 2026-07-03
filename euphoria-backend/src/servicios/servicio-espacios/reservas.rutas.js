@@ -13,6 +13,29 @@ const { verificarToken } = require('../../middlewares/autenticacion')
 
 router.use(verificarToken)
 
+// "Lleno" automático: cuando las reservas (cupos vendidos) alcanzan el aforo total
+// del evento, lo marca 'lleno'; si baja (cancelación), vuelve a 'promocion'.
+async function actualizarLlenoEvento(id_evento) {
+  try {
+    if (!id_evento) return
+    const zonas = await prisma.zona.findMany({ where: { id_evento }, select: { capacidad_maxima: true } })
+    const capacidad = zonas.reduce((a, z) => a + (z.capacidad_maxima || 0), 0)
+    if (capacidad <= 0) return
+    const agg = await prisma.entrada.aggregate({
+      where: { zona: { id_evento } },
+      _sum: { cantidad_personas: true },
+    })
+    const reservado = agg._sum.cantidad_personas || 0
+    const evento = await prisma.evento.findUnique({ where: { id_evento }, select: { estado: true } })
+    if (!evento) return
+    if (reservado >= capacidad && (evento.estado === 'promocion' || evento.estado === 'en_transcurso')) {
+      await prisma.evento.update({ where: { id_evento }, data: { estado: 'lleno' } })
+    } else if (reservado < capacidad && evento.estado === 'lleno') {
+      await prisma.evento.update({ where: { id_evento }, data: { estado: 'promocion' } })
+    }
+  } catch (e) { console.error('Error actualizando estado Lleno:', e.message) }
+}
+
 // ---- Utilidades QR de entrada ----
 
 // Genera un codigo unico para qr_acceso (cabe en VarChar(255) y es irrepetible).
@@ -87,7 +110,7 @@ router.get('/eventos', async (req, res) => {
   try {
     const eventos = await prisma.evento.findMany({
       where: {
-        estado: { not: 'finalizado' },
+        estado: { not: 'terminado' },
         zona: { some: { mesa_espacio: { some: { es_seleccionable: true, tipo_elemento: 'mesa' } } } },
       },
       orderBy: { fecha_hora_inicio: 'asc' },
@@ -281,6 +304,9 @@ router.post('/mesa', async (req, res) => {
       })
     }
 
+    // "Lleno" automático si el evento se agotó con esta reserva.
+    await actualizarLlenoEvento(mesa.zona.id_evento)
+
     res.status(201).json({
       mensaje: 'Reserva confirmada',
       entrada: {
@@ -314,7 +340,7 @@ router.post('/campo', async (req, res) => {
     const zona = await prisma.zona.findUnique({ where: { id_zona }, include: { evento: true } })
     if (!zona) return res.status(404).json({ error: 'La zona no existe' })
     if (!zona.es_general) return res.status(400).json({ error: 'Esta zona no vende entradas generales' })
-    if (zona.evento?.estado === 'finalizado') return res.status(400).json({ error: 'El evento ya finalizó' })
+    if (zona.evento?.estado === 'terminado') return res.status(400).json({ error: 'El evento ya finalizó' })
 
     // Cupos: cada entrada general es de 1 persona
     const vendidas = await prisma.entrada.count({ where: { id_zona } })
@@ -383,6 +409,9 @@ router.post('/campo', async (req, res) => {
 
     const imagenQR = await generarImagenQREntrada(entradaCreada)
     const combos = await obtenerCombosSugeridos(3)
+
+    // "Lleno" automático si el evento se agotó con esta entrada.
+    await actualizarLlenoEvento(zona.id_evento)
 
     res.status(201).json({
       mensaje: 'Entrada de pie confirmada',

@@ -31,44 +31,55 @@
     </div>
 
     <template v-else>
-      <!-- Resumen general -->
-      <section class="resumen superficie aparecer-subir" :class="estadoTotal">
+      <!-- Toggle: reporte del evento completo (Todos) o por plano -->
+      <div class="vista-toggle aparecer-subir" role="tablist">
+        <button v-for="o in opcionesVista" :key="o.id" class="vt-btn" :class="{ activo: vistaSel === o.id }" @click="vistaSel = o.id" type="button">{{ o.nombre }}</button>
+      </div>
+
+      <div class="aforo-layout">
+      <div class="aforo-izq">
+      <!-- Resumen (evento completo o el plano seleccionado) -->
+      <section class="resumen superficie aparecer-subir" :class="resumenActivo.estado">
         <div class="resumen-gauge">
-          <div class="anillo" :class="estadoTotal">
+          <div class="anillo" :class="resumenActivo.estado">
             <svg viewBox="0 0 120 120">
               <circle class="anillo-pista" cx="60" cy="60" r="52" />
               <circle class="anillo-fondo" cx="60" cy="60" r="52" />
               <circle class="anillo-valor" cx="60" cy="60" r="52"
                 :stroke-dasharray="circunferencia"
-                :stroke-dashoffset="circunferencia * (1 - Math.min(100, porcentajeTotal) / 100)" />
+                :stroke-dashoffset="circunferencia * (1 - Math.min(100, resumenActivo.porcentaje) / 100)" />
             </svg>
             <div class="anillo-centro">
-              <span class="pct">{{ porcentajeTotal }}<i>%</i></span>
+              <span class="pct">{{ resumenActivo.porcentaje }}<i>%</i></span>
               <span class="lbl">ocupado</span>
             </div>
           </div>
-          <div class="estado-chip" :class="estadoTotal">
-            <span class="chip-dot"></span>{{ textoEstado(estadoTotal) }}
+          <div class="estado-chip" :class="resumenActivo.estado">
+            <span class="chip-dot"></span>{{ textoEstado(resumenActivo.estado) }}
           </div>
         </div>
 
         <div class="resumen-datos">
           <div class="kpi kpi-hero">
-            <span class="kpi-num">{{ aforoTotal }}</span>
-            <span class="kpi-lbl">personas dentro</span>
+            <span class="kpi-num">{{ resumenActivo.ocupado }}</span>
+            <span class="kpi-lbl">personas dentro{{ vistaSel === 'todos' ? ' (todo el evento)' : '' }}</span>
           </div>
           <div class="kpi-fila">
             <div class="kpi">
-              <span class="kpi-num sm">{{ capacidadTotal }}</span>
-              <span class="kpi-lbl">capacidad total</span>
+              <span class="kpi-num sm">{{ resumenActivo.capacidad }}</span>
+              <span class="kpi-lbl">capacidad</span>
             </div>
             <div class="kpi">
-              <span class="kpi-num sm acento-libre">{{ Math.max(0, capacidadTotal - aforoTotal) }}</span>
-              <span class="kpi-lbl">lugares libres</span>
+              <span class="kpi-num sm">{{ resumenActivo.reservado }}</span>
+              <span class="kpi-lbl">reservados</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-num sm acento-libre">{{ resumenActivo.disponibles }}</span>
+              <span class="kpi-lbl">disponibles</span>
             </div>
             <div class="kpi">
               <span class="kpi-num sm">{{ zonas.length }}</span>
-              <span class="kpi-lbl">zonas activas</span>
+              <span class="kpi-lbl">planos</span>
             </div>
           </div>
         </div>
@@ -76,7 +87,7 @@
 
       <!-- Zonas -->
       <div class="zonas-encabezado aparecer-subir">
-        <h2 class="seccion-h2">Ocupación por zona</h2>
+        <h2 class="seccion-h2">Ocupación por plano</h2>
         <ul class="leyenda" aria-hidden="true">
           <li class="ok"><span class="ll-dot"></span>Disponible</li>
           <li class="alerta"><span class="ll-dot"></span>Casi lleno</li>
@@ -90,13 +101,13 @@
             <span class="zona-nombre">{{ z.nombre_zona }}</span>
             <span class="zona-estado" :class="z.estado"><span class="ze-dot"></span>{{ textoEstado(z.estado) }}</span>
           </div>
-          <div class="zona-num"><b>{{ z.aforo_actual }}</b><i>/ {{ z.capacidad }}</i></div>
+          <div class="zona-num"><b>{{ z.ocupado ?? z.aforo_actual }}</b><i>dentro / {{ z.capacidad }}</i></div>
           <div class="barra">
             <div class="barra-relleno" :class="z.estado" :style="{ width: Math.min(100, z.porcentaje) + '%' }"></div>
           </div>
           <div class="zona-pie">
-            <span class="zp-pct">{{ z.porcentaje }}%</span>
-            <span>{{ z.disponibles }} libres</span>
+            <span><b class="zp-pct">{{ z.reservado ?? 0 }}</b> reservados</span>
+            <span><b>{{ z.disponibles }}</b> disponibles</span>
           </div>
         </div>
       </div>
@@ -104,6 +115,39 @@
       <p class="live-nota">
         <span class="dot"></span> Actualización automática en vivo
       </p>
+      </div><!-- /aforo-izq -->
+
+      <!-- Mapa en vivo (columna derecha, siempre visible) -->
+      <aside class="aforo-der">
+        <section class="mapa-live superficie">
+          <div class="mapa-live-cab">
+            <h2 class="seccion-h2">Mapa en vivo</h2>
+            <span v-if="zonaMapa" class="mapa-plano-nom">{{ zonaMapa.nombre_zona }}</span>
+          </div>
+          <div v-if="!zonaMapa" class="mapa-hint">Elige un plano arriba para ver su mapa en vivo. En "Todos" ves el reporte del evento completo.</div>
+          <div v-else class="mapa-live-cuerpo">
+            <div class="mapa-lienzo" :style="{ aspectRatio: String(zonaMapa.proporcion || 1.6) }">
+              <div
+                v-for="m in zonaMapa.mesas"
+                :key="m.id_mesa"
+                class="mapa-el"
+                :class="claseMesa(m)"
+                :style="estiloMesa(m)"
+                :title="(m.numero_nombre || m.tipo_elemento) + (m.estado_ocupacion === 'reservada' ? ' · reservada' : '')"
+              >
+                <span class="mapa-el-txt">{{ m.numero_nombre }}</span>
+              </div>
+              <div v-if="!zonaMapa.mesas.length" class="mapa-vacio">Este plano no tiene mesas (entrada general).</div>
+            </div>
+            <ul class="mapa-leyenda">
+              <li><span class="ll libre"></span>Libre</li>
+              <li><span class="ll ocupada"></span>Reservada / ocupada</li>
+              <li><span class="ll deco"></span>Barra / escenario</li>
+            </ul>
+          </div>
+        </section>
+      </aside>
+      </div><!-- /aforo-layout -->
     </template>
   </div>
 </template>
@@ -119,10 +163,41 @@ const idEventoSel = ref(null)
 const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
 const zonas = ref([])
 const aforoTotal = ref(0)
+const reservadoTotal = ref(0)
 const capacidadTotal = ref(0)
 const porcentajeTotal = ref(0)
 const estadoTotal = ref('ok')
 const cargando = ref(true)
+
+// Vista activa: 'todos' (evento completo) o el id de un plano.
+const vistaSel = ref('todos')
+const opcionesVista = computed(() => [{ id: 'todos', nombre: 'Todos' }, ...zonas.value.map(z => ({ id: z.id_zona, nombre: z.nombre_zona }))])
+
+// Resumen (gauge + KPIs) según la vista activa.
+const resumenActivo = computed(() => {
+  if (vistaSel.value === 'todos') {
+    return {
+      ocupado: aforoTotal.value,
+      reservado: reservadoTotal.value,
+      capacidad: capacidadTotal.value,
+      disponibles: Math.max(0, capacidadTotal.value - reservadoTotal.value),
+      porcentaje: porcentajeTotal.value,
+      estado: estadoTotal.value,
+    }
+  }
+  const z = zonas.value.find(x => x.id_zona === vistaSel.value)
+  if (!z) return { ocupado: 0, reservado: 0, capacidad: 0, disponibles: 0, porcentaje: 0, estado: 'ok' }
+  return {
+    ocupado: z.ocupado ?? z.aforo_actual ?? 0,
+    reservado: z.reservado ?? 0,
+    capacidad: z.capacidad,
+    disponibles: z.disponibles,
+    porcentaje: z.porcentaje,
+    estado: z.estado,
+  }
+})
+// Plano cuyo mapa se muestra (null = vista "Todos").
+const zonaMapa = computed(() => vistaSel.value === 'todos' ? null : (zonas.value.find(z => z.id_zona === vistaSel.value) || null))
 
 const circunferencia = 2 * Math.PI * 52
 let socket = null
@@ -136,16 +211,41 @@ function textoEstado(e) {
 function aplicar(data) {
   zonas.value = data.zonas || []
   aforoTotal.value = data.aforo_total || 0
+  reservadoTotal.value = data.reservado_total || 0
   capacidadTotal.value = data.capacidad_total || 0
   porcentajeTotal.value = data.porcentaje_total || 0
   estadoTotal.value = data.estado_total || 'ok'
+  // Si el plano seleccionado ya no existe, volvemos a "Todos".
+  if (vistaSel.value !== 'todos' && !zonas.value.some(z => z.id_zona === vistaSel.value)) {
+    vistaSel.value = 'todos'
+  }
 }
 
 function recomputar() {
-  aforoTotal.value = zonas.value.reduce((s, z) => s + z.aforo_actual, 0)
+  aforoTotal.value = zonas.value.reduce((s, z) => s + (z.ocupado ?? z.aforo_actual ?? 0), 0)
+  reservadoTotal.value = zonas.value.reduce((s, z) => s + (z.reservado ?? 0), 0)
   capacidadTotal.value = zonas.value.reduce((s, z) => s + z.capacidad, 0)
   porcentajeTotal.value = capacidadTotal.value > 0 ? Math.round((aforoTotal.value / capacidadTotal.value) * 100) : 0
   estadoTotal.value = porcentajeTotal.value >= 100 ? 'lleno' : (porcentajeTotal.value >= 85 ? 'alerta' : 'ok')
+}
+
+// ── Preview del mapa ──
+function estiloMesa(m) {
+  const estilo = {
+    left: (m.posicion_x || 0) + '%',
+    top: (m.posicion_y || 0) + '%',
+    width: (m.ancho || 7) + '%',
+    height: (m.alto || 10) + '%',
+    transform: m.rotacion ? `rotate(${m.rotacion}deg)` : 'none',
+  }
+  if (m.forma) estilo.borderRadius = m.forma === 'redondo' ? '50%' : '8px'
+  return estilo
+}
+// Clase de color: reservable ocupada/reservada vs libre; decorativos neutros.
+function claseMesa(m) {
+  const reservable = (m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla')
+  if (!reservable) return 'deco tipo-' + m.tipo_elemento
+  return (m.estado_ocupacion === 'reservada' ? 'ocupada' : 'libre') + ' tipo-' + m.tipo_elemento
 }
 
 async function cargarAforo() {
@@ -188,6 +288,18 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 
 <style scoped>
 .vista-aforo-admin { padding: var(--esp-6); max-width: 1400px; margin: 0 auto; }
+
+/* Layout a dos columnas: izquierda (resumen + zonas), derecha (mapa siempre visible) */
+.aforo-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 40%); gap: var(--esp-5); align-items: start; }
+.aforo-izq { min-width: 0; display: flex; flex-direction: column; }
+.aforo-der { position: sticky; top: 12px; }
+.aforo-der .mapa-live { margin-bottom: 0; }
+.aforo-der .mapa-lienzo { max-height: 62vh; }
+@media (max-width: 1024px) {
+  .aforo-layout { grid-template-columns: 1fr; }
+  .aforo-der { position: static; }
+  .aforo-der .mapa-lienzo { max-height: none; }
+}
 
 /* Estado -> color de acento (una fuente de verdad) */
 .ok    { --c: var(--morado-brillante); --c-rgb: 168,85,247; --c2: var(--rosa-acento); }
@@ -241,7 +353,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .kpi-num.acento-libre { color: var(--rosa-acento); }
 .kpi-lbl { font-size: 0.8rem; color: var(--texto-secundario); }
 .kpi-hero .kpi-lbl { font-size: 0.9rem; font-weight: 600; }
-.kpi-fila { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--esp-4); padding-top: var(--esp-5); border-top: 1px solid var(--borde-sutil); }
+.kpi-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--esp-4); padding-top: var(--esp-5); border-top: 1px solid var(--borde-sutil); }
 
 /* Encabezado de sección de zonas */
 .zonas-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-4); flex-wrap: wrap; }
@@ -269,6 +381,47 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .live-nota { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: var(--esp-6); font-size: 0.8rem; color: var(--texto-secundario); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); animation: latido 1.4s infinite; }
 @keyframes latido { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Preview del mapa en vivo */
+.mapa-live { padding: clamp(1.2rem, 3vw, 2rem); margin-bottom: var(--esp-6); }
+.mapa-live-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-4); flex-wrap: wrap; }
+.mapa-zona-sel { min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.mzs-lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-secundario); font-weight: 700; }
+
+/* Toggle Todos / por plano */
+.vista-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--esp-5); background: rgba(10,6,26,0.4); border: 1px solid var(--borde-sutil); border-radius: var(--radio-full); padding: 5px; width: fit-content; max-width: 100%; }
+.vt-btn { padding: 8px 18px; border-radius: var(--radio-full); border: none; background: transparent; color: var(--texto-secundario); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: background .18s ease, color .18s ease; white-space: nowrap; }
+.vt-btn:hover { color: var(--texto-principal); }
+.vt-btn.activo { background: var(--gradiente-marca); color: #fff; box-shadow: var(--glow-morado); }
+.mapa-plano-nom { font-size: 0.85rem; font-weight: 700; color: var(--morado-hover); }
+.mapa-hint { color: var(--texto-secundario); font-size: 0.88rem; line-height: 1.5; padding: 2.5rem 1.25rem; text-align: center; }
+.mapa-live-cuerpo { display: flex; flex-direction: column; gap: var(--esp-4); }
+.mapa-lienzo {
+  position: relative; width: 100%;
+  background:
+    linear-gradient(var(--borde-sutil) 1px, transparent 1px) 0 0 / 5% 5%,
+    linear-gradient(90deg, var(--borde-sutil) 1px, transparent 1px) 0 0 / 5% 5%,
+    var(--fondo-tarjeta);
+  border: 1px solid var(--borde-activo); border-radius: 14px; overflow: hidden;
+}
+.mapa-el {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 700; color: #fff; box-sizing: border-box;
+  border: 1.5px solid transparent; transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.mapa-el-txt { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.5); overflow: hidden; white-space: nowrap; }
+.mapa-el.libre   { background: rgba(34,197,94,0.26); border-color: rgba(34,197,94,0.7); }
+.mapa-el.ocupada { background: rgba(244,88,106,0.42); border-color: rgba(244,88,106,0.88); box-shadow: 0 0 12px rgba(244,88,106,0.4); }
+.mapa-el.deco    { background: rgba(255,255,255,0.06); border-color: var(--borde-sutil); color: var(--texto-secundario); }
+.mapa-el.tipo-escenario { background: rgba(168,85,247,0.16); border-color: rgba(168,85,247,0.4); }
+.mapa-el.tipo-area { background: rgba(168,85,247,0.05); border-style: dashed; color: var(--texto-desactivado); }
+.mapa-vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--texto-desactivado); font-size: 0.85rem; text-align: center; padding: 1rem; }
+.mapa-leyenda { display: flex; gap: var(--esp-4); flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+.mapa-leyenda li { display: inline-flex; align-items: center; gap: 7px; font-size: 0.78rem; color: var(--texto-secundario); font-weight: 600; }
+.mapa-leyenda .ll { width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid; flex-shrink: 0; }
+.mapa-leyenda .ll.libre { background: rgba(34,197,94,0.26); border-color: rgba(34,197,94,0.7); }
+.mapa-leyenda .ll.ocupada { background: rgba(244,88,106,0.42); border-color: rgba(244,88,106,0.88); }
+.mapa-leyenda .ll.deco { background: rgba(255,255,255,0.06); border-color: var(--borde-sutil); }
 
 @media (max-width: 720px) {
   .resumen { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: var(--esp-5); }

@@ -17,7 +17,8 @@ router.get('/', async (req, res) => {
       where: {
         zona: {
           evento: {
-            estado: 'activo'
+            // Eventos públicos / en curso (Promoción, En transcurso, Lleno)
+            estado: { in: ['promocion', 'en_transcurso', 'lleno'] }
           }
         }
       },
