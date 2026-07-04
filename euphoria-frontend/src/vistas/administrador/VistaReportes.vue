@@ -1191,7 +1191,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onActivated, onDeactivated } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
@@ -1202,7 +1202,7 @@ const notif = useNotificaciones()
 // Umbral único de stock bajo para reposición, usado tanto en la alerta de
 // Inventario Crítico como en el indicador de la tabla de ranking (evita
 // inconsistencias donde un producto aparecía crítico en la alerta pero normal en la tabla)
-const UMBRAL_STOCK_BAJO = 20
+const UMBRAL_STOCK_BAJO = 30
 
 const stats = ref({
   clientes: 0,
@@ -1833,9 +1833,14 @@ function exportarPDF() {
   };
 }
 
-onMounted(() => {
-  cargarReportes()
+// KeepAlive: primera activación con spinner, las siguientes en silencio
+// (el dashboard previo se ve al instante mientras se actualiza detrás).
+// El intervalo de sincronización solo corre con la vista visible.
+let yaCargado = false
+onActivated(() => {
+  cargarReportes(yaCargado)
   cargarReporteBilletera()
+  yaCargado = true
   // Sincronización automática en vivo (endpoints ligeros/agregados)
   intervaloSync = setInterval(() => {
     cargarReportes(true) // modo silencioso para no parpadear la pantalla
@@ -1843,8 +1848,9 @@ onMounted(() => {
   }, 15000)
 })
 
-onUnmounted(() => {
+onDeactivated(() => {
   if (intervaloSync) clearInterval(intervaloSync)
+  intervaloSync = null
 })
 
 async function cargarReportes(silencioso = false) {

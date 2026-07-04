@@ -72,6 +72,13 @@ class Recomendador:
                     "score_final": round(sf, 4),
                     "margen_pct": round(R.margen(c, meta) * 100, 1),
                     "en_promocion": meta["precio_promo"].get(c) is not None,
+                    # Factores del ranking (para explicar el "porqué" en el panel):
+                    # >1 empuja al producto, <1 lo castiga
+                    "factores": {
+                        "temporal": round(float(bt), 3),
+                        "margen": round(float(fm), 3),
+                        "promo": round(float(bp), 3),
+                    },
                 })
 
         ts = pd.Timestamp(fecha_hora)

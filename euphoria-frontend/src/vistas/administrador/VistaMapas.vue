@@ -538,19 +538,42 @@ async function eliminarPlano(p) {
   const ok = await notif.confirmar({
     variante: 'peligro',
     titulo: `Eliminar "${p?.nombre || 'plano'}"`,
-    mensaje: 'Este plano guardado se eliminará. Los eventos que ya lo usaron no se ven afectados.',
+    mensaje: 'Se revisará si algún evento usa este plano antes de borrarlo.',
     textoConfirmar: 'Sí, eliminar',
   })
   if (!ok) return
   try {
     await clienteHttp.delete(`/espacios/plantillas/${p.id_plantilla}`)
-    // Si estábamos editando ese plano, volvemos a la galería.
-    if (planoSelId.value === p.id_plantilla) {
-      modo.value = 'galeria'; planoSelId.value = null; elementos.value = []
-    }
-    await cargarPlanos()
+    alFinalizarBorrado(p)
     notif.exito('Plano eliminado')
-  } catch (e) { notif.error(e.error || 'No se pudo eliminar el plano') }
+  } catch (e) {
+    // 409: el plano está vinculado a eventos → segunda confirmación con la lista
+    if (e?.vinculado && Array.isArray(e.vinculos)) {
+      const lista = e.vinculos.map(v => `"${v.nombre_zona}" en ${v.evento}`).join(', ')
+      const okCascada = await notif.confirmar({
+        variante: 'peligro',
+        titulo: 'Este plano está en uso',
+        mensaje: `Está vinculado a: ${lista}. Si continúas se borrará el plano Y se quitará de esos eventos (sus mesas incluidas). ¿Seguro?`,
+        textoConfirmar: 'Sí, borrar todo',
+      })
+      if (!okCascada) return
+      try {
+        const r = await clienteHttp.delete(`/espacios/plantillas/${p.id_plantilla}?cascada=1`)
+        alFinalizarBorrado(p)
+        notif.exito(`Plano eliminado y quitado de ${r.zonas_eliminadas} evento(s)/zona(s).`)
+      } catch (e2) { notif.error(e2?.error || 'No se pudo borrar en cascada') }
+      return
+    }
+    notif.error(e?.error || 'No se pudo eliminar el plano')
+  }
+}
+
+function alFinalizarBorrado(p) {
+  // Si estábamos editando ese plano, volvemos a la galería.
+  if (planoSelId.value === p.id_plantilla) {
+    modo.value = 'galeria'; planoSelId.value = null; elementos.value = []
+  }
+  cargarPlanos()
 }
 
 // Botones del editor: operan sobre el plano en edición.

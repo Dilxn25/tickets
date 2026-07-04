@@ -153,7 +153,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onActivated, onDeactivated } from 'vue'
 import { io } from 'socket.io-client'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
@@ -260,20 +260,10 @@ async function cargarAforo() {
   }
 }
 
-onMounted(async () => {
-  try {
-    eventos.value = await servicioAforo.listarEventos()
-    if (eventos.value.length) {
-      idEventoSel.value = eventos.value[0].id_evento
-      await cargarAforo()
-    } else {
-      cargando.value = false
-    }
-  } catch (err) {
-    console.error('Error cargando eventos:', err)
-    cargando.value = false
-  }
-
+// KeepAlive: la vista queda viva al salir; el socket solo vive mientras
+// está visible. Al volver, se ve el plano al instante y se refresca detrás.
+let yaCargado = false
+onActivated(async () => {
   socket = io()
   socket.on('aforo_actualizado', (resumen) => {
     if (resumen.id_evento !== idEventoSel.value) return
@@ -281,9 +271,30 @@ onMounted(async () => {
     if (i >= 0) zonas.value[i] = { ...zonas.value[i], ...resumen }
     recomputar()
   })
+
+  if (!yaCargado) {
+    yaCargado = true
+    try {
+      eventos.value = await servicioAforo.listarEventos()
+      if (eventos.value.length) {
+        idEventoSel.value = eventos.value[0].id_evento
+        await cargarAforo()
+      } else {
+        cargando.value = false
+      }
+    } catch (err) {
+      console.error('Error cargando eventos:', err)
+      cargando.value = false
+    }
+  } else if (idEventoSel.value) {
+    // Refresco silencioso: sin spinner, sobre los datos ya visibles
+    try { aplicar(await servicioAforo.obtenerAforoEvento(idEventoSel.value)) } catch { /* silencioso */ }
+  }
 })
 
-onUnmounted(() => { if (socket) socket.disconnect() })
+onDeactivated(() => {
+  if (socket) { socket.disconnect(); socket = null }
+})
 </script>
 
 <style scoped>

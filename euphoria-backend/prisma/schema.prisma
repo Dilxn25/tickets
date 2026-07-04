@@ -276,10 +276,31 @@ model zona {
   precio_entrada_base Decimal          @db.Decimal(10, 2)
   proporcion          Float?
   es_general          Boolean          @default(false)
+  id_plantilla        Int?
   entrada             entrada[]
   mesa_espacio        mesa_espacio[]
   registro_aforo      registro_aforo[]
   evento              evento           @relation(fields: [id_evento], references: [id_evento], map: "ZONA_id_evento_fkey")
 
   @@index([id_evento], map: "ZONA_id_evento_fkey")
+}
+
+model configuracion {
+  clave               String   @id @db.VarChar(60)
+  valor               String   @db.VarChar(255)
+  descripcion         String?  @db.VarChar(255)
+  fecha_actualizacion DateTime @default(now()) @updatedAt
+}
+
+model sugerencia_ia {
+  id_sugerencia   Int      @id @default(autoincrement())
+  fecha_hora      DateTime @default(now())
+  id_producto     Int
+  nombre_producto String   @db.VarChar(120)
+  probabilidad    Decimal? @db.Decimal(5, 4)
+  id_mesero       Int?
+  aceptada        Boolean  @default(false)
+
+  @@index([fecha_hora])
+  @@index([id_producto])
 }

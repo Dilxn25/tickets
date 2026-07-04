@@ -771,6 +771,11 @@ function agregarSugerencia(s) {
     // Se agrega al precio dinámico sugerido por la IA
     carrito.value.push({ producto: prod, cantidad: 1, precio: precioSugerido(s) })
   }
+  // Marcar la sugerencia como ACEPTADA para el reporte de efectividad de la IA
+  // (fire-and-forget: nunca bloquea la toma de pedidos)
+  if (s.id_sugerencia) {
+    clienteHttp.patch(`/recomendaciones/sugerencias/${s.id_sugerencia}/aceptar`).catch(() => {})
+  }
 }
 
 // Recalcular sugerencias cuando cambia la orden (con pequeño debounce)

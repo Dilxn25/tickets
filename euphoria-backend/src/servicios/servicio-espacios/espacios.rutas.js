@@ -333,7 +333,55 @@ router.post('/zonas/:id/aplicar-plantilla', soloRoles('Administrador'), async (r
 })
 
 // DELETE /api/espacios/plantillas/:id (Admin)
+// Si el plano está vinculado a eventos (zonas creadas desde él, por id o por
+// nombre para datos antiguos), responde 409 con la lista para que el admin
+// confirme; con ?cascada=1 borra también esas zonas y sus mesas.
 router.delete('/plantillas/:id', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id_plantilla = Number(req.params.id)
+    const plantilla = await prisma.plantilla_mapa.findUnique({ where: { id_plantilla } })
+    if (!plantilla) return res.status(404).json({ error: 'Plano no encontrado' })
+
+    const vinculos = await prisma.zona.findMany({
+      where: {
+        OR: [
+          { id_plantilla },
+          { nombre_zona: String(plantilla.nombre) } // zonas antiguas sin vínculo guardado
+        ]
+      },
+      include: { evento: { select: { nombre_evento: true } } }
+    })
+
+    if (vinculos.length && String(req.query.cascada) !== '1') {
+      return res.status(409).json({
+        vinculado: true,
+        vinculos: vinculos.map(z => ({
+          id_zona: z.id_zona,
+          nombre_zona: z.nombre_zona,
+          evento: z.evento?.nombre_evento || 'Evento desconocido'
+        }))
+      })
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const z of vinculos) {
+        await tx.mesa_espacio.deleteMany({ where: { id_zona: z.id_zona } })
+        await tx.zona.delete({ where: { id_zona: z.id_zona } })
+      }
+      await tx.plantilla_mapa.delete({ where: { id_plantilla } })
+    })
+    return res.json({ mensaje: 'Plano eliminado', zonas_eliminadas: vinculos.length })
+  } catch (error) {
+    if (error.code === 'P2003') {
+      return res.status(400).json({ error: 'No se puede borrar en cascada: alguna zona vinculada tiene reservas o ingresos registrados. Quita primero esas reservas.' })
+    }
+    console.error('Error eliminando plano:', error)
+    return res.status(500).json({ error: 'Error al eliminar el plano' })
+  }
+})
+
+// (handler anterior conservado abajo por compatibilidad — ya no se alcanza)
+router.delete('/plantillas-legacy/:id', soloRoles('Administrador'), async (req, res) => {
   try {
     await prisma.plantilla_mapa.delete({ where: { id_plantilla: Number(req.params.id) } })
     res.json({ mensaje: 'Plantilla eliminada' })
@@ -400,6 +448,7 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
           precio_entrada_base: precio_base,
           proporcion: proporcion,
           es_general: false,
+          id_plantilla, // vínculo con el plano: permite avisar/cascada al borrarlo
         },
       })
       for (const el of elementos) {

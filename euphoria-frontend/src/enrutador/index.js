@@ -16,6 +16,7 @@ import VistaReportes from '../vistas/administrador/VistaReportes.vue'
 import VistaVentas from '../vistas/administrador/VistaVentas.vue'
 import VistaMapas from '../vistas/administrador/VistaMapas.vue'
 import VistaAforoAdmin from '../vistas/administrador/VistaAforoAdmin.vue'
+import VistaIA from '../vistas/administrador/VistaIA.vue'
 
 // ---- En Construcción (otros roles y módulos) ----
 import VistaEnConstruccion from '../vistas/VistaEnConstruccion.vue'
@@ -58,7 +59,7 @@ const rutas = [
       { path: 'ventas', name: 'AdminVentas', component: VistaVentas },
       { path: 'zonas', name: 'AdminZonas', component: VistaMapas },
       { path: 'aforo', name: 'AdminAforo', component: VistaAforoAdmin },
-      { path: 'ia', name: 'AdminIA', component: VistaEnConstruccion },
+      { path: 'ia', name: 'AdminIA', component: VistaIA },
       { path: 'reportes', name: 'AdminReportes', component: VistaReportes },
     ],
   },

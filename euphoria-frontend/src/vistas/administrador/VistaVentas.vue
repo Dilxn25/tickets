@@ -286,7 +286,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onActivated, onDeactivated, watch } from 'vue'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
@@ -335,17 +335,27 @@ const limite = ref(20)
 const ventasTotal = ref(0)
 let intervaloActualizacion = null
 
-onMounted(() => {
-  cargarVentas()
-  cargarFiltros()
+// KeepAlive: la vista queda viva al salir. La primera activación carga con
+// spinner; las siguientes refrescan en silencio (los datos previos se ven
+// al instante). El intervalo solo corre mientras la vista está visible.
+let yaCargado = false
+onActivated(() => {
+  if (!yaCargado) {
+    yaCargado = true
+    cargarVentas()
+    cargarFiltros()
+  } else {
+    actualizarVentas()
+  }
   // Refresco en vivo (endpoint paginado y ligero)
   intervaloActualizacion = setInterval(() => {
     actualizarVentas()
   }, 15000)
 })
 
-onUnmounted(() => {
+onDeactivated(() => {
   if (intervaloActualizacion) clearInterval(intervaloActualizacion)
+  intervaloActualizacion = null
 })
 
 function mapearComanda(cmd) {

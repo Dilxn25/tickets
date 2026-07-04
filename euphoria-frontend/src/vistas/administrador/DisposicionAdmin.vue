@@ -98,9 +98,16 @@
         </div>
       </header>
 
-      <!-- Vista -->
+      <!-- Vista: KeepAlive conserva vivas TODAS las vistas ya visitadas para
+           que volver a ellas sea instantáneo (sin refetch ni pantalla vacía).
+           Las vistas con intervalos/sockets (Ventas, Reportes, Aforo) los
+           arrancan/detienen con onActivated/onDeactivated. -->
       <div class="vista-admin fade-in">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <KeepAlive :include="['VistaUsuarios', 'VistaProductos', 'VistaEventos', 'VistaVentas', 'VistaMapas', 'VistaReportes', 'VistaAforoAdmin', 'VistaIA']">
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </div>
     </main>
 
@@ -111,6 +118,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const tienda = useTiendaAutenticacion()
 const router = useRouter()
@@ -127,8 +136,35 @@ function actualizarAncho() {
   anchoVentana.value = window.innerWidth
   if (esMovil.value !== eraMovil) colapsado.value = esMovil.value
 }
-onMounted(()   => window.addEventListener('resize', actualizarAncho))
-onUnmounted(() => window.removeEventListener('resize', actualizarAncho))
+// ALERTA DE STOCK BAJO para el dueño: al entrar al panel (y cada 10 min)
+// se revisa el inventario; si algo está en 30 uds. o menos, salta el aviso
+const notif = useNotificaciones()
+const UMBRAL_STOCK = 30
+let intervaloStock = null
+async function revisarStockBajo() {
+  try {
+    const res = await clienteHttp.get('/productos')
+    const lista = (Array.isArray(res) ? res : (res.productos || []))
+      .filter(p => !p.es_combo && p.stock_actual <= UMBRAL_STOCK)
+      .sort((a, b) => a.stock_actual - b.stock_actual)
+    if (lista.length) {
+      const detalle = lista.slice(0, 4).map(p => `${p.nombre_producto}: ${p.stock_actual} uds.`).join(' · ')
+      notif.advertencia(
+        `REPONER STOCK — ${lista.length} producto(s) en ${UMBRAL_STOCK} unidades o menos. ${detalle}${lista.length > 4 ? ' y más...' : ''}`
+      )
+    }
+  } catch { /* sin bloqueo si el backend no responde */ }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', actualizarAncho)
+  revisarStockBajo()
+  intervaloStock = setInterval(revisarStockBajo, 10 * 60 * 1000)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', actualizarAncho)
+  if (intervaloStock) clearInterval(intervaloStock)
+})
 
 const menuItems = [
   { ruta: 'usuarios',  nombre: 'Usuarios',   icono: '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' },
@@ -138,6 +174,7 @@ const menuItems = [
   { ruta: 'zonas',     nombre: 'Planos',     icono: '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>' },
   { ruta: 'aforo',     nombre: 'Aforo',      icono: '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/><circle cx="12" cy="12" r="10" opacity="0.25"/></svg>' },
   { ruta: 'reportes',  nombre: 'Reportes',   icono: '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+  { ruta: 'ia',        nombre: 'Panel IA',   icono: '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.9 2.4L22 18l-2.1.6L19 21l-.9-2.4L16 18l2.1-.6z"/></svg>' },
 ]
 
 const rutaActual   = computed(() => ruta.path)
@@ -193,8 +230,8 @@ function cerrar() {
   z-index: 50;
   overflow: hidden;
   flex-shrink: 0;
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  /* sin backdrop-filter: sobre fondo plano no aporta y puede pintar
+     un rectángulo de luz en algunas GPUs al repintar */
   box-shadow:
     inset -1px 0 0 rgba(255, 255, 255, 0.04),
     1px 0 0 var(--borde-sutil),
@@ -555,9 +592,7 @@ function cerrar() {
   align-items: center;
   justify-content: space-between;
   padding: 0 1.5rem;
-  background: var(--fondo-navbar);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background: var(--fondo-app);
   border-bottom: 1px solid var(--borde-sutil);
   position: sticky;
   top: 0;
