@@ -113,51 +113,89 @@ def combos(tam: int = 2, descuento: float = 0.10, minimo: int = 5):
 
 
 @app.get("/packs")
-def packs(descuento: float = 0.10):
-    q = """SELECT p.id_producto, p.nombre_producto nombre, p.precio_base precio, p.url_imagen,
-             cat.nombre_categoria categoria, COALESCE(SUM(d.cantidad),0) vendidos
-           FROM producto p
-           JOIN categoria cat ON cat.id_categoria=p.id_categoria
-           LEFT JOIN detalle_comanda d ON d.id_producto=p.id_producto
-           LEFT JOIN comanda c ON c.id_comanda=d.id_comanda AND c.estado_despacho<>'Cancelada'
-           WHERE p.stock_actual>0
-           GROUP BY p.id_producto, nombre, precio, p.url_imagen, categoria
-           ORDER BY vendidos DESC"""
+def packs(descuento: float = 0.10, min_repeticiones: int = 3):
+    """Packs 100% DINAMICOS: se aprenden de las MESAS GRANDES reales del historial.
+    1) Cada comanda se resume como su composicion por categoria (ej. 6x Cerveza + 2x Snack).
+    2) Se toman las comandas grandes (top de consumo) y se buscan las composiciones
+       que MAS SE REPITEN (patrones reales, no recetas escritas a mano).
+    3) Cada patron se instancia con el producto mas vendido de cada categoria (con stock).
+    Un pack que ninguna mesa pidio nunca, NO puede aparecer."""
+    q_comp = """SELECT d.id_comanda, cat.nombre_categoria categoria, SUM(d.cantidad) cant
+                FROM detalle_comanda d
+                JOIN comanda c ON c.id_comanda=d.id_comanda AND c.estado_despacho<>'Cancelada'
+                JOIN producto p ON p.id_producto=d.id_producto
+                JOIN categoria cat ON cat.id_categoria=p.id_categoria
+                GROUP BY d.id_comanda, categoria"""
+    q_top = """SELECT p.id_producto, p.nombre_producto nombre, p.precio_base precio, p.url_imagen,
+                 cat.nombre_categoria categoria, COALESCE(SUM(d.cantidad),0) vendidos
+               FROM producto p
+               JOIN categoria cat ON cat.id_categoria=p.id_categoria
+               LEFT JOIN detalle_comanda d ON d.id_producto=p.id_producto
+               LEFT JOIN comanda c ON c.id_comanda=d.id_comanda AND c.estado_despacho<>'Cancelada'
+               WHERE p.stock_actual>0 AND p.es_combo=0
+               GROUP BY p.id_producto, nombre, precio, p.url_imagen, categoria
+               ORDER BY vendidos DESC"""
     with _ENG.connect() as cx:
-        filas = [dict(r._mapping) for r in cx.execute(_text(q))]
+        comp_filas = [dict(r._mapping) for r in cx.execute(_text(q_comp))]
+        top_filas = [dict(r._mapping) for r in cx.execute(_text(q_top))]
 
-    def es(f, *claves):
-        c = (f["categoria"] or "").lower()
-        return any(k in c for k in claves)
+    # Producto N.1 por categoria (dinamico: cambia solo con las ventas y el stock)
+    top_por_cat = {}
+    for f in top_filas:
+        top_por_cat.setdefault(f["categoria"], f)
 
-    licores = [f for f in filas if es(f, "ron", "whisky", "vodka", "singani", "licor")]
-    mezc = [f for f in filas if es(f, "sin alcohol", "bebida", "gaseosa", "energ")]
-    snacks = [f for f in filas if es(f, "snack")]
-    cerv = [f for f in filas if es(f, "cerveza")]
-    g = lambda lst, i: lst[i] if len(lst) > i else None
+    # Composicion por comanda: {categoria: cantidad}
+    comandas = {}
+    for f in comp_filas:
+        comandas.setdefault(f["id_comanda"], {})[f["categoria"]] = int(f["cant"])
+    if not comandas:
+        return {"packs": [], "origen": "modelo-ia"}
 
-    def armar(nombre, desc_txt, items, regla=""):
-        items = [(f, c) for f, c in items if f]
-        if len(items) < 2:
-            return None
+    # Umbral de "mesa grande": percentil 80 del total de items (minimo 5)
+    totales = sorted(sum(c.values()) for c in comandas.values())
+    umbral = max(5, totales[int(len(totales) * 0.80)])
+
+    # Contar los patrones de composicion que mas se repiten entre las mesas grandes
+    patrones = {}
+    for comp in comandas.values():
+        if sum(comp.values()) < umbral:
+            continue
+        firma = tuple(sorted(comp.items()))
+        patrones[firma] = patrones.get(firma, 0) + 1
+
+    candidatos = sorted(patrones.items(), key=lambda kv: -kv[1])
+    out = []
+    for firma, veces in candidatos:
+        if len(out) >= 3:
+            break
+        if veces < min_repeticiones:
+            continue
+        # Instanciar el patron con el N.1 actual (con stock) de cada categoria
+        items = []
+        for categoria, cant in firma:
+            prod = top_por_cat.get(categoria)
+            if prod:
+                items.append((prod, int(cant)))
+        if len(items) < 2 or len(items) < len(firma):
+            continue  # falta stock en alguna categoria: el patron no se ofrece incompleto
         normal = sum(float(f["precio"]) * c for f, c in items)
-        return {
-            "nombre": nombre, "descripcion": desc_txt, "razon": regla,
-            "items": [{"id_producto": int(f["id_producto"]), "nombre": f["nombre"], "cantidad": c, "url_imagen": f["url_imagen"]} for f, c in items],
+        etiqueta = " + ".join(f"{c}× {cat}" for (f, c), (cat, _) in zip(items, firma))
+        # El pack se nombra por su producto ANCLA: la categoría del item más caro (el licor/botella)
+        ancla = max(zip(items, firma), key=lambda x: float(x[0][0]["precio"]))[1][0]
+        nombre = f"Pack {ancla} para mesa"
+        usados = {p["nombre"] for p in out}
+        if nombre in usados:
+            nombre = f"Pack {dominante} ({etiqueta})"
+        out.append({
+            "nombre": nombre,
+            "descripcion": f"Como lo piden las mesas grandes: {etiqueta}",
+            "razon": f"Patrón real del historial: {veces} mesas grandes pidieron exactamente esta combinación "
+                     f"(se arma con el más vendido de cada categoría, solo con stock)",
+            "veces": int(veces),
+            "items": [{"id_producto": int(f["id_producto"]), "nombre": f["nombre"], "cantidad": c,
+                       "url_imagen": f["url_imagen"]} for f, c in items],
             "precio_normal": round(normal, 2),
             "precio_pack": _precio_atractivo(normal * (1 - descuento)),
             "descuento_pct": round(descuento * 100, 1),
-        }
-
-    out = [x for x in [
-        armar("Pack Fiesta", "Para una mesa completa: 2 botellas con sus mezcladores y algo para picar",
-              [(g(licores, 0), 2), (g(mezc, 0), 3), (g(snacks, 0), 1)],
-              "Regla del modulo: licor N.1 en ventas + mezclador N.1 + snack N.1 (solo con stock)"),
-        armar("Pack Premium", "Segunda botella mas vendida para mesas exigentes",
-              [(g(licores, 1), 1), (g(mezc, 1) or g(mezc, 0), 2), (g(snacks, 1) or g(snacks, 0), 1)],
-              "Regla del modulo: licor N.2 en ventas (para variar la oferta) + mezclador y snack top"),
-        armar("Pack Amigos", "Balde para compartir: 10 cervezas y snacks dobles",
-              [(g(cerv, 0), 10), (g(snacks, 0), 2)],
-              "Regla del modulo: la cerveza N.1 en ventas x10 (balde) + snack N.1 x2"),
-    ] if x]
+        })
     return {"packs": out, "origen": "modelo-ia"}

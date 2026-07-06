@@ -325,61 +325,72 @@ router.get('/packs', verificarToken, async (req, res) => {
       }
     } catch { /* respaldo local abajo */ }
 
-    const filas = await prisma.$queryRawUnsafe(`
+    // 2) RESPALDO LOCAL (misma lógica DINÁMICA que el módulo, sin recetas fijas):
+    // los packs se aprenden de las composiciones que MÁS repiten las mesas grandes reales.
+    const composicion = await prisma.$queryRawUnsafe(`
+      SELECT d.id_comanda, cat.nombre_categoria categoria, SUM(d.cantidad) cant
+      FROM detalle_comanda d
+      JOIN comanda c ON c.id_comanda = d.id_comanda AND c.estado_despacho <> 'Cancelada'
+      JOIN producto p ON p.id_producto = d.id_producto
+      JOIN categoria cat ON cat.id_categoria = p.id_categoria
+      GROUP BY d.id_comanda, categoria
+    `)
+    const topFilas = await prisma.$queryRawUnsafe(`
       SELECT p.id_producto, p.nombre_producto nombre, p.precio_base precio, p.url_imagen,
              cat.nombre_categoria categoria, COALESCE(SUM(d.cantidad), 0) vendidos
       FROM producto p
       JOIN categoria cat ON cat.id_categoria = p.id_categoria
       LEFT JOIN detalle_comanda d ON d.id_producto = p.id_producto
       LEFT JOIN comanda c ON c.id_comanda = d.id_comanda AND c.estado_despacho <> 'Cancelada'
-      WHERE p.stock_actual > 0
+      WHERE p.stock_actual > 0 AND p.es_combo = 0
       GROUP BY p.id_producto, nombre, precio, p.url_imagen, categoria
       ORDER BY vendidos DESC
     `)
 
-    const norm = (s) => (s || '').toLowerCase()
-    const esLicor = (f) => ['ron', 'whisky', 'vodka', 'singani', 'licor'].some(x => norm(f.categoria).includes(x))
-    const esMezclador = (f) => ['sin alcohol', 'bebida', 'gaseosa', 'energ'].some(x => norm(f.categoria).includes(x))
-    const esSnack = (f) => norm(f.categoria).includes('snack')
-    const esCerveza = (f) => norm(f.categoria).includes('cerveza')
+    // N.1 actual por categoría (con stock)
+    const topPorCat = {}
+    for (const f of topFilas) if (!topPorCat[f.categoria]) topPorCat[f.categoria] = f
 
-    const licores = filas.filter(esLicor)
-    const mezcladores = filas.filter(esMezclador)
-    const snacks = filas.filter(esSnack)
-    const cervezas = filas.filter(esCerveza)
+    // Composición por comanda -> firma "categoria:cant|..." y conteo de patrones grandes
+    const porComanda = {}
+    for (const f of composicion) {
+      (porComanda[f.id_comanda] = porComanda[f.id_comanda] || {})[f.categoria] = Number(f.cant)
+    }
+    const totales = Object.values(porComanda).map(c => Object.values(c).reduce((a, b) => a + b, 0)).sort((a, b) => a - b)
+    if (!totales.length) return res.json({ packs: [] })
+    const umbral = Math.max(5, totales[Math.floor(totales.length * 0.80)])
 
-    const armar = (nombre, descripcion, items) => {
-      const limpio = items.filter(Boolean)
-      if (limpio.length < 2) return null
-      const normal = limpio.reduce((a, it) => a + Number(it.f.precio) * it.cant, 0)
-      return {
-        nombre,
-        descripcion,
-        items: limpio.map(it => ({
-          id_producto: it.f.id_producto,
-          nombre: it.f.nombre,
-          cantidad: it.cant,
-          url_imagen: it.f.url_imagen
-        })),
+    const patrones = {}
+    for (const comp of Object.values(porComanda)) {
+      if (Object.values(comp).reduce((a, b) => a + b, 0) < umbral) continue
+      const firma = Object.entries(comp).sort((a, b) => a[0].localeCompare(b[0]))
+      const clave = firma.map(([c, n]) => `${c}:${n}`).join('|')
+      ;(patrones[clave] = patrones[clave] || { firma, veces: 0 }).veces++
+    }
+
+    const packs = []
+    for (const { firma, veces } of Object.values(patrones).sort((a, b) => b.veces - a.veces)) {
+      if (packs.length >= 3) break
+      if (veces < 3) continue
+      const items = firma.map(([categoria, cant]) => topPorCat[categoria] && { f: topPorCat[categoria], cant }).filter(Boolean)
+      if (items.length < 2 || items.length < firma.length) continue // sin stock completo no se ofrece
+      const normal = items.reduce((a, it) => a + Number(it.f.precio) * it.cant, 0)
+      const etiqueta = firma.map(([c, n]) => `${n}× ${c}`).join(' + ')
+      // El pack se nombra por su producto ANCLA: la categoría del item más caro (el licor/botella)
+      const ancla = items.reduce((m, it) => (Number(it.f.precio) > Number(m.f.precio) ? it : m))
+      const dominante = firma[items.indexOf(ancla)][0]
+      const nombreBase = `Pack ${dominante} para mesa`
+      packs.push({
+        nombre: packs.some(p => p.nombre === nombreBase) ? `Pack ${dominante} (${etiqueta})` : nombreBase,
+        descripcion: `Como lo piden las mesas grandes: ${etiqueta}`,
+        razon: `Patrón real del historial: ${veces} mesas grandes pidieron exactamente esta combinación (se arma con el más vendido de cada categoría, solo con stock)`,
+        veces,
+        items: items.map(it => ({ id_producto: it.f.id_producto, nombre: it.f.nombre, cantidad: it.cant, url_imagen: it.f.url_imagen })),
         precio_normal: Math.round(normal * 100) / 100,
         precio_pack: precioAtractivo(normal * (1 - DESCUENTO)),
         descuento_pct: Math.round(DESCUENTO * 100)
-      }
+      })
     }
-
-    const packs = [
-      armar('Pack Fiesta', 'Para una mesa completa: 2 botellas con sus mezcladores y algo para picar',
-        [licores[0] && { f: licores[0], cant: 2 },
-         mezcladores[0] && { f: mezcladores[0], cant: 3 },
-         snacks[0] && { f: snacks[0], cant: 1 }]),
-      armar('Pack Premium', 'Segunda botella más vendida para mesas exigentes',
-        [licores[1] && { f: licores[1], cant: 1 },
-         (mezcladores[1] || mezcladores[0]) && { f: mezcladores[1] || mezcladores[0], cant: 2 },
-         (snacks[1] || snacks[0]) && { f: snacks[1] || snacks[0], cant: 1 }]),
-      armar('Pack Amigos', 'Balde para compartir: 10 cervezas y snacks dobles',
-        [cervezas[0] && { f: cervezas[0], cant: 10 },
-         snacks[0] && { f: snacks[0], cant: 2 }])
-    ].filter(Boolean)
 
     cacheIA[clavePacks] = { ts: Date.now(), data: packs }
     res.json({ packs })

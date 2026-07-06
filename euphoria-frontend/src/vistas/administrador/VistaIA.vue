@@ -100,12 +100,12 @@
           <div v-else class="vacio">Aún no hay suficiente historial de ventas para detectar combos de este tamaño.</div>
         </div>
 
-        <!-- Packs para mesa: combos grandes armados con reglas (para reservas) -->
+        <!-- Packs para mesa: aprendidos de los patrones reales de las mesas grandes -->
         <div class="tarjeta-ia">
           <div class="tarjeta-ia-head">
             <div>
               <h3>Packs para mesa</h3>
-              <span class="sub">Combos grandes armados con reglas (licor + mezclador + acompañamiento) — pensados para ofrecer al reservar</span>
+              <span class="sub">Aprendidos de las mesas grandes reales: las combinaciones que más se repiten en el historial — pensados para ofrecer al reservar</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="icono-sutil"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
           </div>
@@ -337,7 +337,7 @@ function alternarOcultarCombos() {
   }
 }
 
-// Packs para mesa (combos grandes con reglas de composición)
+// Packs para mesa (patrones reales de mesas grandes, aprendidos del historial)
 const packs = ref([])
 async function cargarPacks() {
   try {
@@ -517,8 +517,12 @@ onActivated(() => {
     cargarPacks()
     cargarEventos()
   } else {
+    // Refresco silencioso al volver a la vista: lo dinámico se mantiene fresco
+    // (los datos previos siguen visibles mientras llegan los nuevos)
     cargarEstado()
     cargarEfectividad()
+    cargarPacks()
+    cargarCombos().then(precargarCombos)
   }
 })
 </script>

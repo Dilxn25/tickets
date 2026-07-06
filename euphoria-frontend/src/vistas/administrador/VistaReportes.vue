@@ -569,7 +569,7 @@
                     <td style="font-weight:800; text-align:center;" :style="idx < 3 ? 'color:var(--color-alerta)' : 'color:rgba(255,255,255,0.4)'">{{ idx + 1 }}</td>
                     <td style="font-weight:700; color:var(--texto-principal);">{{ prod.nombre_producto }}</td>
                     <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
-                    <td><span :class="['stock-indicador', prod.stock_actual < UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">{{ prod.stock_actual }}</span></td>
+                    <td><span :class="['stock-indicador', prod.stock_actual <= UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">{{ prod.stock_actual }}</span></td>
                     <td style="font-weight:700; color:var(--morado-brillante);">{{ prod.vecesVendido }} uds.</td>
                     <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (prod.ingresosGenerados || 0).toFixed(2) }}</td>
                   </tr>
@@ -984,7 +984,7 @@
                   <td style="font-weight: 700; color: var(--texto-principal);">{{ prod.nombre_producto }}</td>
                   <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
                   <td>
-                    <span :class="['stock-indicador', prod.stock_actual < UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">
+                    <span :class="['stock-indicador', prod.stock_actual <= UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">
                       {{ prod.stock_actual }} uds.
                     </span>
                   </td>
@@ -1626,27 +1626,29 @@ function abrirModal(tipo) {
   modalActivo.value = tipo
 }
 
-function exportarPDF() {
-  // Validar que existan datos antes de exportar (evita PDFs con gráficos en blanco
-  // cuando el usuario exporta antes de que cargarReportes termine o sin ventas)
-  const hayDatos = trendComandas.value.length > 0
-    || datosMeseros.value.length > 0
-    || listadoProductosRanking.value.some(p => p.vecesVendido > 0)
-    || (conteoEfectivo.value + conteoQR.value + conteoBilletera.value) > 0
+async function exportarPDF() {
+  // El PDF exporta LO QUE EL ADMIN ESTÁ VIENDO: el informe corresponde a la pestaña activa.
+  // Validación de datos según la pestaña (evita PDFs vacíos)
+  const VALIDA = {
+    ventas:    () => ventas.value.length > 0 || stats.value.ingresosTotales > 0,
+    productos: () => listadoProductosRanking.value.length > 0,
+    precios:   () => (preciosDatos.value.cambios || []).length > 0,
+    personal:  () => datosMeseros.value.length > 0 || listadoPersonal.value.length > 0,
+    billetera: () => (reporteBilletera.value.billeteras?.total ?? 0) > 0 || (reporteBilletera.value.recientes ?? []).length > 0,
+    eventos:   () => listadoEventos.value.length > 0,
+  }
+  const hayDatos = VALIDA[pestana.value]
+    ? VALIDA[pestana.value]()
+    : (trendComandas.value.length > 0
+        || datosMeseros.value.length > 0
+        || listadoProductosRanking.value.some(p => p.vecesVendido > 0)
+        || (conteoEfectivo.value + conteoQR.value + conteoBilletera.value) > 0)
   if (!hayDatos) {
     notif.advertencia('Aún no hay datos suficientes para generar el reporte PDF. Espera a que carguen los reportes o ajusta el periodo seleccionado.')
     return
   }
 
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  document.body.appendChild(iframe);
-
+  // El iframe se renderiza FUERA DE PANTALLA a ancho carta (816px = 8.5in),
   const fechaGen = new Date().toLocaleString();
   const logoUrl = `${window.location.origin}/src/activos/imagenes/logo-euphoria.png`;
 
@@ -1657,8 +1659,10 @@ function exportarPDF() {
 
   // Construir el SVG de tendencia a partir de los datos reactivos (no del DOM),
   // así el PDF nunca sale en blanco por desincronización con el render
+  // Los SVG van como <img> con data-URI: el generador de PDF los rasteriza fiel
+  const svgAImg = (svg) => `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" style="width:100%;height:auto" />`
   const svgTendenciaMarkup = trendComandas.value.length > 0
-    ? `<svg viewBox="0 0 360 160" class="svg-tendencia-2d" xmlns="http://www.w3.org/2000/svg">
+    ? `<svg viewBox="0 0 360 160" width="360" height="160" xmlns="http://www.w3.org/2000/svg">
         <line x1="20" y1="20" x2="340" y2="20" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
         <line x1="20" y1="65" x2="340" y2="65" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
         <line x1="20" y1="110" x2="340" y2="110" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
@@ -1678,7 +1682,7 @@ function exportarPDF() {
   const dashQR = (porcentajeQR.value * 3.14159).toFixed(3);
   const dashB = (porcentajeBilletera.value * 3.14159).toFixed(3);
   const svgAnillosMarkup = `
-    <svg viewBox="0 0 200 200" class="svg-torta" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 200 200" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
       <circle cx="100" cy="100" r="50" fill="transparent" stroke="#2ecc71" stroke-width="100" stroke-dasharray="${dashE} 314.159" stroke-dashoffset="0" />
       <circle cx="100" cy="100" r="50" fill="transparent" stroke="#3498db" stroke-width="100" stroke-dasharray="${dashQR} 314.159" stroke-dashoffset="-${dashE}" />
       <circle cx="100" cy="100" r="50" fill="transparent" stroke="#aa3bff" stroke-width="100" stroke-dasharray="${dashB} 314.159" stroke-dashoffset="-${(porcentajeEfectivo.value + porcentajeQR.value) * 3.14159}" />
@@ -1687,7 +1691,7 @@ function exportarPDF() {
   // Columna 1: Métodos de Pago más Usados
   const colMetodos = `
     <div class="resumen-columna">
-      <h3><svg class="pdf-h3-icon" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="3" ry="3"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>Métodos de Pago</h3>
+      <h3><svg class="pdf-h3-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="3" ry="3"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>Métodos de Pago</h3>
       <ul class="resumen-lista">
         <li>
           <span class="punto-resumen" style="background:#2ecc71;"></span>
@@ -1715,7 +1719,7 @@ function exportarPDF() {
 
   const colPersonal = `
     <div class="resumen-columna">
-      <h3><svg class="pdf-h3-icon" viewBox="0 0 24 24" fill="none" stroke="#aa3bff" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Desempeño del Personal</h3>
+      <h3><svg class="pdf-h3-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#aa3bff" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Desempeño del Personal</h3>
       <ul class="resumen-lista">
         ${filasMeserosHTML}
       </ul>
@@ -1732,285 +1736,201 @@ function exportarPDF() {
 
   const colProductos = `
     <div class="resumen-columna">
-      <h3><svg class="pdf-h3-icon" viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>Productos Estrella</h3>
+      <h3><svg class="pdf-h3-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>Productos Estrella</h3>
       <ul class="resumen-lista">
         ${filasProductosHTML}
       </ul>
     </div>
   `;
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Reporte de Rendimiento - Euphoria</title>
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #1a202c;
-          background: #ffffff;
-          margin: 0;
-          padding: 30px;
-          line-height: 1.5;
-        }
-        .header-pdf {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 3px solid #aa3bff;
-          padding-bottom: 15px;
-          margin-bottom: 25px;
-        }
-        .logo-container img {
-          height: 50px;
-          object-fit: contain;
-        }
-        .titulo-reporte {
-          text-align: right;
-        }
-        .titulo-reporte h1 {
-          margin: 0;
-          font-size: 1.5rem;
-          color: #1a202c;
-          letter-spacing: 0.5px;
-          font-weight: 800;
-        }
-        .titulo-reporte p {
-          margin: 3px 0 0 0;
-          font-size: 0.8rem;
-          color: #718096;
-          font-weight: 600;
-        }
-        .kpis-horizontal {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 25px;
-        }
-        .kpi-item {
-          background: #f7fafc;
-          border: 1px solid #edf2f7;
-          border-radius: 12px;
-          padding: 10px;
-          flex: 1;
-          text-align: center;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.01);
-        }
-        .kpi-item h4 {
-          margin: 0;
-          font-size: 0.68rem;
-          color: #718096;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .kpi-item p {
-          margin: 4px 0 0 0;
-          font-size: 1.15rem;
-          color: #aa3bff;
-          font-weight: 800;
-        }
-        .seccion-titulo {
-          font-size: 1.05rem;
-          color: #1a202c;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          margin-top: 25px;
-          margin-bottom: 15px;
-          border-bottom: 2px solid #e2e8f0;
-          padding-bottom: 6px;
-          text-align: left;
-        }
-        .graficos-pdf-flex {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 25px;
-        }
-        .grafico-pdf-card {
-          background: #f7fafc !important;
-          border: 1px solid #edf2f7 !important;
-          border-radius: 16px;
-          padding: 15px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.02);
-          color: #1a202c;
-        }
-        .grafico-pdf-card h3 {
-          margin: 0 0 10px 0;
-          font-size: 0.85rem;
-          color: #4a5568;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          font-weight: 800;
-        }
-        .grafico-pdf-card svg {
-          width: 100% !important;
-          height: auto !important;
-          max-height: 180px;
-          overflow: visible !important;
-        }
-        .resumen-columnas-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-          margin-top: 15px;
-          margin-bottom: 20px;
-        }
-        .resumen-columna {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 20px;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-        }
-        .resumen-columna h3 {
-          margin: 0 0 15px 0;
-          font-size: 0.95rem;
-          color: #aa3bff;
-          border-bottom: 2px solid #edf2f7;
-          padding-bottom: 8px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          font-weight: 800;
-          text-align: left;
-          display: flex;
-          align-items: center;
-        }
-        .pdf-h3-icon {
-          width: 18px;
-          height: 18px;
-          display: inline-block;
-          margin-right: 8px;
-          flex-shrink: 0;
-        }
-        .resumen-lista {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .resumen-lista li {
-          font-size: 0.85rem;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #2d3748;
-        }
-        .punto-resumen {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-        .footer {
-          text-align: center;
-          margin-top: 40px;
-          font-size: 0.72rem;
-          color: #a0aec0;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 12px;
-        }
-        /* Forzar visualización de textos en tonos oscuros en el PDF sobre fondo blanco */
-        svg text, svg .texto-nodo-grafico {
-          fill: #1a202c !important;
-          font-weight: 800 !important;
-          text-shadow: none !important;
-        }
-        svg line {
-          stroke: rgba(0, 0, 0, 0.08) !important;
-        }
-        svg circle[fill="#fff"] {
-          fill: #ffffff !important;
-          stroke: #aa3bff !important;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="header-pdf">
-        <div class="logo-container">
-          <img src="${logoUrl}" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';" />
-          <div id="logo-fallback" style="display:none; font-size: 2rem; font-weight: 900; color: #aa3bff; letter-spacing: 1px;">EUPHORIA</div>
-        </div>
-        <div class="titulo-reporte">
-          <h1>REPORTE DE RENDIMIENTO GENERAL</h1>
-          <p>${rangoFechas}</p>
-          <p>Generado el: ${fechaGen}</p>
-        </div>
-      </div>
+  // ── Cuerpo del informe SEGÚN LA PESTAÑA ACTIVA ──────────────────────────
+  const esc = (s) => String(s ?? '').replace(/</g, '&lt;')
+  const tablaPdf = (cabeceras, filas, vacio = 'Sin datos en este periodo.') => filas.length
+    ? `<table class="tabla-pdf"><thead><tr>${cabeceras.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.map(f => `<tr>${f.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    : `<p class="pdf-vacio">${vacio}</p>`
+  const kpisPdf = (pares) => `<div class="kpis-horizontal">${pares.map(([tt, v]) => `<div class="kpi-item"><h4>${tt}</h4><p>${v}</p></div>`).join('')}</div>`
 
+  const NOMBRES_INFORME = {
+    general: 'INFORME GENERAL DEL NEGOCIO', ventas: 'INFORME DE VENTAS',
+    productos: 'INFORME DE PRODUCTOS E INVENTARIO', precios: 'INFORME DE CAMBIOS DE PRECIOS',
+    personal: 'INFORME DEL PERSONAL', billetera: 'INFORME DE BILLETERA DIGITAL', eventos: 'INFORME DE EVENTOS',
+  }
+  const tituloInforme = NOMBRES_INFORME[pestana.value] || NOMBRES_INFORME.general
+  let cuerpoInforme
+
+  if (pestana.value === 'ventas') {
+    const ticket = ventasTotal.value ? stats.value.ingresosTotales / ventasTotal.value : 0
+    cuerpoInforme = `
+      ${kpisPdf([
+        ['Ingresos del periodo', `Bs. ${stats.value.ingresosTotales.toFixed(2)}`],
+        ['Comandas', ventasTotal.value],
+        ['Ticket promedio', `Bs. ${ticket.toFixed(2)}`],
+      ])}
+      <div class="seccion-titulo">Detalle de ventas (${ventas.value.length} de ${ventasTotal.value} comandas del periodo)</div>
+      ${tablaPdf(['ID', 'Fecha y hora', 'Cliente', 'Atendido por', 'Método', 'Total (Bs)'],
+        ventas.value.map(v => [`#${v.id_comanda}`, formatearFecha(v.fecha_registro),
+          esc(v.usuario_comanda_id_clienteTousuario?.nombres || 'Sin registro / Barra'),
+          esc(v.usuario_comanda_id_meseroTousuario?.nombres || '—'), v.metodo_pago,
+          `<strong>Bs. ${(v.subtotal || 0).toFixed(2)}</strong>`]))}
+      <div class="seccion-titulo">Resumen del periodo</div>
+      <div class="resumen-columnas-grid">${colMetodos}${colPersonal}${colProductos}</div>`
+  } else if (pestana.value === 'productos') {
+    cuerpoInforme = `
+      ${kpisPdf([
+        ['Productos en inventario', stats.value.productos],
+        ['Unidades vendidas', unidadesVendidas.value],
+        [`Stock crítico (≤ ${UMBRAL_STOCK_BAJO})`, productosBajoStock.value.length],
+      ])}
+      <div class="seccion-titulo">Ranking de productos (de más a menos vendidos)</div>
+      ${tablaPdf(['#', 'Producto', 'Categoría', 'Stock', 'Vendido (uds)', 'Ingresos (Bs)'],
+        listadoProductosRanking.value.map((p, i) => [i + 1, esc(p.nombre_producto), esc(p.nombre_categoria),
+          p.stock_actual, p.vecesVendido, `<strong>Bs. ${(p.ingresosGenerados || 0).toFixed(2)}</strong>`]))}
+      ${productosBajoStock.value.length ? `
+        <div class="seccion-titulo">Reponer pronto (stock ≤ ${UMBRAL_STOCK_BAJO})</div>
+        ${tablaPdf(['Producto', 'Stock actual'], productosBajoStock.value.map(p => [esc(p.nombre_producto), `<strong>${p.stock_actual} uds.</strong>`]))}` : ''}`
+  } else if (pestana.value === 'precios') {
+    cuerpoInforme = `
+      ${kpisPdf([
+        ['Cambios de precio', preciosKpis.value.total], ['Subidas', preciosKpis.value.subidas],
+        ['Bajadas', preciosKpis.value.bajadas], ['Hechos por la IA', preciosKpis.value.ia],
+      ])}
+      <div class="seccion-titulo">Historial de cambios del periodo</div>
+      ${tablaPdf(['Fecha', 'Producto', 'Tipo', 'Cambio', 'Origen', 'Usuario'],
+        (preciosDatos.value.cambios || []).map(c => [formatearFechaPrecio(c.fecha_hora), esc(c.producto),
+          c.tipo === 'promocion' ? 'Promoción' : 'Base',
+          `${c.precio_anterior !== null ? `Bs. ${c.precio_anterior.toFixed(2)} → ` : ''}<strong>Bs. ${c.precio_nuevo.toFixed(2)}</strong>`,
+          etiquetaOrigenPrecio(c.origen), esc(c.usuario)]))}`
+  } else if (pestana.value === 'personal') {
+    cuerpoInforme = `
+      ${kpisPdf([['Personal registrado', stats.value.personal], ['Clientes registrados', stats.value.clientes]])}
+      <div class="seccion-titulo">Ventas por mesero</div>
+      ${tablaPdf(['Mesero', 'Total vendido (Bs)', 'Participación'],
+        datosMeseros.value.map(m => [esc(m.nombre), `<strong>Bs. ${m.total.toFixed(2)}</strong>`, `${m.porcentaje}%`]))}
+      <div class="seccion-titulo">Personal registrado</div>
+      ${tablaPdf(['Nombre', 'Correo', 'Rol'],
+        listadoPersonal.value.map(u => [esc(`${u.nombres || ''} ${u.apellidos || ''}`.trim()), esc(u.correo || '—'), esc(u.rol || u.nombre_rol || '—')]))}`
+  } else if (pestana.value === 'billetera') {
+    const b = reporteBilletera.value
+    cuerpoInforme = `
+      ${kpisPdf([
+        ['Billeteras', b.billeteras?.total ?? 0], ['Activas', b.billeteras?.activas ?? 0],
+        ['Saldo circulante', `Bs. ${(b.billeteras?.saldo_circulante ?? 0).toFixed(2)}`],
+        ['Recargas', `${b.recargas?.total_operaciones ?? 0} ops.`],
+        ['Monto recargado', `Bs. ${(b.recargas?.monto_total ?? 0).toFixed(2)}`],
+        ['Consumido', `Bs. ${(b.uso_billetera?.monto_consumido ?? 0).toFixed(2)}`],
+      ])}
+      <div class="seccion-titulo">Últimas recargas</div>
+      ${tablaPdf(['ID', 'Cliente', 'Quién recargó', 'Monto', 'Estado', 'Fecha'],
+        (b.recientes ?? []).map(r => [r.id, esc(r.nombre), r.rol === 5 ? 'Cuenta propia' : 'Cajero',
+          `<strong>Bs. ${(r.monto ?? 0).toFixed(2)}</strong>`, r.estado, formatearFecha(r.fecha)]))}
+      <div class="seccion-titulo">Top clientes por consumo</div>
+      ${tablaPdf(['Cliente', 'Consumo (Bs)'],
+        (b.top_clientes ?? []).map(c => [esc(c.nombre), `<strong>Bs. ${Number(c.total ?? c.monto ?? 0).toFixed(2)}</strong>`]))}`
+  } else if (pestana.value === 'eventos') {
+    cuerpoInforme = `
+      ${kpisPdf([['Eventos', stats.value.eventos], ['Asistencia (últ. evento)', `${stats.value.asistencia} pers.`]])}
+      <div class="seccion-titulo">Eventos y asistencia</div>
+      ${tablaPdf(['Evento', 'Fecha', 'Estado', 'Asistencia'],
+        listadoEventos.value.map(ev => [esc(ev.nombre_evento), formatearFecha(ev.fecha_hora_inicio), esc(ev.estado || '—'), `${ev.asistenciaReal || 0} pers.`]))}`
+  } else {
+    // GENERAL: el informe completo con KPIs, gráficos y resumen gerencial
+    cuerpoInforme = `
       <div class="kpis-horizontal">
-        <div class="kpi-item">
-          <h4>Ventas Totales</h4>
-          <p>Bs. ${stats.value.ingresosTotales.toFixed(0)}</p>
-        </div>
-        <div class="kpi-item">
-          <h4>Clientes</h4>
-          <p>${stats.value.clientes}</p>
-        </div>
-        <div class="kpi-item">
-          <h4>Personal</h4>
-          <p>${stats.value.personal}</p>
-        </div>
-        <div class="kpi-item">
-          <h4>Productos</h4>
-          <p>${stats.value.productos}</p>
-        </div>
-        <div class="kpi-item">
-          <h4>Eventos</h4>
-          <p>${stats.value.eventos}</p>
-        </div>
-        <div class="kpi-item">
-          <h4>Asistencia (Últ. Evento)</h4>
-          <p>${stats.value.asistencia} pers.</p>
-        </div>
+        <div class="kpi-item"><h4>Ventas Totales</h4><p>Bs. ${stats.value.ingresosTotales.toFixed(0)}</p></div>
+        <div class="kpi-item"><h4>Clientes</h4><p>${stats.value.clientes}</p></div>
+        <div class="kpi-item"><h4>Personal</h4><p>${stats.value.personal}</p></div>
+        <div class="kpi-item"><h4>Productos</h4><p>${stats.value.productos}</p></div>
+        <div class="kpi-item"><h4>Eventos</h4><p>${stats.value.eventos}</p></div>
+        <div class="kpi-item"><h4>Asistencia (Últ. Evento)</h4><p>${stats.value.asistencia} pers.</p></div>
       </div>
-
       <div class="seccion-titulo">Análisis y Gráficos Operativos</div>
-      
       <div class="graficos-pdf-flex">
-        <div class="grafico-pdf-card">
-          <h3>Curva de Tendencia de Ventas (2D)</h3>
-          ${svgTendenciaMarkup}
-        </div>
-        <div class="grafico-pdf-card">
-          <h3>Participación por Métodos de Pago</h3>
-          ${svgAnillosMarkup}
-        </div>
+        <div class="grafico-pdf-card"><h3>Curva de Tendencia de Ventas (2D)</h3>${trendComandas.value.length ? svgAImg(svgTendenciaMarkup) : svgTendenciaMarkup}</div>
+        <div class="grafico-pdf-card"><h3>Participación por Métodos de Pago</h3>${svgAImg(svgAnillosMarkup)}</div>
       </div>
-
       <div class="seccion-titulo">Resumen Gerencial del Negocio</div>
+      <div class="resumen-columnas-grid">${colMetodos}${colPersonal}${colProductos}</div>`
+  }
 
-      <div class="resumen-columnas-grid">
-        ${colMetodos}
-        ${colPersonal}
-        ${colProductos}
+  // ── CSS del informe, NAMESPACEADO bajo #informe-pdf (no interfiere con la app) ──
+  const cssInforme = `
+    #informe-pdf { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a202c; background: #ffffff; width: 816px; padding: 0 13mm; line-height: 1.45; font-size: 12px; }
+    #informe-pdf, #informe-pdf * { box-sizing: border-box; }
+    #informe-pdf .header-pdf { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #aa3bff; padding-bottom: 12px; }
+    #informe-pdf .logo-container img { height: 42px; object-fit: contain; }
+    #informe-pdf .titulo-reporte h1 { margin: 0; font-size: 1.3rem; color: #1a202c; letter-spacing: .4px; font-weight: 800; }
+    #informe-pdf .meta-informe { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .72rem; color: #64748b; font-weight: 600; padding: 8px 2px; border-bottom: 1px solid #e2e8f0; margin-bottom: 20px; }
+    #informe-pdf .meta-informe strong { color: #334155; font-weight: 800; }
+    #informe-pdf .kpis-horizontal { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 22px; page-break-inside: avoid; }
+    #informe-pdf .kpi-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 8px; flex: 1; text-align: center; }
+    #informe-pdf .kpi-item h4 { margin: 0; font-size: .68rem; color: #718096; text-transform: uppercase; letter-spacing: .5px; }
+    #informe-pdf .kpi-item p { margin: 4px 0 0; font-size: 1.15rem; color: #aa3bff; font-weight: 800; }
+    #informe-pdf .seccion-titulo { font-size: 1rem; color: #1a202c; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; margin: 22px 0 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; page-break-after: avoid; }
+    #informe-pdf .graficos-pdf-flex { display: flex; gap: 18px; margin-bottom: 22px; page-break-inside: avoid; }
+    #informe-pdf .grafico-pdf-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; flex: 1; text-align: center; color: #1a202c; }
+    #informe-pdf .grafico-pdf-card h3 { margin: 0 0 10px; font-size: .82rem; color: #4a5568; text-transform: uppercase; letter-spacing: .5px; font-weight: 800; }
+    #informe-pdf .grafico-pdf-card img { width: 100%; height: auto; max-height: 190px; object-fit: contain; }
+    #informe-pdf .resumen-columnas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 12px 0 18px; page-break-inside: avoid; }
+    #informe-pdf .resumen-columna { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+    #informe-pdf .resumen-columna h3 { margin: 0 0 12px; font-size: .85rem; color: #aa3bff; border-bottom: 2px solid #edf2f7; padding-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; font-weight: 800; display: flex; align-items: center; }
+    #informe-pdf .pdf-h3-icon { width: 16px; height: 16px; margin-right: 8px; flex-shrink: 0; }
+    #informe-pdf .resumen-lista { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    #informe-pdf .resumen-lista li { font-size: .8rem; display: flex; align-items: center; gap: 8px; color: #2d3748; }
+    #informe-pdf .punto-resumen { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    #informe-pdf .tabla-pdf { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: .74rem; }
+    #informe-pdf .tabla-pdf th { background: #f1f5f9; color: #334155; text-transform: uppercase; font-size: .62rem; letter-spacing: .5px; text-align: left; padding: 7px 9px; border: 1px solid #dbe2ea; }
+    #informe-pdf .tabla-pdf td { padding: 6px 9px; border: 1px solid #e6ebf1; color: #1a202c; }
+    #informe-pdf .tabla-pdf tr:nth-child(even) td { background: #f9fafb; }
+    #informe-pdf .tabla-pdf tr { page-break-inside: avoid; }
+    #informe-pdf .pdf-vacio { color: #718096; font-size: .8rem; }
+    #informe-pdf .footer { text-align: center; margin-top: 30px; font-size: .7rem; color: #a0aec0; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+  `
+
+  const contenidoInforme = `
+    <div id="informe-pdf">
+      <div class="header-pdf">
+        <div class="logo-container"><img src="${logoUrl}" /></div>
+        <div class="titulo-reporte"><h1>${tituloInforme}</h1></div>
       </div>
-
-      <div class="footer">
-        Este documento es un informe confidencial de toma de decisiones de Euphoria. Sincronizado dinámicamente con la base de datos central.
+      <div class="meta-informe">
+        <span><strong>${rangoFechas}</strong></span>
+        ${eventoFiltro.value ? `<span>Evento: <strong>${nombreEventoFiltro.value}</strong></span>` : ''}
+        <span>Generado: <strong>${fechaGen}</strong></span>
+        <span>Documento interno — Euphoria</span>
       </div>
-    </body>
-    </html>
-  `;
-  
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
+      ${cuerpoInforme}
+      <div class="footer">Este documento es un informe confidencial de toma de decisiones de Euphoria. Sincronizado dinámicamente con la base de datos central.</div>
+    </div>`
 
-  // Esperar a que cargue el contenido y gatillar el diálogo de impresión directamente sin abrir pestañas vacías
-  iframe.contentWindow.onload = function() {
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 1500);
-  };
+  // Contenedor oculto EN el documento principal: el generador ve los estilos reales
+  const estilo = document.createElement('style')
+  estilo.textContent = cssInforme
+  document.head.appendChild(estilo)
+  const lienzo = document.createElement('div')
+  lienzo.style.cssText = 'position:absolute;left:-10000px;top:0;background:#fff'
+  lienzo.innerHTML = contenidoInforme
+  document.body.appendChild(lienzo)
+
+  notif.info('Generando el PDF del informe…')
+  const nombreArchivo = `Euphoria - ${tituloInforme.toLowerCase().replace(/informe de |informe /g, 'informe ')} - ${new Date().toISOString().slice(0, 10)}.pdf`
+  try {
+    const html2pdf = (await import('html2pdf.js')).default
+    await html2pdf().set({
+      margin: [12, 0, 14, 0], // márgenes verticales por página; los laterales van en el documento
+      filename: nombreArchivo,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] },
+    }).from(lienzo.firstElementChild).save()
+    notif.exito('Informe descargado en PDF.')
+  } catch (e) {
+    console.error('Error generando el PDF:', e)
+    notif.error('No se pudo generar el PDF. Intenta de nuevo.')
+  } finally {
+    document.body.removeChild(lienzo)
+    document.head.removeChild(estilo)
+  }
 }
 
 // KeepAlive: primera activación con spinner, las siguientes en silencio
@@ -2046,7 +1966,7 @@ async function cargarReportes(silencioso = false) {
       stats.value.productos = resProductosRaw.length || (resProductosRaw.productos ? resProductosRaw.productos.length : 0)
       
       // Filtrar y guardar los productos con stock crítico bajo el umbral único para las alertas del Dashboard
-      productosBajoStock.value = resProductosRaw.filter(p => p.stock_actual < UMBRAL_STOCK_BAJO)
+      productosBajoStock.value = resProductosRaw.filter(p => p.stock_actual <= UMBRAL_STOCK_BAJO)
 
       resProductosRaw.forEach(p => {
         productosMap[p.id_producto] = p.nombre_categoria || 'Otros'

@@ -25,7 +25,7 @@
         </div>
         <div class="metrica metrica-riesgo">
           <dt class="metrica-label">Stock bajo</dt>
-          <dd class="metrica-valor">{{ productos.filter(p => p.stock_actual < 5).length }}</dd>
+          <dd class="metrica-valor">{{ productos.filter(p => p.stock_actual <= 30).length }}</dd>
         </div>
         <div class="metrica">
           <dt class="metrica-label">Categorías</dt>
@@ -72,7 +72,7 @@
               <span v-if="p.estado_promocion" class="precio-base-tachado">Bs. {{ p.precio_base }}</span>
               <span class="precio-actual"><span class="precio-moneda">Bs.</span>{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
             </div>
-            <span class="producto-stock" :class="p.stock_actual < 5 ? 'stock-bajo' : ''">
+            <span class="producto-stock" :class="p.stock_actual <= 30 ? 'stock-bajo' : ''">
               <span class="stock-punto" aria-hidden="true"></span>{{ p.stock_actual }} en stock
             </span>
           </div>
@@ -153,12 +153,23 @@
                 <li v-for="c in componentesCombo" :key="c.id_producto_hijo" class="combo-item">
                   <span class="combo-cant-badge">{{ c.cantidad }}×</span>
                   <span class="combo-nombre">{{ c.nombre_producto }}</span>
+                  <span class="combo-precio-item">Bs. {{ (precioDe(c.id_producto_hijo) * c.cantidad).toFixed(2) }}</span>
                   <button type="button" class="btn-quitar-combo" aria-label="Quitar" @click="quitarComponente(c.id_producto_hijo)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </li>
               </ul>
               <p v-else class="combo-vacio">Aún no agregaste productos al combo.</p>
+
+              <!-- Precio sugerido autocalculado según los componentes -->
+              <div v-if="componentesCombo.length" class="combo-precio-sugerido">
+                <div class="cps-info">
+                  <span class="cps-linea">Por separado: <strong>Bs. {{ sumaCombo.toFixed(2) }}</strong></span>
+                  <span class="cps-linea cps-destacado">Precio sugerido (−{{ descuentoIA }}%): <strong>Bs. {{ precioSugerido.toFixed(2) }}</strong></span>
+                </div>
+                <button type="button" class="btn btn-sm btn-secundario" @click="usarPrecioSugerido">Usar sugerido</button>
+              </div>
+              <p v-if="avisoPrecioCombo" class="combo-aviso-precio">{{ avisoPrecioCombo }}</p>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secundario" @click="cerrarModal">Cancelar</button>
@@ -286,6 +297,44 @@ function quitarComponente(idHijo) {
   componentesCombo.value = componentesCombo.value.filter(c => c.id_producto_hijo !== idHijo)
 }
 
+// ── Precio sugerido del combo (autocalculado según componentes) ──────────
+// Usa el mismo % de descuento configurado para la IA (tabla configuracion).
+const descuentoIA = ref(10)
+clienteHttp.get('/recomendaciones/config')
+  .then(c => { if (c?.descuento_combos !== undefined) descuentoIA.value = Number(c.descuento_combos) })
+  .catch(() => { /* si falla, queda el 10% por defecto */ })
+
+function precioDe(idProducto) {
+  const p = productos.value.find(x => x.id_producto === idProducto)
+  return p ? parseFloat(p.precio_base) || 0 : 0
+}
+const sumaCombo = computed(() =>
+  componentesCombo.value.reduce((s, c) => s + precioDe(c.id_producto_hijo) * c.cantidad, 0)
+)
+// Redondeo a precio "atractivo" (.00 .40 .50 .60 .90), igual que el módulo de IA
+function precioAtractivo(p) {
+  const entero = Math.floor(p)
+  const dec = p - entero
+  let mejor = 0, dmin = Infinity
+  for (const o of [0.0, 0.4, 0.5, 0.6, 0.9]) {
+    const d = Math.abs(dec - o)
+    if (d < dmin) { dmin = d; mejor = o }
+  }
+  return Math.round((entero + mejor) * 100) / 100
+}
+const precioSugerido = computed(() => precioAtractivo(sumaCombo.value * (1 - descuentoIA.value / 100)))
+function usarPrecioSugerido() { form.precio_base = precioSugerido.value }
+
+// Aviso en vivo si el precio puesto no cuadra con los componentes
+const avisoPrecioCombo = computed(() => {
+  if (!form.es_combo || !componentesCombo.value.length) return ''
+  const p = parseFloat(form.precio_base)
+  if (!(p > 0) || !(sumaCombo.value > 0)) return ''
+  if (p > sumaCombo.value) return `Ojo: el precio (Bs. ${p.toFixed(2)}) es MAYOR que comprar todo por separado (Bs. ${sumaCombo.value.toFixed(2)}) — nadie lo elegiría.`
+  if (p < sumaCombo.value * 0.5) return `Ojo: el precio (Bs. ${p.toFixed(2)}) está muy por debajo del valor real (Bs. ${sumaCombo.value.toFixed(2)}) — más del 50% de descuento.`
+  return ''
+})
+
 async function cargarDatos() {
   cargando.value = true
   try {
@@ -394,6 +443,16 @@ async function guardarProducto(){
     if (!(promo > 0)) { notif.advertencia('Para activar la promoción, define un precio de promoción mayor a 0.'); return }
     if (promo >= base) { notif.advertencia('El precio de promoción debe ser menor al precio base.'); return }
   }
+  // Coherencia de precio del combo: si está muy desviado de sus componentes, pedir confirmación
+  if (form.es_combo && componentesCombo.value.length && avisoPrecioCombo.value) {
+    const ok = await notif.confirmar({
+      variante: 'peligro',
+      titulo: 'Precio del combo incoherente',
+      mensaje: `${avisoPrecioCombo.value} El precio sugerido es Bs. ${precioSugerido.value.toFixed(2)}. ¿Guardar de todas formas?`,
+      textoConfirmar: 'Guardar igual',
+    })
+    if (!ok) return
+  }
   // Un combo debe incluir al menos un producto.
   if (form.es_combo && !componentesCombo.value.length) {
     notif.advertencia('Un combo debe incluir al menos un producto. Agrega sus componentes.'); return
@@ -427,6 +486,12 @@ async function guardarProducto(){
     cerrarModal()
     cargarDatos()
     notif.exito(productoEditando.value ? 'Producto actualizado' : 'Producto creado')
+    // Alerta INMEDIATA de stock bajo (sin esperar el chequeo periódico de 10 min).
+    // Aplica también a combos: si el admin les gestiona stock manual, cuentan igual.
+    const stockGuardado = parseInt(form.stock_actual)
+    if (Number.isFinite(stockGuardado) && stockGuardado <= 30) {
+      notif.advertencia(`REPONER STOCK — "${form.nombre_producto}" quedó con solo ${stockGuardado} unidad(es) (umbral: 30).`)
+    }
   } catch (error) { notif.error(error.error || 'Error al guardar producto') }
 }
 
@@ -551,6 +616,15 @@ async function eliminarCategoria(cat) {
 .btn-quitar-combo{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:none;color:var(--texto-desactivado);border-radius:var(--radio-sm);cursor:pointer;transition:color .15s ease,background-color .15s ease}
 .btn-quitar-combo:hover{color:var(--color-error);background:rgba(239,68,68,.12)}
 .combo-vacio{font-size:.8rem;color:var(--texto-desactivado);font-style:italic;margin:.25rem 0 0}
+.combo-precio-item{flex-shrink:0;font-size:.8rem;font-weight:700;color:var(--texto-secundario);font-variant-numeric:tabular-nums}
+.combo-precio-sugerido{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:.6rem;padding:.6rem .8rem;border-radius:var(--radio-md);background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.3)}
+.cps-info{display:flex;flex-direction:column;gap:2px}
+.cps-linea{font-size:.8rem;color:var(--texto-secundario)}
+.cps-linea strong{color:var(--texto-principal)}
+.cps-destacado{color:var(--morado-hover)}
+.cps-destacado strong{color:var(--color-exito);font-size:.95rem}
+.combo-precio-sugerido .btn{flex-shrink:0}
+.combo-aviso-precio{margin:.5rem 0 0;font-size:.8rem;font-weight:600;color:var(--color-alerta);line-height:1.4}
 .icono-busqueda{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--texto-secundario);pointer-events:none;transition:color var(--trans-rapida)}
 .campo-busqueda:focus-within .icono-busqueda{color:var(--morado-brillante)}
 .campo-con-icono{padding-left:38px;width:100%}

@@ -93,6 +93,76 @@
           <h2 class="navbar-titulo">{{ tituloPagina }}</h2>
         </div>
         <div class="navbar-der">
+          <!-- Centro de notificaciones: stock bajo + resumen del negocio -->
+          <div class="notif-centro">
+            <button type="button" class="btn-campana" :class="{ 'con-pendientes': totalPendientes }" title="Notificaciones" @click.stop="alternarNotif">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span v-if="totalPendientes" class="campana-badge">{{ totalPendientes }}</span>
+            </button>
+            <transition name="notif-fade">
+              <div v-if="notifAbierto" class="notif-panel" @click.stop>
+                <div class="notif-cab">
+                  <span>Notificaciones</span>
+                  <span class="notif-hora">actualizado {{ notifHora }}</span>
+                </div>
+
+                <!-- Motor de IA caído: crítico, el mesero se queda sin sugerencias -->
+                <div v-if="motorIACaido" class="notif-sec">
+                  <p class="notif-sec-titulo critico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Motor de IA fuera de línea
+                  </p>
+                  <RouterLink to="/administrador/ia" class="notif-item critico-fondo" @click="notifAbierto = false">
+                    <span class="notif-item-nombre">El mesero no recibe sugerencias. Revisar el servicio.</span>
+                  </RouterLink>
+                </div>
+
+                <div class="notif-sec">
+                  <p class="notif-sec-titulo" :class="stockBajoLista.length ? 'alerta' : ''">
+                    <svg v-if="stockBajoLista.length" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M20 6L9 17l-5-5"/></svg>
+                    Inventario (umbral: 30 uds.)
+                  </p>
+                  <ul v-if="stockBajoLista.length" class="notif-lista">
+                    <li v-for="p in stockBajoLista" :key="p.id_producto" class="notif-item">
+                      <span class="notif-item-nombre">{{ p.nombre_producto }}</span>
+                      <span class="notif-item-valor" :class="{ critico: p.stock_actual <= 10 }">{{ p.stock_actual }} uds.</span>
+                    </li>
+                  </ul>
+                  <p v-else class="notif-vacio ok">Todo el stock está sano — nada que reponer.</p>
+                </div>
+
+                <div class="notif-sec">
+                  <p class="notif-sec-titulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Operación en curso
+                  </p>
+                  <div class="notif-kpis">
+                    <div class="notif-kpi"><span class="nk-label">Pedidos pendientes</span><span class="nk-valor">{{ pedidosEnCurso.pendientes }}</span></div>
+                    <div class="notif-kpi"><span class="nk-label">En preparación</span><span class="nk-valor">{{ pedidosEnCurso.preparando }}</span></div>
+                  </div>
+                </div>
+
+                <div class="notif-sec">
+                  <p class="notif-sec-titulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                    Resumen del negocio
+                  </p>
+                  <div class="notif-kpis">
+                    <div class="notif-kpi"><span class="nk-label">Ventas</span><span class="nk-valor">Bs. {{ resumenNotif.ingresos.toFixed(0) }}</span></div>
+                    <div class="notif-kpi"><span class="nk-label">Comandas</span><span class="nk-valor">{{ resumenNotif.comandas }}</span></div>
+                    <div class="notif-kpi"><span class="nk-label">Más vendido</span><span class="nk-valor nk-texto">{{ resumenNotif.topProducto }}</span></div>
+                    <div class="notif-kpi"><span class="nk-label">Método principal</span><span class="nk-valor nk-texto">{{ resumenNotif.metodoTop }}</span></div>
+                  </div>
+                </div>
+
+                <RouterLink to="/administrador/reportes" class="notif-ver-reportes" @click="notifAbierto = false">
+                  Ver reportes completos
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>
+                </RouterLink>
+              </div>
+            </transition>
+          </div>
           <span class="badge-online">
             <span class="badge-online-punto" />
             En línea
@@ -143,13 +213,17 @@ function actualizarAncho() {
 const notif = useNotificaciones()
 const UMBRAL_STOCK = 30
 let intervaloStock = null
-async function revisarStockBajo() {
+// La lista de stock bajo alimenta también el CENTRO DE NOTIFICACIONES (campana)
+const stockBajoLista = ref([])
+async function revisarStockBajo(conToast = true) {
   try {
     const res = await clienteHttp.get('/productos')
+    // Incluye COMBOS: si el admin les gestiona stock manual, también deben alertar
     const lista = (Array.isArray(res) ? res : (res.productos || []))
-      .filter(p => !p.es_combo && p.stock_actual <= UMBRAL_STOCK)
+      .filter(p => p.stock_actual <= UMBRAL_STOCK)
       .sort((a, b) => a.stock_actual - b.stock_actual)
-    if (lista.length) {
+    stockBajoLista.value = lista
+    if (conToast && lista.length) {
       const detalle = lista.slice(0, 4).map(p => `${p.nombre_producto}: ${p.stock_actual} uds.`).join(' · ')
       notif.advertencia(
         `REPONER STOCK — ${lista.length} producto(s) en ${UMBRAL_STOCK} unidades o menos. ${detalle}${lista.length > 4 ? ' y más...' : ''}`
@@ -158,13 +232,62 @@ async function revisarStockBajo() {
   } catch { /* sin bloqueo si el backend no responde */ }
 }
 
+// ── Centro de notificaciones (campana del navbar) ────────────────────────
+const notifAbierto = ref(false)
+const notifHora = ref('')
+const resumenNotif = ref({ ingresos: 0, comandas: 0, topProducto: '—', metodoTop: '—' })
+const motorIACaido = ref(false)
+const pedidosEnCurso = ref({ pendientes: 0, preparando: 0 })
+// La bolita cuenta TODO lo que requiere acción del dueño: stock bajo + motor caído
+const totalPendientes = computed(() => stockBajoLista.value.length + (motorIACaido.value ? 1 : 0))
+async function cargarResumenNotif() {
+  try {
+    const r = await clienteHttp.get('/comandas/resumen-ventas')
+    const metodos = r.por_metodo || []
+    const top = metodos.length ? metodos.reduce((m, x) => (x.cantidad > m.cantidad ? x : m)) : null
+    resumenNotif.value = {
+      ingresos: r.totales?.ingresos ?? 0,
+      comandas: r.totales?.num_comandas ?? 0,
+      topProducto: r.ranking_productos?.[0]?.nombre || '—',
+      metodoTop: top ? top.metodo : '—',
+    }
+    notifHora.value = new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })
+  } catch { /* el panel muestra los últimos datos conocidos */ }
+  // Estado del motor de IA (si está caído, es algo que el dueño debe resolver)
+  try {
+    const est = await clienteHttp.get('/recomendaciones/estado')
+    motorIACaido.value = !est?.en_linea
+  } catch { motorIACaido.value = true }
+  // Pedidos en curso (informativo para el dueño)
+  try {
+    const [pen, pre] = await Promise.all([
+      clienteHttp.get('/comandas?estado=Pendiente&pagina=1&limite=1'),
+      clienteHttp.get('/comandas?estado=Preparando&pagina=1&limite=1'),
+    ])
+    pedidosEnCurso.value = { pendientes: pen.total ?? 0, preparando: pre.total ?? 0 }
+  } catch { /* se mantienen los últimos valores */ }
+}
+function alternarNotif() {
+  notifAbierto.value = !notifAbierto.value
+  if (notifAbierto.value) {
+    // Al abrir, se refresca todo en silencio (sin toast repetido)
+    revisarStockBajo(false)
+    cargarResumenNotif()
+  }
+}
+function cerrarNotifFuera() { notifAbierto.value = false }
+
 onMounted(() => {
   window.addEventListener('resize', actualizarAncho)
+  document.addEventListener('click', cerrarNotifFuera)
   revisarStockBajo()
-  intervaloStock = setInterval(revisarStockBajo, 10 * 60 * 1000)
+  cargarResumenNotif()
+  // El chequeo periódico refresca stock Y el estado del resto (motor IA, pedidos)
+  intervaloStock = setInterval(() => { revisarStockBajo(); cargarResumenNotif() }, 10 * 60 * 1000)
 })
 onUnmounted(() => {
   window.removeEventListener('resize', actualizarAncho)
+  document.removeEventListener('click', cerrarNotifFuera)
   if (intervaloStock) clearInterval(intervaloStock)
 })
 
@@ -607,6 +730,94 @@ function cerrar() {
   box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
   flex-shrink: 0;
 }
+/* ─── Centro de notificaciones ──────────────────────────────────────────── */
+.notif-centro { position: relative; }
+.btn-campana {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--borde-sutil);
+  background: var(--fondo-tarjeta);
+  color: var(--texto-secundario);
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, transform .18s ease;
+}
+.btn-campana:hover { border-color: var(--morado-brillante); color: var(--texto-principal); transform: translateY(-1px); }
+.campana-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  color: #fff; font-size: .68rem; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, .5);
+}
+.notif-panel {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  width: 340px; max-height: 70vh; overflow-y: auto;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-lg);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55), 0 0 0 1px rgba(168, 85, 247, .12);
+  z-index: 200;
+  padding: 14px;
+}
+.notif-cab {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 800; font-size: .95rem; color: var(--texto-principal);
+  padding-bottom: 10px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.notif-hora { font-size: .7rem; font-weight: 500; color: var(--texto-desactivado); }
+.notif-sec { margin-bottom: 12px; }
+.notif-sec-titulo {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 8px; font-size: .72rem; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--texto-secundario);
+}
+.notif-sec-titulo.alerta { color: var(--color-alerta); }
+.notif-sec-titulo.critico { color: var(--color-error); }
+.notif-item.critico-fondo {
+  background: rgba(239, 68, 68, .08); border-color: rgba(239, 68, 68, .3);
+  text-decoration: none; color: inherit; cursor: pointer;
+}
+.notif-item.critico-fondo:hover { background: rgba(239, 68, 68, .15); }
+.notif-vacio.ok { color: var(--color-exito); font-style: normal; font-weight: 600; }
+.btn-campana.con-pendientes { border-color: rgba(236, 72, 153, .55); color: var(--texto-principal); }
+.notif-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.notif-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radio-md);
+  background: rgba(245, 158, 11, .07); border: 1px solid rgba(245, 158, 11, .18);
+}
+.notif-item-nombre { font-size: .82rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-item-valor { flex-shrink: 0; font-size: .8rem; font-weight: 800; color: var(--color-alerta); }
+.notif-item-valor.critico { color: var(--color-error); }
+.notif-vacio { margin: 0; font-size: .8rem; color: var(--texto-desactivado); font-style: italic; }
+.notif-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.notif-kpi {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border-radius: var(--radio-md);
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil);
+}
+.nk-label { font-size: .64rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--texto-desactivado); }
+.nk-valor { font-size: 1rem; font-weight: 800; color: var(--texto-principal); font-family: var(--fuente-titulo); }
+.nk-valor.nk-texto { font-size: .8rem; line-height: 1.25; }
+.notif-ver-reportes {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px; border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, .12); border: 1px solid rgba(168, 85, 247, .3);
+  color: var(--morado-hover); font-size: .82rem; font-weight: 700; text-decoration: none;
+  transition: background .18s ease;
+}
+.notif-ver-reportes:hover { background: rgba(168, 85, 247, .2); }
+.notif-fade-enter-active, .notif-fade-leave-active { transition: opacity .16s ease, transform .16s ease; }
+.notif-fade-enter-from, .notif-fade-leave-to { opacity: 0; transform: translateY(-6px); }
+@media (max-width: 480px) {
+  .notif-panel { position: fixed; top: 62px; right: 10px; left: 10px; width: auto; }
+}
+
 .navbar-titulo {
   font-size: 1.22rem;
   font-weight: 700;
