@@ -231,8 +231,16 @@ router.put('/:id', subirImagenEvento.single('imagen'), async (req, res) => {
     const id = Number(req.params.id)
     const { nombre_evento, descripcion, fecha_hora_inicio, fecha_hora_fin, tipo_evento } = req.body
 
-    // Validar que la fecha de fin sea posterior a la de inicio (cuando ambas se envían)
-    if (fecha_hora_inicio && fecha_hora_fin && new Date(fecha_hora_fin) <= new Date(fecha_hora_inicio)) {
+    // Evento actual: necesario para validar la integridad temporal aunque solo se edite UNA fecha
+    const eventoActual = await prisma.evento.findUnique({ where: { id_evento: id } })
+    if (!eventoActual) return res.status(404).json({ error: 'Evento no encontrado' })
+
+    // Valores efectivos tras el merge (lo que llega, o lo que ya estaba)
+    const inicioEfectivo = fecha_hora_inicio ? new Date(fecha_hora_inicio) : eventoActual.fecha_hora_inicio
+    const finEfectivo = fecha_hora_fin !== undefined
+      ? (fecha_hora_fin ? new Date(fecha_hora_fin) : null)
+      : eventoActual.fecha_hora_fin
+    if (inicioEfectivo && finEfectivo && finEfectivo <= inicioEfectivo) {
       return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio' })
     }
 
@@ -279,6 +287,14 @@ router.patch('/:id/estado', async (req, res) => {
     // Un evento Terminado no puede revivir a un estado previo (cierre definitivo).
     if (actual.estado === 'terminado' && estado !== 'terminado') {
       return res.status(400).json({ error: 'Un evento terminado no puede volver a un estado anterior.' })
+    }
+
+    // Un evento cuya fecha ya pasó no puede volver a Planificación ni Promoción
+    // (misma regla que el frontend, validada también aquí por seguridad).
+    const fechaRef = actual.fecha_hora_fin || actual.fecha_hora_inicio
+    const expirado = fechaRef && new Date(fechaRef).getTime() < Date.now()
+    if (expirado && (estado === 'planificacion' || estado === 'promocion') && estado !== actual.estado) {
+      return res.status(400).json({ error: 'La fecha del evento ya pasó: no puede volver a Planificación ni Promoción.' })
     }
 
     const actualizado = await prisma.evento.update({

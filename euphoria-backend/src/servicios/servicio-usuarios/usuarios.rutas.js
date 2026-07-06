@@ -155,8 +155,9 @@ router.get('/', async (req, res) => {
       },
       include: { rol: { select: { nombre_rol: true } } },
       orderBy: { id_usuario: 'desc' },
-      // El Administrador ve el catálogo completo; Mesero/Bartender solo un tope para el POS
-      take: rolUsuario === 'Administrador' ? 200 : 20
+      // El Administrador ve el catálogo COMPLETO (paginación y métricas correctas en el front);
+      // Mesero/Bartender solo un tope para el buscador del POS.
+      ...(rolUsuario === 'Administrador' ? {} : { take: 20 })
     })
 
     // El Administrador ve datos completos (sin hashes); Mesero/Bartender solo lo mínimo

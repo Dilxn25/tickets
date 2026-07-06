@@ -26,7 +26,9 @@
           alt="Euphoria"
           class="sidebar-logo-img sidebar-logo-grande"
         />
-        <span v-else class="sidebar-logo-mono" role="img" aria-label="Euphoria" />
+        <span v-else class="sidebar-logo-mono" role="img" aria-label="Euphoria">
+          <svg class="logo-mono-e" viewBox="0 0 240 265" aria-hidden="true"><defs><linearGradient id="grad-logo-e" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="0.5" stop-color="#A855F7"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs><path d="M109 39L96 39L95 40L90 41L85 44L76 54L72 62L72 64L70 68L70 71L69 72L69 75L68 76L68 83L67 84L67 109L68 110L68 118L69 119L69 124L70 125L70 129L71 130L71 134L74 142L74 145L81 163L84 162L102 144L106 138L133 112L139 104L157 87L157 85L154 81L152 76L150 73L148 72L148 70L146 67L142 64L142 62L125 46L113 40L110 40Z M108 54L109 55L111 55L112 56L115 57L117 59L118 59L132 73L132 74L137 80L137 86L126 97L126 98L125 99L124 99L121 102L121 103L91 133L87 133L86 132L86 130L85 129L85 125L84 124L84 121L83 120L83 112L82 111L82 83L83 82L83 76L84 75L84 72L85 71L85 69L86 68L86 67L87 66L89 61L95 55L96 55L97 54Z M100 7L74 15L58 24L40 39L25 58L15 78L8 103L7 153L12 175L23 200L35 218L52 235L91 255L137 258L161 252L181 242L210 214L223 191L233 152L232 122L218 76L154 141L160 163L160 191L156 201L148 208L138 208L125 201L110 185L107 176L215 63L189 31L164 15L131 6Z M102 22L130 21L154 27L182 44L195 60L195 64L87 176L99 195L116 213L138 223L152 222L163 216L173 200L176 176L172 144L208 107L214 108L217 121L217 159L211 181L201 201L191 215L178 226L159 237L138 243L116 244L96 241L62 224L46 209L36 193L22 153L22 108L28 86L39 63L58 42L70 34Z" fill="url(#grad-logo-e)" fill-rule="evenodd"/></svg>
+        </span>
       </div>
 
       <!-- Navegación -->
@@ -319,55 +321,28 @@ function cerrar() {
 }
 .sidebar-logo-grande { height: 46px; width: auto; max-width: 182px; }
 /* Monograma para el sidebar colapsado (el wordmark no cabe en 76px).
-   Acabado negro metalizado: acero oscuro con reflejo superior y bisel. */
+   La "e" ES la del logo (SVG trazado del glifo real que cargó el usuario),
+   con el mismo acabado NEÓN del logo grande: sin recuadro, glow morado/rosa. */
 .sidebar-logo-mono {
   position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--fuente-titulo);
-  font-weight: 800;
-  font-size: 1.55rem;
-  overflow: hidden;
-  background:
-    linear-gradient(158deg, #3a3a40 0%, #202024 34%, #0c0c0f 72%, #17171b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
-  transition: transform 0.34s var(--ease-suave), box-shadow 0.3s ease;
-  /* "E" con degradado plateado metálico */
-  color: transparent;
-  background-clip: padding-box;
+  transition: transform 0.34s var(--ease-suave), filter 0.3s ease;
 }
-/* Brillo diagonal que cruza el metal */
-.sidebar-logo-mono::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(140deg, rgba(255,255,255,0.16) 0%, transparent 42%);
-  pointer-events: none;
-}
-.sidebar-logo-mono::after {
-  content: "E";
-  position: relative;
-  z-index: 1;
-  background: linear-gradient(180deg, #f4f4f8 0%, #c8c8d0 45%, #85858f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+.logo-mono-e {
+  width: 42px;
+  height: 42px;
+  /* Trazo con el degradado de marca (mismo que el wordmark) recortado al path */
+  color: var(--morado-brillante);
+  fill: url(#grad-logo-e);
+  filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.65)) drop-shadow(0 0 18px rgba(236, 72, 153, 0.35));
 }
 .sidebar-logo-mono:hover {
-  transform: scale(1.06);
-  box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  transform: scale(1.08);
+}
+.sidebar-logo-mono:hover .logo-mono-e {
+  filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 22px rgba(236, 72, 153, 0.5));
 }
 
 /* ─── Nav ───────────────────────────────────────────────────────────────── */

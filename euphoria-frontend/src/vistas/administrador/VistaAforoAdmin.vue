@@ -268,8 +268,31 @@ onActivated(async () => {
   socket.on('aforo_actualizado', (resumen) => {
     if (resumen.id_evento !== idEventoSel.value) return
     const i = zonas.value.findIndex(z => z.id_zona === resumen.id_zona)
-    if (i >= 0) zonas.value[i] = { ...zonas.value[i], ...resumen }
+    if (i >= 0) {
+      // Solo se actualizan EN VIVO los campos de ocupación (el socket manda aforo_actual).
+      // Se preserva reservado/disponibles/mesas del GET (otra base de cálculo) para no
+      // pisar esos números con un criterio distinto y evitar que "salten".
+      zonas.value[i] = {
+        ...zonas.value[i],
+        ocupado: resumen.aforo_actual,
+        aforo_actual: resumen.aforo_actual,
+        porcentaje: resumen.porcentaje,
+        estado: resumen.estado,
+      }
+    }
     recomputar()
+  })
+
+  // Cambio de estado de una mesa (reserva/liberación): recolorea el mapa en vivo
+  socket.on('mesa_actualizada', ({ id_zona, id_mesa, estado }) => {
+    const iz = zonas.value.findIndex(z => z.id_zona === id_zona)
+    if (iz < 0) return
+    const mesas = zonas.value[iz].mesas || []
+    const im = mesas.findIndex(m => m.id_mesa === id_mesa)
+    if (im >= 0) {
+      mesas[im] = { ...mesas[im], estado_ocupacion: estado }
+      zonas.value[iz] = { ...zonas.value[iz], mesas: [...mesas] }
+    }
   })
 
   if (!yaCargado) {

@@ -627,6 +627,103 @@
       </div>
     </div>
 
+    <!-- ============ PESTAÑA: PRECIOS (Fase 8) ============ -->
+    <div v-if="pestana === 'precios'" class="rep-panel fade-in">
+      <div class="rep-kpis-inline escalonar">
+        <div class="kbi-card kbi-morado">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Cambios de precio</span><span class="kbi-valor">{{ preciosKpis.total }}</span></div>
+        </div>
+        <div class="kbi-card kbi-verde">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Subidas</span><span class="kbi-valor">{{ preciosKpis.subidas }}</span></div>
+        </div>
+        <div class="kbi-card kbi-rojo">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Bajadas</span><span class="kbi-valor">{{ preciosKpis.bajadas }}</span></div>
+        </div>
+        <div class="kbi-card kbi-amarillo">
+          <div class="kbi-icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"></path><path d="M19 14l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"></path></svg></div>
+          <div class="kbi-info"><span class="kbi-label">Hechos por la IA</span><span class="kbi-valor">{{ preciosKpis.ia }}</span></div>
+        </div>
+      </div>
+      <div class="rep-dos-col">
+        <div class="rep-col-main rep-col-lista">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Cambios de precio recientes</h3>
+                <span class="subtexto-grafico">Quién cambió qué, cuándo y de cuánto a cuánto</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-admin">
+                <thead>
+                  <tr><th>Fecha</th><th>Producto</th><th>Cambio</th><th>Origen</th><th>Usuario</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="c in preciosDatos.cambios.slice(0, 5)" :key="c.id_historial">
+                    <td style="white-space:nowrap">{{ formatearFechaPrecio(c.fecha_hora) }}</td>
+                    <td style="font-weight:700; color:var(--texto-principal);">{{ c.producto }}</td>
+                    <td style="white-space:nowrap; font-weight:700;" :style="{ color: colorCambioPrecio(c) }">
+                      <template v-if="c.precio_anterior !== null">Bs. {{ c.precio_anterior.toFixed(2) }} → </template>Bs. {{ c.precio_nuevo.toFixed(2) }}
+                    </td>
+                    <td><span class="badge-pago planificado">{{ etiquetaOrigenPrecio(c.origen) }}</span></td>
+                    <td>{{ c.usuario }}</td>
+                  </tr>
+                  <tr v-if="preciosDatos.cambios.length === 0"><td colspan="5" class="texto-centro">Sin cambios de precio en este periodo.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="preciosDatos.cambios.length > 5" class="rep-ver-mas">
+              <span>Últimos 5 de {{ preciosDatos.total }} registros</span>
+              <button class="btn-ver-historial" @click="abrirModal('precios')">Ver historial completo</button>
+            </div>
+          </div>
+        </div>
+        <div class="rep-col-side">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Productos con más cambios</h3>
+                <span class="subtexto-grafico">Los precios que más se han movido</span>
+              </div>
+            </div>
+            <div class="grafico-contenido">
+              <div v-for="(p, i) in preciosMasMovidos" :key="p.nombre" class="fila-barra">
+                <div class="barra-etiqueta">
+                  <span class="categoria-nombre">{{ p.nombre }}</span>
+                  <span class="categoria-monto">{{ p.n }} cambio(s)</span>
+                </div>
+                <div class="barra-pista">
+                  <div class="barra-progreso" :style="{
+                    width: (p.n / maxCambiosProd * 100) + '%',
+                    background: ['var(--morado-brillante)','var(--rosa-acento)','var(--color-info)','var(--color-exito)','var(--color-alerta)'][i]
+                  }"></div>
+                </div>
+              </div>
+              <div v-if="preciosMasMovidos.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">
+                Todavía no hay cambios de precio (solo los registros iniciales). Cambia un precio o haz una promo y aparecerá aquí.
+              </div>
+            </div>
+          </div>
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">¿Cómo se vendió a cada precio?</h3>
+                <span class="subtexto-grafico">Detalle por producto</span>
+              </div>
+            </div>
+            <p class="texto-sutil" style="font-size:.85rem; line-height:1.5">
+              En <strong>Productos</strong>, cada tarjeta tiene el botón de historial (reloj):
+              ahí ves la línea de tiempo del producto y cuántas unidades se vendieron a cada precio.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ PESTAÑA: EVENTOS ============ -->
     <div v-if="pestana === 'eventos'" class="rep-panel fade-in">
       <div class="rep-dos-col">
@@ -896,6 +993,40 @@
                 </tr>
                 <tr v-if="listadoProductosRanking.length === 0">
                   <td colspan="6" class="texto-centro">No hay datos de productos registrados en el inventario.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Historial de Precios completo (Fase 8) -->
+      <div v-if="modalActivo === 'precios'" class="modal-fullscreen fade-in">
+        <div class="modal-fs-header">
+          <h2>Historial completo de cambios de precio</h2>
+          <button class="btn-cerrar-fs" @click="modalActivo = null"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cerrar</button>
+        </div>
+        <div class="modal-fs-body">
+          <div class="tabla-contenedor">
+            <table class="tabla-admin">
+              <thead>
+                <tr><th>Fecha y hora</th><th>Producto</th><th>Tipo</th><th>Cambio</th><th>Origen</th><th>Usuario</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in preciosDatos.cambios" :key="c.id_historial">
+                  <td style="white-space:nowrap">{{ formatearFechaPrecio(c.fecha_hora) }}</td>
+                  <td style="font-weight:700; color:var(--texto-principal);">
+                    {{ c.producto }} <span v-if="c.es_combo" class="badge-pago planificado" style="margin-left:4px">Combo</span>
+                  </td>
+                  <td>{{ c.tipo === 'promocion' ? 'Promoción' : 'Base' }}</td>
+                  <td style="white-space:nowrap; font-weight:700;" :style="{ color: colorCambioPrecio(c) }">
+                    <template v-if="c.precio_anterior !== null">Bs. {{ c.precio_anterior.toFixed(2) }} → </template>Bs. {{ c.precio_nuevo.toFixed(2) }}
+                  </td>
+                  <td><span class="badge-pago planificado">{{ etiquetaOrigenPrecio(c.origen) }}</span></td>
+                  <td>{{ c.usuario }}</td>
+                </tr>
+                <tr v-if="preciosDatos.cambios.length === 0">
+                  <td colspan="6" class="texto-centro">Sin cambios de precio en este periodo.</td>
                 </tr>
               </tbody>
             </table>
@@ -1252,6 +1383,7 @@ function aplicarFiltros() {
   }
   cargarReportes()
   cargarReporteBilletera()
+  if (pestana.value === 'precios') cargarPrecios()
 }
 
 function presetFecha(tipo) {
@@ -1305,10 +1437,55 @@ const pestanas = [
   { id: 'general', nombre: 'General' },
   { id: 'ventas', nombre: 'Ventas' },
   { id: 'productos', nombre: 'Productos' },
+  { id: 'precios', nombre: 'Precios' },
   { id: 'personal', nombre: 'Personal' },
   { id: 'billetera', nombre: 'Billetera' },
   { id: 'eventos', nombre: 'Eventos' }
 ]
+
+// ── Historial de precios (Fase 8) ────────────────────────────────────────
+const preciosDatos = ref({ total: 0, cambios: [] })
+async function cargarPrecios() {
+  try {
+    const params = new URLSearchParams()
+    if (filtroDesde.value) params.append('desde', filtroDesde.value)
+    if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    params.append('limite', '100')
+    preciosDatos.value = await clienteHttp.get(`/productos/historial-precios/recientes?${params.toString()}`)
+  } catch { /* silencioso: la pestaña muestra vacío */ }
+}
+const preciosKpis = computed(() => {
+  const c = preciosDatos.value.cambios || []
+  const reales = c.filter(x => x.origen !== 'registro_inicial')
+  const conMovimiento = reales.filter(x => x.precio_anterior !== null && x.precio_anterior !== x.precio_nuevo)
+  return {
+    total: reales.length,
+    subidas: conMovimiento.filter(x => x.precio_nuevo > x.precio_anterior).length,
+    bajadas: conMovimiento.filter(x => x.precio_nuevo < x.precio_anterior).length,
+    ia: reales.filter(x => x.origen === 'combo_ia').length,
+  }
+})
+const preciosMasMovidos = computed(() => {
+  const mapa = {}
+  for (const x of (preciosDatos.value.cambios || [])) {
+    if (x.origen === 'registro_inicial') continue
+    mapa[x.producto] = (mapa[x.producto] || 0) + 1
+  }
+  return Object.entries(mapa).map(([nombre, n]) => ({ nombre, n })).sort((a, b) => b.n - a.n).slice(0, 5)
+})
+const maxCambiosProd = computed(() => Math.max(...preciosMasMovidos.value.map(p => p.n), 1))
+const ETIQUETAS_ORIGEN_PRECIO = {
+  creacion: 'Creación', edicion: 'Edición', promo_activada: 'Promo activada',
+  promo_desactivada: 'Promo desactivada', combo_ia: 'IA (combo)', registro_inicial: 'Inicial',
+}
+function etiquetaOrigenPrecio(o) { return ETIQUETAS_ORIGEN_PRECIO[o] || o }
+function colorCambioPrecio(x) {
+  if (x.precio_anterior === null || x.precio_anterior === x.precio_nuevo) return 'var(--texto-principal)'
+  return x.precio_nuevo > x.precio_anterior ? 'var(--color-exito)' : 'var(--color-error)'
+}
+function formatearFechaPrecio(f) {
+  return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
 
 // Filtro por mesero (pestaña Personal): '' = todos
 const meseroSel = ref('')
@@ -1336,6 +1513,8 @@ function cambioEvento(v) {
   eventoFiltro.value = v
   presetActivo.value = v ? '' : presetActivo.value
   cargarReportes(true)
+  cargarReporteBilletera() // la billetera también sigue el filtro por evento
+  if (pestana.value === 'precios') cargarPrecios()
 }
 // Desde una fila de la pestaña Eventos: filtra por ese evento y salta al ranking
 function verVentasDeEvento(ev) {
@@ -1440,6 +1619,7 @@ function cambiarPorPagina(v) {
 watch(pestana, () => {
   cargarReportes(true)
   cargarReporteBilletera()
+  if (pestana.value === 'precios') cargarPrecios()
 })
 
 function abrirModal(tipo) {
@@ -2043,8 +2223,13 @@ function cambiarLimiteVentas() {
 async function cargarReporteBilletera() {
   try {
     const params = new URLSearchParams()
-    if (filtroDesde.value) params.append('desde', filtroDesde.value)
-    if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    if (eventoFiltro.value) {
+      // Si hay filtro por evento, la billetera usa la misma ventana del evento
+      params.append('evento', eventoFiltro.value)
+    } else {
+      if (filtroDesde.value) params.append('desde', filtroDesde.value)
+      if (filtroHasta.value) params.append('hasta', filtroHasta.value)
+    }
     const query = params.toString() ? `?${params.toString()}` : ''
     const res = await clienteHttp.get(`/billetera/admin/reporte-completo${query}`)
     reporteBilletera.value = res
@@ -2745,6 +2930,18 @@ function formatearFecha(isoStr) {
   .filtro-rango-personalizado { margin-left: 0; width: 100%; }
   .barra-filtro-periodo { gap: 12px; }
 }
+/* Celular: cada filtro (etiqueta + campo) en su propia fila, sin envolturas raras */
+@media (max-width: 560px) {
+  .filtro-rango-personalizado {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    align-items: center;
+    row-gap: 10px;
+    column-gap: 10px;
+  }
+  .rango-fecha, .filtro-evento { width: 100%; min-width: 0; }
+  .filtro-rango-personalizado .btn-limpiar-filtro { grid-column: 1 / -1; justify-self: start; }
+}
 
 /* FILTRO DE FECHAS */
 .etiqueta-filtro {
@@ -3266,11 +3463,13 @@ function formatearFecha(isoStr) {
   flex-direction: column;
   gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 .leyenda-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   padding: 8px 12px;
   border-radius: var(--radio-md);
   background: rgba(255, 255, 255, 0.03);
@@ -3292,11 +3491,15 @@ function formatearFecha(isoStr) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0; /* permite encoger dentro de columnas angostas (evita desborde) */
 }
 .l-nombre {
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--texto-principal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .l-valores {
   font-size: 0.78rem;

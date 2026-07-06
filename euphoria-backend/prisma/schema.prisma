@@ -198,9 +198,27 @@ model producto {
   combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]   @relation("combo_detalle_id_producto_padreToproducto")
   detalle_comanda                                         detalle_comanda[]
   prediccion_ia                                           prediccion_ia[]
+  historial_precio                                        historial_precio[]
   categoria                                               categoria         @relation(fields: [id_categoria], references: [id_categoria], map: "PRODUCTO_id_categoria_fkey")
 
   @@index([id_categoria], map: "PRODUCTO_id_categoria_fkey")
+}
+
+// Fase 8: cada cambio de precio queda registrado (quién, cuándo, de→a, origen)
+model historial_precio {
+  id_historial    Int      @id @default(autoincrement())
+  id_producto     Int
+  id_usuario      Int?
+  fecha_hora      DateTime @default(now())
+  tipo            String   @db.VarChar(15)
+  precio_anterior Decimal? @db.Decimal(10, 2)
+  precio_nuevo    Decimal  @db.Decimal(10, 2)
+  origen          String   @db.VarChar(25)
+  producto        producto @relation(fields: [id_producto], references: [id_producto], onDelete: Cascade, map: "HISTORIAL_PRECIO_id_producto_fkey")
+  usuario         usuario? @relation(fields: [id_usuario], references: [id_usuario], onDelete: SetNull, map: "HISTORIAL_PRECIO_id_usuario_fkey")
+
+  @@index([id_producto])
+  @@index([fecha_hora])
 }
 
 model registro_aforo {
@@ -263,6 +281,7 @@ model usuario {
   prediccion_ia                       prediccion_ia[]
   registro_aforo                      registro_aforo[]
   transaccion                         transaccion[]
+  historial_precio                    historial_precio[]
   rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")

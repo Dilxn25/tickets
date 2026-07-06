@@ -195,7 +195,7 @@
           <div style="padding:0 1.5rem 1.5rem 1.5rem;">
             <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¿Resetear contraseña?</h3>
             <p style="color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
-              La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a una contraseña temporal que el usuario deberá cambiar en su primer inicio de sesión. ¿Estás seguro?
+              La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a la contraseña temporal <strong>123456</strong>. Compártela con el usuario para que pueda ingresar y cambiarla desde su perfil. ¿Estás seguro?
             </p>
             <div style="display:flex; gap:10px; justify-content:center;">
               <button class="btn btn-secundario" style="flex:1;" @click="modalAlertaReset=false">Cancelar</button>
@@ -376,7 +376,7 @@ async function eliminarRol(rol) {
   const ok = await notif.confirmar({
     variante: 'peligro',
     titulo: `Eliminar rol "${rol.nombre_rol}"`,
-    mensaje: 'Los usuarios con este rol podrían quedar sin rol asignado. ¿Deseas continuar?',
+    mensaje: 'Los usuarios que tengan este rol serán reasignados al rol "Otro". ¿Deseas continuar?',
     textoConfirmar: 'Sí, eliminar',
   })
   if (!ok) return

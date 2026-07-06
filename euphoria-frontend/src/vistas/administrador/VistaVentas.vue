@@ -29,7 +29,7 @@
               <svg class="icono-busqueda" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
               </svg>
-              <input v-model="busqueda" class="campo campo-con-icono" placeholder="Cliente o # de comanda..." />
+              <input v-model="busqueda" class="campo campo-con-icono" placeholder="Filtrar en esta página (cliente o # comanda)…" />
             </span>
           </label>
           <label class="filtro-campo" style="flex:0 1 160px;min-width:140px">
@@ -264,10 +264,6 @@
             <span class="etiqueta">ID Bancarización:</span>
             <span class="valor código">{{ ventaSeleccionada.bancarizacion }}</span>
           </div>
-          <div v-if="ventaSeleccionada.qr_billetera" class="campo-detalle">
-            <span class="etiqueta">Billetera QR:</span>
-            <span class="valor código">{{ ventaSeleccionada.qr_billetera.substring(0, 25) }}...</span>
-          </div>
         </div>
 
         <!-- Acciones -->
@@ -376,7 +372,6 @@ function mapearComanda(cmd) {
     // El comprobante_url se guarda con un sufijo "|TX:...|..."; la URL real de la
     // imagen es la parte antes del "|TX:". Sin esto, el src de la imagen queda roto.
     url_comprobante: cmd.comprobante_url ? cmd.comprobante_url.split('|TX:')[0] : null,
-    qr_billetera: cmd.qr_billetera,
     bancarizacion: cmd.comprobante_url?.split('|TX:')?.[1]?.split('|')?.[0],
     productos_detalles: cmd.detalle_comanda.map(det => ({
       id_producto_comanda: det.id_detalle,

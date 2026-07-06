@@ -298,7 +298,13 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
     // Sin parámetros = histórico completo (compatibilidad hacia atrás).
     const { desde, hasta } = req.query
     let rangoFecha = null
-    if (desde || hasta) {
+    if (req.query.evento) {
+      // Reporte POR EVENTO: la ventana horaria del evento define el periodo (igual que resumen-ventas)
+      const ev = await prisma.evento.findUnique({ where: { id_evento: Number(req.query.evento) } })
+      if (ev) {
+        rangoFecha = { gte: ev.fecha_hora_inicio, lte: ev.fecha_hora_fin || new Date() }
+      }
+    } else if (desde || hasta) {
       rangoFecha = {}
       if (desde) rangoFecha.gte = new Date(desde)
       if (hasta) {

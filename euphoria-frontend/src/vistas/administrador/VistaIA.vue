@@ -470,7 +470,7 @@ async function guardarConfig() {
     cargarCombos().then(precargarCombos) // los precios reflejan el nuevo descuento
     cargarPacks()
   } catch (e) {
-    notif.error(e?.mensaje || 'No se pudo guardar la configuración.')
+    notif.error(e?.error || 'No se pudo guardar la configuración.')
   } finally {
     guardando.value = false
   }
@@ -1195,5 +1195,10 @@ onActivated(() => {
   .ia-cabecera { padding: 18px; }
   .tarjeta-ia { padding: 16px; }
   .combos-grid { grid-template-columns: 1fr; }
+  /* En móvil el head de cada tarjeta se apila: el título ocupa todo el ancho
+     y los controles (toggle de tamaño, interruptor) pasan a su propia fila */
+  .tarjeta-ia-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .switch-combos { justify-content: flex-start; }
+  .toggle-tam { align-self: flex-start; }
 }
 </style>

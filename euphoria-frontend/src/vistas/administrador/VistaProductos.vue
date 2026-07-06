@@ -40,9 +40,9 @@
         <svg class="icono-busqueda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input v-model="busqueda" class="campo campo-con-icono" placeholder="Buscar producto..." aria-label="Buscar producto" />
       </div>
-      <div class="filtro-select"><BaseSelect v-model="filtroCategoria" :options="opcionesCatFiltro" placeholder="Todas las categorías" @update:model-value="cargarDatos" /></div>
+      <div class="filtro-select"><BaseSelect v-model="filtroCategoria" :options="opcionesCatFiltro" placeholder="Todas las categorías" /></div>
       <label class="toggle-label">
-        <input type="checkbox" v-model="soloPromos" @change="cargarDatos" /> Solo promociones
+        <input type="checkbox" v-model="soloPromos" /> Solo promociones
       </label>
       <span class="filtros-conteo">{{ productosFiltrados.length }} resultado{{ productosFiltrados.length === 1 ? '' : 's' }}</span>
     </div>
@@ -81,6 +81,10 @@
           <button class="btn btn-sm btn-secundario" @click="abrirModal(p)">Editar</button>
           <button class="btn btn-sm" :class="p.estado_promocion?'btn-alerta':'btn-secundario'" @click="alternarPromo(p)">
             {{ p.estado_promocion ? 'Quitar promo' : 'Hacer promo' }}
+          </button>
+          <button class="btn btn-sm btn-secundario btn-icono-sm" title="Historial de precios" @click="abrirHistorial(p)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span class="hist-btn-txt">Historial de precios</span>
           </button>
         </div>
       </article>
@@ -164,6 +168,48 @@
         </div>
       </div>
     </Teleport>
+    <!-- Modal Historial de precios (Fase 8) -->
+    <Teleport to="body">
+      <div v-if="modalHistorialAbierto" class="modal-fondo" @click.self="modalHistorialAbierto=false">
+        <div class="modal fade-in" style="max-width:640px">
+          <div class="modal-cabecera">
+            <h3>Historial de precios{{ histDatos ? ' — ' + histDatos.producto.nombre_producto : '' }}</h3>
+            <button class="btn-x" @click="modalHistorialAbierto=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+          </div>
+          <div class="hist-cuerpo">
+            <p v-if="histCargando" class="hist-vacio">Cargando historial...</p>
+            <template v-else-if="histDatos">
+              <h4 class="hist-subtitulo">Cómo se vendió a cada precio</h4>
+              <p v-if="!histDatos.ventas_por_precio.length" class="hist-vacio">Este producto todavía no registra ventas.</p>
+              <div v-else class="hist-barras">
+                <div v-for="v in histDatos.ventas_por_precio" :key="v.precio" class="hist-barra-fila">
+                  <span class="hist-precio">Bs. {{ v.precio.toFixed(2) }}</span>
+                  <div class="hist-barra"><div class="hist-barra-relleno" :style="{ width: anchoBarra(v) }"></div></div>
+                  <span class="hist-barra-info">{{ v.unidades }} uds · Bs. {{ v.ingresos.toFixed(2) }} · {{ v.pedidos }} pedido(s)</span>
+                </div>
+              </div>
+
+              <h4 class="hist-subtitulo">Cambios registrados</h4>
+              <ul class="hist-linea">
+                <li v-for="c in histDatos.cambios" :key="c.id_historial">
+                  <div class="hist-fila-precio">
+                    <span class="hist-cambio" :class="claseCambio(c)">
+                      <template v-if="c.precio_anterior !== null">Bs. {{ c.precio_anterior.toFixed(2) }}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                      </template>
+                      Bs. {{ c.precio_nuevo.toFixed(2) }}
+                    </span>
+                    <span class="hist-badge" :class="'origen-' + c.origen">{{ etiquetaOrigen(c.origen) }}</span>
+                    <span v-if="c.tipo === 'promocion'" class="hist-badge origen-tipo-promo">Promo</span>
+                  </div>
+                  <div class="hist-fila-meta">{{ formatearFechaHist(c.fecha_hora) }} · {{ c.usuario }}</div>
+                </li>
+              </ul>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
     <!-- Modal Gestión de Categorías -->
     <Teleport to="body">
       <div v-if="modalCategoriasAbierto" class="modal-fondo" @click.self="modalCategoriasAbierto=false">
@@ -193,6 +239,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import ComboImagen from '@/componentes/comunes/ComboImagen.vue'
@@ -242,9 +289,11 @@ function quitarComponente(idHijo) {
 async function cargarDatos() {
   cargando.value = true
   try {
+    // Se carga el catálogo COMPLETO; los filtros (categoría/promo/búsqueda) se aplican
+    // en cliente para que las métricas de cabecera sean siempre globales y el filtrado instantáneo.
     const [cats, prods] = await Promise.all([
       servicioProductos.obtenerCategorias(),
-      servicioProductos.listar({ busqueda: busqueda.value, categoria: filtroCategoria.value, promo: soloPromos.value })
+      servicioProductos.listar({})
     ])
     categorias.value = cats
     productos.value = prods
@@ -254,14 +303,16 @@ async function cargarDatos() {
 
 onMounted(() => { cargarDatos() })
 
+// Todos los filtros se aplican en cliente sobre el catálogo completo
 const productosFiltrados=computed(()=>{
   const q = busqueda.value.trim().toLowerCase()
-  if(!q) return productos.value
-  return productos.value.filter(p =>
-    (p.nombre_producto || '').toLowerCase().includes(q) ||
-    (p.descripcion || '').toLowerCase().includes(q)
-  )
-}) // Categoría y promo se filtran en el backend; la búsqueda de texto se filtra localmente
+  return productos.value.filter(p => {
+    const matchCat   = filtroCategoria.value ? p.id_categoria === filtroCategoria.value : true
+    const matchPromo = soloPromos.value ? !!p.estado_promocion : true
+    const matchTexto = !q || (p.nombre_producto || '').toLowerCase().includes(q) || (p.descripcion || '').toLowerCase().includes(q)
+    return matchCat && matchPromo && matchTexto
+  })
+})
 
 const pagina = ref(1)
 const limite = ref(20)
@@ -299,6 +350,41 @@ async function abrirModal(p=null){
   }
 }
 function cerrarModal(){modalAbierto.value=false}
+
+// ── Historial de precios (Fase 8) ────────────────────────────────────────
+const modalHistorialAbierto = ref(false)
+const histCargando = ref(false)
+const histDatos = ref(null)
+
+async function abrirHistorial(p) {
+  modalHistorialAbierto.value = true
+  histCargando.value = true
+  histDatos.value = null
+  try {
+    histDatos.value = await clienteHttp.get(`/productos/${p.id_producto}/historial-precios`)
+  } catch {
+    notif.error('No se pudo cargar el historial de precios.')
+    modalHistorialAbierto.value = false
+  } finally { histCargando.value = false }
+}
+
+const ETIQUETAS_ORIGEN = {
+  creacion: 'Creación', edicion: 'Edición', promo_activada: 'Promo activada',
+  promo_desactivada: 'Promo desactivada', combo_ia: 'IA (combo)', registro_inicial: 'Registro inicial',
+}
+function etiquetaOrigen(o) { return ETIQUETAS_ORIGEN[o] || o }
+// Verde si el precio subió, rojo si bajó
+function claseCambio(c) {
+  if (c.precio_anterior === null || c.precio_anterior === c.precio_nuevo) return ''
+  return c.precio_nuevo > c.precio_anterior ? 'sube' : 'baja'
+}
+function anchoBarra(v) {
+  const max = Math.max(...histDatos.value.ventas_por_precio.map(x => x.unidades), 1)
+  return Math.max((v.unidades / max) * 100, 4) + '%'
+}
+function formatearFechaHist(f) {
+  return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 async function guardarProducto(){
   // Validación de promoción (el backend también la valida como defensa).
@@ -506,8 +592,34 @@ async function eliminarCategoria(cat) {
 .stock-punto{width:6px;height:6px;border-radius:50%;background:var(--color-exito);box-shadow:0 0 7px rgba(34,197,94,.6);flex:0 0 auto}
 .stock-bajo{color:var(--color-alerta)}
 .stock-bajo .stock-punto{background:var(--color-alerta);box-shadow:0 0 7px rgba(245,158,11,.65)}
-.producto-acciones{display:flex;gap:6px;padding:.75rem;border-top:1px solid var(--borde-sutil);margin-top:auto}
+.producto-acciones{display:flex;flex-wrap:wrap;gap:6px;padding:.75rem;border-top:1px solid var(--borde-sutil);margin-top:auto}
 .producto-acciones .btn{flex:1;justify-content:center}
+.producto-acciones .btn-icono-sm{flex:0 0 auto;padding:6px 9px}
+.hist-btn-txt{display:none}
+
+/* ── Modal Historial de precios ── */
+.hist-cuerpo{padding:1.25rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.5rem}
+.hist-subtitulo{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--texto-secundario);margin:.5rem 0 .4rem}
+.hist-vacio{color:var(--texto-secundario);font-size:.88rem;padding:.4rem 0}
+.hist-barras{display:flex;flex-direction:column;gap:8px}
+.hist-barra-fila{display:grid;grid-template-columns:86px 1fr auto;gap:10px;align-items:center}
+.hist-precio{font-weight:700;font-size:.88rem;white-space:nowrap}
+.hist-barra{height:12px;border-radius:var(--radio-full);background:rgba(168,85,247,.10);overflow:hidden}
+.hist-barra-relleno{height:100%;border-radius:inherit;background:var(--gradiente-marca)}
+.hist-barra-info{font-size:.76rem;color:var(--texto-secundario);white-space:nowrap}
+.hist-linea{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist-linea li{position:relative;padding:.55rem 0 .55rem 20px;border-left:2px solid var(--borde-sutil);margin-left:6px}
+.hist-linea li::before{content:'';position:absolute;left:-6px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--morado-brillante);box-shadow:0 0 8px rgba(168,85,247,.5)}
+.hist-fila-precio{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hist-cambio{display:inline-flex;align-items:center;gap:5px;font-weight:700;font-size:.92rem}
+.hist-cambio.sube{color:var(--color-exito)}
+.hist-cambio.baja{color:var(--color-error)}
+.hist-badge{font-size:.68rem;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:var(--radio-full);background:rgba(168,85,247,.14);border:1px solid rgba(168,85,247,.3)}
+.hist-badge.origen-combo_ia{background:rgba(236,72,153,.12);border-color:rgba(236,72,153,.35)}
+.hist-badge.origen-promo_activada,.hist-badge.origen-tipo-promo{background:rgba(245,196,66,.10);border-color:rgba(245,196,66,.35)}
+.hist-badge.origen-registro_inicial{opacity:.7}
+.hist-fila-meta{font-size:.76rem;color:var(--texto-secundario);margin-top:2px}
+@media (max-width:560px){.hist-barra-fila{grid-template-columns:74px 1fr}.hist-barra-info{grid-column:1/-1;margin-top:-2px}}
 .btn-alerta{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:var(--color-alerta);transition:var(--trans-rapida)}
 .btn-alerta:hover{background:rgba(245,158,11,.24);border-color:rgba(245,158,11,.55)}
 .btn-alerta:active{transform:translateY(1px)}
@@ -559,6 +671,8 @@ async function eliminarCategoria(cat) {
   /* En tarjetas angostas los botones se apilan y ocupan todo el ancho */
   .producto-acciones{flex-direction:column;gap:8px;padding:.6rem}
   .producto-acciones .btn{width:100%;justify-content:center}
+  /* Apilado en celular, el botón de historial muestra su etiqueta (no solo el reloj) */
+  .hist-btn-txt{display:inline;margin-left:6px}
   .modal-fondo{padding:.5rem}
   .modal-cabecera{padding:1rem}
   .modal-form{padding:1rem}

@@ -11,7 +11,7 @@
       <svg class="bf-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
       </svg>
-      <span class="bf-texto">{{ modelValue ? textoFecha(modelValue) : (placeholder || 'Elegir fecha') }}</span>
+      <span class="bf-texto">{{ parteFecha ? textoDisparador : (placeholder || (conHora ? 'Elegir fecha y hora' : 'Elegir fecha')) }}</span>
       <button v-if="modelValue && clearable" type="button" class="bf-limpiar" title="Quitar fecha" @click.stop="limpiar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
       </button>
@@ -43,8 +43,22 @@
               @click="dia && elegir(dia)"
             >{{ dia ? dia.getDate() : '' }}</button>
           </div>
+          <!-- Selector de hora (solo cuando conHora): reloj propio de horas/minutos -->
+          <div v-if="conHora" class="bf-hora">
+            <svg class="bf-hora-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>
+            <div class="bf-hora-campos">
+              <select class="bf-hora-sel" :value="hora" @change="setHora($event.target.value)" aria-label="Hora">
+                <option v-for="h in horasOpc" :key="h" :value="h">{{ h }}</option>
+              </select>
+              <span class="bf-hora-sep">:</span>
+              <select class="bf-hora-sel" :value="minuto" @change="setMinuto($event.target.value)" aria-label="Minutos">
+                <option v-for="m in minutosOpc" :key="m" :value="m">{{ m }}</option>
+              </select>
+            </div>
+          </div>
           <div class="bf-pie">
             <button type="button" class="bf-hoy-btn" @click="irHoy">Hoy</button>
+            <button v-if="conHora && parteFecha" type="button" class="bf-hoy-btn" @click="cerrar">Listo</button>
             <button v-if="clearable" type="button" class="bf-limpiar-btn" @click="limpiar">Limpiar</button>
           </div>
         </div>
@@ -57,14 +71,47 @@
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' }, // 'YYYY-MM-DD'
+  // Sin conHora: 'YYYY-MM-DD'. Con conHora: 'YYYY-MM-DDTHH:mm' (compatible datetime-local)
+  modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '' },
   min: { type: String, default: '' },
   max: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   clearable: { type: Boolean, default: true },
+  conHora: { type: Boolean, default: false },        // muestra selector de hora
+  horaPorDefecto: { type: String, default: '20:00' }, // hora inicial al elegir un día sin hora previa
 })
 const emit = defineEmits(['update:modelValue'])
+
+// Partes del valor: fecha ('YYYY-MM-DD') y hora ('HH:mm')
+const parteFecha = computed(() => (props.modelValue || '').split('T')[0] || '')
+const parteHora = computed(() => {
+  const t = (props.modelValue || '').split('T')[1]
+  return t ? t.slice(0, 5) : ''
+})
+const hora = computed(() => (parteHora.value || props.horaPorDefecto).slice(0, 2))
+const minuto = computed(() => (parteHora.value || props.horaPorDefecto).slice(3, 5))
+const horasOpc = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+const minutosOpc = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+
+const textoDisparador = computed(() => {
+  if (!parteFecha.value) return ''
+  const f = textoFecha(parteFecha.value)
+  return props.conHora ? `${f} · ${parteHora.value || props.horaPorDefecto}` : f
+})
+
+// Construye el valor emitido según haya hora o no
+function componer(fechaIso, horaStr) {
+  return props.conHora ? `${fechaIso}T${horaStr || props.horaPorDefecto}` : fechaIso
+}
+function setHora(h) {
+  const base = parteFecha.value || isoHoy
+  emit('update:modelValue', `${base}T${h}:${minuto.value}`)
+}
+function setMinuto(m) {
+  const base = parteFecha.value || isoHoy
+  emit('update:modelValue', `${base}T${hora.value}:${m}`)
+}
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
@@ -77,7 +124,7 @@ const estiloPanel = ref({})
 // Mes visible (primer día del mes). Arranca en el valor o en hoy.
 const hoy = new Date()
 const isoHoy = iso(hoy)
-const mesVisible = ref(inicioMes(props.modelValue ? desdeIso(props.modelValue) : hoy))
+const mesVisible = ref(inicioMes(props.modelValue ? desdeIso((props.modelValue).split('T')[0]) : hoy))
 
 function pad(n) { return String(n).padStart(2, '0') }
 function iso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
@@ -121,7 +168,7 @@ function posicionar() {
 }
 function abrir() {
   if (props.disabled) return
-  mesVisible.value = inicioMes(props.modelValue ? desdeIso(props.modelValue) : hoy)
+  mesVisible.value = inicioMes(parteFecha.value ? desdeIso(parteFecha.value) : hoy)
   abierto.value = true
   posicionar()
   nextTick(() => {
@@ -146,8 +193,9 @@ function cambiarMes(delta) {
   mesVisible.value = new Date(mesVisible.value.getFullYear(), mesVisible.value.getMonth() + delta, 1)
 }
 function elegir(d) {
-  emit('update:modelValue', iso(d))
-  cerrar()
+  emit('update:modelValue', componer(iso(d), parteHora.value))
+  // Con hora, dejamos el panel abierto para ajustar la hora; sin hora, cerramos
+  if (!props.conHora) cerrar()
 }
 function irHoy() {
   mesVisible.value = inicioMes(hoy)
@@ -209,6 +257,21 @@ onBeforeUnmount(cerrar)
 .bf-dia.bf-hoy { color: var(--morado-hover, #c084fc); box-shadow: inset 0 0 0 1px rgba(168,85,247,.5); }
 .bf-dia.bf-sel { background: var(--gradiente-marca, linear-gradient(135deg,#a855f7,#ec4899)); color: #fff; box-shadow: 0 4px 12px rgba(168,85,247,.4); }
 .bf-dia.bf-fuera { opacity: .3; cursor: not-allowed; }
+/* Selector de hora (conHora) */
+.bf-hora { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--borde-sutil); }
+.bf-hora-icono { width: 16px; height: 16px; color: var(--morado-hover, #c084fc); flex-shrink: 0; }
+.bf-hora-campos { display: flex; align-items: center; gap: 4px; }
+.bf-hora-sel {
+  appearance: none; -webkit-appearance: none;
+  background: var(--fondo-tarjeta-alt, rgba(255,255,255,.04));
+  border: 1px solid var(--borde-sutil); border-radius: 8px;
+  color: var(--texto-principal); font-family: inherit; font-size: .9rem; font-weight: 700;
+  padding: 6px 10px; cursor: pointer; text-align: center; text-align-last: center;
+  transition: border-color .15s ease;
+}
+.bf-hora-sel:hover, .bf-hora-sel:focus { border-color: var(--morado-brillante, #a855f7); outline: none; }
+.bf-hora-sel option { background: var(--fondo-tarjeta, #17141f); color: var(--texto-principal); }
+.bf-hora-sep { font-weight: 800; color: var(--texto-secundario); }
 .bf-pie { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--borde-sutil); }
 .bf-hoy-btn, .bf-limpiar-btn { background: none; border: none; font-size: .8rem; font-weight: 700; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
 .bf-hoy-btn { color: var(--morado-hover, #c084fc); }

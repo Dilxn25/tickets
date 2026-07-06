@@ -14,8 +14,18 @@ const router   = express.Router()
 const prisma   = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { subirImagenProducto, eliminarImagen } = require('../../config/cloudinary')
+const { registrarPrecio, registrarCambios } = require('../../utilidades/historial-precios')
 
 router.use(verificarToken)
+
+// Valida que un número monetario/cantidad sea válido (> 0, o >= 0 si se permite cero).
+// Devuelve mensaje de error o null.
+function validarNumero(valor, etiqueta, { permitirCero = false } = {}) {
+  const n = parseFloat(valor)
+  if (!Number.isFinite(n)) return `${etiqueta} debe ser un número válido.`
+  if (permitirCero ? n < 0 : n <= 0) return `${etiqueta} debe ser mayor ${permitirCero ? 'o igual a' : 'a'} 0.`
+  return null
+}
 
 // Valida la coherencia de una promoción. Devuelve un mensaje de error (string)
 // si es inválida, o null si está bien. Solo aplica cuando la promo está activa.
@@ -188,9 +198,15 @@ router.post('/', soloRoles('Administrador'), subirImagenProducto.single('imagen'
     const { nombre_producto, descripcion, precio_base, precio_promocion,
             estado_promocion, stock_actual, es_combo, id_categoria } = req.body
 
-    if (!nombre_producto || !precio_base || !stock_actual || !id_categoria) {
+    if (!nombre_producto || precio_base === undefined || stock_actual === undefined || !id_categoria) {
       return res.status(400).json({ error: 'Faltan campos requeridos' })
     }
+
+    // Precio base > 0 y stock >= 0 (no se permiten precios negativos ni cero)
+    const errBase = validarNumero(precio_base, 'El precio base')
+    if (errBase) return res.status(400).json({ error: errBase })
+    const errStock = validarNumero(stock_actual, 'El stock', { permitirCero: true })
+    if (errStock) return res.status(400).json({ error: errStock })
 
     // Validación de promoción: si está activa, exige un precio de promo válido.
     const errPromo = validarPromo(estado_promocion === 'true', precio_promocion, precio_base)
@@ -215,6 +231,9 @@ router.post('/', soloRoles('Administrador'), subirImagenProducto.single('imagen'
       await sincronizarCombo(nuevo.id_producto, req.body.componentes)
     }
 
+    // Historial de precios: precio inicial del producto (y su promo si nació con una)
+    await registrarCambios({ anterior: null, nuevo, idUsuario: req.usuario.id })
+
     res.status(201).json({ mensaje: 'Producto creado correctamente', producto: nuevo })
   } catch (error) {
     console.error('Error al crear producto:', error)
@@ -231,6 +250,16 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
 
     const actual = await prisma.producto.findUnique({ where: { id_producto: id } })
     if (!actual) return res.status(404).json({ error: 'Producto no encontrado' })
+
+    // No permitir cambiar a precio base negativo/cero ni stock negativo
+    if (precio_base !== undefined && precio_base !== '') {
+      const errBase = validarNumero(precio_base, 'El precio base')
+      if (errBase) return res.status(400).json({ error: errBase })
+    }
+    if (stock_actual !== undefined && stock_actual !== '') {
+      const errStock = validarNumero(stock_actual, 'El stock', { permitirCero: true })
+      if (errStock) return res.status(400).json({ error: errStock })
+    }
 
     // Si se sube nueva imagen, eliminar la anterior de Cloudinary
     if (req.file && actual.url_imagen) await eliminarImagen(actual.url_imagen)
@@ -276,6 +305,9 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
       await sincronizarCombo(id, [])
     }
 
+    // Historial de precios: registra base y/o promo solo si cambiaron
+    await registrarCambios({ anterior: actual, nuevo: actualizado, idUsuario: req.usuario.id })
+
     res.json({ mensaje: 'Producto actualizado', producto: actualizado })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Producto no encontrado' })
@@ -301,8 +333,128 @@ router.patch('/:id/promo', soloRoles('Administrador'), async (req, res) => {
       where: { id_producto: id },
       data:  { estado_promocion: activando },
     })
+
+    // Historial: al activar, el precio vigente pasa de base→promo; al desactivar, vuelve al base
+    await registrarPrecio({
+      idProducto: id,
+      idUsuario:  req.usuario.id,
+      tipo:       'promocion',
+      precioAnterior: activando ? actual.precio_base : actual.precio_promocion,
+      precioNuevo:    activando ? actual.precio_promocion : actual.precio_base,
+      origen:     activando ? 'promo_activada' : 'promo_desactivada',
+    })
+
     res.json({ mensaje: `Promoción ${actualizado.estado_promocion ? 'activada' : 'desactivada'}`, producto: actualizado })
   } catch { res.status(500).json({ error: 'Error al cambiar promoción' }) }
+})
+
+// ---- GET /api/productos/historial-precios/recientes — cambios de todos los productos ----
+// Para la pestaña "Precios" de Reportes. Filtros: ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&pagina=&limite=
+router.get('/historial-precios/recientes', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const pagina = Math.max(parseInt(req.query.pagina) || 1, 1)
+    const limite = Math.min(Math.max(parseInt(req.query.limite) || 20, 1), 100)
+    const desde  = req.query.desde ? new Date(req.query.desde + 'T00:00:00') : null
+    const hasta  = req.query.hasta ? new Date(req.query.hasta + 'T23:59:59.999') : null
+
+    const where = {}
+    if (desde || hasta) where.fecha_hora = { ...(desde && { gte: desde }), ...(hasta && { lte: hasta }) }
+
+    const [total, filas] = await Promise.all([
+      prisma.historial_precio.count({ where }),
+      prisma.historial_precio.findMany({
+        where,
+        orderBy: { fecha_hora: 'desc' },
+        skip: (pagina - 1) * limite,
+        take: limite,
+        include: {
+          producto: { select: { nombre_producto: true, url_imagen: true, es_combo: true } },
+          usuario:  { select: { nombres: true, apellidos: true } },
+        },
+      }),
+    ])
+
+    res.json({
+      total, pagina, limite,
+      cambios: filas.map(f => ({
+        id_historial:    f.id_historial,
+        id_producto:     f.id_producto,
+        producto:        f.producto.nombre_producto,
+        url_imagen:      f.producto.url_imagen,
+        es_combo:        f.producto.es_combo,
+        usuario:         f.usuario ? `${f.usuario.nombres} ${f.usuario.apellidos}`.trim() : 'Sistema',
+        fecha_hora:      f.fecha_hora,
+        tipo:            f.tipo,
+        precio_anterior: f.precio_anterior !== null ? Number(f.precio_anterior) : null,
+        precio_nuevo:    Number(f.precio_nuevo),
+        origen:          f.origen,
+      })),
+    })
+  } catch (error) {
+    console.error('Error al obtener historial reciente:', error)
+    res.status(500).json({ error: 'Error al obtener el historial de precios' })
+  }
+})
+
+// ---- GET /api/productos/:id/historial-precios — historial + ventas a cada precio ----
+router.get('/:id/historial-precios', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const producto = await prisma.producto.findUnique({ where: { id_producto: id } })
+    if (!producto) return res.status(404).json({ error: 'Producto no encontrado' })
+
+    const filas = await prisma.historial_precio.findMany({
+      where: { id_producto: id },
+      orderBy: { fecha_hora: 'desc' },
+      include: { usuario: { select: { nombres: true, apellidos: true } } },
+    })
+
+    // Cómo se vendió a cada precio: agrupa las ventas reales por precio_cobrado
+    // (se guarda en cada línea de venta, así que incluye promos y precios viejos).
+    const ventas = await prisma.$queryRaw`
+      SELECT dc.precio_cobrado AS precio,
+             SUM(dc.cantidad)  AS unidades,
+             SUM(dc.subtotal)  AS ingresos,
+             COUNT(DISTINCT dc.id_comanda) AS pedidos,
+             MIN(c.fecha_registro) AS primera_venta,
+             MAX(c.fecha_registro) AS ultima_venta
+      FROM detalle_comanda dc
+      JOIN comanda c ON c.id_comanda = dc.id_comanda
+      WHERE dc.id_producto = ${id} AND c.estado_despacho <> 'Cancelada'
+      GROUP BY dc.precio_cobrado
+      ORDER BY unidades DESC`
+
+    res.json({
+      producto: {
+        id_producto:      producto.id_producto,
+        nombre_producto:  producto.nombre_producto,
+        url_imagen:       producto.url_imagen,
+        precio_base:      Number(producto.precio_base),
+        precio_promocion: producto.precio_promocion !== null ? Number(producto.precio_promocion) : null,
+        estado_promocion: producto.estado_promocion,
+      },
+      cambios: filas.map(f => ({
+        id_historial:    f.id_historial,
+        usuario:         f.usuario ? `${f.usuario.nombres} ${f.usuario.apellidos}`.trim() : 'Sistema',
+        fecha_hora:      f.fecha_hora,
+        tipo:            f.tipo,
+        precio_anterior: f.precio_anterior !== null ? Number(f.precio_anterior) : null,
+        precio_nuevo:    Number(f.precio_nuevo),
+        origen:          f.origen,
+      })),
+      ventas_por_precio: ventas.map(v => ({
+        precio:        Number(v.precio),
+        unidades:      Number(v.unidades),
+        ingresos:      Number(v.ingresos),
+        pedidos:       Number(v.pedidos),
+        primera_venta: v.primera_venta,
+        ultima_venta:  v.ultima_venta,
+      })),
+    })
+  } catch (error) {
+    console.error('Error al obtener historial del producto:', error)
+    res.status(500).json({ error: 'Error al obtener el historial de precios' })
+  }
 })
 
 // ---- DELETE /api/productos/:id ----
@@ -312,11 +464,31 @@ router.delete('/:id', soloRoles('Administrador'), async (req, res) => {
     const producto = await prisma.producto.findUnique({ where: { id_producto: id } })
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' })
 
+    // 1) Con ventas registradas: eliminarlo orfanaría comandas/reportes. Se bloquea con aviso.
+    const ventas = await prisma.detalle_comanda.count({ where: { id_producto: id } })
+    if (ventas > 0) {
+      return res.status(409).json({ error: 'Este producto tiene ventas registradas, no se puede eliminar (se perdería el historial). Puedes dejarlo sin stock o desactivarlo.' })
+    }
+
+    // 2) Es componente de otros combos: hay que quitarlo de ellos primero.
+    const enCombos = await prisma.combo_detalle.count({ where: { id_producto_hijo: id } })
+    if (enCombos > 0) {
+      return res.status(409).json({ error: 'Este producto forma parte de uno o más combos. Quítalo de esos combos antes de eliminarlo.' })
+    }
+
     if (producto.url_imagen) await eliminarImagen(producto.url_imagen)
 
-    await prisma.producto.delete({ where: { id_producto: id } })
+    // Limpia sus propias dependencias (composición del combo y predicciones) y borra en una transacción
+    await prisma.$transaction([
+      prisma.combo_detalle.deleteMany({ where: { id_producto_padre: id } }),
+      prisma.prediccion_ia.deleteMany({ where: { id_producto: id } }),
+      prisma.producto.delete({ where: { id_producto: id } }),
+    ])
     res.json({ mensaje: 'Producto eliminado correctamente' })
-  } catch { res.status(500).json({ error: 'Error al eliminar producto' }) }
+  } catch (error) {
+    console.error('Error al eliminar producto:', error)
+    res.status(500).json({ error: 'Error al eliminar producto' })
+  }
 })
 
 module.exports = router

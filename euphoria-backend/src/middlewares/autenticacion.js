@@ -40,11 +40,16 @@ async function verificarToken(req, res, next) {
     
     next()
   } catch (err) {
+    // Fallos de autenticación → 401 (token vencido, malformado o firma inválida)
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Sesión expirada. Inicia sesión nuevamente.' })
     }
+    if (err.name === 'JsonWebTokenError' || err.name === 'NotBeforeError') {
+      return res.status(401).json({ error: 'Token inválido. Inicia sesión nuevamente.' })
+    }
+    // Cualquier otra cosa es un error real del servidor
     console.error('Error verificando token:', err)
-    return res.status(403).json({ error: 'Token inválido o error de servidor' })
+    return res.status(500).json({ error: 'Error al validar la sesión.' })
   }
 }
 

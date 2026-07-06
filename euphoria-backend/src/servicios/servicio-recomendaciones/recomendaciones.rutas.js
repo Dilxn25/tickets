@@ -6,6 +6,7 @@ const express = require('express')
 const router = express.Router()
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { registrarPrecio } = require('../../utilidades/historial-precios')
 
 // Caché en memoria (60s) para combos/packs: las consultas de co-ocurrencia
 // escanean todo el historial y no cambian minuto a minuto
@@ -167,7 +168,7 @@ router.get('/combos', verificarToken, async (req, res) => {
         nombre: prods.map(p => p.nombre).join(' + '),
         precio_normal: Math.round(normal * 100) / 100,
         precio_combo: precioAtractivo(normal * (1 - DESCUENTO)),
-        descuento_pct: DESCUENTO * 100,
+        descuento_pct: Math.round(DESCUENTO * 100),
         veces: Number(r.veces),
       }
     })
@@ -362,7 +363,7 @@ router.get('/packs', verificarToken, async (req, res) => {
         })),
         precio_normal: Math.round(normal * 100) / 100,
         precio_pack: precioAtractivo(normal * (1 - DESCUENTO)),
-        descuento_pct: DESCUENTO * 100
+        descuento_pct: Math.round(DESCUENTO * 100)
       }
     }
 
@@ -419,6 +420,12 @@ router.post('/crear-combo', verificarToken, soloRoles('Administrador'), async (r
         where: { id_producto: duplicado.id_producto },
         data: { precio_base: precioNum }
       })
+      if (precioAnterior !== precioNum) {
+        await registrarPrecio({
+          idProducto: duplicado.id_producto, idUsuario: req.usuario.id, tipo: 'base',
+          precioAnterior, precioNuevo: precioNum, origen: 'combo_ia',
+        })
+      }
       return res.json({
         ya_existia: true,
         nombre: duplicado.nombre_producto,
@@ -446,6 +453,10 @@ router.post('/crear-combo', verificarToken, soloRoles('Administrador'), async (r
         id_producto_hijo: Number(i.id_producto),
         cantidad: Number(i.cantidad) || 1
       }))
+    })
+    await registrarPrecio({
+      idProducto: nuevo.id_producto, idUsuario: req.usuario.id, tipo: 'base',
+      precioAnterior: null, precioNuevo: precioNum, origen: 'combo_ia',
     })
     res.json({ ya_existia: false, nombre: nuevo.nombre_producto, id_producto: nuevo.id_producto })
   } catch (error) {

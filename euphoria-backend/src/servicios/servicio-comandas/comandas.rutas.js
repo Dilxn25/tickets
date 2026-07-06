@@ -596,13 +596,13 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
         cond.push('c.fecha_registro <= ?'); params.push(ev.fecha_hora_fin || new Date())
       }
     } else {
+      // Se compara por DATE() (misma extracción que el gráfico por_dia con DATE_FORMAT),
+      // así el rango filtrado y las columnas por día usan exactamente el mismo criterio de "día".
       if (req.query.desde) {
-        const [y, m, d] = req.query.desde.split('-').map(Number)
-        cond.push('c.fecha_registro >= ?'); params.push(new Date(y, m - 1, d, 0, 0, 0))
+        cond.push('DATE(c.fecha_registro) >= ?'); params.push(req.query.desde)
       }
       if (req.query.hasta) {
-        const [y, m, d] = req.query.hasta.split('-').map(Number)
-        cond.push('c.fecha_registro <= ?'); params.push(new Date(y, m - 1, d, 23, 59, 59, 999))
+        cond.push('DATE(c.fecha_registro) <= ?'); params.push(req.query.hasta)
       }
     }
     const W = 'WHERE ' + cond.join(' AND ')

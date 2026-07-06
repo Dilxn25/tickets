@@ -18,11 +18,11 @@
         </div>
         <div class="metrica metrica-activos">
           <dt class="metrica-label">En cartelera</dt>
-          <dd class="metrica-valor">{{ eventosActuales.length }}</dd>
+          <dd class="metrica-valor">{{ totalEnCartelera }}</dd>
         </div>
         <div class="metrica">
           <dt class="metrica-label">Pasados</dt>
-          <dd class="metrica-valor">{{ eventosPasados.length }}</dd>
+          <dd class="metrica-valor">{{ totalPasados }}</dd>
         </div>
       </dl>
     </header>
@@ -155,11 +155,11 @@
             <div class="form-fila">
               <div class="grupo-campo">
                 <label class="etiqueta">Fecha y hora de inicio *</label>
-                <input v-model="form.fecha_hora_inicio" type="datetime-local" class="campo" required />
+                <BaseFecha v-model="form.fecha_hora_inicio" con-hora :clearable="false" placeholder="Elegir inicio" />
               </div>
               <div class="grupo-campo">
                 <label class="etiqueta">Fecha y hora de fin (opcional)</label>
-                <input v-model="form.fecha_hora_fin" type="datetime-local" class="campo" />
+                <BaseFecha v-model="form.fecha_hora_fin" con-hora :min="form.fecha_hora_inicio || ''" placeholder="Elegir fin" />
               </div>
             </div>
 
@@ -279,6 +279,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
@@ -442,6 +443,9 @@ const limite = ref(12)
 
 const eventosActuales = computed(() => eventosFiltrados.value.filter(e => e.estado !== 'terminado'))
 const eventosPasados  = computed(() => eventosFiltrados.value.filter(e => e.estado === 'terminado'))
+// Métricas de cabecera SIEMPRE globales (no se mueven al filtrar/buscar)
+const totalEnCartelera = computed(() => eventos.value.filter(e => e.estado !== 'terminado').length)
+const totalPasados     = computed(() => eventos.value.filter(e => e.estado === 'terminado').length)
 const listaActiva = computed(() => pestana.value === 'pasados' ? eventosPasados.value : eventosActuales.value)
 const eventosPaginados = computed(() => {
   const ini = (pagina.value - 1) * limite.value
