@@ -211,6 +211,21 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       })
     }
 
+    // Vínculo con la reserva: si la mesa tiene una entrada (reserva) activa, se liga
+    // el pedido a ella (y de ahí a su mesa + evento). En walk-ins queda null.
+    let idEntradaVinculada = null
+    if (id_mesa) {
+      const reserva = await prisma.entrada.findFirst({
+        where: { id_mesa: Number(id_mesa) },
+        orderBy: { fecha_reserva: 'desc' },
+        select: { id_entrada: true },
+      })
+      idEntradaVinculada = reserva?.id_entrada || null
+    }
+    // Origen del pedido según quién lo crea (el 'app' del cliente se define en la Fase C)
+    const origenComanda = req.usuario?.rol === 'Cliente' ? 'app'
+      : (req.usuario?.rol === 'Cajero' ? 'caja' : 'mesero')
+
     // SI EL METODO ES BILLETERA
     if (metodo_pago === 'Billetera') {
       if (!qr_billetera) return res.status(400).json({ error: 'Falta el código QR o ID de la billetera' })
@@ -315,6 +330,8 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
               estado_despacho: 'Pendiente',
               fecha_registro: new Date(),
               metodo_pago: 'Billetera',
+              id_entrada: idEntradaVinculada,
+              origen: origenComanda,
               detalle_comanda: { create: detalles_crear }
             }
           })
@@ -394,6 +411,8 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           monto_recibido: monto_recibido ? Number(monto_recibido) : null,
           cambio_dado: cambio_dado ? Number(cambio_dado) : null,
           comprobante_url: url_final_comprobante,
+          id_entrada: idEntradaVinculada,
+          origen: origenComanda,
           detalle_comanda: { create: detalles_crear }
         }
       })
