@@ -18,6 +18,20 @@
       </div>
     </header>
 
+    <!-- Aviso sutil en un rincón: el servicio de sugerencias (IA) no está disponible -->
+    <transition name="chip-ia-anim">
+      <div v-if="!iaEnLinea && !avisoIaDescartado" class="chip-ia">
+        <span class="chip-ia-punto" aria-hidden="true"></span>
+        <span class="chip-ia-txt">Sin sugerencias por ahora</span>
+        <button class="chip-ia-avisar" :class="{ enviado: avisoIaEnviado }" @click="avisarCajaIA" :disabled="avisoIaEnviado">
+          {{ avisoIaEnviado ? 'Avisado ✓' : 'Avisar a caja' }}
+        </button>
+        <button class="chip-ia-cerrar" @click="avisoIaDescartado = true" title="Ocultar" aria-label="Ocultar aviso">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </transition>
+
     <!-- ============================================
          VISTA 1: PEDIDOS LISTOS PARA RECOGER 
          (Oculta el POS para evitar sobreposiciones)
@@ -49,13 +63,13 @@
                 Mesa {{ ped.mesa_espacio.numero_nombre }}
               </span>
               <span class="clf-destino vip" v-else>
-                Barra/VIP
+                Barra
               </span>
             </div>
             
             <div class="clf-cliente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-              <span>{{ ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : 'Sin Registro' }}</span>
+              <span>{{ ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : 'Sin registro' }}</span>
             </div>
             
             <div class="clf-prods">
@@ -83,48 +97,174 @@
     <div v-else class="pos-layout">
       <!-- PANEL IZQUIERDO: PRODUCTOS -->
       <section class="panel-productos" :class="{ 'oculto-movil': verCarritoMovil }">
-        <div class="buscador">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" v-model="busqueda" placeholder="Buscar producto por nombre..." />
+        <div class="barra-buscar">
+          <div class="buscador">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" v-model="busqueda" placeholder="Buscar producto por nombre..." />
+          </div>
+          <button
+            v-if="hayCombos"
+            type="button"
+            class="toggle-combos"
+            :class="{ activo: mostrarCombos }"
+            role="switch"
+            :aria-checked="mostrarCombos"
+            @click="mostrarCombos = !mostrarCombos"
+            :title="mostrarCombos ? 'Ocultar combos' : 'Mostrar combos'"
+          >
+            <span class="toggle-pista"><span class="toggle-bolita"></span></span>
+            <span class="toggle-txt">Combos</span>
+          </button>
         </div>
 
-        <div class="categorias-scroll">
-          <button class="btn-categoria" :class="{ activo: categoriaSeleccionada === null }" @click="categoriaSeleccionada = null">Todos</button>
-          <button
-            class="btn-categoria"
-            v-for="cat in categorias"
-            :key="cat.id_categoria"
-            :class="{ activo: categoriaSeleccionada === cat.id_categoria }"
-            @click="categoriaSeleccionada = cat.id_categoria"
-          >{{ cat.nombre_categoria }}</button>
+        <div class="categorias-fila">
+          <button class="cat-flecha" type="button" aria-label="Categorías anteriores" @click="desplazarCategorias(-1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="categorias-scroll" ref="scrollCategorias">
+            <button class="btn-categoria" :class="{ activo: categoriaSeleccionada === null }" @click="categoriaSeleccionada = null">Todos</button>
+            <button v-if="hayCombos && mostrarCombos" class="btn-categoria cat-combos" :class="{ activo: categoriaSeleccionada === 'combos' }" @click="categoriaSeleccionada = 'combos'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+              Combos
+            </button>
+            <button
+              class="btn-categoria"
+              v-for="cat in categorias"
+              :key="cat.id_categoria"
+              :class="{ activo: categoriaSeleccionada === cat.id_categoria }"
+              @click="categoriaSeleccionada = cat.id_categoria"
+            >{{ cat.nombre_categoria }}</button>
+          </div>
+          <button class="cat-flecha" type="button" aria-label="Categorías siguientes" @click="desplazarCategorias(1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
         </div>
 
         <div class="lista-productos">
           <div v-if="cargandoProductos" class="spinner-container"><div class="spinner"></div></div>
-          <div v-else-if="productosFiltrados.length === 0" class="vacio">
+          <div v-else-if="catalogoVacio" class="vacio">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <p>No hay productos que coincidan con tu búsqueda</p>
           </div>
-          
-          <div v-else class="grid-productos escalonar">
-            <div
-              v-for="prod in productosFiltrados"
-              :key="prod.id_producto"
-              class="tarjeta-producto-pos"
-              @click="agregarAlCarrito(prod)"
-            >
-              <div class="tp-media">
-                <img :src="prod.url_imagen || 'https://via.placeholder.com/150?text=No+Img'" :alt="prod.nombre_producto" class="img-producto" />
-                <span class="tp-add" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </span>
+
+          <template v-else>
+            <!-- APARTADO COMBOS (destacado, con el detalle claro de qué incluye) -->
+            <div v-if="mostrarSeccionCombos || categoriaSeleccionada === 'combos'" class="seccion-combos">
+              <div class="seccion-titulo" v-if="mostrarSeccionCombos">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                <span>Combos para la mesa</span>
               </div>
-              <div class="info-producto">
-                <h5>{{ prod.nombre_producto }}</h5>
-                <p class="precio">Bs. {{ prod.precio_base }}</p>
+              <div class="grid-combos escalonar">
+                <div
+                  v-for="combo in combosDisponibles"
+                  :key="combo.id_producto"
+                  class="tarjeta-combo"
+                  @click="agregarAlCarrito(combo)"
+                >
+                  <div class="tc-media">
+                    <img v-if="combo.url_imagen" :src="combo.url_imagen" :alt="combo.nombre_producto" class="img-producto" />
+                    <div v-else-if="combo.combos_como_padre && combo.combos_como_padre.length" class="tp-combo">
+                      <div v-for="(c, ci) in combo.combos_como_padre.slice(0, 3)" :key="ci" class="tp-combo-cell">
+                        <img v-if="c.url_imagen" :src="c.url_imagen" alt="" />
+                        <span v-else class="tp-combo-ph">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-else class="tp-placeholder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line></svg>
+                    </div>
+                    <span v-if="ahorroCombo(combo) > 0" class="tc-ahorro">Ahorra Bs {{ ahorroCombo(combo).toFixed(2) }}</span>
+                    <span class="tp-add" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </span>
+                  </div>
+                  <div class="tc-info">
+                    <h5>{{ nombreCombo(combo) }}</h5>
+                    <!-- Cada componente como una mini-tarjeta clara: cantidad + qué es -->
+                    <div class="tc-items">
+                      <span v-for="(c, ci) in combo.combos_como_padre" :key="ci" class="tc-item">
+                        <img v-if="c.url_imagen" :src="c.url_imagen" class="tc-item-img" alt="" />
+                        <span v-else class="tc-item-img tc-item-ph">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                        </span>
+                        <span class="tc-item-txt"><b>{{ c.cantidad }}</b> {{ nombreLimpio(c.nombre_producto) }}</span>
+                      </span>
+                    </div>
+                    <p class="precio">Bs. {{ Number(combo.precio_base).toFixed(2) }}</p>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+
+            <!-- APARTADO PRODUCTOS (disponibles) -->
+            <div v-if="categoriaSeleccionada !== 'combos' && productosSueltos.length" class="seccion-productos">
+              <div class="seccion-titulo" v-if="mostrarSeccionCombos">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                <span>Productos</span>
+              </div>
+              <div class="grid-productos escalonar">
+                <div
+                  v-for="prod in productosSueltos"
+                  :key="prod.id_producto"
+                  class="tarjeta-producto-pos"
+                  @click="agregarAlCarrito(prod)"
+                >
+                  <div class="tp-media">
+                    <img v-if="prod.url_imagen" :src="prod.url_imagen" :alt="prod.nombre_producto" class="img-producto" />
+                    <div v-else class="tp-placeholder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="30" height="30"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                      <span class="tp-ph-nombre">{{ prod.nombre_producto }}</span>
+                    </div>
+                    <span class="tp-add" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </span>
+                  </div>
+                  <div class="info-producto">
+                    <h5>{{ prod.nombre_producto }}</h5>
+                    <p class="precio">Bs. {{ Number(prod.precio_base).toFixed(2) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- APARTADO FUERA DE STOCK (al final, no estorba lo vendible) -->
+            <div v-if="fueraDeStock.length" class="seccion-agotados">
+              <div class="seccion-titulo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                <span>Fuera de stock</span>
+              </div>
+              <div class="grid-productos escalonar">
+                <div
+                  v-for="prod in fueraDeStock"
+                  :key="prod.id_producto"
+                  class="tarjeta-producto-pos agotado"
+                  @click="agregarAlCarrito(prod)"
+                >
+                  <div class="tp-media">
+                    <img v-if="prod.url_imagen" :src="prod.url_imagen" :alt="prod.nombre_producto" class="img-producto" />
+                    <div v-else-if="prod.es_combo && prod.combos_como_padre && prod.combos_como_padre.length" class="tp-combo">
+                      <div v-for="(c, ci) in prod.combos_como_padre.slice(0, 3)" :key="ci" class="tp-combo-cell">
+                        <img v-if="c.url_imagen" :src="c.url_imagen" alt="" />
+                        <span v-else class="tp-combo-ph">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-else class="tp-placeholder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="30" height="30"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                      <span class="tp-ph-nombre">{{ prod.nombre_producto }}</span>
+                    </div>
+                    <span class="tp-agotado">Agotado</span>
+                  </div>
+                  <div class="info-producto">
+                    <h5>{{ prod.es_combo ? nombreCombo(prod) : prod.nombre_producto }}</h5>
+                    <p class="precio">Bs. {{ Number(prod.precio_base).toFixed(2) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- Botón flotante móvil para ver la orden actual -->
@@ -147,12 +287,48 @@
         
         <!-- SELECTOR DE MESA -->
         <div class="selector-mesa">
-          <div class="mesa-selector-row">
+          <div class="mesa-tabs">
+            <button type="button" class="mesa-tab" :class="{ activo: modoMesa === 'lista' }" @click="modoMesa = 'lista'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              Lista
+            </button>
+            <button type="button" class="mesa-tab" :class="{ activo: modoMesa === 'buscar' }" @click="modoMesa = 'buscar'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              Buscar
+            </button>
+            <button type="button" class="mesa-tab" @click="abrirMapaMesa">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+              Mapa
+            </button>
+          </div>
+
+          <!-- Modo LISTA -->
+          <div v-if="modoMesa === 'lista'" class="mesa-selector-row">
             <div class="mesa-icono">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 12h18M3 6h18M3 18h18"></path></svg>
             </div>
             <div class="select-mesa-wrap"><BaseSelect v-model="mesaSeleccionada" :options="opcionesMesa" @update:model-value="alCambiarMesa" /></div>
           </div>
+
+          <!-- Modo BUSCAR (las mesas aparecen al teclear, no llenan la pantalla) -->
+          <div v-else class="mesa-buscar">
+            <input v-model="busquedaMesa" type="text" class="input-cliente" placeholder="Número de mesa (M1, S2...)" />
+            <div class="mesa-chips">
+              <button type="button" class="mesa-chip barra" :class="{ sel: !mesaSeleccionada }" @click="seleccionarMesaObj(null)">Barra</button>
+              <template v-if="busquedaMesa.trim()">
+                <button
+                  v-for="m in mesasFiltradas" :key="m.id_mesa"
+                  type="button" class="mesa-chip"
+                  :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa }"
+                  @click="seleccionarMesaObj(m)">
+                  {{ m.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ m.numero_nombre }}
+                </button>
+                <p v-if="!mesasFiltradas.length" class="mesa-vacio">Sin coincidencias.</p>
+              </template>
+              <p v-else class="mesa-hint">Escribe el número para ver las mesas.</p>
+            </div>
+          </div>
+
           <div v-if="mesaSeleccionada && clienteAutoAsignado" class="cliente-auto-mesa">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             Reserva de <strong>{{ clienteAutoAsignado }}</strong> asignada automaticamente
@@ -202,6 +378,19 @@
               <button @click="sumar(index)">+</button>
             </div>
           </div>
+        </div>
+
+        <!-- Aviso: los productos de la orden forman un combo (conviene armarlo) -->
+        <div v-if="comboSugeridoPorCarrito" class="combo-sugerido">
+          <div class="cs-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+          </div>
+          <div class="cs-texto">
+            <strong>Conviene como {{ comboSugeridoPorCarrito.combo.nombre_producto }}</strong>
+            <small v-if="comboSugeridoPorCarrito.ahorro > 0">Ahorra Bs {{ comboSugeridoPorCarrito.ahorro.toFixed(2) }}</small>
+            <small v-else>Arma la orden como combo</small>
+          </div>
+          <button class="cs-btn" @click="armarComboSugerido">Armar</button>
         </div>
 
         <!-- Sugerencias del motor de recomendación (IA) -->
@@ -304,12 +493,8 @@
 
               <div class="ocr-zona mt-15">
                 <div v-if="!validandoOCR && !comprobanteValido">
-                  <label class="btn-camara-label">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                    Fotografiar Comprobante
-                    <input type="file" accept="image/*" capture="environment" @change="alSeleccionarComprobanteYValidar" style="display:none;" />
-                  </label>
-                  <p style="text-align:center; font-size:0.8rem; margin-top:12px; color:var(--texto-secundario);">La IA verificara el comprobante automaticamente</p>
+                  <CapturaCamara modo="foto" :deshabilitado="validandoOCR" texto-guia="Coloca el comprobante dentro del marco" nombre-archivo="comprobante.jpg" @archivo="validarComprobante" />
+                  <p style="text-align:center; font-size:0.8rem; margin-top:12px; color:var(--texto-secundario);">Verificamos el comprobante automáticamente</p>
                 </div>
                 <div v-if="validandoOCR" class="ia-verificando">
                   <div class="ia-barra"></div>
@@ -317,7 +502,7 @@
                 </div>
                 <div v-if="comprobanteValido" class="ia-ok">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="44" height="44"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  <span>Comprobante Aprobado</span>
+                  <span>Comprobante aprobado</span>
                 </div>
               </div>
             </div>
@@ -343,7 +528,7 @@
 
                 <div v-if="saldoBilleteraVerificada >= totalCarrito">
                   <div v-if="requierePin">
-                    <p class="pin-sub" style="color: var(--color-alerta); font-weight: bold; margin-bottom: 10px;">Por seguridad (QR Privado), ingresa el PIN:</p>
+                    <p class="pin-sub" style="color: var(--color-alerta); font-weight: bold; margin-bottom: 10px;">Por seguridad, ingresa el PIN de la billetera:</p>
                     <input type="password" v-model="formCobro.pin" placeholder="••••" maxlength="4" class="input-pin" autofocus @input="verificarPinLleno" />
                   </div>
                   <div v-else style="margin-top: 15px;">
@@ -356,59 +541,30 @@
 
               <!-- Estado inicial (Paso 1) -->
               <div v-else class="billetera-inicio fade-in">
-                <p class="cobro-instruccion">El cliente paga con su saldo Euphoria. Escanea su QR personal o ingresa su ID.</p>
-                
-                <div v-if="!camaraActiva" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                  <button class="btn btn-primario" style="flex: 1; padding: 0.8rem; font-size: 0.85rem;" @click="activarCamaraScanner" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="margin-bottom: 4px; display: block; margin: 0 auto;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                    Escanear en Vivo
-                  </button>
+                <p class="cobro-instruccion">El cliente paga con su saldo Euphoria. Escanea su QR o ingresa su ID.</p>
 
-                  <label class="btn btn-secundario" style="flex: 1; padding: 0.8rem; font-size: 0.85rem; text-align: center; cursor: pointer; margin: 0; display: block;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="margin-bottom: 4px; display: block; margin: 0 auto;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                    Foto Nativa
-                    <input type="file" accept="image/*" capture="environment" @change="escanearQrDesdeImagen" style="display:none;" />
-                  </label>
-                </div>
-                
-                <div v-show="camaraActiva" class="camara-zona fade-in">
-                  <!-- Contenedor del video con overlay de enfoque -->
-                  <div class="qr-scanner-wrapper">
-                    <div id="reader"></div>
-                    <!-- Overlay oscuro con recorte central -->
-                    <div class="qr-overlay">
-                      <div class="qr-overlay-top"></div>
-                      <div class="qr-overlay-middle">
-                        <div class="qr-overlay-side"></div>
-                        <!-- Cuadro de enfoque -->
-                        <div class="qr-viewfinder" :class="{ 'qr-detected': qrDetectado }">
-                          <span class="corner tl"></span>
-                          <span class="corner tr"></span>
-                          <span class="corner bl"></span>
-                          <span class="corner br"></span>
-                          <!-- Línea de escaneo animada -->
-                          <div class="scan-line" v-if="!qrDetectado"></div>
-                        </div>
-                        <div class="qr-overlay-side"></div>
-                      </div>
-                      <div class="qr-overlay-bottom">
-                        <p class="qr-hint" v-if="!qrDetectado">Apunta la cámara al código QR del cliente</p>
-                        <p class="qr-hint qr-hint-ok" v-else><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"></polyline></svg> Código detectado</p>
-                      </div>
-                    </div>
+                <CapturaCamara modo="qr" :deshabilitado="procesando" texto-guia="Coloca el QR del cliente dentro del marco" @codigo="alDetectarQr" />
+
+                <div class="mt-15">
+                  <p class="cobro-o-manual">O busca al cliente por nombre, carnet o celular:</p>
+                  <div class="billetera-manual">
+                    <input type="text" v-model="formCobro.qr_billetera" placeholder="Nombre, carnet o celular..." class="input-qr" @input="buscarClientesBilletera" @keydown.enter="verificarBilleteraBackend" />
+                    <button class="btn btn-primario" @click="verificarBilleteraBackend" :disabled="procesando || !formCobro.qr_billetera">Buscar</button>
                   </div>
-                  <button class="btn btn-secundario btn-full" style="margin-top: 12px;" @click="detenerEscaneoCamara" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
-                    Detener Cámara
-                  </button>
-                </div>
-                
-                <div class="mt-15" v-if="!camaraActiva">
-                  <p style="text-align:center; font-size:0.8rem; color:var(--texto-secundario); margin-bottom:8px;">O ingresa el ID corto, carnet o celular:</p>
-                  <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" v-model="formCobro.qr_billetera" placeholder="Ej: 5576, 1234567..." class="input-qr" style="flex: 1; margin:0;" @keydown.enter="verificarBilleteraBackend" />
-                    <button class="btn btn-primario" style="padding: 0 1.5rem;" @click="verificarBilleteraBackend" :disabled="procesando || !formCobro.qr_billetera">Buscar</button>
-                  </div>
+                  <!-- Coincidencias a medida que escribe (como los demás buscadores) -->
+                  <transition-group name="lista" tag="div" v-if="clientesBilletera.length" class="billetera-resultados">
+                    <button
+                      v-for="c in clientesBilletera" :key="c.id_usuario"
+                      type="button" class="billetera-item"
+                      @click="elegirClienteBilletera(c)"
+                    >
+                      <span class="bi-avatar">{{ (c.nombres || '?').charAt(0) }}</span>
+                      <span class="bi-txt">
+                        <span class="bi-nombre">{{ c.nombres }} {{ c.apellidos }}</span>
+                        <span class="bi-dato">{{ c.ci_carnet || c.telefono || ('ID ' + c.id_usuario) }}</span>
+                      </span>
+                    </button>
+                  </transition-group>
                 </div>
               </div>
 
@@ -417,13 +573,30 @@
             <!-- TAB 3: EFECTIVO -->
             <div v-if="metodoPago === 'Efectivo'" class="cobro-panel">
               <p class="cobro-instruccion">Ingresa el monto que entrega el cliente.</p>
-              <div class="efectivo-display">
-                <label class="efectivo-label">MONTO RECIBIDO (Bs.)</label>
-                <input type="number" v-model="formCobro.monto_recibido" @input="calcularCambio" placeholder="0.00" class="efectivo-input" autofocus />
+
+              <!-- Display del monto recibido (sin flechas: solo números positivos) -->
+              <div class="efe-display" :class="{ ok: efectivoSuficiente }">
+                <span class="efe-label">Monto recibido</span>
+                <div class="efe-monto">
+                  <span class="efe-moneda">Bs.</span>
+                  <input
+                    type="text" inputmode="decimal" v-model="montoRecibidoTexto"
+                    @input="alEscribirEfectivo" placeholder="0.00" class="efe-input" autofocus
+                  />
+                </div>
               </div>
-              <div class="cambio-display" :class="{ 'cambio-insuf': formCobro.cambio_dado < 0 }">
-                <span class="cambio-label">CAMBIO A DEVOLVER</span>
-                <span class="cambio-valor">Bs. {{ (formCobro.cambio_dado || 0).toFixed(2) }}</span>
+
+              <!-- Chips de billetes: arman el monto rápido (suman) -->
+              <div class="efe-chips">
+                <button v-for="b in billetes" :key="b" type="button" class="efe-chip" @click="sumarBillete(b)">+{{ b }}</button>
+                <button type="button" class="efe-chip exacto" @click="montoExacto">Exacto</button>
+                <button type="button" class="efe-chip limpiar" @click="limpiarEfectivo" :disabled="!montoRecibidoTexto">Limpiar</button>
+              </div>
+
+              <!-- Cambio / faltante en vivo -->
+              <div class="efe-cambio" :class="{ falta: faltaEfectivo, listo: efectivoSuficiente }">
+                <span class="efe-cambio-label">{{ faltaEfectivo ? 'Falta' : 'Cambio a devolver' }}</span>
+                <span class="efe-cambio-valor">Bs. {{ Math.abs(cambioEfectivo).toFixed(2) }}</span>
               </div>
             </div>
 
@@ -434,7 +607,7 @@
           <div class="cobro-pie">
             <button class="cobro-btn-cancel" @click="cerrarModalCobro" :disabled="procesando">Cancelar</button>
             <button v-if="metodoPago === 'Efectivo'" class="cobro-btn-ok" @click="procesarCobro" :disabled="procesando || formCobro.cambio_dado < 0">
-              <span v-if="!procesando">Confirmar Bs. {{ totalCarrito.toFixed(2) }}</span>
+              <span v-if="!procesando">Cobrar Bs. {{ totalCarrito.toFixed(2) }}</span>
               <span v-else class="loader"></span>
             </button>
           </div>
@@ -473,6 +646,41 @@
             <button class="btn-confirmar" @click="crearClienteRapido" :disabled="creandoCliente || !formNuevoCliente.nombres">
               {{ creandoCliente ? 'Buscando...' : 'Confirmar y Seleccionar' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- MODAL MAPA DE MESAS (elegir tocando el plano) -->
+    <Teleport to="body">
+      <div v-if="modalMapaMesa" class="mapa-overlay" @click.self="modalMapaMesa = false">
+        <div class="mapa-sheet fade-in">
+          <div class="mapa-header">
+            <div>
+              <h3>Elige la mesa en el mapa</h3>
+              <p class="mapa-sub">Toca una mesa para asignarla a la orden.</p>
+            </div>
+            <button class="mapa-cerrar" @click="modalMapaMesa = false" title="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          <div class="mapa-body">
+            <div v-if="cargandoMapa" class="mapa-cargando"><div class="spinner"></div></div>
+            <div v-else-if="!mapaZonas.length" class="mapa-vacio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon></svg>
+              <p>No hay un mapa disponible para el evento activo.</p>
+            </div>
+            <div v-else v-for="z in mapaZonas" :key="z.id_zona" class="mapa-zona">
+              <p class="mapa-zona-nombre">{{ z.nombre_zona }}<em v-if="z.evento"> · {{ z.evento }}</em></p>
+              <div class="mapa-lienzo" :style="{ aspectRatio: String(z.proporcion || 1) }">
+                <div
+                  v-for="el in z.elementos" :key="el.id_mesa"
+                  class="mapa-el" :class="claseElementoMapa(el)" :style="estiloElementoMapa(el)"
+                  @click="elegirMesaMapa(el)">
+                  <span class="mapa-el-txt">{{ el.numero_nombre }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -557,10 +765,9 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 const notif = useNotificaciones()
-
-import { Html5Qrcode } from "html5-qrcode"
 
 const router = useRouter()
 const tienda = useTiendaAutenticacion()
@@ -570,6 +777,20 @@ const busqueda = ref('')
 const categorias = ref([])
 const categoriaSeleccionada = ref(null)
 const cargandoProductos = ref(true)
+// Interruptor para mostrar u ocultar los combos en el catálogo
+const mostrarCombos = ref(true)
+watch(mostrarCombos, (v) => {
+  // Si se apaga estando en el chip "Combos", volver a "Todos"
+  if (!v && categoriaSeleccionada.value === 'combos') categoriaSeleccionada.value = null
+})
+
+// Desplazamiento de las categorías con flechas (útil en escritorio, donde no
+// se puede arrastrar con el dedo como en el celular).
+const scrollCategorias = ref(null)
+function desplazarCategorias(dir) {
+  const el = scrollCategorias.value
+  if (el) el.scrollBy({ left: dir * Math.max(180, el.clientWidth * 0.7), behavior: 'smooth' })
+}
 
 const carrito = ref([])
 const verCarritoMovil = ref(false)
@@ -588,6 +809,63 @@ const opcionesMesa = computed(() => [
   ...mesas.value.map(m => ({ value: m, label: `Mesa ${m.numero_nombre} — ${m.estado_ocupacion === 'reservada' ? 'Reservada' : 'Libre'}` })),
 ])
 const clienteAutoAsignado = ref('')
+
+// Selector de mesa: 3 modos (lista / buscar / mapa)
+const modoMesa = ref('lista')
+const busquedaMesa = ref('')
+const mesasFiltradas = computed(() => {
+  const q = busquedaMesa.value.trim().toLowerCase()
+  const base = mesas.value.filter(m => m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla')
+  if (!q) return base
+  return base.filter(m => String(m.numero_nombre || '').toLowerCase().includes(q))
+})
+function seleccionarMesaObj(m) {
+  mesaSeleccionada.value = m
+  alCambiarMesa()
+}
+
+// Mapa de mesas (elegir tocando el plano)
+const modalMapaMesa = ref(false)
+const mapaZonas = ref([])
+const cargandoMapa = ref(false)
+async function abrirMapaMesa() {
+  modalMapaMesa.value = true
+  cargandoMapa.value = true
+  try {
+    mapaZonas.value = await clienteHttp.get('/mesas/mapa')
+  } catch (e) {
+    mapaZonas.value = []
+  } finally {
+    cargandoMapa.value = false
+  }
+}
+// Posición del elemento en el lienzo (los datos vienen en % 0-100)
+function estiloElementoMapa(el) {
+  return {
+    left: `${el.posicion_x}%`,
+    top: `${el.posicion_y}%`,
+    width: `${el.ancho ?? 7}%`,
+    height: `${el.alto ?? 10}%`,
+    transform: `rotate(${el.rotacion || 0}deg)`,
+    borderRadius: el.forma === 'redondo' ? '50%' : '8px',
+  }
+}
+// Sin colores de estado: el mesero solo elige la mesa para llenar el campo.
+// 'elegible' = mesa/silla seleccionable (toca y listo); 'deco' = elemento fijo.
+function claseElementoMapa(el) {
+  const elegible = (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && el.es_seleccionable
+  return elegible ? 'elegible' : 'deco'
+}
+function elegirMesaMapa(el) {
+  const elegible = (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && el.es_seleccionable
+  if (!elegible) return
+  // Usa la mesa de la lista plana si existe (misma forma), si no el propio elemento
+  const m = mesas.value.find(x => x.id_mesa === el.id_mesa) || el
+  mesaSeleccionada.value = m
+  alCambiarMesa()
+  modalMapaMesa.value = false
+  notif.info(`${el.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${el.numero_nombre} seleccionada`)
+}
 
 // Variables de Cliente
 const busquedaCliente = ref('')
@@ -608,7 +886,6 @@ const metodoPago = ref('Transferencia QR')
 const procesando = ref(false)
 const errorCobro = ref('')
 const requierePin = ref(false)
-const camaraActiva = ref(false)
 const mostrarExito = ref(false)
 const detalleExito = ref({
   monto: 0,
@@ -623,11 +900,43 @@ const comprobanteValido = ref(false)
 const billeteraVerificada = ref(false)
 const nombreBilleteraVerificada = ref('')
 const saldoBilleteraVerificada = ref(0)
+// Autocompletado del pago con billetera (buscar cliente por nombre/carnet/celular)
+const clientesBilletera = ref([])
+let timeoutBilletera = null
 
 // Variables para pedidos listos
 const pedidosListos = ref([])
 const mostrarModalListos = ref(false)
 const procesandoEntrega = ref(null)
+
+// Estado del servicio de sugerencias (IA). Se vigila para avisar si se cae.
+const iaEnLinea = ref(true)
+const avisoIaEnviado = ref(false)
+const avisoIaDescartado = ref(false) // si el mesero lo oculta, no molestamos más
+let intervaloIA = null
+async function verificarEstadoIA() {
+  try {
+    const res = await clienteHttp.get('/recomendaciones/estado')
+    const online = res.en_linea !== false
+    // Si el servicio se recuperó, reseteamos para volver a avisar si cae de nuevo
+    if (online && !iaEnLinea.value) { avisoIaDescartado.value = false; avisoIaEnviado.value = false }
+    iaEnLinea.value = online
+  } catch {
+    iaEnLinea.value = true // ante un fallo del chequeo, no molestamos con la alerta
+  }
+}
+// El mesero avisa a caja/admin que el servicio de IA está caído
+async function avisarCajaIA() {
+  if (avisoIaEnviado.value) return
+  try {
+    await clienteHttp.post('/recomendaciones/reportar-caida', { nombre: tienda.usuario?.nombres || '' })
+    avisoIaEnviado.value = true
+    notif.exito('Le avisamos a caja que el servicio está caído.')
+    setTimeout(() => { avisoIaEnviado.value = false }, 20000) // se puede reavisar tras 20s
+  } catch {
+    notif.error('No se pudo enviar el aviso. Intenta de nuevo.')
+  }
+}
 
 // Variables para toasts (notificaciones en tiempo real)
 const toasts = ref([])
@@ -685,20 +994,105 @@ onMounted(async () => {
   }
 })
 
-const productosFiltrados = computed(() => {
-  let filtrados = productos.value
-  
-  if (categoriaSeleccionada.value !== null) {
-    filtrados = filtrados.filter(p => p.id_categoria === categoriaSeleccionada.value)
+// ---- Catálogo: combos destacados vs. productos sueltos ----
+function coincideBusqueda(p) {
+  if (!busqueda.value) return true
+  return p.nombre_producto.toLowerCase().includes(busqueda.value.toLowerCase())
+}
+const hayCombos = computed(() => productos.value.some(p => p.es_combo))
+// Coincide con la categoría numérica activa (o "Todos"/"combos" que no filtran por id)
+function coincideCategoria(p) {
+  return typeof categoriaSeleccionada.value !== 'number' || p.id_categoria === categoriaSeleccionada.value
+}
+// Combos DISPONIBLES (con stock) — sección destacada y chip "Combos"
+const combosDisponibles = computed(() =>
+  mostrarCombos.value ? productos.value.filter(p => p.es_combo && !estaAgotado(p) && coincideBusqueda(p)) : []
+)
+// Productos sueltos DISPONIBLES (con stock), filtrados por categoría numérica
+const productosSueltos = computed(() =>
+  productos.value.filter(p => !p.es_combo && !estaAgotado(p) && coincideBusqueda(p) && coincideCategoria(p))
+)
+// Apartado "Fuera de stock" (combos y productos agotados), respetando el filtro activo
+const fueraDeStock = computed(() =>
+  productos.value.filter(p => {
+    if (!estaAgotado(p) || !coincideBusqueda(p)) return false
+    if (p.es_combo && !mostrarCombos.value) return false // los combos ocultos no aparecen ni aquí
+    if (categoriaSeleccionada.value === 'combos') return p.es_combo
+    if (typeof categoriaSeleccionada.value === 'number') return !p.es_combo && p.id_categoria === categoriaSeleccionada.value
+    return true // "Todos"
+  })
+)
+// La sección de combos destacada solo aparece en "Todos" y con el interruptor encendido
+const mostrarSeccionCombos = computed(() =>
+  categoriaSeleccionada.value === null && mostrarCombos.value && combosDisponibles.value.length > 0
+)
+const catalogoVacio = computed(() =>
+  !combosDisponibles.value.length && !productosSueltos.value.length && !fueraDeStock.value.length
+)
+
+// Nombre del combo legible: si es autogenerado ("A + B + C") mostramos algo corto,
+// porque el detalle real va en las mini-tarjetas de abajo.
+function nombreCombo(combo) {
+  const n = combo.nombre_producto || ''
+  if (n.includes(' + ')) {
+    const total = (combo.combos_como_padre || []).reduce((a, c) => a + (Number(c.cantidad) || 1), 0)
+    return `Combo · ${total} producto${total === 1 ? '' : 's'}`
   }
-  
-  if (busqueda.value) {
-    const p = busqueda.value.toLowerCase()
-    filtrados = filtrados.filter(pr => pr.nombre_producto.toLowerCase().includes(p))
+  return n
+}
+// Quita el sufijo "(x1)"/"(x6)" del nombre para que se lea limpio en las tarjetas
+function nombreLimpio(nombre) {
+  return String(nombre || '').replace(/\s*\(x\d+\)\s*$/i, '').trim()
+}
+// Ahorro del combo frente a comprar sus componentes por separado
+function precioComponentes(combo) {
+  return (combo.combos_como_padre || []).reduce((acc, c) => {
+    const hijo = productos.value.find(p => p.id_producto === c.id_producto_hijo)
+    return acc + (hijo ? Number(hijo.precio_base) * c.cantidad : 0)
+  }, 0)
+}
+function ahorroCombo(combo) {
+  const dif = precioComponentes(combo) - Number(combo.precio_base)
+  return dif > 0 ? dif : 0
+}
+
+// Si lo que hay en la orden forma un combo existente, lo ofrece
+const comboSugeridoPorCarrito = computed(() => {
+  if (!mostrarCombos.value) return null // combos ocultos: no sugerir
+  const enCarrito = new Map()
+  carrito.value.forEach(it => enCarrito.set(it.producto.id_producto, (enCarrito.get(it.producto.id_producto) || 0) + it.cantidad))
+  for (const combo of productos.value) {
+    if (!combo.es_combo || enCarrito.has(combo.id_producto)) continue
+    if (estaAgotado(combo)) continue // no ofrecer un combo sin stock
+    const comps = combo.combos_como_padre || []
+    if (comps.length < 2) continue
+    if (comps.every(c => (enCarrito.get(c.id_producto_hijo) || 0) >= c.cantidad)) {
+      return { combo, ahorro: ahorroCombo(combo) }
+    }
   }
-  
-  return filtrados
+  return null
 })
+// Reemplaza los componentes sueltos del carrito por el combo
+function armarComboSugerido() {
+  const sug = comboSugeridoPorCarrito.value
+  if (!sug) return
+  ;(sug.combo.combos_como_padre || []).forEach(c => {
+    let restante = c.cantidad
+    for (let i = carrito.value.length - 1; i >= 0 && restante > 0; i--) {
+      const it = carrito.value[i]
+      if (it.producto.id_producto === c.id_producto_hijo) {
+        const usar = Math.min(it.cantidad, restante)
+        it.cantidad -= usar
+        restante -= usar
+        if (it.cantidad <= 0) carrito.value.splice(i, 1)
+      }
+    }
+  })
+  const ex = carrito.value.find(x => x.producto.id_producto === sug.combo.id_producto)
+  if (ex) ex.cantidad++
+  else carrito.value.push({ producto: sug.combo, cantidad: 1 })
+  notif.exito(`Combo "${sug.combo.nombre_producto}" armado`)
+}
 
 const totalCarrito = computed(() => {
   return carrito.value.reduce((acc, item) => acc + (precioItem(item) * item.cantidad), 0)
@@ -733,13 +1127,34 @@ function precioSugerido(s) {
   return precioAtractivo(min + (max - min) * (s.probabilidad || 0))
 }
 
+// ---- Control de stock (evita armar órdenes que el backend rechazaría al cobrar) ----
+// Si el producto no trae stock_actual, no se bloquea (Infinity).
+function stockDisponible(prod) {
+  const s = Number(prod?.stock_actual)
+  return Number.isFinite(s) ? s : Infinity
+}
+function estaAgotado(prod) {
+  return stockDisponible(prod) <= 0
+}
+// Cantidad ya puesta en la orden para ese producto
+function cantidadEnCarrito(idProducto) {
+  const it = carrito.value.find(c => c.producto.id_producto === idProducto)
+  return it ? it.cantidad : 0
+}
+
 function agregarAlCarrito(prod) {
-  const ex = carrito.value.find(c => c.producto.id_producto === prod.id_producto)
-  if (ex) {
-    ex.cantidad++
-  } else {
-    carrito.value.push({ producto: prod, cantidad: 1 })
+  const disp = stockDisponible(prod)
+  if (disp <= 0) {
+    notif.advertencia(`${prod.nombre_producto} está agotado.`)
+    return
   }
+  const ex = carrito.value.find(c => c.producto.id_producto === prod.id_producto)
+  if ((ex ? ex.cantidad : 0) >= disp) {
+    notif.advertencia(`Solo quedan ${disp} de ${prod.nombre_producto}.`)
+    return
+  }
+  if (ex) ex.cantidad++
+  else carrito.value.push({ producto: prod, cantidad: 1 })
 }
 
 // ---- Recomendaciones (IA) ----
@@ -755,6 +1170,8 @@ async function cargarSugerencias() {
     const enOrden = new Set(ids)
     sugerencias.value = (res.recomendaciones || [])
       .filter(r => !enOrden.has(r.id_producto))
+      // No sugerir productos agotados
+      .filter(r => { const p = productos.value.find(x => x.id_producto === r.id_producto); return !p || stockDisponible(p) > 0 })
       .slice(0, 3)
   } catch (e) {
     sugerencias.value = [] // degradación elegante: si la IA no está, no se muestran
@@ -764,13 +1181,15 @@ async function cargarSugerencias() {
 function agregarSugerencia(s) {
   const prod = productos.value.find(p => p.id_producto === s.id_producto)
   if (!prod) return
+  const disp = stockDisponible(prod)
+  if (disp <= 0) { notif.advertencia(`${prod.nombre_producto} está agotado.`); return }
   const ex = carrito.value.find(c => c.producto.id_producto === prod.id_producto)
-  if (ex) {
-    ex.cantidad++
-  } else {
-    // Se agrega al precio dinámico sugerido por la IA
-    carrito.value.push({ producto: prod, cantidad: 1, precio: precioSugerido(s) })
+  if ((ex ? ex.cantidad : 0) >= disp) {
+    notif.advertencia(`Solo quedan ${disp} de ${prod.nombre_producto}.`)
+    return
   }
+  if (ex) ex.cantidad++
+  else carrito.value.push({ producto: prod, cantidad: 1, precio: precioSugerido(s) }) // precio dinámico IA
   // Marcar la sugerencia como ACEPTADA para el reporte de efectividad de la IA
   // (fire-and-forget: nunca bloquea la toma de pedidos)
   if (s.id_sugerencia) {
@@ -786,7 +1205,13 @@ watch(carrito, () => {
 }, { deep: true })
 
 function sumar(idx) {
-  carrito.value[idx].cantidad++
+  const item = carrito.value[idx]
+  const disp = stockDisponible(item.producto)
+  if (item.cantidad >= disp) {
+    notif.advertencia(`Solo quedan ${disp} de ${item.producto.nombre_producto}.`)
+    return
+  }
+  item.cantidad++
 }
 
 function restar(idx) {
@@ -805,19 +1230,18 @@ function cerrarSesion() {
 }
 
 // Detectar si es dispositivo movil
-const esCelular = ref(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))
-
 function abrirModalCobro() {
   modalCobro.value = true
   errorCobro.value = ''
   metodoPago.value = 'Transferencia QR'
   requierePin.value = false
-  camaraActiva.value = false
   ampliarQr.value = false
   comprobanteValido.value = false
   billeteraVerificada.value = false
   nombreBilleteraVerificada.value = ''
   saldoBilleteraVerificada.value = 0
+  montoRecibidoTexto.value = ''
+  clientesBilletera.value = []
   formCobro.value = {
     qr_billetera: '',
     pin: '',
@@ -831,65 +1255,78 @@ function abrirModalCobro() {
 }
 
 function cambiarMetodo(metodo) {
-  if (camaraActiva.value) {
-    detenerEscaneoCamara()
-    camaraActiva.value = false
-  }
   metodoPago.value = metodo
   errorCobro.value = ''
   requierePin.value = false
+  clientesBilletera.value = []
+  if (metodo === 'Efectivo') montoRecibidoTexto.value = ''
 }
 
-function activarCamaraScanner() {
-  camaraActiva.value = true
+// ---- Pago en EFECTIVO (solo positivos, con chips de billetes y cambio en vivo) ----
+const montoRecibidoTexto = ref('')
+const billetes = [10, 20, 50, 100, 200]
+const recibidoNum = computed(() => {
+  const n = parseFloat(montoRecibidoTexto.value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+})
+const cambioEfectivo = computed(() => recibidoNum.value - totalCarrito.value)
+const faltaEfectivo = computed(() => cambioEfectivo.value < 0)
+const efectivoSuficiente = computed(() => recibidoNum.value > 0 && cambioEfectivo.value >= 0)
+function sincronizarEfectivo() {
+  // El backend y el botón de cobro leen estos campos
+  formCobro.value.monto_recibido = recibidoNum.value
+  formCobro.value.cambio_dado = recibidoNum.value - totalCarrito.value
+}
+function alEscribirEfectivo() {
+  // Solo números positivos con hasta 2 decimales (sin signos ni letras)
+  let v = (montoRecibidoTexto.value || '').replace(/[^0-9.]/g, '')
+  const partes = v.split('.')
+  if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('')
+  const m = v.match(/^\d*(\.\d{0,2})?/)
+  montoRecibidoTexto.value = m ? m[0] : v
+  sincronizarEfectivo()
+}
+function sumarBillete(b) {
+  montoRecibidoTexto.value = String(Math.round((recibidoNum.value + b) * 100) / 100)
+  sincronizarEfectivo()
+}
+function montoExacto() {
+  montoRecibidoTexto.value = totalCarrito.value.toFixed(2)
+  sincronizarEfectivo()
+}
+function limpiarEfectivo() {
+  montoRecibidoTexto.value = ''
+  sincronizarEfectivo()
+}
+
+// Valida un comprobante (File) por OCR y, si es válido, auto-confirma el cobro.
+// Lo emite CapturaCamara (modo foto) tras "Tomar foto" o "Subir foto".
+async function validarComprobante(archivo) {
+  if (!archivo) return
+  validandoOCR.value = true
   errorCobro.value = ''
-  nextTick(() => {
-    iniciarEscaneoCamara()
-  })
-}
+  try {
+    const formData = new FormData()
+    formData.append('comprobante', archivo)
+    formData.append('monto_esperado', totalCarrito.value)
 
-function calcularCambio() {
-  const recibido = parseFloat(formCobro.value.monto_recibido) || 0
-  formCobro.value.cambio_dado = recibido - totalCarrito.value
-}
+    const res = await clienteHttp.post('/comandas/validar-comprobante', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
 
-async function alSeleccionarComprobanteYValidar(e) {
-  if (e.target.files.length > 0) {
-    const archivo = e.target.files[0]
-    
-    // Enviar al motor de validación OCR
-    validandoOCR.value = true
-    errorCobro.value = ''
-    try {
-      const formData = new FormData()
-      formData.append('comprobante', archivo)
-      formData.append('monto_esperado', totalCarrito.value)
-      
-      const res = await clienteHttp.post('/comandas/validar-comprobante', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      
-      if (res.valido) {
-        comprobanteValido.value = true
-        formCobro.value.url_comprobante_ya_subido = res.url_comprobante
-        formCobro.value.ocr_transaccion_id = res.transaccionId
-        // AUTO-CONFIRMAR EL PAGO DE TRANSFERENCIA
-        await procesarCobro()
-      }
-    } catch (err) {
-      errorCobro.value = err.response?.data?.error || err.error || 'No se pudo validar el comprobante mediante IA'
-    } finally {
-      validandoOCR.value = false
+    if (res.valido) {
+      comprobanteValido.value = true
+      formCobro.value.url_comprobante_ya_subido = res.url_comprobante
+      formCobro.value.ocr_transaccion_id = res.transaccionId
+      // AUTO-CONFIRMAR EL PAGO DE TRANSFERENCIA
+      await procesarCobro()
     }
+  } catch (err) {
+    errorCobro.value = err.response?.data?.error || err.error || 'No se pudo validar el comprobante'
+  } finally {
+    validandoOCR.value = false
   }
 }
-
-const esCobroValido = computed(() => {
-  if (metodoPago.value === 'Efectivo' && formCobro.value.cambio_dado < 0) return false
-  if (metodoPago.value === 'Transferencia QR' && !comprobanteValido.value) return false
-  if (metodoPago.value === 'Billetera' && !formCobro.value.qr_billetera) return false
-  return true
-})
 
 async function procesarCobro() {
   errorCobro.value = ''
@@ -917,12 +1354,20 @@ async function procesarCobro() {
       monto: totalCarrito.value,
       cliente: res.nombres_cliente || (clienteSeleccionado.value 
         ? `${clienteSeleccionado.value.nombres} ${clienteSeleccionado.value.apellidos || ''}`.trim()
-        : 'Sin registro / Barra'),
+        : 'Sin registro'),
       metodo: metodoPago.value,
       transaccionId: res.id_transaccion || (res.id_comanda ? `TR-${res.id_comanda}` : 'N/D'),
       saldo_restante: res.saldo_restante
     }
     
+    // Reflejar el consumo en el stock local (sin recargar todo el catálogo)
+    carrito.value.forEach(it => {
+      const prod = productos.value.find(p => p.id_producto === it.producto.id_producto)
+      if (prod && Number.isFinite(Number(prod.stock_actual))) {
+        prod.stock_actual = Math.max(0, Number(prod.stock_actual) - it.cantidad)
+      }
+    })
+
     carrito.value = []
     clienteSeleccionado.value = null
     verCarritoMovil.value = false
@@ -932,11 +1377,9 @@ async function procesarCobro() {
     // Si el error es 403 y dice PIN requerido, mostramos el input
     if (err.error?.includes('PIN')) {
       requierePin.value = true
-      errorCobro.value = 'Verificación de Seguridad Requerida'
-      detenerEscaneoCamara()
+      errorCobro.value = 'Verificación de seguridad requerida'
     } else {
       errorCobro.value = err.error || 'Ocurrió un error al procesar el pago'
-      if (metodoPago.value === 'Billetera' && !requierePin.value) iniciarEscaneoCamara()
     }
   } finally {
     procesando.value = false
@@ -944,10 +1387,6 @@ async function procesarCobro() {
 }
 
 function cerrarModalCobro() {
-  if (camaraActiva.value) {
-    detenerEscaneoCamara()
-    camaraActiva.value = false
-  }
   modalCobro.value = false
   ampliarQr.value = false
   errorCobro.value = ''
@@ -956,7 +1395,28 @@ function cerrarModalCobro() {
   billeteraVerificada.value = false
 }
 
+// Autocompletado: busca clientes a medida que el mesero escribe (nombre/carnet/celular)
+function buscarClientesBilletera() {
+  clearTimeout(timeoutBilletera)
+  const q = (formCobro.value.qr_billetera || '').trim()
+  billeteraVerificada.value = false
+  if (q.length < 2) { clientesBilletera.value = []; return }
+  timeoutBilletera = setTimeout(async () => {
+    try {
+      const res = await clienteHttp.get(`/usuarios?busqueda=${encodeURIComponent(q)}&rol=Cliente`)
+      clientesBilletera.value = (res || []).slice(0, 6)
+    } catch { clientesBilletera.value = [] }
+  }, 300)
+}
+function elegirClienteBilletera(c) {
+  // Se usa el carnet o el celular como identificador que reconoce la billetera
+  formCobro.value.qr_billetera = c.ci_carnet || c.telefono || String(c.id_usuario)
+  clientesBilletera.value = []
+  verificarBilleteraBackend()
+}
+
 async function verificarBilleteraBackend() {
+  clientesBilletera.value = []
   if (!formCobro.value.qr_billetera) return
   errorCobro.value = ''
   procesando.value = true
@@ -977,67 +1437,11 @@ async function verificarBilleteraBackend() {
   }
 }
 
-let scannerInstancia = null
-const qrDetectado = ref(false)
-
-async function escanearQrDesdeImagen(e) {
-  if (e.target.files.length === 0) return
-  
-  const file = e.target.files[0]
-  try {
-    procesando.value = true
-    errorCobro.value = ''
-    const html5QrCode = new Html5Qrcode("reader")
-    const decodedText = await html5QrCode.scanFile(file, true)
-    formCobro.value.qr_billetera = decodedText
-    await verificarBilleteraBackend()
-  } catch (err) {
-    errorCobro.value = 'No se pudo detectar un QR claro en la foto. Asegúrate de enfocar bien e intenta de nuevo.'
-    console.error('Error leyendo QR:', err)
-  } finally {
-    procesando.value = false
-  }
-}
-
-function iniciarEscaneoCamara() {
-  qrDetectado.value = false
-  scannerInstancia = new Html5Qrcode("reader")
-  scannerInstancia.start(
-    { facingMode: "environment" },
-    { fps: 10 },
-    async (decodedText) => {
-      // Feedback visual: mostrar cuadro verde antes de detener
-      qrDetectado.value = true
-      setTimeout(async () => {
-        detenerEscaneoCamara()
-        formCobro.value.qr_billetera = decodedText
-        await verificarBilleteraBackend()
-      }, 400)
-    },
-    (errorMessage) => {
-      // Ignorar errores de frame mientras busca
-    }
-  ).catch(err => {
-    errorCobro.value = "No se pudo acceder a la cámara. Permisos denegados."
-    camaraActiva.value = false
-  })
-}
-
-function detenerEscaneoCamara() {
-  qrDetectado.value = false
-  if (scannerInstancia && scannerInstancia.isScanning) {
-    scannerInstancia.stop().then(() => {
-      scannerInstancia.clear()
-    }).catch(e => console.error("Error al detener cámara", e))
-  }
-  camaraActiva.value = false
-}
-
-function procesarCobroSiHayQr() {
-  // ya no lo auto-procesamos para cobrar directo, solo verificamos
-  if (formCobro.value.qr_billetera && formCobro.value.qr_billetera.trim() !== '') {
-    verificarBilleteraBackend()
-  }
+// El componente CapturaCamara (modo qr) emite el texto del QR ya decodificado,
+// venga del escaneo en vivo o de una foto subida.
+function alDetectarQr(texto) {
+  formCobro.value.qr_billetera = texto
+  verificarBilleteraBackend()
 }
 
 function verificarPinLleno() {
@@ -1145,7 +1549,11 @@ async function entregarPedido(id) {
 
 onMounted(() => {
   cargarPedidosListos()
-  
+
+  // Vigilancia del servicio de sugerencias (IA): al entrar y cada 30s
+  verificarEstadoIA()
+  intervaloIA = setInterval(verificarEstadoIA, 30000)
+
   socket = io({ path: '/socket.io' })
   socket.on('pedido_listo', (data) => {
     if (data.id_mesero === tienda.usuario?.id) {
@@ -1158,10 +1566,16 @@ onMounted(() => {
       } catch (e) {}
     }
   })
+  // Aviso de un compañero: el servicio de IA está caído (no me lo muestro a mí mismo)
+  socket.on('ia_reportada', (data) => {
+    if (data?.id_usuario === tienda.usuario?.id) return
+    agregarToast(`${data?.reportadoPor || 'Un compañero'} avisó: el servicio de sugerencias está caído`)
+  })
 })
 
 onUnmounted(() => {
   if (socket) socket.disconnect()
+  if (intervaloIA) clearInterval(intervaloIA)
 })
 </script>
 
@@ -1181,9 +1595,7 @@ onUnmounted(() => {
 .pos-header {
   position: relative;
   height: 66px;
-  background: linear-gradient(180deg, rgba(27, 16, 64, 0.92), rgba(20, 10, 46, 0.92));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: linear-gradient(180deg, #1F124A 0%, #17092F 100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1207,6 +1619,40 @@ onUnmounted(() => {
 
 .usuario-area { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; color: var(--texto-secundario); }
 .usuario-area strong { color: var(--texto-principal); }
+
+/* Aviso sutil (chip flotante en un rincón) cuando la IA está caída */
+.chip-ia {
+  position: fixed; bottom: 18px; left: 16px; z-index: 40; max-width: calc(100vw - 32px);
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 7px 8px 7px 13px; border-radius: var(--radio-full);
+  background: var(--fondo-tarjeta, #17092F); border: 1px solid rgba(251, 191, 36, 0.4);
+  box-shadow: 0 8px 22px rgba(10, 6, 26, 0.5);
+  font-size: 0.78rem; font-weight: 600; color: var(--texto-secundario);
+}
+.chip-ia-punto { width: 8px; height: 8px; border-radius: 50%; background: #FBBF24; box-shadow: 0 0 0 0 rgba(251,191,36,0.5); animation: pulso-ia 1.8s ease-out infinite; flex-shrink: 0; }
+@keyframes pulso-ia { 0% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); } 70% { box-shadow: 0 0 0 7px rgba(251,191,36,0); } 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); } }
+.chip-ia-txt { white-space: nowrap; }
+.chip-ia-avisar {
+  flex-shrink: 0; padding: 5px 11px; border-radius: var(--radio-full); border: none; cursor: pointer;
+  font-size: 0.74rem; font-weight: 800; white-space: nowrap;
+  color: #1a1206; background: #FBBF24; transition: background var(--trans-normal), transform var(--trans-rapida);
+}
+.chip-ia-avisar:hover:not(:disabled) { background: #FCD34D; transform: translateY(-1px); }
+.chip-ia-avisar:active:not(:disabled) { transform: scale(0.95); }
+.chip-ia-avisar.enviado { background: rgba(34,197,94,0.2); color: #86EFAC; cursor: default; }
+.chip-ia-cerrar {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--texto-desactivado); transition: background var(--trans-normal), color var(--trans-normal);
+}
+.chip-ia-cerrar:hover { background: rgba(255,255,255,0.08); color: var(--texto-principal); }
+.chip-ia-anim-enter-active, .chip-ia-anim-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+.chip-ia-anim-enter-from, .chip-ia-anim-leave-to { opacity: 0; transform: translateY(8px); }
+/* En móvil se sube para no chocar con el botón flotante del carrito */
+@media (max-width: 480px) {
+  .chip-ia { bottom: 84px; left: 10px; font-size: 0.74rem; }
+}
+@media (prefers-reduced-motion: reduce) { .chip-ia-punto { animation: none; } }
 
 .pos-layout {
   display: flex;
@@ -1250,70 +1696,203 @@ onUnmounted(() => {
 .vacio svg { opacity: 0.5; }
 .vacio p { font-size: 0.95rem; max-width: 34ch; text-wrap: balance; }
 
+/* Barra superior: buscador + interruptor de combos */
+.barra-buscar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.barra-buscar .buscador { flex: 1; margin-bottom: 0; min-width: 0; }
+.toggle-combos {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  background: var(--fondo-tarjeta); border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-full); padding: 8px 15px 8px 10px; cursor: pointer;
+  color: var(--texto-secundario); font-weight: 700; font-size: 0.82rem; white-space: nowrap;
+  transition: color var(--trans-normal), border-color var(--trans-normal), background var(--trans-normal);
+}
+.toggle-combos:hover { border-color: var(--borde-activo); }
+.toggle-combos.activo { color: var(--texto-principal); border-color: var(--borde-activo); }
+.toggle-combos:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.toggle-pista { position: relative; width: 34px; height: 20px; border-radius: var(--radio-full); background: rgba(255,255,255,0.16); transition: background 0.22s ease; flex-shrink: 0; }
+.toggle-combos.activo .toggle-pista { background: var(--gradiente-marca); }
+.toggle-bolita { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35); transition: transform 0.22s ease; }
+.toggle-combos.activo .toggle-bolita { transform: translateX(14px); }
+
 .buscador {
+  position: relative;
   display: flex;
   align-items: center;
-  background: var(--fondo-input);
-  border: 1px solid var(--borde-sutil);
-  padding: 13px 20px;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--glass-borde);
+  padding: 14px 20px;
   border-radius: var(--radio-full);
-  margin-bottom: 16px;
-  transition: var(--trans-rapida);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  margin-bottom: 14px;
+  transition: background var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
-.buscador:focus-within { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.buscador:hover { border-color: var(--borde-activo); }
+.buscador:focus-within { background: var(--fondo-tarjeta-alt); border-color: var(--morado-brillante); box-shadow: var(--anillo-foco), var(--glow-morado); }
 .buscador:focus-within svg { color: var(--morado-hover); }
-.buscador svg { width: 20px; height: 20px; color: var(--texto-secundario); margin-right: 10px; transition: color var(--trans-rapida); flex-shrink: 0; }
-.buscador input { background: transparent; border: none; color: var(--texto-principal); width: 100%; font-size: 1rem; outline: none; }
+.buscador svg { width: 19px; height: 19px; color: var(--texto-desactivado); margin-right: 12px; transition: color var(--trans-rapida); flex-shrink: 0; }
+.buscador input { background: transparent; border: none; color: var(--texto-principal); width: 100%; min-width: 0; font-size: 0.98rem; outline: none; }
 .buscador input::placeholder { color: var(--texto-desactivado); }
 
-.categorias-scroll { display: flex; gap: 10px; overflow-x: auto; margin-bottom: 20px; padding-bottom: 5px; }
-.categorias-scroll::-webkit-scrollbar { height: 4px; }
-.categorias-scroll::-webkit-scrollbar-thumb { background: var(--morado-medio); border-radius: 4px; }
-.btn-categoria { padding: 8px 16px; border-radius: var(--radio-full); background: rgba(168,85,247,0.08); border: 1px solid var(--borde-sutil); color: var(--texto-secundario); white-space: nowrap; cursor: pointer; transition: var(--trans-normal); font-weight: 500; }
-.btn-categoria:hover { background: rgba(168,85,247,0.16); color: var(--texto-principal); border-color: var(--borde-activo); }
+/* Fila de categorías con flechas (escritorio) + deslizar (móvil) */
+.categorias-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+.cat-flecha {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: var(--radio-full);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fondo-tarjeta); border: 1px solid var(--glass-borde);
+  color: var(--texto-secundario); cursor: pointer;
+  transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal);
+}
+.cat-flecha:hover { background: var(--fondo-tarjeta-alt); color: var(--texto-principal); border-color: var(--borde-activo); }
+.cat-flecha:active { transform: scale(0.92); }
+.categorias-scroll { display: flex; gap: 10px; overflow-x: auto; min-width: 0; flex: 1; padding: 2px 2px 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-behavior: smooth; }
+.categorias-scroll::-webkit-scrollbar { display: none; }
+.cat-combos { display: inline-flex; align-items: center; gap: 6px; }
+.cat-combos svg { flex-shrink: 0; }
+/* En pantallas táctiles se desliza con el dedo: las flechas estorban */
+@media (hover: none) { .cat-flecha { display: none; } }
+@media (max-width: 700px) { .cat-flecha { display: none; } }
+
+/* Secciones del catálogo (combos destacados + productos) */
+.seccion-titulo { display: flex; align-items: center; gap: 8px; margin: 4px 2px 12px; color: var(--texto-principal); }
+.seccion-titulo svg { color: var(--morado-hover); flex-shrink: 0; }
+.seccion-titulo span { font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 800; letter-spacing: -0.01em; }
+.seccion-combos { margin-bottom: 22px; }
+.seccion-productos { margin-bottom: 4px; }
+.grid-combos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+
+/* Tarjeta de combo (más informativa: qué incluye + ahorro) */
+.tarjeta-combo {
+  position: relative; display: flex; flex-direction: column; cursor: pointer; min-width: 0;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(168,85,247,0.16), transparent 55%),
+    var(--gradiente-sutil);
+  border: 1px solid rgba(168,85,247,0.35); border-radius: var(--radio-xl); overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px rgba(10,6,26,0.38);
+  transition: transform 0.35s var(--ease-suave), box-shadow 0.3s ease, border-color 0.2s ease;
+  will-change: transform;
+}
+.tarjeta-combo:hover { transform: translateY(-6px); border-color: var(--morado-brillante); box-shadow: 0 22px 48px rgba(10,6,26,0.55), var(--glow-morado); }
+.tarjeta-combo:hover .tp-add { opacity: 1; transform: translateY(0) scale(1); }
+.tarjeta-combo:active { transform: translateY(-1px) scale(0.98); }
+.tc-media { position: relative; height: 130px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.22); }
+.tc-media .img-producto { width: 100%; height: 100%; object-fit: cover; }
+.tc-ahorro {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.02em;
+  padding: 4px 9px; border-radius: var(--radio-full);
+  background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff;
+  box-shadow: 0 4px 12px rgba(16,80,40,0.45);
+}
+.tc-info { padding: 12px 14px 15px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tc-info h5 { font-family: var(--fuente-titulo); font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--texto-principal); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Mini-tarjetas de componentes: cantidad grande + qué es (fácil de leer de un vistazo) */
+.tc-items { display: flex; flex-direction: column; gap: 5px; }
+.tc-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tc-item-img { width: 26px; height: 26px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: rgba(255,255,255,0.06); border: 1px solid var(--borde-sutil); }
+.tc-item-ph { display: flex; align-items: center; justify-content: center; color: var(--morado-hover); }
+.tc-item-txt { font-size: 0.8rem; color: var(--texto-secundario); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-item-txt b { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; margin-right: 3px; border-radius: var(--radio-full); background: rgba(168,85,247,0.25); color: #E9D5FF; font-size: 0.72rem; font-weight: 800; }
+.tc-info .precio { color: var(--rosa-acento); font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(236,72,153,0.35); margin-top: 2px; }
+
+/* Apartado Fuera de stock (título apagado, se coloca al final) */
+.seccion-agotados { margin-top: 8px; }
+.seccion-agotados .seccion-titulo { color: var(--texto-desactivado); }
+.seccion-agotados .seccion-titulo svg { color: var(--texto-desactivado); }
+
+/* Aviso de combo en la orden */
+.combo-sugerido {
+  display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; padding: 12px 14px;
+  border-radius: var(--radio-md);
+  background: linear-gradient(135deg, rgba(168,85,247,0.16), rgba(236,72,153,0.12));
+  border: 1px solid rgba(168,85,247,0.4);
+}
+.cs-icono { flex-shrink: 0; width: 34px; height: 34px; border-radius: var(--radio-full); display: flex; align-items: center; justify-content: center; background: rgba(168,85,247,0.22); color: var(--morado-hover); }
+.cs-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cs-texto strong { font-size: 0.86rem; color: var(--texto-principal); line-height: 1.2; }
+.cs-texto small { font-size: 0.75rem; color: var(--color-exito); font-weight: 700; }
+.cs-btn { flex-shrink: 0; padding: 8px 16px; border-radius: var(--radio-full); border: none; cursor: pointer; font-weight: 700; font-size: 0.82rem; color: #fff; background: var(--gradiente-marca); box-shadow: 0 4px 14px rgba(236,72,153,0.4); transition: transform var(--trans-rapida); }
+.cs-btn:hover { transform: translateY(-1px); }
+.cs-btn:active { transform: scale(0.95); }
+.btn-categoria { white-space: nowrap; padding: 10px 18px; border-radius: var(--radio-full); background: var(--fondo-tarjeta); border: 1px solid var(--glass-borde); color: var(--texto-secundario); cursor: pointer; font-size: 0.84rem; font-weight: 600; letter-spacing: 0.01em; transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal), transform var(--trans-rapida), box-shadow var(--trans-normal); }
+.btn-categoria:hover { background: var(--fondo-tarjeta-alt); color: var(--texto-principal); border-color: var(--borde-activo); transform: translateY(-2px); }
 .btn-categoria:active { transform: scale(0.96); }
 .btn-categoria:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
-.btn-categoria.activo { background: var(--gradiente-marca); color: #fff; border-color: transparent; box-shadow: 0 3px 12px rgba(168, 85, 247, 0.3); }
+.btn-categoria.activo { background: var(--gradiente-marca); color: #fff; border-color: transparent; box-shadow: var(--glow-morado); transform: translateY(-1px); }
 
 .grid-productos {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 16px;
 }
 
 .tarjeta-producto-pos {
   position: relative;
   background: var(--gradiente-sutil);
-  border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-lg);
+  border: 1px solid var(--glass-borde);
+  border-radius: var(--radio-xl);
   overflow: hidden;
   cursor: pointer;
-  transition: transform var(--trans-normal), box-shadow var(--trans-normal), border-color var(--trans-normal);
+  transition: transform 0.35s var(--ease-suave), box-shadow 0.3s ease, border-color 0.2s ease;
   display: flex;
   flex-direction: column;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 16px rgba(10, 6, 26, 0.35);
+  min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 28px rgba(10, 6, 26, 0.38);
   will-change: transform;
 }
-.tarjeta-producto-pos:hover { transform: translateY(-5px); border-color: var(--borde-activo); box-shadow: 0 16px 36px rgba(14, 8, 33, 0.6), var(--sombra-glow); }
-.tarjeta-producto-pos:hover .img-producto { transform: scale(1.08); }
+.tarjeta-producto-pos:hover { transform: translateY(-6px); border-color: var(--borde-activo); box-shadow: 0 22px 48px rgba(10, 6, 26, 0.55), var(--glow-morado); }
+.tarjeta-producto-pos:hover .img-producto { transform: scale(1.07); }
 .tarjeta-producto-pos:hover .tp-add { opacity: 1; transform: translateY(0) scale(1); }
-.tarjeta-producto-pos:active { transform: translateY(-1px) scale(0.985); }
+.tarjeta-producto-pos:active { transform: translateY(-1px) scale(0.98); }
 .tarjeta-producto-pos:focus-visible { outline: none; box-shadow: var(--anillo-foco), 0 16px 36px rgba(14, 8, 33, 0.6); }
 
-.tp-media { position: relative; overflow: hidden; }
+.tp-media { position: relative; height: 150px; overflow: hidden; background: rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; }
 .tp-media::after {
   content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, transparent 45%, rgba(14, 8, 33, 0.55) 100%);
+  position: absolute; bottom: 0; left: 0; right: 0; height: 62px;
+  background: linear-gradient(to top, var(--fondo-tarjeta-alt), transparent);
   pointer-events: none;
 }
-.img-producto { width: 100%; height: 124px; object-fit: cover; display: block; transition: transform var(--trans-lenta); }
+.img-producto { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.5s var(--ease-suave); }
+
+/* Combos: composición de fotos solapadas (sin imagen propia) */
+.tp-combo { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 0 16px; }
+.tp-combo-cell {
+  width: 56px; height: 56px; flex-shrink: 0;
+  border-radius: 30%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid var(--fondo-tarjeta-alt);
+  box-shadow: 0 6px 16px rgba(6, 3, 18, 0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.tp-combo-cell + .tp-combo-cell { margin-left: -20px; }
+.tp-combo-cell:nth-child(2) { z-index: 1; }
+.tp-combo-cell:nth-child(3) { z-index: 2; }
+.tp-combo-cell img { width: 100%; height: 100%; object-fit: cover; }
+.tp-combo-ph { color: var(--morado-hover); opacity: 0.75; display: flex; }
+
+/* Placeholder elegante (producto sin imagen) */
+.tp-placeholder {
+  position: relative; z-index: 1;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 12px; text-align: center;
+  background: radial-gradient(80% 80% at 50% 32%, rgba(168, 85, 247, 0.20), transparent 65%);
+  color: var(--morado-hover);
+}
+.tp-placeholder svg { opacity: 0.85; filter: drop-shadow(0 4px 12px rgba(168, 85, 247, 0.4)); }
+.tp-ph-nombre {
+  font-family: var(--fuente-titulo);
+  font-size: 0.72rem; font-weight: 700; line-height: 1.2;
+  color: var(--texto-secundario); letter-spacing: 0.02em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%;
+}
+
 .tp-add {
   position: absolute;
-  bottom: 8px; right: 8px;
-  z-index: 1;
-  width: 34px; height: 34px;
+  bottom: 10px; right: 10px;
+  z-index: 2;
+  width: 38px; height: 38px;
   border-radius: var(--radio-full);
   background: var(--gradiente-marca);
   color: #fff;
@@ -1323,9 +1902,28 @@ onUnmounted(() => {
   transform: translateY(6px) scale(0.8);
   transition: opacity var(--trans-normal), transform var(--trans-normal);
 }
-.info-producto { padding: 12px 13px 14px; text-align: left; display: flex; flex-direction: column; gap: 4px; }
-.info-producto h5 { font-family: var(--fuente-titulo); font-size: 0.92rem; font-weight: 600; margin: 0; color: var(--texto-principal); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.3em; }
-.info-producto .precio { color: var(--rosa-suave); font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* En pantallas táctiles (sin hover) el botón + siempre es visible */
+@media (hover: none) {
+  .tp-add { opacity: 1; transform: none; }
+}
+
+/* Producto agotado: badge claro y tarjeta atenuada (no se puede pedir) */
+.tp-agotado {
+  position: absolute; bottom: 10px; right: 10px; z-index: 2;
+  font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 4px 10px; border-radius: var(--radio-full);
+  background: rgba(239, 68, 68, 0.92); color: #fff;
+  box-shadow: 0 4px 12px rgba(10, 6, 26, 0.35);
+}
+.tarjeta-producto-pos.agotado,
+.tarjeta-combo.agotado { opacity: 0.55; filter: grayscale(0.4); }
+.tarjeta-producto-pos.agotado:hover,
+.tarjeta-combo.agotado:hover { transform: none; border-color: var(--glass-borde); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px rgba(10,6,26,0.38); }
+.tarjeta-producto-pos.agotado .img-producto,
+.tarjeta-combo.agotado:hover .tp-add { transform: none; }
+.info-producto { padding: 13px 14px 15px; text-align: left; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.info-producto h5 { font-family: var(--fuente-titulo); font-size: 0.95rem; font-weight: 700; margin: 0; color: var(--texto-principal); line-height: 1.22; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.32em; }
+.info-producto .precio { color: var(--rosa-acento); font-weight: 800; font-size: 1.2rem; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; text-shadow: 0 0 18px rgba(236, 72, 153, 0.35); }
 
 .panel-carrito {
   position: relative;
@@ -1485,6 +2083,21 @@ onUnmounted(() => {
 
 /* Selector de Mesa */
 .selector-mesa { margin-bottom: 12px; }
+/* Tabs de modo de mesa (lista / buscar / mapa) */
+.mesa-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.mesa-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border-radius: var(--radio-md); background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-secundario); font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: var(--trans-rapida); }
+.mesa-tab:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.mesa-tab.activo { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+.mesa-buscar { display: flex; flex-direction: column; gap: 8px; }
+.mesa-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 128px; overflow-y: auto; }
+.mesa-chip { padding: 7px 12px; border-radius: var(--radio-full); background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: var(--trans-rapida); }
+.mesa-chip:hover { border-color: var(--borde-activo); }
+.mesa-chip.sel { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+.mesa-chip.reservada { border-color: rgba(239,68,68,0.4); color: #FCA5A5; }
+.mesa-chip.reservada.sel { background: var(--gradiente-marca); color: #fff; }
+.mesa-chip.barra { border-style: dashed; }
+.mesa-vacio { font-size: 0.8rem; color: var(--texto-desactivado); padding: 4px; }
+.mesa-hint { font-size: 0.8rem; color: var(--texto-desactivado); padding: 4px; }
 .mesa-selector-row { display: flex; align-items: center; gap: 10px; background: var(--fondo-input); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); padding: 4px 12px; transition: var(--trans-rapida); }
 .mesa-selector-row:focus-within { border-color: var(--morado-brillante); }
 .mesa-icono { color: var(--texto-secundario); display: flex; align-items: center; flex-shrink: 0; }
@@ -1515,7 +2128,8 @@ onUnmounted(() => {
 /* ============================
    MODAL DE COBRO — Mobile First
    ============================ */
-.cobro-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 5000; display: flex; align-items: flex-end; justify-content: center; }
+.cobro-overlay { position: fixed; inset: 0; background: rgba(6, 3, 18, 0.82); z-index: 5000; display: flex; align-items: flex-end; justify-content: center; animation: fadeOverlay 0.2s ease; }
+@keyframes fadeOverlay { from { opacity: 0; } to { opacity: 1; } }
 .cobro-sheet { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl) var(--radio-xl) 0 0; width: 100%; max-width: 540px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--sombra-modal); }
 
 .cobro-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; background: var(--fondo-sidebar); border-bottom: 1px solid var(--borde-sutil); flex-shrink: 0; }
@@ -1562,37 +2176,27 @@ onUnmounted(() => {
 @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
 
 /* Billetera */
-.billetera-inicio { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-.btn-activar-camara { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento)); color: #fff; border: none; padding: 16px 28px; border-radius: 30px; font-weight: 700; font-size: 1.05rem; cursor: pointer; box-shadow: 0 4px 20px rgba(168, 85, 247,0.4); transition: 0.2s; }
-.btn-activar-camara:active { transform: scale(0.97); }
-.camara-zona { display: flex; flex-direction: column; gap: 12px; }
-.btn-stop-camara { display: flex; align-items: center; gap: 8px; background: rgba(239, 68, 68,0.1); border: 1px solid rgba(239, 68, 68,0.3); color: var(--color-error); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; align-self: center; }
+.billetera-inicio { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+.cobro-o-manual { text-align: center; font-size: 0.8rem; color: var(--texto-secundario); margin: 0 0 8px; }
+.billetera-manual { display: flex; gap: 0.5rem; }
+.billetera-manual .input-qr { flex: 1; }
+.billetera-manual .btn { padding: 0 1.5rem; white-space: nowrap; }
+/* Autocompletado de billetera */
+.billetera-resultados { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.billetera-item {
+  display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+  padding: 9px 12px; border-radius: var(--radio-md); cursor: pointer;
+  background: rgba(168,85,247,0.06); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
+  transition: background var(--trans-rapida), border-color var(--trans-rapida), transform var(--trans-rapida);
+}
+.billetera-item:hover { background: rgba(168,85,247,0.14); border-color: var(--borde-activo); transform: translateX(2px); }
+.billetera-item:active { transform: scale(0.99); }
+.bi-avatar { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: #fff; background: var(--gradiente-marca); text-transform: uppercase; }
+.bi-txt { display: flex; flex-direction: column; min-width: 0; }
+.bi-nombre { font-size: 0.88rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bi-dato { font-size: 0.76rem; color: var(--texto-secundario); }
 .input-qr { width: 100%; box-sizing: border-box; min-width: 0; padding: 14px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: var(--fondo-input); color: var(--texto-principal); font-size: 1rem; outline: none; text-align: center; }
 .input-qr:focus { border-color: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168,85,247,0.15); }
-
-/* === QR SCANNER OVERLAY === */
-.qr-scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
-.qr-scanner-wrapper #reader { width: 100%; height: 300px; }
-.qr-scanner-wrapper #reader__dashboard_section_csr,
-.qr-scanner-wrapper #reader__status_span { display: none !important; }
-.qr-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; }
-.qr-overlay-top, .qr-overlay-bottom { flex: 1; background: rgba(0,0,0,0.55); }
-.qr-overlay-middle { display: flex; flex-direction: row; }
-.qr-overlay-side { flex: 1; background: rgba(0,0,0,0.55); }
-.qr-overlay-bottom { display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; }
-.qr-viewfinder { width: 220px; height: 220px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(34, 197, 94,0.5); }
-.corner { position: absolute; width: 22px; height: 22px; border-color: #fff; border-style: solid; transition: border-color 0.3s ease; }
-.qr-viewfinder.qr-detected .corner { border-color: var(--color-exito); }
-.corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-.corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
-.corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
-.corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--color-info), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(168, 85, 247,0.8); animation: scan-move 1.8s ease-in-out infinite; }
-@keyframes scan-move { 0% { top: 10px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: calc(100% - 10px); opacity: 0; } }
-.qr-hint { color: rgba(255,255,255,0.75); font-size: 0.78rem; text-align: center; margin: 0; padding: 0 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-.qr-hint-ok { color: var(--color-exito); font-weight: 700; font-size: 0.85rem; }
-
 
 /* PIN */
 .pin-zone { display: flex; flex-direction: column; align-items: center; padding: 20px 0; text-align: center; }
@@ -1601,16 +2205,56 @@ onUnmounted(() => {
 .input-pin { width: 200px; max-width: 100%; box-sizing: border-box; text-align: center; font-size: 2.5rem; letter-spacing: 15px; background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: var(--texto-principal); padding: 10px 0; outline: none; }
 .input-pin:focus { border-bottom-color: var(--rosa-acento); }
 
-/* Efectivo */
-.efectivo-display { text-align: center; margin-bottom: 20px; }
-.efectivo-label { font-size: 0.7rem; color: var(--texto-secundario); letter-spacing: 2px; font-weight: 700; }
-.efectivo-input { width: 100%; box-sizing: border-box; text-align: center; font-size: clamp(2rem, 10vw, 3rem); font-weight: 800; font-family: var(--fuente-titulo); background: transparent; border: none; border-bottom: 3px solid var(--morado-brillante); color: var(--texto-principal); padding: 10px 0; margin-top: 10px; outline: none; }
-.efectivo-input:focus { border-bottom-color: var(--rosa-acento); }
-.cambio-display { background: rgba(34, 197, 94,0.1); border: 1px solid rgba(34, 197, 94,0.3); padding: 18px 20px; border-radius: var(--radio-md); display: flex; justify-content: space-between; align-items: center; }
-.cambio-label { font-size: 0.75rem; color: var(--texto-secundario); font-weight: 700; letter-spacing: 1px; }
-.cambio-valor { font-family: var(--fuente-titulo); font-size: 1.8rem; font-weight: 800; color: var(--color-exito); font-variant-numeric: tabular-nums; }
-.cambio-insuf { background: rgba(239, 68, 68,0.1); border-color: rgba(239, 68, 68,0.3); }
-.cambio-insuf .cambio-valor { color: var(--color-error); }
+/* ===== Pago en EFECTIVO (rediseño con chips y cambio en vivo) ===== */
+.efe-display {
+  position: relative; overflow: hidden;
+  border-radius: var(--radio-lg); padding: 16px 20px 18px; margin-bottom: 14px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(168,85,247,0.14), transparent 60%),
+    var(--fondo-tarjeta-alt, rgba(255,255,255,0.04));
+  border: 1px solid var(--borde-sutil);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.efe-display.ok { border-color: rgba(34,197,94,0.5); box-shadow: 0 0 0 1px rgba(34,197,94,0.25), 0 0 24px rgba(34,197,94,0.14); }
+.efe-label { font-size: 0.72rem; color: var(--texto-secundario); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.efe-monto { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
+.efe-moneda { font-family: var(--fuente-titulo); font-size: 1.4rem; font-weight: 800; color: var(--texto-secundario); }
+.efe-input {
+  flex: 1; min-width: 0; width: 100%; background: transparent; border: none; outline: none;
+  font-family: var(--fuente-titulo); font-size: clamp(2rem, 9vw, 2.8rem); font-weight: 800;
+  color: var(--texto-principal); font-variant-numeric: tabular-nums; padding: 0;
+}
+.efe-input::placeholder { color: var(--texto-desactivado); }
+
+.efe-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.efe-chip {
+  flex: 1 1 auto; min-width: 58px; padding: 11px 10px; border-radius: var(--radio-md);
+  background: rgba(168,85,247,0.08); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
+  font-weight: 800; font-size: 0.92rem; cursor: pointer; font-variant-numeric: tabular-nums;
+  transition: background var(--trans-rapida), border-color var(--trans-rapida), transform var(--trans-rapida);
+}
+.efe-chip:hover { background: rgba(168,85,247,0.2); border-color: var(--borde-activo); transform: translateY(-2px); }
+.efe-chip:active { transform: scale(0.94); }
+.efe-chip.exacto { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.4); color: #86EFAC; }
+.efe-chip.exacto:hover { background: rgba(34,197,94,0.22); }
+.efe-chip.limpiar { background: transparent; color: var(--texto-secundario); }
+.efe-chip.limpiar:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.efe-cambio {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-radius: var(--radio-md);
+  background: rgba(255,255,255,0.04); border: 1px solid var(--borde-sutil);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.efe-cambio.listo { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); }
+.efe-cambio.falta { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+.efe-cambio-label { font-size: 0.75rem; color: var(--texto-secundario); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.efe-cambio-valor { font-family: var(--fuente-titulo); font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--texto-principal); transition: color 0.3s ease; }
+.efe-cambio.listo .efe-cambio-valor { color: var(--color-exito); }
+.efe-cambio.falta .efe-cambio-valor { color: var(--color-error); }
+@media (prefers-reduced-motion: reduce) {
+  .efe-chip:hover, .efe-chip:active { transform: none; }
+}
 
 /* QR Fullscreen */
 .qr-fullscreen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
@@ -1624,10 +2268,7 @@ onUnmounted(() => {
 .exito-card p { font-size: 0.9rem; color: var(--texto-secundario); }
 @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-#reader { width: 100%; min-height: 220px; }
-
 .ia-aprobado svg { width: 50px; height: 50px; }
-@keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
 
 /* Efectivo Gigante */
 .input-efectivo-grande { text-align: center; margin-bottom: 20px; }
@@ -1658,13 +2299,13 @@ onUnmounted(() => {
 .modal-overlay-centrado {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(6, 3, 18, 0.82);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9998;
   padding: 20px;
+  animation: fadeOverlay 0.2s ease;
 }
 .modal-nuevo-cliente {
   background: var(--fondo-tarjeta);
@@ -1696,6 +2337,24 @@ onUnmounted(() => {
   border-color: var(--morado-brillante);
   box-shadow: 0 0 0 3px rgba(168,85,247,0.15);
 }
+.input-grupo { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.input-grupo label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--morado-hover);
+}
+.mensaje-error {
+  color: var(--color-error); background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radio-md);
+  padding: 10px 14px; font-size: 0.85rem; font-weight: 600; text-align: center;
+}
+/* Loader del botón de confirmar cobro */
+.loader {
+  width: 20px; height: 20px; display: inline-block;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff; border-radius: var(--radio-full);
+  animation: girarLoader 0.7s linear infinite;
+}
+@keyframes girarLoader { to { transform: rotate(360deg); } }
 .modal-cabecera {
   display: flex;
   justify-content: space-between;
@@ -2027,13 +2686,25 @@ onUnmounted(() => {
 @media (max-width: 480px) {
   .pos-header {
     padding: 0 12px;
+    gap: 10px;
   }
+  /* Cada zona conserva su ancho natural (flex-shrink:0) y se reduce el tamaño:
+     así el badge nunca se desborda sobre la campana. */
+  .logo-area { flex-shrink: 0; gap: 6px; overflow: hidden; }
+  .logo-mini { height: 24px; margin-right: 4px; flex-shrink: 0; }
+  .badge-rol { padding: 4px 9px; font-size: 0.6rem; white-space: nowrap; flex-shrink: 0; }
   .usuario-area {
     gap: 8px;
     font-size: 0.8rem;
+    flex-shrink: 0;
   }
+  /* En pantallas angostas ocultamos el saludo y dejamos solo el botón Salir */
+  .usuario-area > span { display: none; }
   .btn-campana {
-    margin: 0 8px;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    flex-shrink: 0;
   }
   .cobro-panel {
     padding: 20px 16px;
@@ -2350,5 +3021,55 @@ onUnmounted(() => {
     transform: none;
   }
   .tarjeta-producto-pos:hover .img-producto { transform: none; }
+}
+
+/* ===== Modal mapa de mesas ===== */
+.mapa-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(6, 3, 18, 0.72);
+}
+.mapa-sheet {
+  width: 100%; max-width: 620px; max-height: 90dvh; display: flex; flex-direction: column;
+  background: var(--fondo-tarjeta, #17092F); border: 1px solid var(--glass-borde, rgba(168,85,247,0.3));
+  border-radius: var(--radio-xl); box-shadow: 0 30px 70px rgba(0,0,0,0.6); overflow: hidden;
+}
+.mapa-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--borde-sutil); }
+.mapa-header h3 { font-family: var(--fuente-titulo); font-size: 1.1rem; font-weight: 800; color: var(--texto-principal); margin: 0; }
+.mapa-sub { font-size: 0.78rem; color: var(--texto-secundario); margin: 3px 0 0; }
+.mapa-cerrar { flex-shrink: 0; background: rgba(255,255,255,0.06); border: none; color: var(--texto-secundario); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.mapa-cerrar:hover { background: rgba(255,255,255,0.12); color: var(--texto-principal); }
+.mapa-body { padding: 18px 20px calc(20px + env(safe-area-inset-bottom)); overflow-y: auto; }
+.mapa-cargando { display: flex; justify-content: center; padding: 3rem; }
+.mapa-vacio { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 2.5rem 1rem; color: var(--texto-secundario); text-align: center; }
+.mapa-vacio svg { color: var(--morado-brillante); opacity: 0.6; }
+.mapa-zona + .mapa-zona { margin-top: 22px; }
+.mapa-zona-nombre { font-size: 0.85rem; font-weight: 700; color: var(--texto-principal); margin: 0 0 8px; }
+.mapa-zona-nombre em { font-style: normal; color: var(--texto-desactivado); font-weight: 500; }
+.mapa-lienzo {
+  position: relative; width: 100%; border-radius: var(--radio-lg);
+  background:
+    linear-gradient(rgba(168,85,247,0.06) 1px, transparent 1px) 0 0 / 100% 9%,
+    linear-gradient(90deg, rgba(168,85,247,0.06) 1px, transparent 1px) 0 0 / 9% 100%,
+    var(--fondo-app, #0b0618);
+  border: 1px solid var(--borde-sutil); overflow: hidden;
+}
+.mapa-el {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 800; color: #fff; box-sizing: border-box; user-select: none;
+}
+.mapa-el-txt { padding: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.6); pointer-events: none; }
+/* Todas las mesas se ven igual: el mesero solo elige y llena el campo */
+.mapa-el.elegible { background: rgba(168,85,247,0.2); border: 2px solid rgba(168,85,247,0.6); color: #E9D5FF; cursor: pointer; transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+.mapa-el.elegible:hover { background: rgba(168,85,247,0.38); transform: scale(1.06); box-shadow: 0 0 16px rgba(168,85,247,0.5); }
+.mapa-el.deco { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--texto-desactivado); }
+@media (max-width: 480px) {
+  .mapa-body { padding: 14px 16px; }
+}
+
+/* Pantallas muy angostas: el badge de rol es decorativo, se oculta para que
+   logo + campana + Salir siempre quepan sin desbordar ni sobreponerse. */
+@media (max-width: 360px) {
+  .badge-rol { display: none; }
 }
 </style>

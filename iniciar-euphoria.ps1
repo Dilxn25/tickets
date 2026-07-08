@@ -16,9 +16,11 @@ Write-Host "Limpiando conexiones de ejecuciones anteriores..." -ForegroundColor 
 Get-NetTCPConnection -LocalPort 3000, 5173, 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 1
 
-# Iniciar SERVICIO IA (Recomendaciones) en nueva ventana
-Write-Host "[1] Iniciando Servicio IA / Recomendaciones (puerto 8000)..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\euphoria-ia'; Write-Host '=== EUPHORIA IA (Recomendaciones) ===' -ForegroundColor Magenta; Write-Host 'http://localhost:8000/docs' -ForegroundColor Green; uvicorn api:app --port 8000"
+# Iniciar SERVICIO IA (Recomendaciones) en nueva ventana con AUTO-REINICIO
+# (si el proceso muere, el bucle lo vuelve a levantar solo -> "nunca caido").
+# Se usa "python -m uvicorn" porque el ejecutable "uvicorn" no siempre esta en el PATH.
+Write-Host "[1] Iniciando Servicio IA / Recomendaciones (puerto 8000, con auto-reinicio)..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\euphoria-ia'; Write-Host '=== EUPHORIA IA (Recomendaciones) - auto-reinicio activo ===' -ForegroundColor Magenta; Write-Host 'http://localhost:8000/docs' -ForegroundColor Green; while (1 -eq 1) { python -m uvicorn api:app --port 8000; Write-Host '[IA] El servicio se detuvo. Reiniciando en 3s...' -ForegroundColor Red; Start-Sleep -Seconds 3 }"
 
 Start-Sleep -Seconds 2
 

@@ -100,8 +100,9 @@ router.put('/config', verificarToken, soloRoles('Administrador'), async (req, re
   }
 })
 
-// GET /api/recomendaciones/estado — ¿el microservicio Python está en línea? (solo admin)
-router.get('/estado', verificarToken, soloRoles('Administrador'), async (req, res) => {
+// GET /api/recomendaciones/estado — ¿el microservicio Python está en línea?
+// Lo consultan el admin (panel IA) y también caja/mesero para avisar si se cae.
+router.get('/estado', verificarToken, soloRoles('Administrador', 'Cajero', 'Mesero', 'Bartender'), async (req, res) => {
   const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
   try {
     // Cualquier respuesta HTTP (aunque sea 404) significa que el servicio está vivo
@@ -110,6 +111,20 @@ router.get('/estado', verificarToken, soloRoles('Administrador'), async (req, re
   } catch {
     res.json({ en_linea: false, url: urlIA })
   }
+})
+
+// POST /api/recomendaciones/reportar-caida — el mesero avisa a caja/admin que la IA está caída.
+// Reenvía el aviso en tiempo real a todas las pantallas conectadas (caja, panel del admin).
+router.post('/reportar-caida', verificarToken, soloRoles('Administrador', 'Cajero', 'Mesero', 'Bartender'), (req, res) => {
+  const reportadoPor = (req.body?.nombre || 'Un compañero').toString().trim().slice(0, 60)
+  if (global.io) {
+    global.io.emit('ia_reportada', {
+      reportadoPor,
+      id_usuario: req.usuario.id,
+      hora: new Date().toISOString(),
+    })
+  }
+  res.json({ ok: true })
 })
 
 // GET /api/recomendaciones/combos — Combos populares (pares más co-comprados) para promociones.
