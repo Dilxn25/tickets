@@ -103,6 +103,23 @@
             </div>
           </div>
         </transition>
+
+        <!-- Asignación de mesero (sugerido por carga, recepción confirma o cambia) -->
+        <transition name="fade">
+          <div v-if="asignacionPendiente" class="asignar-mesero">
+            <div class="am-cab">
+              <b>Asignar mesero</b>
+              <span>{{ asignacionPendiente.mesa ? 'Mesa ' + asignacionPendiente.mesa : 'Mesa reservada' }} · {{ asignacionPendiente.cliente || 'cliente' }}</span>
+            </div>
+            <BaseSelect v-model="meseroElegido" :options="opcionesMesero" placeholder="Elige un mesero" />
+            <div class="am-acciones">
+              <button class="btn-sec" type="button" @click="asignacionPendiente = null">Ahora no</button>
+              <button class="btn-primario" type="button" :disabled="asignandoMesero || !meseroElegido" @click="confirmarMesero">
+                {{ asignandoMesero ? 'Asignando…' : 'Confirmar mesero' }}
+              </button>
+            </div>
+          </div>
+        </transition>
       </section>
 
       <!-- Aforo en vivo -->
@@ -226,6 +243,7 @@ import { io } from 'socket.io-client'
 import { Html5Qrcode } from 'html5-qrcode'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const eventos = ref([])
@@ -241,6 +259,15 @@ const codigoManual = ref('')
 const procesando = ref(false)
 const resultado = ref(null)
 const pendiente = ref(null)
+
+// ---- Asignación de mesero al hacer check-in (Fase B) ----
+const asignacionPendiente = ref(null) // { id_mesa, id_entrada, cliente, mesa }
+const meserosLista = ref([])
+const meseroElegido = ref(null)
+const asignandoMesero = ref(false)
+const opcionesMesero = computed(() =>
+  meserosLista.value.map(m => ({ value: m.id_usuario, label: `${m.nombre} (${m.carga} mesa${m.carga === 1 ? '' : 's'})` }))
+)
 
 const camaraActiva = ref(false)
 let scanner = null
@@ -415,12 +442,41 @@ async function confirmarIngreso() {
     if (i >= 0) zonas.value[i] = { ...zonas.value[i], ...a }
     recomputarTotales()
     pendiente.value = null
+    // Asignación de mesero: si la reserva tiene mesa, ofrecer confirmar el mesero sugerido
+    if (r.mesa_ya_asignada) {
+      mostrarResultado('ok', 'Mesa ya asignada', `${r.mesa ? 'Mesa ' + r.mesa + ' · ' : ''}la atiende ${r.mesa_ya_asignada.nombre}`)
+    } else if (r.id_mesa && r.mesero_sugerido) {
+      try {
+        meserosLista.value = await clienteHttp.get('/aforo/meseros')
+      } catch { meserosLista.value = [] }
+      meseroElegido.value = r.mesero_sugerido.id_usuario
+      asignacionPendiente.value = { id_mesa: r.id_mesa, id_entrada: r.id_entrada, cliente: r.cliente, mesa: r.mesa }
+    }
   } catch (err) {
     const data = err?.response?.data || err
     mostrarResultado('error', data?.aforo_lleno ? 'Aforo lleno' : 'No se pudo validar',
       data?.error || 'No se pudo registrar el ingreso')
   } finally {
     procesando.value = false
+  }
+}
+
+async function confirmarMesero() {
+  if (!asignacionPendiente.value || !meseroElegido.value) return
+  asignandoMesero.value = true
+  try {
+    await clienteHttp.post('/aforo/asignar-mesero', {
+      id_mesa: asignacionPendiente.value.id_mesa,
+      id_entrada: asignacionPendiente.value.id_entrada,
+      id_mesero: meseroElegido.value,
+    })
+    const m = meserosLista.value.find(x => x.id_usuario === meseroElegido.value)
+    mostrarResultado('ok', 'Mesero asignado', `${asignacionPendiente.value.mesa ? 'Mesa ' + asignacionPendiente.value.mesa + ' · ' : ''}${m ? m.nombre : 'mesero'} atenderá a ${asignacionPendiente.value.cliente || 'el cliente'}`)
+    asignacionPendiente.value = null
+  } catch (e) {
+    mostrarResultado('error', 'No se pudo asignar', e.error || 'Intenta de nuevo')
+  } finally {
+    asignandoMesero.value = false
   }
 }
 
@@ -729,4 +785,17 @@ onUnmounted(() => {
   .btn-camara:hover, .btn-primario:hover:not(:disabled), .btn-camara:active, .btn-primario:active:not(:disabled), .stepper button:active { transform: none; }
   .barra-relleno { transition: none; }
 }
+
+/* Panel de asignación de mesero al check-in */
+.asignar-mesero {
+  margin-top: var(--esp-4); padding: var(--esp-4);
+  border-radius: var(--radio-md); background: rgba(168,85,247,0.08);
+  border: 1px solid rgba(168,85,247,0.35); display: flex; flex-direction: column; gap: var(--esp-3);
+  animation: aparecerEscala 0.3s var(--ease-rebote) both;
+}
+.am-cab { display: flex; flex-direction: column; gap: 2px; }
+.am-cab b { font-size: 0.95rem; color: var(--texto-principal); }
+.am-cab span { font-size: 0.82rem; color: var(--texto-secundario); }
+.am-acciones { display: flex; gap: var(--esp-3); }
+.am-acciones .btn-primario, .am-acciones .btn-sec { flex: 1; }
 </style>

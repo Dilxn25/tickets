@@ -284,7 +284,27 @@
           </button>
           <h3 class="titulo-carrito" style="margin: 0;">Orden Actual</h3>
         </div>
-        
+
+        <!-- MIS MESAS ASIGNADAS (recepción se las asigna al llegar el cliente) -->
+        <div v-if="misMesas.length" class="mis-mesas">
+          <div class="mm-titulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>Tus mesas asignadas</span>
+          </div>
+          <div class="mm-chips">
+            <button
+              v-for="m in misMesas" :key="m.id_asignacion"
+              type="button" class="mm-chip"
+              :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa }"
+              @click="elegirMesaAsignada(m)"
+            >
+              <strong>{{ m.mesa || 'Mesa' }}</strong>
+              <span v-if="m.cliente" class="mm-cli">{{ m.cliente }}</span>
+              <span v-if="m.es_vip" class="mm-vip">VIP</span>
+            </button>
+          </div>
+        </div>
+
         <!-- SELECTOR DE MESA -->
         <div class="selector-mesa">
           <div class="mesa-tabs">
@@ -628,12 +648,26 @@
           </div>
           <div class="modal-nuevo-body">
             <div class="input-grupo">
-              <label>CI / Carnet / NIT</label>
-              <input v-model="formNuevoCliente.ci_carnet" type="text" class="campo-nuevo-cliente" placeholder="Ej: 12345678" autofocus />
+              <label>Nombre o razón social *</label>
+              <input v-model="formNuevoCliente.nombres" type="text" class="campo-nuevo-cliente" placeholder="Ej: Carlos Pérez / Comercial XYZ" autofocus />
             </div>
             <div class="input-grupo">
-              <label>Razon Social *</label>
-              <input v-model="formNuevoCliente.nombres" type="text" class="campo-nuevo-cliente" placeholder="Nombre o razon social" />
+              <label>CI / Carnet / NIT <span class="opcional">(opcional)</span></label>
+              <input v-model="formNuevoCliente.ci_carnet" type="text" class="campo-nuevo-cliente" placeholder="Ej: 12345678" />
+            </div>
+            <div class="input-grupo">
+              <label>Celular <span class="opcional">(opcional)</span></label>
+              <input v-model="formNuevoCliente.telefono" type="text" class="campo-nuevo-cliente" placeholder="Ej: 70000000" />
+            </div>
+            <div class="input-grupo">
+              <label>Tipo de cliente</label>
+              <div class="tipo-cliente-tabs">
+                <button type="button" class="tc-tab" :class="{ activo: !formNuevoCliente.es_vip }" @click="formNuevoCliente.es_vip = false">Común</button>
+                <button type="button" class="tc-tab tc-vip" :class="{ activo: formNuevoCliente.es_vip }" @click="formNuevoCliente.es_vip = true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polygon points="12 2 15 8.5 22 9.3 17 14 18.5 21 12 17.3 5.5 21 7 14 2 9.3 9 8.5 12 2"></polygon></svg>
+                  VIP
+                </button>
+              </div>
             </div>
             <div v-if="avisoNitExistente" class="aviso-nit">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -810,6 +844,19 @@ const opcionesMesa = computed(() => [
 ])
 const clienteAutoAsignado = ref('')
 
+// Mesas asignadas a este mesero (recepción se las asigna al check-in)
+const misMesas = ref([])
+async function cargarMisMesas() {
+  try { misMesas.value = await clienteHttp.get('/comandas/mis-mesas') }
+  catch { misMesas.value = [] }
+}
+// Elegir una mesa asignada = seleccionarla en la orden (y su cliente si tiene reserva)
+function elegirMesaAsignada(m) {
+  const mesaObj = mesas.value.find(x => x.id_mesa === m.id_mesa)
+  if (mesaObj) { mesaSeleccionada.value = mesaObj; modoMesa.value = 'lista'; alCambiarMesa() }
+  else notif.advertencia(`La mesa ${m.mesa || ''} no está en el evento activo.`)
+}
+
 // Selector de mesa: 3 modos (lista / buscar / mapa)
 const modoMesa = ref('lista')
 const busquedaMesa = ref('')
@@ -878,7 +925,7 @@ const modalNuevoCliente = ref(false)
 const creandoCliente = ref(false)
 const errorNuevoCliente = ref('')
 const avisoNitExistente = ref(false)
-const formNuevoCliente = ref({ nombres: '', apellidos: '', ci_carnet: '', telefono: '' })
+const formNuevoCliente = ref({ nombres: '', apellidos: '', ci_carnet: '', telefono: '', es_vip: false })
 
 // Variables de Cobro
 const modalCobro = ref(false)
@@ -1504,7 +1551,8 @@ async function crearClienteRapido() {
       ci_carnet: formNuevoCliente.value.ci_carnet,
       nombres: formNuevoCliente.value.nombres,
       apellidos: '',
-      telefono: ''
+      telefono: formNuevoCliente.value.telefono,
+      es_vip: formNuevoCliente.value.es_vip,
     }
     const res = await clienteHttp.post('/usuarios/cliente-rapido', payload)
     seleccionarCliente(res.usuario)
@@ -1512,7 +1560,7 @@ async function crearClienteRapido() {
     // Cerrar despues de breve pausa si ya existia (para que lea el aviso)
     setTimeout(() => {
       modalNuevoCliente.value = false
-      formNuevoCliente.value = { nombres: '', apellidos: '', ci_carnet: '', telefono: '' }
+      formNuevoCliente.value = { nombres: '', apellidos: '', ci_carnet: '', telefono: '', es_vip: false }
       avisoNitExistente.value = false
     }, res.yaExistia ? 1500 : 0)
   } catch (error) {
@@ -1549,6 +1597,7 @@ async function entregarPedido(id) {
 
 onMounted(() => {
   cargarPedidosListos()
+  cargarMisMesas()
 
   // Vigilancia del servicio de sugerencias (IA): al entrar y cada 30s
   verificarEstadoIA()
@@ -1570,6 +1619,12 @@ onMounted(() => {
   socket.on('ia_reportada', (data) => {
     if (data?.id_usuario === tienda.usuario?.id) return
     agregarToast(`${data?.reportadoPor || 'Un compañero'} avisó: el servicio de sugerencias está caído`)
+  })
+  // Recepción me asignó una mesa
+  socket.on('mesa_asignada', (data) => {
+    if (data?.id_mesero !== tienda.usuario?.id) return
+    cargarMisMesas()
+    agregarToast('Te asignaron una nueva mesa')
   })
 })
 
@@ -2082,6 +2137,22 @@ onUnmounted(() => {
 .btn-cobrar:not(:disabled):hover .btn-cobrar-arrow { transform: translateX(3px); }
 
 /* Selector de Mesa */
+/* Mis mesas asignadas */
+.mis-mesas { margin-bottom: 12px; padding: 10px 12px; border-radius: var(--radio-md); background: rgba(168,85,247,0.07); border: 1px solid var(--borde-sutil); }
+.mm-titulo { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--morado-hover); margin-bottom: 8px; }
+.mm-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.mm-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: var(--radio-full);
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
+  cursor: pointer; font-size: 0.82rem; transition: border-color var(--trans-rapida), background var(--trans-rapida), transform var(--trans-rapida);
+}
+.mm-chip:hover { border-color: var(--morado-brillante); transform: translateY(-1px); }
+.mm-chip.sel { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+.mm-chip strong { font-weight: 800; }
+.mm-cli { color: var(--texto-secundario); font-size: 0.76rem; }
+.mm-chip.sel .mm-cli { color: rgba(255,255,255,0.85); }
+.mm-vip { font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: var(--radio-full); background: #FBBF24; color: #1a1206; }
+
 .selector-mesa { margin-bottom: 12px; }
 /* Tabs de modo de mesa (lista / buscar / mapa) */
 .mesa-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -2342,6 +2413,18 @@ onUnmounted(() => {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--morado-hover);
 }
+.input-grupo label .opcional { color: var(--texto-desactivado); font-weight: 600; text-transform: none; letter-spacing: 0; }
+/* Selector de tipo de cliente (común / VIP) */
+.tipo-cliente-tabs { display: flex; gap: 8px; }
+.tc-tab {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.85rem;
+  background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-secundario);
+  transition: border-color var(--trans-rapida), background var(--trans-rapida), color var(--trans-rapida);
+}
+.tc-tab:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.tc-tab.activo { background: rgba(168,85,247,0.16); border-color: var(--morado-brillante); color: var(--texto-principal); }
+.tc-tab.tc-vip.activo { background: linear-gradient(135deg, rgba(251,191,36,0.2), rgba(236,72,153,0.15)); border-color: #FBBF24; color: #FCD34D; }
 .mensaje-error {
   color: var(--color-error); background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radio-md);
