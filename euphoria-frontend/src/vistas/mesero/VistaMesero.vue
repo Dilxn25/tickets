@@ -48,13 +48,40 @@
         </button>
       </div>
 
-      <div v-if="pedidosListos.length === 0" class="vacio-listos">
+      <!-- Pedidos libres (pool): los liberó otro mesero, cualquiera puede llevarlos -->
+      <div v-if="pedidosPool.length" class="pool-libres">
+        <div class="pool-titulo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          Pedidos libres para llevar
+        </div>
+        <div class="grid-listos">
+          <div v-for="pp in pedidosPool" :key="pp.id_comanda" class="card-listo-full card-pool">
+            <div class="clf-header">
+              <span class="clf-orden">Orden #{{ pp.id_comanda }}</span>
+              <span class="clf-destino">{{ pp.mesa ? 'Mesa ' + pp.mesa : 'Barra' }}</span>
+            </div>
+            <div class="clf-cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <span>{{ pp.cliente || 'Sin registro' }}</span>
+            </div>
+            <div class="clf-prods">
+              <div v-for="(it, i) in pp.items" :key="i" class="clf-prod-item">
+                <span class="clf-cant">{{ it.cantidad }}x</span>
+                <span class="clf-nom">{{ it.nombre }}</span>
+              </div>
+            </div>
+            <button class="btn-tomar" @click="tomarPedidoPool(pp)">Yo lo llevo</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="pedidosListos.length === 0 && !pedidosPool.length" class="vacio-listos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:0.3; margin-bottom:15px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         <p>No tienes pedidos pendientes de recoger.</p>
         <button class="btn btn-primario mt-15" @click="mostrarModalListos = false">Volver al Menú</button>
       </div>
 
-      <div v-else class="grid-listos escalonar">
+      <div v-if="pedidosListos.length" class="grid-listos escalonar">
         <transition-group name="list">
           <div v-for="ped in pedidosListos" :key="ped.id_comanda" class="card-listo-full">
             <div class="clf-header">
@@ -79,6 +106,12 @@
               </div>
             </div>
 
+            <!-- Aviso cuando el pedido lleva mucho listo sin recoger -->
+            <div v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="clf-espera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Lleva {{ minutosListo(ped) }} min listo. ¿Lo llevas tú o que lo lleve otro?
+            </div>
+
             <div class="clf-acciones">
               <button
                 v-if="ped.mesa_espacio"
@@ -87,6 +120,9 @@
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                 Dónde llevar
+              </button>
+              <button v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="btn-liberar" @click="liberarPedido(ped.id_comanda)">
+                Que lo lleve otro
               </button>
               <button class="btn-entregar-full" @click="entregarPedido(ped.id_comanda)" :disabled="procesandoEntrega === ped.id_comanda">
                 <span v-if="procesandoEntrega === ped.id_comanda">Procesando...</span>
@@ -1611,7 +1647,7 @@ async function entregarPedido(id) {
   try {
     await clienteHttp.patch(`/comandas/${id}/estado`, { estado: 'Completada' })
     pedidosListos.value = pedidosListos.value.filter(p => p.id_comanda !== id)
-    if (pedidosListos.value.length === 0) {
+    if (pedidosListos.value.length === 0 && !pedidosPool.value.length) {
       mostrarModalListos.value = false
     }
   } catch(e) {
@@ -1621,9 +1657,46 @@ async function entregarPedido(id) {
   }
 }
 
+// ==== REASIGNACIÓN POR TIEMPO (pool de pedidos listos) ====
+const pedidosPool = ref([])
+const ahoraTick = ref(Date.now())     // se refresca cada 20s para recalcular la espera
+let intervaloTick = null
+const UMBRAL_LISTO_MIN = 3            // min. listo sin recoger antes de sugerir liberarlo
+function minutosListo(ped) {
+  if (!ped.fecha_listo) return 0
+  return Math.floor((ahoraTick.value - new Date(ped.fecha_listo).getTime()) / 60000)
+}
+async function cargarPool() {
+  try { pedidosPool.value = await clienteHttp.get('/comandas/pool') }
+  catch { pedidosPool.value = [] }
+}
+async function liberarPedido(id) {
+  try {
+    await clienteHttp.post(`/comandas/${id}/liberar`)
+    pedidosListos.value = pedidosListos.value.filter(p => p.id_comanda !== id)
+    notif.info('Pedido liberado: otro mesero puede llevarlo.')
+    cargarPool()
+  } catch { notif.error('No se pudo liberar el pedido.') }
+}
+async function tomarPedidoPool(p) {
+  try {
+    await clienteHttp.post(`/comandas/${p.id_comanda}/tomar`)
+    pedidosPool.value = pedidosPool.value.filter(x => x.id_comanda !== p.id_comanda)
+    cargarPedidosListos()
+    notif.exito(`Tomaste el pedido de ${p.mesa ? 'la mesa ' + p.mesa : 'barra'}`)
+    if (p.id_mesa) abrirMapaDestino(p.id_mesa, p.mesa, p.cliente)
+  } catch (e) {
+    notif.advertencia(e.error || 'Ese pedido ya lo tomó otro mesero.')
+    cargarPool()
+  }
+}
+
 onMounted(() => {
   cargarPedidosListos()
   cargarMisMesas()
+  cargarPool()
+  // Recalcular el tiempo "listo sin recoger" cada 20s
+  intervaloTick = setInterval(() => { ahoraTick.value = Date.now() }, 20000)
 
   // Vigilancia del servicio de sugerencias (IA): al entrar y cada 30s
   verificarEstadoIA()
@@ -1652,11 +1725,19 @@ onMounted(() => {
     cargarMisMesas()
     agregarToast('Te asignaron una nueva mesa')
   })
+  // Un pedido cayó al pool (alguien lo liberó) — cualquier mesero puede tomarlo
+  socket.on('pedido_pool', () => { cargarPool() })
+  // Alguien tomó un pedido del pool
+  socket.on('pedido_tomado', (data) => {
+    cargarPool()
+    if (data?.id_mesero === tienda.usuario?.id) cargarPedidosListos()
+  })
 })
 
 onUnmounted(() => {
   if (socket) socket.disconnect()
   if (intervaloIA) clearInterval(intervaloIA)
+  if (intervaloTick) clearInterval(intervaloTick)
 })
 </script>
 
@@ -3044,6 +3125,18 @@ onUnmounted(() => {
   font-size: 1rem;
 }
 
+.clf-espera { display: flex; align-items: center; gap: 7px; margin: 4px 0 8px; padding: 8px 10px; border-radius: var(--radio-md); font-size: 0.78rem; font-weight: 600; color: #FBBF24; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.25); }
+.clf-espera svg { flex-shrink: 0; }
+.btn-liberar { width: 100%; padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.9rem; background: rgba(251,191,36,0.14); color: #FCD34D; border: 1px solid rgba(251,191,36,0.4); transition: background var(--trans-normal); }
+.btn-liberar:hover { background: rgba(251,191,36,0.24); }
+/* Pool de pedidos libres */
+.pool-libres { margin-bottom: 22px; }
+.pool-titulo { display: flex; align-items: center; gap: 8px; font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 800; color: #FCD34D; margin-bottom: 12px; }
+.pool-titulo svg { color: #FBBF24; }
+.card-pool { border-color: rgba(251,191,36,0.35) !important; background: rgba(251,191,36,0.05); }
+.btn-tomar { margin-top: auto; width: 100%; padding: 12px; border-radius: var(--radio-md); cursor: pointer; font-weight: 800; font-size: 1rem; color: #1a1206; background: linear-gradient(135deg, #FBBF24, #F59E0B); border: none; transition: transform var(--trans-rapida); }
+.btn-tomar:hover { transform: translateY(-1px); }
+.btn-tomar:active { transform: scale(0.98); }
 .clf-acciones { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 .btn-donde-llevar {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

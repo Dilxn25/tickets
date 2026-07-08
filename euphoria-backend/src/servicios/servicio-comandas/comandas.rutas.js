@@ -812,7 +812,11 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
 
     const comanda = await prisma.comanda.update({
       where: { id_comanda: id },
-      data: { estado_despacho: estado },
+      data: {
+        estado_despacho: estado,
+        // Marca cuándo quedó Listo (para medir la espera de recojo en el pool)
+        ...(estado === 'Listo' && !actual.fecha_listo ? { fecha_listo: new Date() } : {}),
+      },
     })
 
     // Emitir eventos por websocket
@@ -829,6 +833,55 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
     console.error('Error actualizando estado de comanda:', error)
     res.status(500).json({ error: 'Error al actualizar estado de comanda' })
   }
+})
+
+// ===== Reasignación por tiempo (Fase E): pool de pedidos listos sin recoger =====
+
+// GET /api/comandas/pool — pedidos listos liberados que cualquier mesero puede tomar
+router.get('/pool', verificarToken, async (req, res) => {
+  try {
+    const comandas = await prisma.comanda.findMany({
+      where: { estado_despacho: 'Listo', estado_entrega: 'en_pool' },
+      orderBy: { fecha_listo: 'asc' },
+      include: {
+        detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
+        mesa_espacio: { select: { id_mesa: true, numero_nombre: true } },
+        usuario_comanda_id_clienteTousuario: { select: { nombres: true } },
+      },
+    })
+    res.json(comandas.map(c => ({
+      id_comanda: c.id_comanda,
+      id_mesa: c.mesa_espacio?.id_mesa || null,
+      mesa: c.mesa_espacio?.numero_nombre || null,
+      cliente: c.usuario_comanda_id_clienteTousuario?.nombres || null,
+      fecha_listo: c.fecha_listo,
+      items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad })),
+    })))
+  } catch (e) { res.status(500).json({ error: 'Error al obtener el pool' }) }
+})
+
+// POST /api/comandas/:id/liberar — el mesero suelta su pedido al pool (que lo lleve otro)
+router.post('/:id/liberar', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    await prisma.comanda.update({ where: { id_comanda: id }, data: { estado_entrega: 'en_pool' } })
+    if (global.io) global.io.emit('pedido_pool', { id_comanda: id })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: 'No se pudo liberar el pedido' }) }
+})
+
+// POST /api/comandas/:id/tomar — otro mesero toma un pedido del pool (atómico)
+router.post('/:id/tomar', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const r = await prisma.comanda.updateMany({
+      where: { id_comanda: id, estado_entrega: 'en_pool' },
+      data: { estado_entrega: 'pendiente', id_mesero: req.usuario.id },
+    })
+    if (r.count === 0) return res.status(409).json({ error: 'Ese pedido ya lo tomó otro mesero.' })
+    if (global.io) global.io.emit('pedido_tomado', { id_comanda: id, id_mesero: req.usuario.id })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: 'No se pudo tomar el pedido' }) }
 })
 
 module.exports = router
