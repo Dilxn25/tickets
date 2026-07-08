@@ -221,6 +221,14 @@
               </span>
             </div>
 
+            <div class="entrega-mini">
+              <span class="entrega-lbl">¿Cómo lo quieres?</span>
+              <div class="entrega-tabs">
+                <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'barra' }" @click="modoEntrega = 'barra'">Recojo en barra</button>
+                <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'llevar' }" @click="modoEntrega = 'llevar'">Que me lo lleven</button>
+              </div>
+            </div>
+
             <div class="botones-mini">
               <button class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
                 <span class="pago-texto">{{ textoBotonPago }}</span>
@@ -292,6 +300,7 @@ const qrPublico = ref('')
 const cargandoSaldo = ref(true)
 const errorCargaSaldo = ref('')
 const cargandoPago = ref(false)
+const modoEntrega = ref('barra') // barra = recoge / llevar = a su mesa
 const mensajeExito = ref('')
 const errorPago = ref('')
 
@@ -404,6 +413,7 @@ async function irAPagar() {
       cantidad: i.cantidad
     }))
     formData.append('productos', JSON.stringify(productosParaBackend))
+    formData.append('modo_entrega', modoEntrega.value)
 
     const resPago = await clienteHttp.post('/comandas/crear', formData)
 
@@ -1279,6 +1289,18 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.8rem;
 }
+
+/* Selector recoger / llevar (autoservicio del cliente) */
+.entrega-mini { margin: 0.9rem 0; }
+.entrega-lbl { display: block; font-size: 0.78rem; color: var(--texto-secundario); margin-bottom: 8px; font-weight: 600; }
+.entrega-tabs { display: flex; gap: 8px; }
+.ent-tab {
+  flex: 1; padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.82rem;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--borde-sutil); color: var(--texto-secundario);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.ent-tab:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.ent-tab.activo { background: rgba(168,85,247,0.18); border-color: var(--morado-brillante); color: var(--texto-principal); }
 
 /* Botón de pago (CTA isla a ancho completo) */
 .btn-pago-mini {

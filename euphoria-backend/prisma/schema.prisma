@@ -70,6 +70,7 @@ model comanda {
   comprobante_url                     String?           @db.VarChar(255)
   id_entrada                          Int?
   origen                              String            @default("mesero") @db.VarChar(20)
+  modo_entrega                        String?           @db.VarChar(20)
   usuario_comanda_id_clienteTousuario usuario?          @relation("comanda_id_clienteTousuario", fields: [id_cliente], references: [id_usuario], map: "COMANDA_id_cliente_fkey")
   mesa_espacio                        mesa_espacio?     @relation(fields: [id_mesa], references: [id_mesa], map: "COMANDA_id_mesa_fkey")
   usuario_comanda_id_meseroTousuario  usuario           @relation("comanda_id_meseroTousuario", fields: [id_mesero], references: [id_usuario], map: "COMANDA_id_mesero_fkey")

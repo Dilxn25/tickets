@@ -211,10 +211,25 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       })
     }
 
-    // Vínculo con la reserva: si la mesa tiene una entrada (reserva) activa, se liga
-    // el pedido a ella (y de ahí a su mesa + evento). En walk-ins queda null.
+    // Origen del pedido según quién lo crea
+    const origenComanda = req.usuario?.rol === 'Cliente' ? 'app'
+      : (req.usuario?.rol === 'Cajero' ? 'caja' : 'mesero')
+
+    // Vínculo con la reserva (y de ahí mesa + evento).
     let idEntradaVinculada = null
-    if (id_mesa) {
+    if (origenComanda === 'app') {
+      // AUTOSERVICIO: el cliente solo puede pedir si YA ingresó al evento (recepción validó su QR).
+      const ingresada = await prisma.entrada.findFirst({
+        where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+        orderBy: { fecha_reserva: 'desc' },
+        select: { id_entrada: true },
+      })
+      if (!ingresada) {
+        return res.status(403).json({ error: 'Para pedir desde la app primero debes ingresar al evento (recepción valida tu QR).' })
+      }
+      idEntradaVinculada = ingresada.id_entrada
+    } else if (id_mesa) {
+      // Mesero/caja: si la mesa tiene reserva activa, se liga a ella (walk-in queda null)
       const reserva = await prisma.entrada.findFirst({
         where: { id_mesa: Number(id_mesa) },
         orderBy: { fecha_reserva: 'desc' },
@@ -222,9 +237,10 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       })
       idEntradaVinculada = reserva?.id_entrada || null
     }
-    // Origen del pedido según quién lo crea (el 'app' del cliente se define en la Fase C)
-    const origenComanda = req.usuario?.rol === 'Cliente' ? 'app'
-      : (req.usuario?.rol === 'Cajero' ? 'caja' : 'mesero')
+    // Modo de entrega (solo aplica al autoservicio del cliente: 'barra' recoge / 'llevar')
+    const modoEntrega = origenComanda === 'app'
+      ? (['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : 'barra')
+      : null
 
     // SI EL METODO ES BILLETERA
     if (metodo_pago === 'Billetera') {
@@ -332,6 +348,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
               metodo_pago: 'Billetera',
               id_entrada: idEntradaVinculada,
               origen: origenComanda,
+              modo_entrega: modoEntrega,
               detalle_comanda: { create: detalles_crear }
             }
           })
@@ -413,6 +430,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           comprobante_url: url_final_comprobante,
           id_entrada: idEntradaVinculada,
           origen: origenComanda,
+          modo_entrega: modoEntrega,
           detalle_comanda: { create: detalles_crear }
         }
       })
@@ -697,6 +715,34 @@ router.get('/mis-mesas', verificarToken, async (req, res) => {
     })))
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener mis mesas asignadas' })
+  }
+})
+
+// GET /api/comandas/mis-pedidos (historial de pedidos del cliente logueado)
+router.get('/mis-pedidos', verificarToken, async (req, res) => {
+  try {
+    const comandas = await prisma.comanda.findMany({
+      where: { id_cliente: req.usuario.id },
+      orderBy: { fecha_registro: 'desc' },
+      take: 50,
+      include: {
+        detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
+        mesa_espacio: { select: { numero_nombre: true } },
+      },
+    })
+    res.json(comandas.map(c => ({
+      id_comanda: c.id_comanda,
+      fecha: c.fecha_registro,
+      estado: c.estado_despacho,
+      metodo_pago: c.metodo_pago,
+      origen: c.origen,              // app | mesero | caja
+      modo_entrega: c.modo_entrega,  // barra | llevar | null
+      mesa: c.mesa_espacio?.numero_nombre || null,
+      total: c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0),
+      items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad, subtotal: Number(d.subtotal) })),
+    })))
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener tus pedidos' })
   }
 })
 

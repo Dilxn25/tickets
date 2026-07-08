@@ -8,6 +8,7 @@
         </svg>
       </button>
       <h1 class="titulo-movimientos">Tus movimientos</h1>
+      <RouterLink to="/cliente/pedidos" class="link-pedidos">Mis pedidos</RouterLink>
     </header>
 
     <!-- Filtros rápidos por tipo -->
@@ -329,6 +330,13 @@ onMounted(cargarMovimientos)
   gap: 0.8rem;
   margin-bottom: 1.15rem;
 }
+.link-pedidos {
+  margin-left: auto; font-size: 0.82rem; font-weight: 700; text-decoration: none;
+  color: var(--morado-hover); padding: 7px 14px; border-radius: var(--radio-full);
+  background: rgba(168,85,247,0.12); border: 1px solid var(--borde-sutil); white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.link-pedidos:hover { background: rgba(168,85,247,0.22); border-color: var(--borde-activo); }
 
 .btn-volver {
   flex-shrink: 0;
