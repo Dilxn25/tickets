@@ -266,6 +266,18 @@
                   <input v-model.number="formAgregar.precio_base" type="number" min="0" step="0.01" class="campo" placeholder="0.00" />
                 </div>
               </div>
+              <div class="grupo-campo">
+                <label class="etiqueta">Prioridad de atención</label>
+                <BaseSelect
+                  v-model="formAgregar.prioridad"
+                  :options="[
+                    { value: 0, label: 'Normal' },
+                    { value: 1, label: 'Alta' },
+                    { value: 2, label: 'Zona VIP' },
+                  ]"
+                />
+                <small class="ayuda-campo">Define el orden en que la barra prepara los pedidos de esta zona.</small>
+              </div>
               <button class="btn btn-primario" style="width:100%" @click="agregarPlanoAEvento">+ Agregar al evento</button>
             </div>
           </div>
@@ -353,11 +365,11 @@ const modalPlanos = ref(false)
 const eventoPlanos = ref(null)              // evento cuyos planos gestionamos
 const planosDelEvento = ref([])             // planos ya agregados (zonas)
 const cargandoPlanos = ref(false)
-const formAgregar = reactive({ id_plano: '', nombre: '', precio_base: 0 })
+const formAgregar = reactive({ id_plano: '', nombre: '', precio_base: 0, prioridad: 0 })
 
 async function abrirPlanosEvento(evento) {
   eventoPlanos.value = evento
-  formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0
+  formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0; formAgregar.prioridad = 0
   modalPlanos.value = true
   await cargarPlanosDelEvento()
 }
@@ -376,8 +388,9 @@ async function agregarPlanoAEvento() {
       id_plantilla: formAgregar.id_plano,
       precio_base: formAgregar.precio_base,
       nombre: formAgregar.nombre,
+      prioridad: formAgregar.prioridad,
     })
-    formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0
+    formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0; formAgregar.prioridad = 0
     await cargarPlanosDelEvento()
     cargarEventos()
     notif.exito('Plano agregado al evento')
@@ -1045,4 +1058,6 @@ async function confirmarCambioEstado() {
   .tarjeta-evento:hover .portada-img { transform: none; }
   .skeleton-brillo { animation: none; }
 }
+
+.ayuda-campo { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--texto-secundario); }
 </style>
