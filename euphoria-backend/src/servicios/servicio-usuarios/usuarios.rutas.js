@@ -399,6 +399,73 @@ router.post('/cliente-rapido', async (req, res) => {
 // El resto sí es solo para Administrador
 router.use(soloRoles('Administrador'))
 
+// ---- GET /api/usuarios/recurrentes — ranking de clientes por consumo (fidelización) ----
+router.get('/recurrentes', async (req, res) => {
+  try {
+    const filas = await prisma.$queryRawUnsafe(`
+      SELECT u.id_usuario, u.nombres, u.apellidos, u.es_vip, u.premio_perfil,
+             COUNT(DISTINCT c.id_comanda) AS visitas,
+             COALESCE(SUM(d.subtotal), 0) AS consumo
+      FROM usuario u
+      JOIN comanda c ON c.id_cliente = u.id_usuario AND c.estado_despacho <> 'Cancelada'
+      JOIN detalle_comanda d ON d.id_comanda = c.id_comanda
+      JOIN rol r ON r.id_rol = u.id_rol AND r.nombre_rol = 'Cliente'
+      GROUP BY u.id_usuario
+      ORDER BY consumo DESC
+      LIMIT 20
+    `)
+    // Producto más consumido por cada cliente del ranking
+    const salida = []
+    for (const f of filas) {
+      const top = await prisma.$queryRawUnsafe(`
+        SELECT p.nombre_producto AS nombre, SUM(d.cantidad) AS veces
+        FROM detalle_comanda d
+        JOIN comanda c ON c.id_comanda = d.id_comanda AND c.id_cliente = ${Number(f.id_usuario)} AND c.estado_despacho <> 'Cancelada'
+        JOIN producto p ON p.id_producto = d.id_producto
+        GROUP BY p.id_producto ORDER BY veces DESC LIMIT 1
+      `)
+      salida.push({
+        id_usuario: Number(f.id_usuario),
+        nombre: `${f.nombres} ${f.apellidos || ''}`.trim(),
+        es_vip: !!f.es_vip,
+        premio_pendiente: f.premio_perfil === 'pendiente',
+        visitas: Number(f.visitas),
+        consumo: Number(f.consumo),
+        top_producto: top[0]?.nombre || null,
+      })
+    }
+    res.json(salida)
+  } catch (error) {
+    console.error('Error en recurrentes:', error)
+    res.status(500).json({ error: 'Error al obtener clientes recurrentes' })
+  }
+})
+
+// ---- PATCH /api/usuarios/:id/vip — marca/desmarca cliente VIP ----
+router.patch('/:id/vip', async (req, res) => {
+  try {
+    const u = await prisma.usuario.update({
+      where: { id_usuario: Number(req.params.id) },
+      data: { es_vip: !!req.body.es_vip },
+      select: { id_usuario: true, es_vip: true },
+    })
+    res.json({ ok: true, es_vip: u.es_vip })
+  } catch (e) { res.status(500).json({ error: 'No se pudo actualizar el VIP' }) }
+})
+
+// ---- POST /api/usuarios/:id/premio — otorga un premio de fidelización al cliente ----
+// Reutiliza el canal de premio (premio_perfil='pendiente' => descuento en su próximo pago).
+router.post('/:id/premio', async (req, res) => {
+  try {
+    const u = await prisma.usuario.update({
+      where: { id_usuario: Number(req.params.id) },
+      data: { premio_perfil: 'pendiente' },
+      select: { id_usuario: true, premio_perfil: true },
+    })
+    res.json({ ok: true, premio: u.premio_perfil })
+  } catch (e) { res.status(500).json({ error: 'No se pudo otorgar el premio' }) }
+})
+
 // ---- GET /api/usuarios/:id — Obtener uno ----
 router.get('/:id', async (req, res) => {
   try {
