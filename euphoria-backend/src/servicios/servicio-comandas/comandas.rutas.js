@@ -649,23 +649,44 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
   }
 })
 
-// GET /api/comandas/pendientes (Para barra)
+// GET /api/comandas/pendientes (Para barra) — cola priorizada
+// Puntaje = prioridad de la ZONA * PESO + minutos esperando. El VIP arranca arriba,
+// pero un normal sube con la espera hasta superar a un VIP recién llegado (anti-inanición).
+// El VIP del cliente es solo una etiqueta visual: NO afecta el orden (lo decide la zona).
+const PESO_PRIORIDAD = 10 // minutos de ventaja por cada nivel de prioridad de zona
 router.get('/pendientes', verificarToken, async (req, res) => {
   try {
     const comandas = await prisma.comanda.findMany({
-      where: { 
-        estado_despacho: { in: ['Pendiente', 'Preparando'] } 
-      },
+      where: { estado_despacho: { in: ['Pendiente', 'Preparando'] } },
       include: {
         detalle_comanda: { include: { producto: true } },
         usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true, id_rol: true } },
-        usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true } },
-        mesa_espacio: true
+        usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true, es_vip: true } },
+        mesa_espacio: { include: { zona: { select: { prioridad: true, nombre_zona: true } } } },
       },
-      orderBy: { fecha_registro: 'asc' }
     })
-
-    res.json(comandas)
+    const ahora = Date.now()
+    const conPuntaje = comandas.map(c => {
+      const prioridad_zona = c.mesa_espacio?.zona?.prioridad || 0
+      const minutos_espera = Math.max(0, Math.floor((ahora - new Date(c.fecha_registro).getTime()) / 60000))
+      return {
+        ...c,
+        prioridad_zona,
+        zona_nombre: c.mesa_espacio?.zona?.nombre_zona || null,
+        es_vip_cliente: c.usuario_comanda_id_clienteTousuario?.es_vip || false,
+        minutos_espera,
+        puntaje: prioridad_zona * PESO_PRIORIDAD + minutos_espera,
+      }
+    })
+    // "Preparando" (ya en curso) arriba; el resto por puntaje desc
+    conPuntaje.sort((a, b) => {
+      if (a.estado_despacho !== b.estado_despacho) {
+        if (a.estado_despacho === 'Preparando') return -1
+        if (b.estado_despacho === 'Preparando') return 1
+      }
+      return b.puntaje - a.puntaje
+    })
+    res.json(conPuntaje)
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener comandas' })
   }

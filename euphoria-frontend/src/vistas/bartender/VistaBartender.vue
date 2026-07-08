@@ -78,6 +78,9 @@
                   <span class="estado-punto"></span>
                   {{ comanda.estado_despacho === 'Preparando' ? 'En preparación' : 'En cola' }}
                 </span>
+                <span v-if="comanda.prioridad_zona >= 2" class="chip-prio vip">★ Zona VIP</span>
+                <span v-else-if="comanda.prioridad_zona === 1" class="chip-prio alta">Prioridad alta</span>
+                <span v-if="comanda.es_vip_cliente" class="chip-prio cliente-vip">Cliente VIP</span>
               </div>
 
               <!-- Información del Destino / Entrega -->
@@ -95,7 +98,7 @@
                 </div>
                 <div class="destino-row" v-if="comanda.mesa_espacio">
                   <span class="destino-etiq">Llevar a:</span>
-                  <strong class="destino-val mesa-badge">{{ comanda.mesa_espacio.nombre_mesa }}</strong>
+                  <strong class="destino-val mesa-badge">{{ comanda.mesa_espacio.numero_nombre }}</strong>
                 </div>
                 <div class="destino-row" v-else>
                   <span class="destino-etiq">Cliente:</span>
@@ -663,7 +666,13 @@ onUnmounted(() => {
   margin-bottom: var(--esp-4);
   padding-bottom: var(--esp-4);
   border-bottom: 1px dashed var(--borde-sutil);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
 }
+/* Chips de prioridad de la cola del bartender */
+.chip-prio { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 9px; border-radius: 999px; }
+.chip-prio.vip { background: linear-gradient(135deg, #FBBF24, #F59E0B); color: #1a1206; }
+.chip-prio.alta { background: rgba(168,85,247,0.2); color: #E9D5FF; border: 1px solid rgba(168,85,247,0.4); }
+.chip-prio.cliente-vip { background: rgba(236,72,153,0.16); color: #F9A8D4; border: 1px solid rgba(236,72,153,0.35); }
 .estado-pill {
   display: inline-flex;
   align-items: center;
