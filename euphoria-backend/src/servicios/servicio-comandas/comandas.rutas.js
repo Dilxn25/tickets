@@ -674,6 +674,32 @@ router.get('/mis-listos', verificarToken, async (req, res) => {
   }
 })
 
+// GET /api/comandas/mis-mesas (mesas asignadas al mesero, con el cliente de la reserva)
+router.get('/mis-mesas', verificarToken, async (req, res) => {
+  try {
+    const asignaciones = await prisma.asignacion_mesa.findMany({
+      where: { id_mesero: req.usuario.id, estado: { in: ['asignada', 'atendiendo'] } },
+      orderBy: { fecha_asignacion: 'desc' },
+      include: {
+        mesa_espacio: { select: { id_mesa: true, numero_nombre: true } },
+        entrada: { select: { id_entrada: true, usuario: { select: { id_usuario: true, nombres: true, apellidos: true, es_vip: true } } } },
+      },
+    })
+    res.json(asignaciones.map(a => ({
+      id_asignacion: a.id_asignacion,
+      id_mesa: a.id_mesa,
+      mesa: a.mesa_espacio?.numero_nombre || null,
+      estado: a.estado,
+      id_entrada: a.entrada?.id_entrada || null,
+      id_cliente: a.entrada?.usuario?.id_usuario || null,
+      cliente: a.entrada?.usuario ? `${a.entrada.usuario.nombres} ${a.entrada.usuario.apellidos || ''}`.trim() : null,
+      es_vip: a.entrada?.usuario?.es_vip || false,
+    })))
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener mis mesas asignadas' })
+  }
+})
+
 // PATCH /api/comandas/:id/estado (Cambiar estado de una comanda)
 router.patch('/:id/estado', verificarToken, async (req, res) => {
   try {

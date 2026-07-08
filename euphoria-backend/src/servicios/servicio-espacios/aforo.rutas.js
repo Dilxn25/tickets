@@ -218,6 +218,23 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     const resumen = resumenZona(entrada.zona, aforoNuevo)
     if (global.io) global.io.emit('aforo_actualizado', resumen)
 
+    // Asignación de mesero: si la reserva tiene mesa, o ya está asignada (se informa
+    // quién) o se sugiere el mesero con menos carga para que recepción confirme.
+    let mesero_sugerido = null
+    let mesa_ya_asignada = null
+    if (entrada.id_mesa) {
+      const existente = await prisma.asignacion_mesa.findFirst({
+        where: { id_mesa: entrada.id_mesa, estado: { in: ['asignada', 'atendiendo'] } },
+        include: { usuario: { select: { nombres: true, apellidos: true } } },
+      })
+      if (existente) {
+        mesa_ya_asignada = { id_mesero: existente.id_mesero, nombre: `${existente.usuario.nombres} ${existente.usuario.apellidos || ''}`.trim() }
+      } else {
+        const sug = await meseroConMenosCarga()
+        if (sug) mesero_sugerido = { id_usuario: sug.id_usuario, nombre: `${sug.nombres} ${sug.apellidos || ''}`.trim(), carga: sug.carga }
+      }
+    }
+
     res.json({
       mensaje: nuevoIngresado >= total ? 'Ingreso completo' : 'Ingreso parcial registrado',
       cliente: `${entrada.usuario.nombres} ${entrada.usuario.apellidos}`,
@@ -227,6 +244,10 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
       restantes: total - nuevoIngresado,  // cupos que aún quedan en el QR
       completo: nuevoIngresado >= total,
       mesa: entrada.mesa_espacio ? entrada.mesa_espacio.numero_nombre : null,
+      id_mesa: entrada.id_mesa,
+      id_entrada: entrada.id_entrada,
+      mesero_sugerido,
+      mesa_ya_asignada,
       evento: entrada.zona.evento ? entrada.zona.evento.nombre_evento : null,
       aforo: resumen,
     })
@@ -374,6 +395,79 @@ router.get('/eventos', soloRoles('Recepcionista', 'Administrador'), async (req, 
   } catch (error) {
     console.error('Error listando eventos con aforo:', error)
     res.status(500).json({ error: 'Error al obtener los eventos' })
+  }
+})
+
+// ============================================
+// Asignación de meseros a mesas (Fase B)
+// ============================================
+const ROLES_MESERO = ['Mesero', 'Bartender']
+
+// Mesero activo con menos mesas asignadas (para sugerir al hacer check-in)
+async function meseroConMenosCarga() {
+  const meseros = await prisma.usuario.findMany({
+    where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
+    select: { id_usuario: true, nombres: true, apellidos: true },
+  })
+  if (!meseros.length) return null
+  const cargas = await Promise.all(meseros.map(async (m) => ({
+    ...m,
+    carga: await prisma.asignacion_mesa.count({
+      where: { id_mesero: m.id_usuario, estado: { in: ['asignada', 'atendiendo'] } },
+    }),
+  })))
+  cargas.sort((a, b) => a.carga - b.carga)
+  return cargas[0]
+}
+
+// GET /api/aforo/meseros — meseros activos con su carga (para elegir/cambiar)
+router.get('/meseros', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const meseros = await prisma.usuario.findMany({
+      where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
+      select: { id_usuario: true, nombres: true, apellidos: true },
+      orderBy: { nombres: 'asc' },
+    })
+    const conCarga = await Promise.all(meseros.map(async (m) => ({
+      id_usuario: m.id_usuario,
+      nombre: `${m.nombres} ${m.apellidos || ''}`.trim(),
+      carga: await prisma.asignacion_mesa.count({
+        where: { id_mesero: m.id_usuario, estado: { in: ['asignada', 'atendiendo'] } },
+      }),
+    })))
+    res.json(conCarga)
+  } catch (e) {
+    console.error('Error listando meseros:', e)
+    res.status(500).json({ error: 'Error al listar meseros' })
+  }
+})
+
+// POST /api/aforo/asignar-mesero — recepción asigna (o cambia) el mesero de una mesa
+// Body: { id_mesa, id_entrada?, id_mesero }
+router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const { id_mesa, id_entrada, id_mesero } = req.body
+    if (!id_mesa || !id_mesero) return res.status(400).json({ error: 'Faltan datos (mesa y mesero)' })
+    // Cerrar la asignación activa previa de esa mesa (si la había)
+    await prisma.asignacion_mesa.updateMany({
+      where: { id_mesa: Number(id_mesa), estado: { in: ['asignada', 'atendiendo'] } },
+      data: { estado: 'cerrada' },
+    })
+    const asignacion = await prisma.asignacion_mesa.create({
+      data: {
+        id_mesa: Number(id_mesa),
+        id_entrada: id_entrada ? Number(id_entrada) : null,
+        id_mesero: Number(id_mesero),
+        estado: 'asignada',
+        fecha_asignacion: new Date(),
+      },
+    })
+    // Avisar al mesero en tiempo real
+    if (global.io) global.io.emit('mesa_asignada', { id_mesero: Number(id_mesero), id_mesa: Number(id_mesa) })
+    res.status(201).json({ ok: true, id_asignacion: asignacion.id_asignacion })
+  } catch (e) {
+    console.error('Error asignando mesero:', e)
+    res.status(500).json({ error: 'Error al asignar el mesero' })
   }
 })
 

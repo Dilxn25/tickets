@@ -347,8 +347,8 @@ router.post('/cliente-rapido', async (req, res) => {
       return res.status(403).json({ error: 'Sin permisos' })
     }
 
-    const { nombres, apellidos, ci_carnet, telefono } = req.body
-    if (!nombres) return res.status(400).json({ error: 'Razon Social es obligatoria' })
+    const { nombres, apellidos, ci_carnet, telefono, es_vip } = req.body
+    if (!nombres) return res.status(400).json({ error: 'El nombre o razón social es obligatorio' })
 
     // Si tienen CI/NIT, verificar si ya existe ese cliente
     if (ci_carnet && ci_carnet.trim() !== '') {
@@ -376,13 +376,14 @@ router.post('/cliente-rapido', async (req, res) => {
 
     const nuevo = await prisma.usuario.create({
       data: {
-        nombres,
-        apellidos: apellidos || '',
-        ci_carnet: ci_carnet?.trim() || '',
-        telefono: telefono || '',
+        nombres: String(nombres).trim(),
+        apellidos: (apellidos || '').trim(),
+        ci_carnet: ci_carnet?.trim() || null,
+        telefono: telefono?.trim() || null,
         correo: correoFalso,
         password_hash: passwordHash,
         estado_cuenta: 'activo',
+        es_vip: !!es_vip,
         id_rol: rolCliente.id_rol
       }
     })
