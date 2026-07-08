@@ -62,6 +62,7 @@
           <span class="tab-glow" aria-hidden="true"></span>
           <div class="icono-badge-wrapper">
             <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+            <span v-if="tiendaCarrito.totalItems > 0" class="badge-carrito">{{ tiendaCarrito.totalItems > 99 ? '99+' : tiendaCarrito.totalItems }}</span>
           </div>
           <span>Carrito</span>
         </RouterLink>
@@ -94,8 +95,10 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
+import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 
 const tienda = useTiendaAutenticacion()
+const tiendaCarrito = useTiendaCarrito()
 const router = useRouter()
 
 const iniciales = computed(() => {
@@ -441,6 +444,30 @@ function confirmarCerrarSesion() {
   width: 23px;
   height: 23px;
   transition: transform 0.3s var(--ease-rebote), filter var(--trans-normal);
+}
+
+.icono-badge-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.badge-carrito {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  z-index: 2;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: var(--radio-full);
+  background: var(--rosa-acento);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.55);
+  pointer-events: none;
 }
 
 /* Item activo: capsula de vidrio iluminada + icono realzado */

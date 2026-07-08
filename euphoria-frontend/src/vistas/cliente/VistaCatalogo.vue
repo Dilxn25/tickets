@@ -1,22 +1,47 @@
 <template>
   <div class="vista-catalogo entrada-cine">
-    <!-- Hero: bienvenida + buscador sobre superficie con orbes de neon -->
-    <header class="hero textura-grano">
-      <div class="orbe-deco morado orbe-a" aria-hidden="true"></div>
-      <div class="orbe-deco rosa orbe-b" aria-hidden="true"></div>
-
-      <div class="hero-contenido">
-        <h1 class="titulo-hola">
-          Hola, {{ nombreCorto }}
-        </h1>
-        <p class="subtitulo">¿Qué vas a tomar esta noche?</p>
-
-        <div class="buscador-contenedor">
-          <svg class="icono-buscar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input v-model="busqueda" type="text" class="buscador-input" placeholder="Buscar bebidas, combos..." />
-        </div>
-      </div>
+    <!-- Saludo compacto: franja sutil, el buscador queda casi arriba -->
+    <header class="saludo">
+      <span class="saludo-kicker">
+        <span class="punto-vivo" aria-hidden="true"></span>
+        Barra abierta
+      </span>
+      <h1 class="saludo-texto">
+        Hola, <span class="saludo-nombre">{{ nombreCorto }}</span>
+        <span class="saludo-sub">· ¿qué vas a tomar esta noche?</span>
+      </h1>
     </header>
+
+    <!-- Barra pegajosa: buscador + categorías siempre a mano -->
+    <div class="barra-pegajosa">
+      <div class="buscador-contenedor">
+        <svg class="icono-buscar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input v-model="busqueda" type="text" class="buscador-input" placeholder="Buscar bebidas, combos..." />
+        <button v-if="busqueda" class="btn-limpiar-busqueda" aria-label="Limpiar búsqueda" @click="busqueda = ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <!-- Categorías Horizontales -->
+      <div class="categorias-scroll">
+        <button
+          class="cat-btn"
+          :class="{ activo: filtroCategoria === '' }"
+          @click="filtroCategoria = ''"
+        >
+          Todo
+        </button>
+        <button
+          v-for="c in categorias"
+          :key="c.id_categoria"
+          class="cat-btn"
+          :class="{ activo: filtroCategoria === c.id_categoria }"
+          @click="filtroCategoria = c.id_categoria"
+        >
+          {{ c.nombre_categoria }}
+        </button>
+      </div>
+    </div>
 
     <!-- Destacados: carrusel horizontal deslizable -->
     <section v-if="!busqueda && !cargando && destacados.length" class="destacados-seccion">
@@ -31,13 +56,13 @@
       </div>
       <div class="carrusel escalonar">
         <article v-for="p in destacados" :key="'dest-' + p.id_producto" class="destacado-card brillo-hover" @click="abrirDetalle(p)">
-          <div class="destacado-img">
+          <div class="destacado-img" :class="{ 'fondo-combo': p.es_combo && !p.url_imagen }">
             <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
             <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
             <div v-else class="placeholder">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </div>
-            <span v-if="p.estado_promocion" class="badge promo">Promo</span>
+            <span v-if="p.estado_promocion" class="badge promo">{{ descuentoPct(p) ? '−' + descuentoPct(p) + '%' : 'Promo' }}</span>
             <span v-else-if="p.es_combo" class="badge combo">Combo</span>
           </div>
           <div class="destacado-info">
@@ -50,26 +75,6 @@
         </article>
       </div>
     </section>
-
-    <!-- Categorías Horizontales -->
-    <div class="categorias-scroll">
-      <button
-        class="cat-btn"
-        :class="{ activo: filtroCategoria === '' }"
-        @click="filtroCategoria = ''"
-      >
-        Todo
-      </button>
-      <button
-        v-for="c in categorias"
-        :key="c.id_categoria"
-        class="cat-btn"
-        :class="{ activo: filtroCategoria === c.id_categoria }"
-        @click="filtroCategoria = c.id_categoria"
-      >
-        {{ c.nombre_categoria }}
-      </button>
-    </div>
 
     <!-- Lista de Productos -->
     <div class="productos-contenedor">
@@ -91,7 +96,16 @@
           </div>
         </div>
       </div>
-      
+
+      <div v-else-if="errorCarga" class="vacio-estado aparecer-subir">
+        <div class="vacio-icono-halo">
+          <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <p class="vacio-titulo">No pudimos cargar el catálogo</p>
+        <p class="vacio-sub">Revisa tu conexión e intenta de nuevo.</p>
+        <button class="btn-entendido" style="margin-top:10px" @click="cargarDatos">Reintentar</button>
+      </div>
+
       <div v-else-if="productosFiltrados.length === 0" class="vacio-estado aparecer-subir">
         <div class="vacio-icono-halo">
           <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -100,38 +114,53 @@
         <p class="vacio-sub">Prueba con otro nombre o cambia de categoría.</p>
       </div>
 
-      <div v-else class="grid-productos escalonar">
-        <div v-for="p in productosFiltrados" :key="p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
+      <TransitionGroup v-else tag="div" name="prod" class="grid-productos">
+        <article v-for="p in productosFiltrados" :key="p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
           <!-- Insignias -->
           <div class="insignias">
-            <span v-if="p.estado_promocion" class="badge promo">Promo</span>
+            <span v-if="p.estado_promocion" class="badge promo">{{ descuentoPct(p) ? '−' + descuentoPct(p) + '%' : 'Promo' }}</span>
             <span v-if="p.es_combo" class="badge combo">Combo</span>
           </div>
 
-          <div class="imagen-box">
+          <div class="imagen-box" :class="{ 'fondo-combo': p.es_combo && !p.url_imagen }">
             <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
             <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
             <div v-else class="placeholder">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             </div>
           </div>
-          
+
           <div class="info-box">
             <h3 class="nombre">{{ p.nombre_producto }}</h3>
             <p class="categoria">{{ p.nombre_categoria }}</p>
-            
+
             <div class="precio-fila">
               <div class="precios">
                 <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
                 <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
               </div>
-              <button class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
+
+              <!-- Si el producto ya está en el pedido: stepper. Si no: botón + -->
+              <Transition name="accion" mode="out-in">
+                <div v-if="cantidadEnCarrito(p.id_producto) > 0" key="stepper" class="stepper" @click.stop>
+                  <button class="btn-step" :aria-label="cantidadEnCarrito(p.id_producto) === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click.stop="quitarUno(p.id_producto)">
+                    <svg v-if="cantidadEnCarrito(p.id_producto) === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                  <span :key="cantidadEnCarrito(p.id_producto)" class="stepper-cant">{{ cantidadEnCarrito(p.id_producto) }}</span>
+                  <button class="btn-step mas" aria-label="Agregar uno" @click.stop="aumentarDesdeCarta(p)">
+                    <svg v-if="idAgregado === p.id_producto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                </div>
+                <button v-else key="agregar" class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+              </Transition>
             </div>
           </div>
-        </div>
-      </div>
+        </article>
+      </TransitionGroup>
     </div>
     <!-- Modal de Alerta -->
     <Teleport to="body">
@@ -183,26 +212,41 @@
       <!-- Panel Flotante de Carrito Detallado -->
       <div v-if="tiendaCarrito.totalItems > 0 && mostrarMiniCarrito" class="panel-carrito-flotante">
         <div class="cabecera-panel">
-          <h4>Tu pedido</h4>
+          <h4>Tu pedido <span class="conteo-panel">{{ tiendaCarrito.totalItems }}</span></h4>
           <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel" aria-label="Ocultar el pedido"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
-        <div class="lista-items-panel">
+        <TransitionGroup tag="div" name="linea" class="lista-items-panel">
           <div v-for="item in tiendaCarrito.items" :key="item.id" class="item-panel">
-            <div class="control-cantidad-mini">
-              <button class="btn-mini-cant" aria-label="Quitar uno" @click="tiendaCarrito.disminuirCantidad(item.id)">-</button>
-              <span class="cant-panel">{{ item.cantidad }}</span>
-              <button class="btn-mini-cant" aria-label="Agregar uno" @click="tiendaCarrito.aumentarCantidad(item.id)">+</button>
+            <!-- Combos: miniaturas de su composición solapadas, como en su tarjeta -->
+            <div class="mini-thumb" :class="{ 'thumb-combo': (item.imagenes?.length || 0) > 1, 'thumb-3': (item.imagenes?.length || 0) >= 3 }">
+              <template v-if="(item.imagenes?.length || 0) > 1">
+                <img v-for="(img, j) in item.imagenes.slice(0, 3)" :key="j" :src="img" class="mini-foto" alt="" />
+              </template>
+              <img v-else-if="item.imagen" :src="item.imagen" :alt="item.nombre" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 21h8"></path><path d="M12 15v6"></path><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path></svg>
             </div>
-            <span class="nom-panel">{{ item.nombre }}</span>
-            <span class="prec-panel">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</span>
+            <div class="mini-info">
+              <span class="nom-panel">{{ item.nombre }}</span>
+              <div class="control-cantidad-mini">
+                <button class="btn-mini-cant" :aria-label="item.cantidad === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click="quitarUno(item.id)">−</button>
+                <span class="cant-panel">{{ item.cantidad }}</span>
+                <button class="btn-mini-cant" aria-label="Agregar uno" @click="aumentarConAviso(item.id)">+</button>
+              </div>
+            </div>
+            <div class="mini-der">
+              <span class="prec-panel">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</span>
+              <button class="btn-quitar-item" :aria-label="'Quitar ' + item.nombre + ' del pedido'" @click="tiendaCarrito.eliminarItem(item.id)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
           </div>
-        </div>
+        </TransitionGroup>
         <div class="pie-panel">
           <div class="total-panel">Total: <strong>Bs. {{ tiendaCarrito.total.toFixed(2) }}</strong></div>
           <button class="btn-ir-pagar" @click="$router.push('/cliente/carrito')">Ir a pagar →</button>
         </div>
       </div>
-      
+
       <!-- Botón Flotante (cuando está oculto) -->
       <button v-if="tiendaCarrito.totalItems > 0 && !mostrarMiniCarrito" class="btn-reabrir-carrito" @click="mostrarMiniCarrito = true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> {{ tiendaCarrito.totalItems }} - Bs. {{ tiendaCarrito.total.toFixed(2) }}
@@ -216,10 +260,12 @@ import { ref, computed, onMounted } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import ComboImagen from '@/componentes/comunes/ComboImagen.vue'
 
 const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()
+const notif = useNotificaciones()
 const nombreCorto = computed(() => tienda.usuario?.nombres?.split(' ')[0] || 'Invitado')
 
 const busqueda = ref('')
@@ -239,8 +285,10 @@ const eventoActivoId = computed(() => tiendaCarrito.eventoActivoId || null)
 const detalleProducto = ref(null)
 const cargandoDetalle = ref(false)
 
+const errorCarga = ref(false)
 async function cargarDatos() {
   cargando.value = true
+  errorCarga.value = false
   try {
     const [cats, prods] = await Promise.all([
       servicioProductos.obtenerCategorias(),
@@ -250,6 +298,7 @@ async function cargarDatos() {
     productos.value = prods
   } catch (error) {
     console.error('Error cargando catálogo:', error)
+    errorCarga.value = true
   } finally {
     cargando.value = false
   }
@@ -257,6 +306,14 @@ async function cargarDatos() {
 
 onMounted(() => {
   cargarDatos()
+  // Si el cliente ya reservó un evento (clave que guarda el flujo de reserva),
+  // se sincroniza como evento activo para habilitar los pedidos
+  if (!eventoActivoId.value) {
+    try {
+      const ev = JSON.parse(localStorage.getItem('euphoria_evento_actual') || 'null')
+      if (ev?.id) tiendaCarrito.setEventoActivo(String(ev.id))
+    } catch { /* sin evento previo */ }
+  }
 })
 
 // Productos destacados (promos y combos) para el carrusel horizontal.
@@ -266,12 +323,20 @@ const destacados = computed(() =>
 
 const productosFiltrados = computed(() => {
   return productos.value.filter(p => {
-    const matchBusqueda = p.nombre_producto.toLowerCase().includes(busqueda.value.toLowerCase()) || 
+    const matchBusqueda = p.nombre_producto.toLowerCase().includes(busqueda.value.toLowerCase()) ||
                           (p.descripcion && p.descripcion.toLowerCase().includes(busqueda.value.toLowerCase()))
     const matchCat = filtroCategoria.value === '' || p.id_categoria === filtroCategoria.value
     return matchBusqueda && matchCat && p.stock_actual > 0 // Ocultamos los sin stock
   })
 })
+
+// Porcentaje de descuento para la insignia de promo (0 si no aplica)
+function descuentoPct(p) {
+  const base = parseFloat(p.precio_base)
+  const promo = parseFloat(p.precio_promocion)
+  if (!p.estado_promocion || !(base > 0) || !(promo > 0) || promo >= base) return 0
+  return Math.round((1 - promo / base) * 100)
+}
 
 async function abrirDetalle(producto) {
   // Mostramos primero lo que ya tenemos y luego refrescamos desde el backend
@@ -289,6 +354,80 @@ async function abrirDetalle(producto) {
 
 function cerrarDetalle() {
   detalleProducto.value = null
+}
+
+// Feedback visual breve al agregar (checkmark en el botón +)
+const idAgregado = ref(null)
+let timerAgregado = null
+function marcarAgregado(id) {
+  idAgregado.value = id
+  clearTimeout(timerAgregado)
+  timerAgregado = setTimeout(() => { idAgregado.value = null }, 900)
+}
+
+// Cantidad de un producto ya en el pedido (para mostrar el stepper en la tarjeta)
+function cantidadEnCarrito(idProducto) {
+  const item = tiendaCarrito.items.find(i => i.id === idProducto)
+  return item ? item.cantidad : 0
+}
+
+// −1: si queda en cero, se elimina el item del pedido
+function quitarUno(idItem) {
+  const item = tiendaCarrito.items.find(i => i.id === idItem)
+  if (!item) return
+  if (item.cantidad <= 1) tiendaCarrito.eliminarItem(idItem)
+  else tiendaCarrito.disminuirCantidad(idItem)
+}
+
+// +1 desde el mini-carrito: si topa el stock, avisa en vez de fallar en silencio
+function aumentarConAviso(idItem) {
+  const r = tiendaCarrito.aumentarCantidad(idItem)
+  if (r && r.ok === false) notif.advertencia(r.mensaje || 'No hay más stock disponible.')
+}
+
+// +1 desde el stepper de la tarjeta, con feedback de checkmark
+function aumentarDesdeCarta(producto) {
+  // Si la línea del pedido quedó sin foto o sin composición (combos agregados
+  // antes de este cambio), la completamos con los datos del catálogo
+  const linea = tiendaCarrito.items.find(i => i.id === producto.id_producto)
+  if (linea && (!linea.imagen || !(linea.imagenes && linea.imagenes.length))) {
+    const conImg = conImagenParaCarrito(producto)
+    if (!linea.imagen && conImg.url_imagen) linea.imagen = conImg.url_imagen
+    if (!(linea.imagenes && linea.imagenes.length)) {
+      linea.imagenes = (conImg.imagenes_combo && conImg.imagenes_combo.length)
+        ? conImg.imagenes_combo
+        : (conImg.url_imagen ? [conImg.url_imagen] : [])
+    }
+  }
+  const r = tiendaCarrito.aumentarCantidad(producto.id_producto)
+  if (r && r.ok === false) {
+    notif.advertencia(r.mensaje || 'No hay más stock disponible.')
+    return
+  }
+  marcarAgregado(producto.id_producto)
+}
+
+// Fotos de los componentes del combo (misma fuente que usa ComboImagen), hasta 3
+function imagenesDeCombo(prod) {
+  if (!prod?.es_combo) return []
+  return (prod.combos_como_padre || [])
+    .map(c => c.url_imagen || c.producto?.url_imagen || '')
+    .filter(Boolean)
+    .slice(0, 3)
+}
+
+// Los combos entran al carrito con su COMPOSICIÓN (2-3 fotos solapadas, como
+// en su tarjeta); los sin foto propia usan la del primer componente.
+// No muta el producto original.
+function conImagenParaCarrito(prod) {
+  if (!prod || !prod.es_combo) return prod
+  const imagenes = imagenesDeCombo(prod)
+  if (!imagenes.length) return prod
+  return {
+    ...prod,
+    url_imagen: prod.url_imagen || imagenes[0],
+    imagenes_combo: imagenes
+  }
 }
 
 async function agregarAlCarrito(producto) {
@@ -322,7 +461,13 @@ async function agregarAlCarrito(producto) {
   if (idx !== -1) productos.value[idx] = { ...productos.value[idx], ...productoActual }
 
   tiendaCarrito.setEventoActivo(eventoActivoId.value)
-  tiendaCarrito.agregarItem(productoActual)
+  const resultado = tiendaCarrito.agregarItem(conImagenParaCarrito(productoActual))
+  // Si se llegó al tope de stock, avisamos (antes fallaba en silencio)
+  if (resultado && resultado.ok === false) {
+    notif.advertencia(resultado.mensaje || 'No hay más stock disponible de este producto.')
+    return
+  }
+  marcarAgregado(productoActual.id_producto)
   mostrarMiniCarrito.value = true
 }
 </script>
@@ -330,43 +475,78 @@ async function agregarAlCarrito(producto) {
 <style scoped>
 .vista-catalogo {
   --azul-profundo: var(--color-info);
-  padding: 1rem 1rem 2rem;
+  --pad-x: 1rem;
+  padding: 1rem var(--pad-x) 2rem;
   max-width: 1180px;
   margin: 0 auto;
 }
 
-/* ============ HERO ============ */
-.hero {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--radio-xl);
-  padding: clamp(1.3rem, 3.5vw, 1.9rem) clamp(1.3rem, 4vw, 2.2rem);
-  margin-bottom: var(--esp-5);
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(236, 72, 153, 0.14), transparent 55%),
-    var(--gradiente-sutil);
-  border: 1px solid var(--glass-borde);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px rgba(10, 6, 26, 0.5);
+/* ============ SALUDO COMPACTO ============ */
+.saludo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px 0;
+  margin-bottom: var(--esp-3);
 }
-.hero .orbe-deco { width: 320px; height: 320px; }
-.hero .orbe-a { top: -140px; right: -90px; opacity: 0.4; }
-.hero .orbe-b { bottom: -170px; left: -110px; opacity: 0.28; }
-.hero-contenido { position: relative; z-index: 1; }
-
-.titulo-hola {
-  margin: 0 0 0.2rem;
-  font-family: var(--fuente-titulo);
-  font-size: clamp(1.5rem, 4vw, 1.9rem);
+.saludo-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.6rem;
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--rosa-suave);
+}
+.punto-vivo {
+  width: 6px; height: 6px; border-radius: var(--radio-full);
+  background: var(--rosa-acento);
+  box-shadow: 0 0 8px rgba(236,72,153,0.9);
+  animation: latido 1.8s ease-in-out infinite;
+}
+@keyframes latido {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.45); opacity: 0.6; }
+}
+
+.saludo-texto {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.05rem, 2.8vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
   color: var(--texto-principal);
 }
-.subtitulo {
+.saludo-nombre {
+  background: var(--gradiente-texto);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.saludo-sub {
   color: var(--texto-secundario);
-  font-size: 0.9rem;
-  margin-bottom: var(--esp-4);
+  font-weight: 500;
+  font-size: 0.92em;
+}
+
+/* ============ BARRA PEGAJOSA: buscador + categorías ============ */
+.barra-pegajosa {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0 calc(-1 * var(--pad-x)) var(--esp-5);
+  padding: 10px var(--pad-x) 2px;
+  background: var(--fondo-app);
+}
+/* Fundido inferior para que las tarjetas se deslicen por debajo con suavidad */
+.barra-pegajosa::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -16px; height: 16px;
+  background: linear-gradient(to bottom, var(--fondo-app), transparent);
+  pointer-events: none;
 }
 
 /* Buscador premium */
@@ -375,6 +555,7 @@ async function agregarAlCarrito(producto) {
   display: flex;
   align-items: center;
   max-width: 520px;
+  margin-bottom: 10px;
 }
 .icono-buscar {
   position: absolute;
@@ -387,14 +568,13 @@ async function agregarAlCarrito(producto) {
 }
 .buscador-input {
   width: 100%;
-  background: rgba(14, 8, 33, 0.55);
+  min-width: 0;
+  background: var(--fondo-tarjeta);
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-full);
-  padding: 15px 18px 15px 50px;
+  padding: 14px 48px 14px 50px;
   color: var(--texto-principal);
   font-size: 0.98rem;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
   transition: background var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal);
 }
@@ -403,19 +583,35 @@ async function agregarAlCarrito(producto) {
 .buscador-contenedor:hover .icono-buscar { color: var(--texto-secundario); }
 .buscador-input:focus {
   outline: none;
-  background: rgba(168,85,247,0.1);
+  background: var(--fondo-tarjeta-alt);
   border-color: var(--morado-brillante);
   box-shadow: var(--anillo-foco), var(--glow-morado);
 }
 .buscador-contenedor:focus-within .icono-buscar { color: var(--morado-hover); }
+.btn-limpiar-busqueda {
+  position: absolute;
+  right: 10px;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(168,85,247,0.15);
+  border: none;
+  border-radius: var(--radio-full);
+  color: var(--texto-secundario);
+  cursor: pointer;
+  transition: background var(--trans-rapida), color var(--trans-rapida), transform var(--trans-rapida);
+}
+.btn-limpiar-busqueda svg { width: 14px; height: 14px; }
+.btn-limpiar-busqueda:hover { background: rgba(168,85,247,0.3); color: #fff; }
+.btn-limpiar-busqueda:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-limpiar-busqueda:active { transform: scale(0.9); }
 
 /* Categorías Horizontales */
 .categorias-scroll {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  padding: 4px 2px 16px;
-  margin-bottom: var(--esp-5);
+  min-width: 0;
+  padding: 4px 2px 12px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none; /* Firefox */
 }
@@ -423,7 +619,7 @@ async function agregarAlCarrito(producto) {
 
 .cat-btn {
   white-space: nowrap;
-  background: rgba(46, 26, 102, 0.35);
+  background: var(--fondo-tarjeta);
   border: 1px solid var(--glass-borde);
   color: var(--texto-secundario);
   padding: 10px 20px;
@@ -432,14 +628,12 @@ async function agregarAlCarrito(producto) {
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
 .cat-btn:hover {
   color: var(--texto-principal);
   border-color: var(--borde-activo);
-  background: rgba(168,85,247,0.14);
+  background: var(--fondo-tarjeta-alt);
   transform: translateY(-2px);
 }
 .cat-btn:focus-visible {
@@ -452,6 +646,7 @@ async function agregarAlCarrito(producto) {
   color: #fff;
   border-color: transparent;
   box-shadow: var(--glow-morado);
+  transform: translateY(-1px);
 }
 .cat-btn.activo:hover { color: #fff; transform: translateY(-2px); }
 
@@ -467,11 +662,16 @@ async function agregarAlCarrito(producto) {
   color: var(--texto-principal);
 }
 .destacados-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--texto-desactivado); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; white-space: nowrap; }
-.destacados-hint svg { width: 14px; height: 14px; }
+.destacados-hint svg { width: 14px; height: 14px; animation: vaiven 1.8s ease-in-out infinite; }
+@keyframes vaiven {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
 .carrusel {
   display: flex;
   gap: var(--esp-4);
   overflow-x: auto;
+  min-width: 0;
   padding: 4px 2px 14px;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
@@ -523,10 +723,18 @@ async function agregarAlCarrito(producto) {
 
 /* Grid Productos */
 .grid-productos {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 18px;
 }
+
+/* Transición al filtrar categorías / buscar */
+.prod-move { transition: transform 0.45s var(--ease-suave); }
+.prod-enter-active { transition: opacity 0.3s ease, transform 0.35s var(--ease-suave); }
+.prod-enter-from { opacity: 0; transform: translateY(14px) scale(0.97); }
+.prod-leave-active { position: absolute; z-index: 0; transition: opacity 0.18s ease, transform 0.18s ease; }
+.prod-leave-to { opacity: 0; transform: scale(0.94); }
 
 .tarjeta-producto {
   background: var(--gradiente-sutil);
@@ -536,6 +744,7 @@ async function agregarAlCarrito(producto) {
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px rgba(10, 6, 26, 0.38);
   transition: transform 0.35s var(--ease-cine, cubic-bezier(0.22,1,0.36,1)), border-color 0.2s ease, box-shadow 0.3s ease;
@@ -556,18 +765,29 @@ async function agregarAlCarrito(producto) {
 }
 .badge {
   font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-  padding: 4px 10px; border-radius: var(--radio-full); backdrop-filter: blur(6px);
+  padding: 4px 10px; border-radius: var(--radio-full);
   border: 1px solid rgba(255,255,255,0.18);
   box-shadow: 0 4px 12px rgba(10, 6, 26, 0.35);
+  font-variant-numeric: tabular-nums;
 }
-.badge.promo { background: rgba(236,72,153,0.85); color: #fff; }
-.badge.combo { background: rgba(139,92,246,0.85); color: #fff; }
+.badge.promo {
+  background: linear-gradient(135deg, #EC4899, #F472B6);
+  color: #fff;
+  animation: pulsoPromo 2.4s ease-in-out infinite;
+}
+.badge.combo { background: rgba(139,92,246,0.92); color: #fff; }
+@keyframes pulsoPromo {
+  0%, 100% { box-shadow: 0 4px 12px rgba(10,6,26,0.35), 0 0 0 0 rgba(236,72,153,0.4); }
+  50% { box-shadow: 0 4px 12px rgba(10,6,26,0.35), 0 0 14px 2px rgba(236,72,153,0.45); }
+}
 
+/* Imagen protagonista */
 .imagen-box {
-  height: 170px;
+  height: 195px;
   background: rgba(0,0,0,0.25);
   display: flex; align-items: center; justify-content: center;
   position: relative;
+  overflow: hidden;
 }
 .imagen-box img {
   width: 100%; height: 100%; object-fit: cover;
@@ -575,6 +795,15 @@ async function agregarAlCarrito(producto) {
 }
 .placeholder {
   width: 44px; height: 44px; color: var(--texto-desactivado); opacity: 0.5;
+}
+
+/* Fondo ambiente para combos con imágenes compuestas */
+.imagen-box.fondo-combo,
+.destacado-img.fondo-combo {
+  background:
+    radial-gradient(90% 90% at 18% 12%, rgba(168,85,247,0.24), transparent 60%),
+    radial-gradient(95% 100% at 85% 85%, rgba(236,72,153,0.2), transparent 55%),
+    rgba(0,0,0,0.25);
 }
 
 /* Velo para fundir la imagen con el cuerpo de la tarjeta */
@@ -588,6 +817,7 @@ async function agregarAlCarrito(producto) {
 .info-box {
   padding: 14px 15px 15px;
   display: flex; flex-direction: column; flex: 1;
+  min-width: 0;
 }
 .nombre {
   font-family: var(--fuente-titulo);
@@ -603,10 +833,11 @@ async function agregarAlCarrito(producto) {
 .precio-fila {
   margin-top: auto;
   display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
+  min-width: 0;
 }
-.precios { display: flex; flex-direction: column; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.precios { display: flex; flex-direction: column; line-height: 1.05; font-variant-numeric: tabular-nums; min-width: 0; }
 .precio-tachado { font-size: 0.72rem; color: var(--texto-desactivado); text-decoration: line-through; }
-.precio-final { font-size: 1.4rem; font-weight: 800; color: var(--rosa-acento); letter-spacing: -0.02em; }
+.precio-final { font-size: 1.45rem; font-weight: 800; color: var(--rosa-acento); letter-spacing: -0.02em; text-shadow: 0 0 18px rgba(236,72,153,0.35); }
 
 .btn-agregar {
   background: var(--gradiente-marca);
@@ -624,6 +855,59 @@ async function agregarAlCarrito(producto) {
 .btn-agregar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-agregar:active { transform: scale(0.9); }
 .btn-agregar svg { width: 20px; height: 20px; }
+
+/* Stepper de la tarjeta (producto ya en el pedido) */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-full);
+  padding: 3px;
+  box-shadow: var(--glow-morado), inset 0 1px 0 rgba(255,255,255,0.06);
+  cursor: default;
+}
+.btn-step {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radio-full);
+  color: var(--texto-secundario);
+  cursor: pointer;
+  transition: background var(--trans-rapida), color var(--trans-rapida), transform var(--trans-rapida);
+}
+.btn-step svg { width: 16px; height: 16px; }
+.btn-step:hover { background: rgba(168,85,247,0.22); color: #fff; }
+.btn-step:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.btn-step:active { transform: scale(0.88); }
+.btn-step.mas {
+  background: var(--gradiente-marca);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(168,85,247,0.4);
+}
+.btn-step.mas:hover { box-shadow: var(--glow-rosa); }
+.stepper-cant {
+  min-width: 22px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+  animation: cantPop 0.3s var(--ease-rebote);
+}
+@keyframes cantPop {
+  0% { transform: scale(1.5); color: var(--rosa-acento); }
+  100% { transform: scale(1); }
+}
+
+/* Cambio botón + ↔ stepper */
+.accion-enter-active { transition: opacity 0.16s ease, transform 0.22s var(--ease-rebote); }
+.accion-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.accion-enter-from { opacity: 0; transform: scale(0.7); }
+.accion-leave-to { opacity: 0; transform: scale(0.8); }
 
 /* Estados */
 .vacio-estado {
@@ -649,7 +933,7 @@ async function agregarAlCarrito(producto) {
   overflow: hidden;
   display: flex; flex-direction: column;
 }
-.sk-img { height: 170px; }
+.sk-img { height: 195px; }
 .sk-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .sk-fila { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
 .sk-linea { height: 12px; border-radius: var(--radio-sm); }
@@ -672,7 +956,7 @@ async function agregarAlCarrito(producto) {
 
 /* Modal Alerta Custom */
 .modal-alerta {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+  position: fixed; inset: 0; background: rgba(8, 4, 20, 0.82);
   z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .modal-contenido {
@@ -695,7 +979,7 @@ async function agregarAlCarrito(producto) {
 
 /* Modal Detalle Producto */
 .modal-detalle {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+  position: fixed; inset: 0; background: rgba(8, 4, 20, 0.82);
   z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .detalle-contenido {
@@ -707,13 +991,12 @@ async function agregarAlCarrito(producto) {
 }
 .btn-cerrar-detalle {
   position: absolute; top: 10px; right: 10px; z-index: 2;
-  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.14); color: #fff;
+  background: rgba(14, 8, 33, 0.78); border: 1px solid rgba(255,255,255,0.14); color: #fff;
   width: 34px; height: 34px; border-radius: var(--radio-full); cursor: pointer; font-size: 1rem;
   display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
   transition: background var(--trans-normal), transform var(--trans-rapida);
 }
-.btn-cerrar-detalle:hover { background: rgba(0,0,0,0.7); }
+.btn-cerrar-detalle:hover { background: rgba(14, 8, 33, 0.95); }
 .btn-cerrar-detalle:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-cerrar-detalle:active { transform: scale(0.92); }
 .detalle-imagen {
@@ -745,8 +1028,8 @@ async function agregarAlCarrito(producto) {
   position: fixed;
   bottom: 80px;
   right: 20px;
-  width: min(320px, calc(100vw - 40px));
-  max-width: 320px;
+  width: min(340px, calc(100vw - 40px));
+  max-width: 340px;
   background: var(--fondo-tarjeta);
   border: 1px solid var(--borde-activo);
   border-radius: var(--radio-lg);
@@ -765,7 +1048,13 @@ async function agregarAlCarrito(producto) {
   align-items: center;
   color: white;
 }
-.cabecera-panel h4 { margin: 0; font-weight: 700; font-size: 1rem; }
+.cabecera-panel h4 { margin: 0; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+.conteo-panel {
+  font-size: 0.72rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,0.22); border-radius: var(--radio-full);
+  min-width: 22px; height: 22px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .btn-ocultar-panel {
   background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -777,9 +1066,10 @@ async function agregarAlCarrito(producto) {
 .btn-ocultar-panel:active { transform: scale(0.9); }
 
 .lista-items-panel {
-  max-height: 200px;
+  position: relative;
+  max-height: 240px;
   overflow-y: auto;
-  padding: 10px 16px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -787,34 +1077,109 @@ async function agregarAlCarrito(producto) {
 .item-panel {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   font-size: 0.85rem;
   color: var(--texto-principal);
   border-bottom: 1px solid rgba(255,255,255,0.05);
   padding-bottom: 8px;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
 }
-.control-cantidad-mini {
+
+/* Transición al quitar/agregar líneas del pedido */
+.linea-move { transition: transform 0.3s var(--ease-suave); }
+.linea-enter-active { transition: opacity 0.25s ease, transform 0.3s var(--ease-suave); }
+.linea-enter-from { opacity: 0; transform: translateY(8px); }
+.linea-leave-active { position: absolute; left: 14px; right: 14px; transition: opacity 0.22s ease, transform 0.22s ease; }
+.linea-leave-to { opacity: 0; transform: translateX(28px); }
+
+.mini-thumb {
+  flex-shrink: 0;
+  width: 42px; height: 42px;
+  border-radius: var(--radio-md);
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(168,85,247,0.16), rgba(236,72,153,0.1));
+  border: 1px solid var(--borde-sutil);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--morado-hover);
+}
+.mini-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.mini-thumb svg { width: 20px; height: 20px; opacity: 0.8; }
+
+/* Miniaturas solapadas para combos (composición de 2-3 fotos) */
+.mini-thumb.thumb-combo {
+  width: auto;
+  min-width: 42px;
+  background: transparent;
+  border: none;
+  overflow: visible;
+  justify-content: flex-start;
+}
+.mini-thumb .mini-foto {
+  width: 32px; height: 32px;
+  border-radius: var(--radio-full);
+  object-fit: cover;
+  border: 2px solid var(--fondo-tarjeta-alt);
+  background: var(--fondo-tarjeta);
+  box-shadow: 0 3px 8px rgba(6, 3, 18, 0.45);
+  flex-shrink: 0;
+}
+.mini-thumb .mini-foto + .mini-foto { margin-left: -13px; }
+.mini-thumb .mini-foto:nth-child(2) { position: relative; z-index: 1; }
+.mini-thumb.thumb-3 .mini-foto { width: 28px; height: 28px; }
+.mini-thumb.thumb-3 .mini-foto + .mini-foto { margin-left: -11px; }
+
+.mini-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nom-panel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+
+.control-cantidad-mini {
+  display: inline-flex;
   align-items: center;
   gap: 2px;
+  align-self: flex-start;
   background: rgba(255,255,255,0.08);
   border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-sm);
+  border-radius: var(--radio-full);
   padding: 2px;
 }
 .btn-mini-cant {
   background: none; border: none; color: var(--texto-principal); cursor: pointer;
   font-weight: bold; font-size: 0.95rem; line-height: 1;
-  width: 20px; height: 20px; border-radius: var(--radio-sm);
+  width: 22px; height: 22px; border-radius: var(--radio-full);
   display: flex; align-items: center; justify-content: center;
   transition: background var(--trans-rapida), color var(--trans-rapida);
 }
 .btn-mini-cant:hover { background: rgba(168,85,247,0.3); color: #fff; }
 .btn-mini-cant:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
-.cant-panel { font-weight: 800; color: var(--morado-hover); min-width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
-.nom-panel { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.cant-panel { font-weight: 800; color: var(--morado-hover); min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.mini-der {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
 .prec-panel { font-weight: 700; font-variant-numeric: tabular-nums; }
+.btn-quitar-item {
+  background: none;
+  border: none;
+  width: 26px; height: 26px;
+  border-radius: var(--radio-full);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--texto-desactivado);
+  cursor: pointer;
+  transition: background var(--trans-rapida), color var(--trans-rapida), transform var(--trans-rapida);
+}
+.btn-quitar-item svg { width: 14px; height: 14px; }
+.btn-quitar-item:hover { background: rgba(239,68,68,0.16); color: var(--color-error); }
+.btn-quitar-item:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(239,68,68,0.35); }
+.btn-quitar-item:active { transform: scale(0.88); }
 
 .pie-panel {
   padding: 12px 16px;
@@ -867,7 +1232,15 @@ async function agregarAlCarrito(producto) {
   .tarjeta-producto,
   .destacado-img img,
   .imagen-box img,
-  .btn-reabrir-carrito {
+  .btn-reabrir-carrito,
+  .prod-move,
+  .prod-enter-active,
+  .prod-leave-active,
+  .linea-move,
+  .linea-enter-active,
+  .linea-leave-active,
+  .accion-enter-active,
+  .accion-leave-active {
     transition: none;
   }
   .destacado-card:hover,
@@ -875,6 +1248,10 @@ async function agregarAlCarrito(producto) {
   .destacado-card:hover .destacado-img img,
   .tarjeta-producto:hover .imagen-box img { transform: none; }
   .btn-reabrir-carrito:hover { transform: none; }
+  .punto-vivo,
+  .destacados-hint svg,
+  .badge.promo,
+  .stepper-cant { animation: none; }
 }
 
 /* Tablet: mantiene la retícula fluida y evita que las tarjetas queden demasiado anchas */
@@ -900,25 +1277,29 @@ async function agregarAlCarrito(producto) {
   }
   /* Limita la altura de la lista para que el pie y el total siempre sean visibles */
   .lista-items-panel {
-    max-height: min(200px, 35vh);
+    max-height: min(240px, 35vh);
   }
 }
 
 /* Celular pequeño: retícula de una sola columna cómoda y padding reducido */
 @media (max-width: 480px) {
   .vista-catalogo {
-    padding: 0.85rem 0.85rem 2rem;
+    --pad-x: 0.85rem;
+    padding: 0.85rem var(--pad-x) 2rem;
   }
-  .hero { padding: 1.5rem 1.3rem; }
   .grid-productos {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
-  .imagen-box { height: 150px; }
-  .sk-img { height: 150px; }
+  .imagen-box { height: 168px; }
+  .sk-img { height: 168px; }
   .destacado-card { width: 168px; }
   .modal-contenido {
     padding: 1.5rem;
   }
+  /* Stepper compacto para tarjetas angostas */
+  .btn-step { width: 28px; height: 28px; }
+  .stepper-cant { min-width: 18px; font-size: 0.88rem; }
+  .precio-final { font-size: 1.25rem; }
 }
 
 /* Pantalla muy angosta: una columna para evitar tarjetas apretadas */

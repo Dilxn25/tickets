@@ -132,6 +132,55 @@
                   <p v-else class="notif-vacio ok">Todo el stock está sano — nada que reponer.</p>
                 </div>
 
+                <!-- Solicitudes de recuperación de cuenta (clientes que pidieron ayuda) -->
+                <div class="notif-sec">
+                  <p class="notif-sec-titulo" :class="solicitudesRec.length ? 'alerta' : ''">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                    Recuperación de cuentas
+                  </p>
+                  <ul v-if="solicitudesRec.length" class="notif-lista">
+                    <li v-for="s in solicitudesRec" :key="s.id_solicitud" class="notif-item notif-solicitud">
+                      <div class="sol-datos">
+                        <span class="notif-item-nombre">{{ s.correo }}</span>
+                        <span class="sol-contacto">{{ s.nombre_contacto || 'Sin nombre' }}</span>
+                        <div class="sol-senales">
+                          <template v-if="s.cuenta">
+                            <span class="sol-senal" :class="senalCi(s).clase">CI {{ senalCi(s).simbolo }}</span>
+                            <span class="sol-senal" :class="senalTel(s).clase">Tel. {{ senalTel(s).simbolo }}</span>
+                          </template>
+                          <span v-else class="sol-senal mal">No existe cuenta con ese correo</span>
+                        </div>
+                        <p v-if="s.mensaje" class="sol-mensaje">{{ s.mensaje }}</p>
+                      </div>
+                      <div class="sol-acciones">
+                        <button v-if="s.cuenta" type="button" class="sol-btn sol-btn-reset" :disabled="atendiendoId === s.id_solicitud" @click="resolverSolicitud(s)">
+                          {{ atendiendoId === s.id_solicitud ? '…' : 'Restablecer' }}
+                        </button>
+                        <button type="button" class="sol-btn" :disabled="atendiendoId === s.id_solicitud" @click="atenderSolicitud(s)">
+                          Atendida
+                        </button>
+                      </div>
+                    </li>
+                  </ul>
+                  <p v-else class="notif-vacio ok">Sin solicitudes pendientes.</p>
+
+                  <!-- Tras restablecer: clave temporal + avisar al cliente por fuera -->
+                  <div v-if="resueltaInfo" class="sol-resuelta">
+                    <div class="sol-resuelta-cab">
+                      <span>Clave temporal de {{ resueltaInfo.nombre }}</span>
+                      <button type="button" class="sol-x" @click="resueltaInfo = null" title="Cerrar">✕</button>
+                    </div>
+                    <div class="sol-clave">{{ resueltaInfo.password }}</div>
+                    <p class="sol-resuelta-nota">Avísale su nueva clave (no tiene acceso a la app todavía):</p>
+                    <div class="sol-avisos">
+                      <a v-if="linkWhatsapp(resueltaInfo)" :href="linkWhatsapp(resueltaInfo)" target="_blank" rel="noopener" class="sol-aviso wa">WhatsApp</a>
+                      <a :href="linkCorreo(resueltaInfo)" class="sol-aviso mail">Correo</a>
+                    </div>
+                  </div>
+
+                  <p v-if="solicitudesRec.length" class="sol-pie">Valida su identidad con las señales de CI/teléfono (o pídele el CI físico). Luego «Restablecer» pone su clave temporal en 123456 y te da los botones para avisarle.</p>
+                </div>
+
                 <div class="notif-sec">
                   <p class="notif-sec-titulo">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -238,8 +287,74 @@ const notifHora = ref('')
 const resumenNotif = ref({ ingresos: 0, comandas: 0, topProducto: '—', metodoTop: '—' })
 const motorIACaido = ref(false)
 const pedidosEnCurso = ref({ pendientes: 0, preparando: 0 })
-// La bolita cuenta TODO lo que requiere acción del dueño: stock bajo + motor caído
-const totalPendientes = computed(() => stockBajoLista.value.length + (motorIACaido.value ? 1 : 0))
+// La bolita cuenta TODO lo que requiere acción del dueño: stock bajo + motor caído + recuperaciones
+const totalPendientes = computed(() =>
+  stockBajoLista.value.length + (motorIACaido.value ? 1 : 0) + solicitudesRec.value.length
+)
+
+// ── Solicitudes de recuperación de cuenta (el cliente pidió ayuda al local) ──
+const solicitudesRec = ref([])
+const atendiendoId = ref(null)
+async function cargarSolicitudesRec() {
+  try {
+    const res = await clienteHttp.get('/usuarios/solicitudes-recuperacion?estado=pendiente')
+    solicitudesRec.value = res.solicitudes || []
+  } catch { /* se mantiene la última lista conocida */ }
+}
+// Señal de identidad: ✓ coincide (verde), ✗ no coincide (rojo), — sin datos
+function senalDato(tieneDato, tieneRegistrado, coincide) {
+  if (!tieneDato || !tieneRegistrado) return { clase: 'neutro', simbolo: '—' }
+  return coincide ? { clase: 'ok', simbolo: '✓' } : { clase: 'mal', simbolo: '✗' }
+}
+function senalCi(s)  { return senalDato(!!s.ci_contacto, !!s.cuenta?.tiene_ci_registrado, !!s.cuenta?.ci_coincide) }
+function senalTel(s) { return senalDato(!!s.telefono, !!s.cuenta?.tiene_telefono_registrado, !!s.cuenta?.telefono_coincide) }
+async function atenderSolicitud(s) {
+  atendiendoId.value = s.id_solicitud
+  try {
+    await clienteHttp.patch(`/usuarios/solicitudes-recuperacion/${s.id_solicitud}/atender`)
+    notif.exito('Solicitud marcada como atendida.')
+    await cargarSolicitudesRec()
+  } catch (err) {
+    notif.error(err?.error || 'No se pudo marcar la solicitud. Intenta de nuevo.')
+  } finally {
+    atendiendoId.value = null
+  }
+}
+
+// Restablecer: resetea la contraseña a la temporal y muestra la clave + botones
+// para avisar al cliente (no tiene acceso a la app, se le avisa por fuera).
+const resueltaInfo = ref(null) // { nombre, correo, telefono, password }
+async function resolverSolicitud(s) {
+  atendiendoId.value = s.id_solicitud
+  try {
+    const res = await clienteHttp.patch(`/usuarios/solicitudes-recuperacion/${s.id_solicitud}/resolver`)
+    resueltaInfo.value = {
+      nombre: res.contacto?.nombre || s.nombre_contacto || 'Cliente',
+      correo: res.contacto?.correo || s.correo,
+      telefono: res.contacto?.telefono || null,
+      password: res.password_temporal,
+    }
+    notif.exito('Contraseña restablecida. Avísale al cliente su clave temporal.')
+    await cargarSolicitudesRec()
+  } catch (err) {
+    notif.error(err?.error || 'No se pudo restablecer la contraseña.')
+  } finally {
+    atendiendoId.value = null
+  }
+}
+// Bolivia: 8 dígitos → prefijo 591 para el enlace de WhatsApp
+function linkWhatsapp(info) {
+  const digitos = String(info.telefono || '').replace(/\D/g, '')
+  if (!digitos) return null
+  const numero = digitos.startsWith('591') ? digitos : `591${digitos}`
+  const msg = `Hola ${info.nombre}, tu contraseña de Euphoria fue restablecida. Tu clave temporal es: ${info.password}. Ingresa y cámbiala desde tu perfil.`
+  return `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`
+}
+function linkCorreo(info) {
+  const asunto = 'Tu cuenta de Euphoria fue restablecida'
+  const cuerpo = `Hola ${info.nombre},\n\nRestablecimos tu contraseña. Tu clave temporal es: ${info.password}\n\nIngresa con ella y cámbiala desde tu perfil.\n\n— Euphoria`
+  return `mailto:${info.correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`
+}
 async function cargarResumenNotif() {
   try {
     const r = await clienteHttp.get('/comandas/resumen-ventas')
@@ -273,6 +388,7 @@ function alternarNotif() {
     // Al abrir, se refresca todo en silencio (sin toast repetido)
     revisarStockBajo(false)
     cargarResumenNotif()
+    cargarSolicitudesRec()
   }
 }
 function cerrarNotifFuera() { notifAbierto.value = false }
@@ -282,8 +398,9 @@ onMounted(() => {
   document.addEventListener('click', cerrarNotifFuera)
   revisarStockBajo()
   cargarResumenNotif()
-  // El chequeo periódico refresca stock Y el estado del resto (motor IA, pedidos)
-  intervaloStock = setInterval(() => { revisarStockBajo(); cargarResumenNotif() }, 10 * 60 * 1000)
+  cargarSolicitudesRec()
+  // El chequeo periódico refresca stock Y el estado del resto (motor IA, pedidos, recuperaciones)
+  intervaloStock = setInterval(() => { revisarStockBajo(); cargarResumenNotif(); cargarSolicitudesRec() }, 10 * 60 * 1000)
 })
 onUnmounted(() => {
   window.removeEventListener('resize', actualizarAncho)
@@ -795,6 +912,79 @@ function cerrar() {
 .notif-item-valor { flex-shrink: 0; font-size: .8rem; font-weight: 800; color: var(--color-alerta); }
 .notif-item-valor.critico { color: var(--color-error); }
 .notif-vacio { margin: 0; font-size: .8rem; color: var(--texto-desactivado); font-style: italic; }
+/* Solicitudes de recuperación de cuenta */
+.notif-item.notif-solicitud {
+  align-items: flex-start;
+  background: rgba(168, 85, 247, .07);
+  border-color: rgba(168, 85, 247, .22);
+}
+.sol-datos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sol-contacto {
+  font-size: .74rem; color: var(--texto-secundario);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sol-senales { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.sol-senal {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: var(--radio-full);
+  font-size: .66rem; font-weight: 800; letter-spacing: .03em;
+}
+.sol-senal.ok     { color: var(--color-exito); background: rgba(34, 197, 94, .12); border: 1px solid rgba(34, 197, 94, .3); }
+.sol-senal.mal    { color: var(--color-error); background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
+.sol-senal.neutro { color: var(--texto-desactivado); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); }
+.sol-mensaje {
+  margin: 2px 0 0; font-size: .72rem; line-height: 1.35;
+  color: var(--texto-desactivado); white-space: normal; word-break: break-word;
+}
+.sol-btn {
+  flex-shrink: 0;
+  padding: 6px 10px; border-radius: var(--radio-md);
+  border: 1px solid rgba(34, 197, 94, .35);
+  background: rgba(34, 197, 94, .1);
+  color: var(--color-exito);
+  font-family: var(--fuente-principal);
+  font-size: .72rem; font-weight: 700;
+  cursor: pointer;
+  transition: background .18s ease;
+}
+.sol-btn:hover:not(:disabled) { background: rgba(34, 197, 94, .2); }
+.sol-btn:disabled { opacity: .6; cursor: wait; }
+.sol-btn:focus-visible { outline: 2px solid var(--color-exito); outline-offset: 2px; }
+.sol-acciones { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+.sol-btn-reset {
+  border-color: rgba(168, 85, 247, .4);
+  background: rgba(168, 85, 247, .14);
+  color: var(--morado-hover);
+}
+.sol-btn-reset:hover:not(:disabled) { background: rgba(168, 85, 247, .24); }
+.sol-resuelta {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, .1); border: 1px solid rgba(168, 85, 247, .3);
+}
+.sol-resuelta-cab {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: .68rem; font-weight: 700; color: var(--texto-secundario);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.sol-x { background: none; border: none; color: var(--texto-desactivado); cursor: pointer; font-size: .8rem; padding: 2px; }
+.sol-x:hover { color: var(--texto-principal); }
+.sol-clave {
+  margin: 6px 0; font-family: var(--fuente-titulo); font-weight: 800;
+  font-size: 1.5rem; letter-spacing: .18em; color: var(--texto-principal);
+  text-align: center;
+}
+.sol-resuelta-nota { margin: 0 0 8px; font-size: .68rem; color: var(--texto-desactivado); }
+.sol-avisos { display: flex; gap: 8px; }
+.sol-aviso {
+  flex: 1; text-align: center; text-decoration: none;
+  padding: 7px 10px; border-radius: var(--radio-md);
+  font-size: .74rem; font-weight: 700;
+  transition: filter .18s ease;
+}
+.sol-aviso.wa { background: #1fab54; color: #fff; }
+.sol-aviso.mail { background: rgba(168, 85, 247, .18); color: var(--morado-hover); border: 1px solid rgba(168, 85, 247, .35); }
+.sol-aviso:hover { filter: brightness(1.1); }
+.sol-pie { margin: 8px 0 0; font-size: .68rem; line-height: 1.45; color: var(--texto-desactivado); }
 .notif-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .notif-kpi {
   display: flex; flex-direction: column; gap: 2px;

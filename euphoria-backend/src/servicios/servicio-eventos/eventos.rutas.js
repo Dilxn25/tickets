@@ -81,35 +81,11 @@ router.get('/disponibles/:id', async (req, res) => {
   }
 })
 
-// ---- POST /api/eventos/reservar (Para Clientes) ----
-router.post('/reservar', verificarToken, async (req, res) => {
-  try {
-    const { id_evento, id_zona, id_mesa, tipo } = req.body
-
-    // Si es VIP y envían una mesa, bloquearla
-    if (tipo === 'vip' && id_mesa) {
-      const mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa: Number(id_mesa) } })
-      if (!mesa) return res.status(404).json({ error: 'Mesa no encontrada' })
-
-      // Bloqueo ATÓMICO: solo reserva si la mesa SIGUE libre.
-      // updateMany con filtro estado_ocupacion='libre' evita que dos clientes
-      // reserven la misma mesa al mismo tiempo (condición de carrera).
-      const bloqueada = await prisma.mesa_espacio.updateMany({
-        where: { id_mesa: Number(id_mesa), estado_ocupacion: 'libre' },
-        data: { estado_ocupacion: 'reservada' }
-      })
-      if (bloqueada.count === 0) {
-        return res.status(400).json({ error: 'La mesa ya ha sido reservada por otro usuario' })
-      }
-    }
-
-    // TODO: Aquí se podría crear el registro en la tabla 'entrada'
-
-    res.json({ mensaje: 'Reserva confirmada exitosamente' })
-  } catch (error) {
-    console.error('Error en reserva:', error)
-    res.status(500).json({ error: 'Error interno al procesar la reserva' })
-  }
+// ---- POST /api/eventos/reservar — RETIRADO ----
+// Este stub bloqueaba mesas sin cobrar, sin entrada y sin QR (quedaban huérfanas).
+// El flujo REAL y completo vive en POST /api/reservas/mesa (pago atómico + QR).
+router.post('/reservar', verificarToken, (req, res) => {
+  res.status(410).json({ error: 'Este flujo fue reemplazado. Reserva desde el mapa del evento.' })
 })
 
 // === RUTAS PROTEGIDAS (Solo Administrador) ===

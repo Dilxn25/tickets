@@ -14,7 +14,12 @@ const cacheIA = {}
 const CACHE_TTL = 60000
 
 // ---- Configuración de la IA (tabla configuracion, con valores por defecto) ----
-const CONFIG_DEFECTO = { ia_descuento_combos: '10', ia_sugerencias_activas: '1' }
+const CONFIG_DEFECTO = {
+  ia_descuento_combos: '10',
+  ia_sugerencias_activas: '1',
+  premio_perfil_pct: '10',
+  premio_perfil_max: '50',
+}
 
 async function leerConfigIA() {
   const filas = await prisma.configuracion.findMany({
@@ -24,7 +29,10 @@ async function leerConfigIA() {
   filas.forEach(f => { cfg[f.clave] = f.valor })
   return {
     descuento_combos: Math.min(Math.max(parseFloat(cfg.ia_descuento_combos) || 10, 0), 90),
-    sugerencias_activas: cfg.ia_sugerencias_activas === '1'
+    sugerencias_activas: cfg.ia_sugerencias_activas === '1',
+    // Premio por perfil completo (módulo cliente), editable por el admin
+    premio_pct: Math.min(Math.max(parseFloat(cfg.premio_perfil_pct) || 10, 0), 90),
+    premio_max: Math.max(parseFloat(cfg.premio_perfil_max) || 50, 0),
   }
 }
 
@@ -59,6 +67,30 @@ router.put('/config', verificarToken, soloRoles('Administrador'), async (req, re
         where: { clave: 'ia_sugerencias_activas' },
         update: { valor: sugerencias_activas ? '1' : '0' },
         create: { clave: 'ia_sugerencias_activas', valor: sugerencias_activas ? '1' : '0', descripcion: 'Si las sugerencias de la IA se muestran en la toma de pedidos (1=si, 0=no)' }
+      })
+    }
+    // Premio por perfil completo (módulo cliente)
+    const { premio_pct, premio_max } = req.body
+    if (premio_pct !== undefined) {
+      const p = parseFloat(premio_pct)
+      if (isNaN(p) || p < 0 || p > 90) {
+        return res.status(400).json({ error: 'El porcentaje del premio debe estar entre 0 y 90' })
+      }
+      await prisma.configuracion.upsert({
+        where: { clave: 'premio_perfil_pct' },
+        update: { valor: String(p) },
+        create: { clave: 'premio_perfil_pct', valor: String(p), descripcion: 'Porcentaje de descuento del premio por perfil completo' }
+      })
+    }
+    if (premio_max !== undefined) {
+      const m = parseFloat(premio_max)
+      if (isNaN(m) || m < 0) {
+        return res.status(400).json({ error: 'El tope del premio debe ser un número mayor o igual a 0' })
+      }
+      await prisma.configuracion.upsert({
+        where: { clave: 'premio_perfil_max' },
+        update: { valor: String(m) },
+        create: { clave: 'premio_perfil_max', valor: String(m), descripcion: 'Tope en Bs del descuento del premio por perfil completo' }
       })
     }
     res.json(await leerConfigIA())

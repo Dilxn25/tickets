@@ -9,7 +9,8 @@ const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const QRCode = require('qrcode')
 const prisma = require('../../config/base-de-datos')
-const { verificarToken } = require('../../middlewares/autenticacion')
+const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { verificarPin } = require('../../utilidades/pin-billetera')
 
 router.use(verificarToken)
 
@@ -34,6 +35,51 @@ async function actualizarLlenoEvento(id_evento) {
       await prisma.evento.update({ where: { id_evento }, data: { estado: 'promocion' } })
     }
   } catch (e) { console.error('Error actualizando estado Lleno:', e.message) }
+}
+
+// Límite anti-acaparamiento: máximo de espacios (mesas/sillas/entradas) que una
+// misma cuenta puede reservar por evento. Configurable en la tabla configuracion
+// (clave 'reserva_max_espacios'); los grupos grandes se atienden por el local
+// (reserva corporativa), no por autoservicio.
+const RESERVA_MAX_POR_DEFECTO = 2
+
+async function obtenerMaxEspacios() {
+  try {
+    const fila = await prisma.configuracion.findUnique({ where: { clave: 'reserva_max_espacios' } })
+    const v = parseInt(fila?.valor, 10)
+    if (Number.isFinite(v) && v > 0) return v
+    if (!fila) {
+      await prisma.configuracion.create({
+        data: {
+          clave: 'reserva_max_espacios',
+          valor: String(RESERVA_MAX_POR_DEFECTO),
+          descripcion: 'Máximo de espacios (mesas/sillas/entradas) por cliente en cada evento',
+        },
+      }).catch(() => {})
+    }
+  } catch (e) { /* respaldo abajo */ }
+  return RESERVA_MAX_POR_DEFECTO
+}
+
+// Devuelve un error listo para responder si el usuario ya alcanzó el límite
+// de espacios en el evento; null si aún puede reservar.
+async function validarLimiteEspacios(id_usuario, id_evento) {
+  const maximo = await obtenerMaxEspacios()
+  const actuales = await prisma.entrada.count({
+    where: { id_usuario, zona: { id_evento } },
+  })
+  if (actuales >= maximo) {
+    return {
+      status: 400,
+      body: {
+        error: `Ya tienes ${actuales} espacio(s) reservado(s) en este evento: el máximo por cuenta es ${maximo}. Si vienen en grupo grande (empresa, cumpleaños), contáctanos y el local te arma una reserva especial.`,
+        limite_reservas: true,
+        maximo,
+        actuales,
+      },
+    }
+  }
+  return null
 }
 
 // ---- Utilidades QR de entrada ----
@@ -207,6 +253,15 @@ router.post('/mesa', async (req, res) => {
     if (mesa.estado_ocupacion !== 'libre') {
       return res.status(409).json({ error: 'Ese lugar ya fue reservado. Elige otro.' })
     }
+    // No se puede reservar en un evento que ya terminó (misma regla que /campo)
+    const eventoMesa = await prisma.evento.findUnique({ where: { id_evento: mesa.zona.id_evento } })
+    if (!eventoMesa || eventoMesa.estado === 'terminado') {
+      return res.status(400).json({ error: 'Este evento ya terminó: no se puede reservar.' })
+    }
+
+    // Anti-acaparamiento: máximo de espacios por cuenta en el evento
+    const limite = await validarLimiteEspacios(id_usuario, mesa.zona.id_evento)
+    if (limite) return res.status(limite.status).json(limite.body)
     // La mesa se compra COMPLETA: el QR vale para toda su capacidad (ej. 8).
     // La silla es individual (1 persona).
     const cantidad_personas = esMesa ? Math.max(1, mesa.capacidad_sillas || 1) : 1
@@ -221,9 +276,8 @@ router.post('/mesa', async (req, res) => {
 
     if (billetera.pin_transaccional) {
       if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
-      const bcrypt = require('bcryptjs')
-      const pinValido = await bcrypt.compare(String(pin), billetera.pin_transaccional)
-      if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
+      const pinValido = await verificarPin(pin, billetera.pin_transaccional)
+      if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
     }
 
     if (Number(billetera.saldo_actual) < precio) {
@@ -298,10 +352,7 @@ router.post('/mesa', async (req, res) => {
     // 6. Tiempo real: avisar que la mesa cambio y refrescar saldo del cliente
     if (global.io) {
       global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa, estado: 'reservada' })
-      global.io.emit('billetera_actualizada', {
-        id_usuario,
-        saldo_nuevo: Number(billetera.saldo_actual) - precio,
-      })
+      global.io.emit('billetera_actualizada', { id_usuario })
     }
 
     // "Lleno" automático si el evento se agotó con esta reserva.
@@ -342,6 +393,10 @@ router.post('/campo', async (req, res) => {
     if (!zona.es_general) return res.status(400).json({ error: 'Esta zona no vende entradas generales' })
     if (zona.evento?.estado === 'terminado') return res.status(400).json({ error: 'El evento ya finalizó' })
 
+    // Anti-acaparamiento: máximo de espacios por cuenta en el evento
+    const limite = await validarLimiteEspacios(id_usuario, zona.id_evento)
+    if (limite) return res.status(limite.status).json(limite.body)
+
     // Cupos: cada entrada general es de 1 persona
     const vendidas = await prisma.entrada.count({ where: { id_zona } })
     if (vendidas >= zona.capacidad_maxima) {
@@ -356,9 +411,8 @@ router.post('/campo', async (req, res) => {
 
     if (billetera.pin_transaccional) {
       if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
-      const bcrypt = require('bcryptjs')
-      const pinValido = await bcrypt.compare(String(pin), billetera.pin_transaccional)
-      if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
+      const pinValido = await verificarPin(pin, billetera.pin_transaccional)
+      if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
     }
 
     if (Number(billetera.saldo_actual) < precio) {
@@ -436,6 +490,22 @@ router.post('/campo', async (req, res) => {
 // ---------- MIS RESERVAS ----------
 
 // GET /api/reservas/mias — entradas/reservas del cliente con su QR
+// Estado de la ventana de validez de una entrada según la fecha del evento
+// (misma regla que la puerta): solo el día del evento, con margen de apertura.
+const HORAS_ANTES_ENTRADA = 4
+const HORAS_DESPUES_ENTRADA = 12
+function estadoFechaEntrada(evento, ahora = new Date()) {
+  if (!evento || !evento.fecha_hora_inicio) return 'vigente'
+  const inicio = new Date(evento.fecha_hora_inicio)
+  const fin = evento.fecha_hora_fin
+    ? new Date(evento.fecha_hora_fin)
+    : new Date(inicio.getTime() + HORAS_DESPUES_ENTRADA * 3600 * 1000)
+  const ventanaInicio = new Date(inicio.getTime() - HORAS_ANTES_ENTRADA * 3600 * 1000)
+  if (ahora < ventanaInicio) return 'proxima'
+  if (ahora > fin) return 'finalizada'
+  return 'vigente'
+}
+
 router.get('/mias', async (req, res) => {
   try {
     const entradas = await prisma.entrada.findMany({
@@ -444,26 +514,179 @@ router.get('/mias', async (req, res) => {
       include: {
         zona: { include: { evento: true } },
         mesa_espacio: true,
+        // Historial real de ingresos/salidas de esta entrada (por tandas)
+        registro_aforo: { orderBy: { fecha_hora: 'asc' } },
       },
     })
 
-    const salida = await Promise.all(entradas.map(async (e) => ({
-      id_entrada: e.id_entrada,
-      codigo_ingreso: e.codigo_ingreso,
-      cantidad_personas: e.cantidad_personas,
-      monto_pagado: e.monto_pagado != null ? Number(e.monto_pagado) : null,
-      estado_validacion: e.estado_validacion,
-      fecha_reserva: e.fecha_reserva,
-      mesa: e.mesa_espacio ? e.mesa_espacio.numero_nombre : null,
-      zona: e.zona ? e.zona.nombre_zona : null,
-      evento: e.zona && e.zona.evento ? e.zona.evento.nombre_evento : null,
-      fecha_evento: e.zona && e.zona.evento ? e.zona.evento.fecha_hora_inicio : null,
-      qr: await generarImagenQREntrada(e),
-    })))
+    const salida = await Promise.all(entradas.map(async (e) => {
+      const evento = e.zona && e.zona.evento ? e.zona.evento : null
+      const cantidadIngresada = e.cantidad_ingresada || 0
+      const completo = cantidadIngresada >= e.cantidad_personas
+      const estadoFecha = estadoFechaEntrada(evento)
+      return {
+        id_entrada: e.id_entrada,
+        codigo_ingreso: e.codigo_ingreso,
+        cantidad_personas: e.cantidad_personas,
+        cantidad_ingresada: cantidadIngresada,
+        monto_pagado: e.monto_pagado != null ? Number(e.monto_pagado) : null,
+        estado_validacion: e.estado_validacion,
+        completo,                    // ya ingresaron todos los cupos
+        estado_fecha: estadoFecha,   // proxima | vigente | finalizada
+        fecha_reserva: e.fecha_reserva,
+        mesa: e.mesa_espacio ? e.mesa_espacio.numero_nombre : null,
+        tipo_elemento: e.mesa_espacio ? e.mesa_espacio.tipo_elemento : null,
+        zona: e.zona ? e.zona.nombre_zona : null,
+        evento: evento ? evento.nombre_evento : null,
+        fecha_evento: evento ? evento.fecha_hora_inicio : null,
+        fecha_evento_fin: evento ? evento.fecha_hora_fin : null,
+        // Historial de movimientos: cuándo y cuántas personas entraron/salieron
+        ingresos: (e.registro_aforo || []).map(r => ({
+          tipo: r.tipo_movimiento,   // ingreso | salida
+          cantidad: r.cantidad,
+          fecha_hora: r.fecha_hora,
+        })),
+        // El QR solo se genera si la entrada aún se puede usar (ni usada ni vencida)
+        qr: (!completo && estadoFecha !== 'finalizada') ? await generarImagenQREntrada(e) : null,
+      }
+    }))
     res.json(salida)
   } catch (error) {
     console.error('Error obteniendo mis reservas:', error)
     res.status(500).json({ error: 'Error al obtener tus reservas' })
+  }
+})
+
+// ============================================================
+// RESERVAS GESTIONADAS POR RECEPCIÓN (grupos grandes)
+// Cuando un cliente quiere más espacios que el tope de autoservicio, recepción
+// lo atiende: busca al cliente, elige la(s) mesa(s) y se las asigna. Sin cobro
+// a la billetera (el pago se maneja en el mostrador) y sin el tope por cuenta.
+// ============================================================
+
+// GET /api/reservas/buscar-cliente?q=texto — recepción busca al cliente por
+// nombre, correo o CI para asignarle la reserva.
+router.get('/buscar-cliente', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim()
+    if (q.length < 2) return res.json({ clientes: [] })
+    const clientes = await prisma.usuario.findMany({
+      where: {
+        rol: { nombre_rol: 'Cliente' },
+        estado_cuenta: 'activo',
+        OR: [
+          { correo: { contains: q } },
+          { ci_carnet: { contains: q } },
+          { nombres: { contains: q } },
+          { apellidos: { contains: q } },
+        ],
+      },
+      select: { id_usuario: true, nombres: true, apellidos: true, correo: true, ci_carnet: true, telefono: true },
+      take: 8,
+    })
+    res.json({
+      clientes: clientes.map(c => ({
+        id_usuario: c.id_usuario,
+        nombre: `${c.nombres} ${c.apellidos}`.trim(),
+        correo: c.correo,
+        ci_carnet: c.ci_carnet,
+        telefono: c.telefono,
+      })),
+    })
+  } catch (error) {
+    console.error('Error buscando cliente:', error)
+    res.status(500).json({ error: 'Error al buscar el cliente' })
+  }
+})
+
+// POST /api/reservas/gestionada — recepción asigna una mesa a un cliente.
+// Body: { id_cliente, id_mesa, metodo_pago? ('efectivo'|'cortesia') }
+router.post('/gestionada', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const id_cliente = Number(req.body.id_cliente)
+    const id_mesa = Number(req.body.id_mesa)
+    const metodo = req.body.metodo_pago === 'cortesia' ? 'cortesia' : 'efectivo'
+    if (!id_cliente || !id_mesa) return res.status(400).json({ error: 'Falta el cliente o la mesa.' })
+
+    const cliente = await prisma.usuario.findUnique({ where: { id_usuario: id_cliente }, include: { rol: true } })
+    if (!cliente || cliente.rol?.nombre_rol !== 'Cliente') {
+      return res.status(400).json({ error: 'El cliente seleccionado no es válido.' })
+    }
+
+    const mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa }, include: { zona: true } })
+    if (!mesa) return res.status(404).json({ error: 'La mesa no existe' })
+    const esMesa = mesa.tipo_elemento === 'mesa'
+    const esSilla = mesa.tipo_elemento === 'silla'
+    if ((!esMesa && !esSilla) || !mesa.es_seleccionable) {
+      return res.status(400).json({ error: 'Ese elemento no es reservable' })
+    }
+    if (mesa.estado_ocupacion !== 'libre') {
+      return res.status(409).json({ error: 'Ese lugar ya está reservado. Elige otro.' })
+    }
+    const evento = await prisma.evento.findUnique({ where: { id_evento: mesa.zona.id_evento } })
+    if (!evento || evento.estado === 'terminado') {
+      return res.status(400).json({ error: 'Este evento ya terminó: no se puede reservar.' })
+    }
+
+    const cantidad_personas = esMesa ? Math.max(1, mesa.capacidad_sillas || 1) : 1
+    const precioBase = Number(mesa.precio != null ? mesa.precio : mesa.zona.precio_entrada_base)
+    // Cortesía = sin costo; efectivo = se cobra en el mostrador, se registra el valor.
+    const monto = metodo === 'cortesia' ? 0 : (precioBase >= 0 ? precioBase : 0)
+    const codigo = generarCodigoEntrada(id_cliente)
+
+    let entradaCreada
+    try {
+      entradaCreada = await prisma.$transaction(async (tx) => {
+        const tomada = await tx.mesa_espacio.updateMany({
+          where: { id_mesa, estado_ocupacion: 'libre' },
+          data: { estado_ocupacion: 'reservada' },
+        })
+        if (tomada.count === 0) throw new Error('MESA_OCUPADA')
+
+        return await tx.entrada.create({
+          data: {
+            id_usuario: id_cliente,
+            id_zona: mesa.id_zona,
+            id_mesa,
+            qr_acceso: codigo,
+            codigo_ingreso: codigo.slice(-12).toUpperCase(),
+            cantidad_personas,
+            monto_pagado: monto,
+            estado_validacion: false,
+            fecha_reserva: new Date(),
+          },
+        })
+      })
+    } catch (e) {
+      if (e.message === 'MESA_OCUPADA') {
+        return res.status(409).json({ error: 'Alguien tomó esa mesa antes. Elige otra.' })
+      }
+      throw e
+    }
+
+    const imagenQR = await generarImagenQREntrada(entradaCreada)
+    if (global.io) {
+      global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa, estado: 'reservada' })
+    }
+    await actualizarLlenoEvento(mesa.zona.id_evento)
+
+    res.status(201).json({
+      mensaje: 'Reserva asignada al cliente',
+      entrada: {
+        id_entrada: entradaCreada.id_entrada,
+        codigo_ingreso: entradaCreada.codigo_ingreso,
+        cantidad_personas,
+        monto_pagado: monto,
+        metodo_pago: metodo,
+        mesa: mesa.numero_nombre,
+        zona: mesa.zona.nombre_zona,
+        cliente: `${cliente.nombres} ${cliente.apellidos}`.trim(),
+      },
+      qr: imagenQR,
+    })
+  } catch (error) {
+    console.error('Error en reserva gestionada:', error)
+    res.status(500).json({ error: 'Error al asignar la reserva' })
   }
 })
 

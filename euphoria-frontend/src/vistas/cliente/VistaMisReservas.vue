@@ -1,121 +1,186 @@
 <template>
   <div class="vista-mis-reservas entrada-cine">
-    <div class="fondo-orbes" aria-hidden="true">
-      <span class="orbe-deco morado"></span>
-      <span class="orbe-deco rosa"></span>
-    </div>
-
-    <header class="hero">
-      <button class="btn-volver hover-glow" @click="volver" aria-label="Volver">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      </button>
-      <div class="hero-texto">
-        <h1 class="hero-titulo">Mis reservas</h1>
-        <p class="hero-sub">Muestra el QR en la puerta y accede sin filas.</p>
-      </div>
-      <span v-if="!cargando && !error && reservas.length" class="hero-contador" aria-hidden="true">
-        <b>{{ reservas.length }}</b>
-        <em>{{ reservas.length === 1 ? 'pase' : 'pases' }}</em>
-      </span>
-    </header>
-
-    <div v-if="cargando" class="lista" aria-busy="true" aria-label="Cargando tus reservas">
-      <div v-for="n in 3" :key="n" class="ticket esqueleto">
-        <div class="ticket-cuerpo">
-          <span class="sk sk-chip"></span>
-          <span class="sk sk-titulo"></span>
-          <span class="sk sk-linea"></span>
-          <span class="sk sk-linea corta"></span>
-          <span class="sk sk-linea media"></span>
+    <div class="mr-interior">
+      <header class="hero">
+        <button class="btn-volver" @click="volver" aria-label="Volver">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <div class="hero-texto">
+          <h1 class="hero-titulo">Mis reservas</h1>
+          <p class="hero-sub">Tus pases y el registro de tus ingresos.</p>
         </div>
-        <div class="ticket-perf" aria-hidden="true"></div>
-        <div class="ticket-talon">
-          <span class="sk sk-qr"></span>
-        </div>
-      </div>
-    </div>
+      </header>
 
-    <div v-else-if="error" class="estado-msg superficie textura-grano aparecer-subir">
-      <div class="icono-estado error">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="13"></line><line x1="12" y1="16.5" x2="12" y2="16.5"></line></svg>
-      </div>
-      <div class="estado-texto">
-        <h2 class="estado-titulo">No pudimos cargar tus reservas</h2>
-        <p class="estado-detalle">Revisa tu conexión e inténtalo de nuevo.</p>
-      </div>
-      <button class="cta-isla brillo-hover" @click="cargar">
-        Reintentar
-        <span class="cta-icono" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-        </span>
-      </button>
-    </div>
-
-    <div v-else-if="!reservas.length" class="estado-msg superficie textura-grano aparecer-subir">
-      <div class="icono-estado">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-      </div>
-      <div class="estado-texto">
-        <h2 class="estado-titulo">Todavía no tienes reservas</h2>
-        <p class="estado-detalle">Reserva tu mesa para el próximo evento y aparecerá aquí con su QR de acceso.</p>
-      </div>
-      <RouterLink to="/cliente/eventos" class="cta-isla link brillo-hover">
-        Ver eventos
-        <span class="cta-icono" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-        </span>
-      </RouterLink>
-    </div>
-
-    <div v-else class="lista escalonar">
-      <article v-for="r in reservas" :key="r.id_entrada" class="ticket anim-subir hover-elevar" :class="{ validada: r.estado_validacion }">
-        <span class="ticket-borde" aria-hidden="true"></span>
-
-        <div class="ticket-cuerpo">
-          <div class="ticket-encabezado">
-            <span class="marca-pase" aria-hidden="true">Euphoria · Boarding pass</span>
-            <span class="estado" :class="r.estado_validacion ? 'ok' : 'pend'">
-              <span class="estado-punto" aria-hidden="true"></span>
-              {{ r.estado_validacion ? 'Ingresado' : 'Válida' }}
-            </span>
+      <!-- Cargando -->
+      <div v-if="cargando" class="lista" aria-busy="true">
+        <div v-for="n in 3" :key="n" class="ticket esqueleto">
+          <div class="ticket-cuerpo">
+            <span class="sk sk-chip"></span>
+            <span class="sk sk-titulo"></span>
+            <span class="sk sk-linea"></span>
+            <span class="sk sk-linea corta"></span>
           </div>
+          <div class="ticket-perf" aria-hidden="true"></div>
+          <div class="ticket-talon"><span class="sk sk-qr"></span></div>
+        </div>
+      </div>
 
-          <h3 class="evento">{{ r.evento || 'Evento' }}</h3>
-          <p v-if="r.fecha_evento" class="fecha">{{ formatoFecha(r.fecha_evento) }}</p>
+      <!-- Error -->
+      <div v-else-if="error" class="estado-msg">
+        <div class="icono-estado error">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="13"></line><line x1="12" y1="16.5" x2="12" y2="16.5"></line></svg>
+        </div>
+        <div class="estado-texto">
+          <h2 class="estado-titulo">No pudimos cargar tus reservas</h2>
+          <p class="estado-detalle">Revisa tu conexión e inténtalo de nuevo.</p>
+        </div>
+        <button class="cta-isla brillo-hover" @click="cargar">Reintentar</button>
+      </div>
 
-          <dl class="ticket-datos">
-            <div class="dato">
-              <dt>Mesa</dt>
-              <dd>{{ r.mesa || '—' }}<em v-if="r.zona"> · {{ r.zona }}</em></dd>
-            </div>
-            <div class="dato">
-              <dt>Personas</dt>
-              <dd>{{ r.cantidad_personas }}</dd>
-            </div>
-            <div v-if="r.monto_pagado != null" class="dato dato-pago">
-              <dt>Pagado</dt>
-              <dd><span class="moneda">Bs</span>{{ Number(r.monto_pagado).toFixed(2) }}</dd>
-            </div>
-          </dl>
+      <!-- Vacío total -->
+      <div v-else-if="!reservas.length" class="estado-msg">
+        <div class="icono-estado">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        </div>
+        <div class="estado-texto">
+          <h2 class="estado-titulo">Todavía no tienes reservas</h2>
+          <p class="estado-detalle">Reserva tu mesa para el próximo evento y aparecerá aquí con su QR de acceso.</p>
+        </div>
+        <RouterLink to="/cliente/eventos" class="cta-isla link brillo-hover">Ver eventos</RouterLink>
+      </div>
 
-          <p class="codigo">Código de ingreso<b>{{ r.codigo_ingreso }}</b></p>
+      <!-- Contenido -->
+      <template v-else>
+        <!-- Buscador -->
+        <div class="buscador">
+          <svg class="buscador-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          <input v-model="busqueda" type="text" class="buscador-input" placeholder="Buscar por evento…" aria-label="Buscar reserva" />
+          <button v-if="busqueda" class="buscador-limpiar" @click="busqueda = ''" aria-label="Limpiar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
 
-        <div class="ticket-perf" aria-hidden="true"></div>
-
-        <div class="ticket-talon">
-          <div class="qr-marco">
-            <img :src="r.qr" alt="Código QR de acceso" />
-          </div>
-          <span class="qr-pie">Muestra este QR</span>
+        <!-- Pestañas -->
+        <div class="tabs" role="tablist">
+          <button
+            v-for="t in tabs" :key="t.clave"
+            class="tab" :class="{ activo: tabActiva === t.clave }"
+            role="tab" :aria-selected="tabActiva === t.clave"
+            @click="tabActiva = t.clave">
+            {{ t.label }}
+            <span v-if="conteos[t.clave]" class="tab-num">{{ conteos[t.clave] }}</span>
+          </button>
         </div>
-      </article>
+
+        <!-- Lista filtrada -->
+        <div v-if="visibles.length" class="lista escalonar">
+          <article
+            v-for="r in visibles" :key="r.id_entrada"
+            class="ticket anim-subir" :class="`estado-${estadoTicket(r).clave}`">
+            <span class="ticket-borde" aria-hidden="true"></span>
+
+            <div class="ticket-cuerpo">
+              <div class="ticket-encabezado">
+                <span class="estado" :class="estadoTicket(r).clase">
+                  <span class="estado-punto" aria-hidden="true"></span>
+                  {{ estadoTicket(r).label }}
+                </span>
+                <span class="chip-fecha" :class="textoFecha(r).clase">{{ textoFecha(r).label }}</span>
+              </div>
+
+              <h3 class="evento">{{ r.evento || 'Evento' }}</h3>
+              <p v-if="r.fecha_evento" class="fecha">{{ formatoFechaLarga(r.fecha_evento) }}</p>
+
+              <dl class="ticket-datos">
+                <div class="dato">
+                  <dt>{{ r.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }}</dt>
+                  <dd>{{ r.mesa || '—' }}<em v-if="r.zona"> · {{ r.zona }}</em></dd>
+                </div>
+                <div class="dato">
+                  <dt>Personas</dt>
+                  <dd>{{ r.cantidad_personas }}</dd>
+                </div>
+                <div v-if="r.monto_pagado != null" class="dato dato-pago">
+                  <dt>Pagado</dt>
+                  <dd><span class="moneda">Bs</span>{{ Number(r.monto_pagado).toFixed(2) }}</dd>
+                </div>
+              </dl>
+
+              <!-- Progreso de ingreso para grupos (mesa de N) -->
+              <div v-if="r.cantidad_personas > 1" class="progreso">
+                <div class="progreso-cab">
+                  <span>Ingresaron</span>
+                  <strong>{{ r.cantidad_ingresada }} / {{ r.cantidad_personas }}</strong>
+                </div>
+                <div class="progreso-barra">
+                  <span class="progreso-relleno" :style="{ width: pct(r) + '%' }"></span>
+                </div>
+                <p v-if="r.cantidad_ingresada > 0 && !r.completo" class="progreso-nota">
+                  Quedan {{ r.cantidad_personas - r.cantidad_ingresada }} cupo(s) por usar en este QR.
+                </p>
+              </div>
+
+              <p class="codigo">Código de ingreso<b>{{ r.codigo_ingreso }}</b></p>
+
+              <!-- Historial de ingresos (colapsable) -->
+              <button v-if="r.ingresos && r.ingresos.length" class="btn-historial" @click="alternarHistorial(r.id_entrada)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ girar: historialAbierto === r.id_entrada }"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                Historial de ingresos ({{ r.ingresos.length }})
+              </button>
+              <Transition name="expandir">
+                <ul v-if="historialAbierto === r.id_entrada" class="timeline">
+                  <li v-for="(mov, i) in r.ingresos" :key="i" class="tl-item" :class="mov.tipo">
+                    <span class="tl-punto" aria-hidden="true"></span>
+                    <span class="tl-texto">
+                      <b>{{ mov.tipo === 'salida' ? 'Salida' : 'Ingreso' }} de {{ mov.cantidad }} {{ mov.cantidad === 1 ? 'persona' : 'personas' }}</b>
+                      <em>{{ formatoFechaHora(mov.fecha_hora) }}</em>
+                    </span>
+                  </li>
+                </ul>
+              </Transition>
+            </div>
+
+            <div class="ticket-perf" aria-hidden="true"></div>
+
+            <!-- Talón: QR si aún se puede usar; si no, sello de estado -->
+            <div class="ticket-talon">
+              <template v-if="r.qr">
+                <button class="qr-marco" type="button" title="Ampliar QR" @click="ampliarQR(r)">
+                  <img :src="r.qr" alt="Código QR de acceso" />
+                </button>
+                <span class="qr-pie">Toca para ampliar</span>
+              </template>
+              <div v-else class="sello" :class="estadoTicket(r).clave">
+                <svg v-if="r.completo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <span>{{ r.completo ? 'Ingreso\ncompleto' : 'Evento\nfinalizado' }}</span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Vacío por filtro -->
+        <div v-else class="vacio-filtro">
+          <p v-if="busqueda">Ningún pase coincide con «{{ busqueda }}».</p>
+          <p v-else>No tienes pases en «{{ tabs.find(t => t.clave === tabActiva)?.label }}».</p>
+        </div>
+      </template>
     </div>
+
+    <!-- QR a pantalla completa: fondo blanco y brillo alto para el escáner -->
+    <Teleport to="body">
+      <div v-if="qrAmpliado" class="qr-fullscreen" @click="qrAmpliado = null">
+        <p class="qr-fs-evento">{{ qrAmpliado.evento || 'Evento' }}</p>
+        <img :src="qrAmpliado.qr" alt="Código QR de acceso ampliado" class="qr-fs-img" />
+        <p class="qr-fs-codigo">{{ qrAmpliado.codigo_ingreso }}</p>
+        <p class="qr-fs-hint">Muestra la pantalla en la puerta · Toca para cerrar</p>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 
@@ -123,12 +188,85 @@ const router = useRouter()
 const reservas = ref([])
 const cargando = ref(true)
 const error = ref(false)
+const qrAmpliado = ref(null)
+const busqueda = ref('')
+const tabActiva = ref('vigentes')
+const historialAbierto = ref(null)
+
+const tabs = [
+  { clave: 'vigentes', label: 'Vigentes' },
+  { clave: 'usadas', label: 'Usadas' },
+  { clave: 'finalizadas', label: 'Finalizadas' },
+]
+
+// A qué grupo pertenece una reserva
+function grupoDe(r) {
+  if (r.completo) return 'usadas'
+  if (r.estado_fecha === 'finalizada') return 'finalizadas'
+  return 'vigentes'
+}
+
+const conteos = computed(() => {
+  const c = { vigentes: 0, usadas: 0, finalizadas: 0 }
+  for (const r of reservas.value) c[grupoDe(r)]++
+  return c
+})
+
+// Lista filtrada por pestaña + búsqueda
+const visibles = computed(() => {
+  const q = busqueda.value.trim().toLowerCase()
+  return reservas.value.filter(r => {
+    if (grupoDe(r) !== tabActiva.value) return false
+    if (q && !(r.evento || '').toLowerCase().includes(q)) return false
+    return true
+  })
+})
+
+// Estado visible del ticket
+function estadoTicket(r) {
+  if (r.completo) return { clave: 'usada', label: 'Ingresado', clase: 'ok' }
+  if (r.estado_fecha === 'finalizada') return { clave: 'finalizada', label: 'Finalizada', clase: 'muted' }
+  if (r.cantidad_ingresada > 0) return { clave: 'parcial', label: `Adentro ${r.cantidad_ingresada}/${r.cantidad_personas}`, clase: 'parcial' }
+  if (r.estado_fecha === 'proxima') return { clave: 'proxima', label: 'Próxima', clase: 'pend' }
+  return { clave: 'vigente', label: 'Válida hoy', clase: 'live' }
+}
+
+// Chip de fecha relativa (Hoy / Faltan X días / Finalizado)
+function textoFecha(r) {
+  if (!r.fecha_evento) return { label: '', clase: '' }
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  const dia = new Date(r.fecha_evento); dia.setHours(0, 0, 0, 0)
+  const dias = Math.round((dia - hoy) / 86400000)
+  if (r.estado_fecha === 'finalizada') return { label: 'Finalizado', clase: 'muted' }
+  if (dias < 0) return { label: 'Finalizado', clase: 'muted' }
+  if (dias === 0) return { label: 'Hoy', clase: 'hoy' }
+  if (dias === 1) return { label: 'Mañana', clase: 'pronto' }
+  return { label: `Faltan ${dias} días`, clase: 'pronto' }
+}
+
+function pct(r) {
+  if (!r.cantidad_personas) return 0
+  return Math.min(100, Math.round((r.cantidad_ingresada / r.cantidad_personas) * 100))
+}
+
+function alternarHistorial(id) {
+  historialAbierto.value = historialAbierto.value === id ? null : id
+}
+
+function ampliarQR(reserva) {
+  if (!reserva?.qr) return
+  qrAmpliado.value = reserva
+}
 
 function volver() { router.back() }
 
-function formatoFecha(f) {
+function formatoFechaLarga(f) {
   if (!f) return ''
-  return new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })
+  return new Date(f).toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })
+}
+function formatoFechaHora(f) {
+  if (!f) return ''
+  return new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 async function cargar() {
@@ -136,6 +274,11 @@ async function cargar() {
   error.value = false
   try {
     reservas.value = await servicioReservas.misReservas()
+    // Si la pestaña por defecto está vacía, saltar a la primera con contenido
+    if (!conteos.value[tabActiva.value]) {
+      const primera = tabs.find(t => conteos.value[t.clave])
+      if (primera) tabActiva.value = primera.clave
+    }
   } catch (err) {
     console.error('Error cargando mis reservas:', err)
     error.value = true
@@ -150,256 +293,258 @@ onMounted(cargar)
 <style scoped>
 .vista-mis-reservas {
   position: relative;
-  padding: var(--esp-6) var(--esp-4) 104px;
-  max-width: 760px; margin: 0 auto;
-  isolation: isolate;
+  width: 100%;
+  padding-bottom: 104px;
+  box-sizing: border-box;
 }
-
-/* Orbes ambientales de neon (fondo del hero) */
-.fondo-orbes { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.fondo-orbes .orbe-deco { position: absolute; }
-.fondo-orbes .morado { width: 320px; height: 320px; top: -120px; right: -90px; opacity: 0.28; }
-.fondo-orbes .rosa { width: 260px; height: 260px; top: 40px; left: -120px; opacity: 0.22; }
+/* Contenido centrado, sin orbes ni recuadros: fondo único de la app */
+.mr-interior {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--esp-6) var(--esp-4) 0;
+  box-sizing: border-box;
+}
 
 /* ---------- Hero ---------- */
-.hero {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: start; column-gap: var(--esp-4);
-  margin-bottom: var(--esp-6);
-}
-.hero-texto { min-width: 0; padding-top: 2px; }
+.hero { display: flex; align-items: center; gap: var(--esp-4); margin-bottom: var(--esp-5); }
+.hero-texto { min-width: 0; }
 .hero-titulo {
-  margin: 0; text-wrap: balance;
-  font-family: var(--fuente-titulo);
-  font-size: clamp(1.55rem, 5vw, 1.9rem);
-  font-weight: 800; letter-spacing: -0.025em; line-height: 1.08;
-  color: var(--texto-principal);
+  margin: 0; font-family: var(--fuente-titulo);
+  font-size: clamp(1.5rem, 5vw, 1.85rem); font-weight: 800;
+  letter-spacing: -0.025em; line-height: 1.08; color: var(--texto-principal);
 }
-.hero-sub {
-  margin-top: var(--esp-2); max-width: 44ch;
-  font-size: 0.9rem; line-height: 1.5; color: var(--texto-secundario); text-wrap: pretty;
-}
+.hero-sub { margin-top: 4px; font-size: 0.88rem; line-height: 1.4; color: var(--texto-secundario); }
 .btn-volver {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 46px; height: 46px; border-radius: var(--radio-md);
-  background: var(--glass-fondo); border: 1px solid var(--glass-borde);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  color: var(--texto-principal); cursor: pointer; flex-shrink: 0;
-  transition: transform 0.3s var(--ease-cine, ease), border-color 0.25s ease, box-shadow 0.3s ease, background 0.25s ease;
+  width: 44px; height: 44px; border-radius: var(--radio-md); flex-shrink: 0;
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil);
+  color: var(--texto-principal); cursor: pointer;
+  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
 }
-.btn-volver:hover { border-color: var(--borde-activo); background: var(--fondo-tarjeta-alt); transform: translateX(-3px); box-shadow: var(--glow-morado); }
-.btn-volver:active { transform: translateX(-3px) scale(0.94); }
+.btn-volver:hover { border-color: var(--borde-activo); background: var(--fondo-tarjeta); transform: translateX(-2px); }
+.btn-volver:active { transform: translateX(-2px) scale(0.94); }
 .btn-volver:focus-visible { outline: 2px solid var(--morado-hover); outline-offset: 2px; }
 .btn-volver svg { width: 20px; height: 20px; }
 
-.hero-contador {
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-  min-width: 72px; padding: 10px 14px; border-radius: var(--radio-lg);
-  background: var(--glass-fondo); border: 1px solid var(--glass-borde);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); line-height: 1;
+/* ---------- Buscador ---------- */
+.buscador {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; margin-bottom: var(--esp-4);
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-full);
 }
-.hero-contador b {
-  font-family: var(--fuente-titulo); font-size: 1.7rem; font-weight: 800;
-  letter-spacing: -0.03em; color: var(--morado-hover); font-variant-numeric: tabular-nums;
+.buscador:focus-within { border-color: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168,85,247,0.16); }
+.buscador-icono { width: 18px; height: 18px; color: var(--texto-desactivado); flex-shrink: 0; }
+.buscador-input {
+  flex: 1; min-width: 0; background: none; border: none; outline: none;
+  padding: 12px 0; color: var(--texto-principal); font-size: 0.92rem; font-family: var(--fuente-principal);
 }
-.hero-contador em {
-  margin-top: 3px; font-style: normal; font-size: 0.6rem; font-weight: 700;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--texto-desactivado);
-}
+.buscador-input::placeholder { color: var(--texto-desactivado); }
+.buscador-limpiar { background: none; border: none; color: var(--texto-desactivado); cursor: pointer; padding: 4px; display: flex; }
+.buscador-limpiar svg { width: 16px; height: 16px; }
+.buscador-limpiar:hover { color: var(--texto-principal); }
 
-/* ---------- Estados: vacio y error ---------- */
+/* ---------- Pestañas ---------- */
+.tabs {
+  display: flex; gap: 8px; margin-bottom: var(--esp-5);
+  overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+  padding: 9px 16px; border-radius: var(--radio-full);
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
+  color: var(--texto-secundario); font-size: 0.84rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.tab:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.tab.activo { background: var(--gradiente-marca); border-color: transparent; color: #fff; box-shadow: 0 6px 18px rgba(168,85,247,0.35); }
+.tab-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radio-full);
+  background: rgba(0,0,0,0.22); font-size: 0.68rem; font-weight: 800;
+}
+.tab:not(.activo) .tab-num { background: var(--fondo-tarjeta-alt); color: var(--texto-desactivado); }
+
+/* ---------- Estados vacío / error ---------- */
 .estado-msg {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--esp-4); padding: var(--esp-7) var(--esp-5);
-  color: var(--texto-secundario); text-align: center;
+  gap: var(--esp-4); padding: var(--esp-7) var(--esp-5); text-align: center;
 }
-.estado-msg > * { position: relative; z-index: 1; }
 .icono-estado {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 82px; height: 82px; border-radius: var(--radio-full);
-  color: var(--morado-hover);
-  background: radial-gradient(circle at 50% 38%, rgba(168,85,247,0.28), rgba(168,85,247,0.04));
-  border: 1px solid var(--borde-sutil);
-  box-shadow: inset 0 0 22px rgba(168,85,247,0.15), var(--glow-morado);
+  width: 80px; height: 80px; border-radius: var(--radio-full); color: var(--morado-hover);
+  background: radial-gradient(circle at 50% 38%, rgba(168,85,247,0.26), rgba(168,85,247,0.04));
+  border: 1px solid var(--borde-sutil); box-shadow: inset 0 0 22px rgba(168,85,247,0.14);
 }
-.icono-estado svg { width: 36px; height: 36px; }
-.icono-estado.error { color: #FCA5A5; background: radial-gradient(circle at 50% 38%, rgba(239,68,68,0.24), rgba(239,68,68,0.04)); border-color: rgba(239,68,68,0.3); box-shadow: inset 0 0 22px rgba(239,68,68,0.15), 0 0 24px rgba(239,68,68,0.3); }
-.estado-texto { display: flex; flex-direction: column; gap: var(--esp-2); max-width: 42ch; }
-.estado-titulo { font-family: var(--fuente-titulo); font-size: 1.32rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); text-wrap: balance; }
-.estado-detalle { font-size: 0.9rem; line-height: 1.6; color: var(--texto-secundario); text-wrap: pretty; }
+.icono-estado svg { width: 34px; height: 34px; }
+.icono-estado.error { color: #FCA5A5; background: radial-gradient(circle at 50% 38%, rgba(239,68,68,0.22), rgba(239,68,68,0.04)); border-color: rgba(239,68,68,0.3); }
+.estado-titulo { font-family: var(--fuente-titulo); font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); }
+.estado-detalle { font-size: 0.9rem; line-height: 1.6; color: var(--texto-secundario); max-width: 40ch; }
 .cta-isla.link { text-decoration: none; }
+.vacio-filtro { padding: var(--esp-6); text-align: center; color: var(--texto-desactivado); font-size: 0.92rem; }
 
 /* ---------- Lista ---------- */
-.lista { display: flex; flex-direction: column; gap: var(--esp-5); }
+.lista { display: flex; flex-direction: column; gap: var(--esp-4); }
 
-/* ---------- Ticket / boarding pass ---------- */
+/* ---------- Ticket ---------- */
 .ticket {
   position: relative;
-  display: grid; grid-template-columns: 1fr auto minmax(150px, 210px);
+  display: grid; grid-template-columns: 1fr auto minmax(148px, 200px);
   align-items: stretch;
   border-radius: var(--radio-xl);
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(236,72,153,0.10), transparent 55%),
-    var(--gradiente-sutil);
-  border: 1px solid var(--glass-borde);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 22px 50px rgba(10, 6, 26, 0.55);
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  box-shadow: 0 14px 34px rgba(10, 6, 26, 0.4);
   overflow: hidden;
-  transition: transform 0.35s var(--ease-cine, ease), box-shadow 0.35s ease, border-color 0.3s ease, opacity 0.3s ease;
-}
-/* Filo de neon superior */
-.ticket-borde {
-  position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: var(--gradiente-marca); opacity: 0.9;
-  box-shadow: 0 0 16px rgba(168,85,247,0.55);
+  transition: border-color 0.25s ease, opacity 0.25s ease;
 }
 .ticket:hover { border-color: var(--borde-activo); }
-.ticket.validada { opacity: 0.6; filter: saturate(0.85); }
-.ticket.validada:hover { opacity: 0.86; }
+.ticket-borde { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--gradiente-marca); opacity: 0.9; }
+/* Estados apagados */
+.ticket.estado-usada, .ticket.estado-finalizada { opacity: 0.72; }
+.ticket.estado-finalizada .ticket-borde { background: var(--texto-desactivado); opacity: 0.5; }
+.ticket.estado-usada .ticket-borde { background: var(--color-exito); opacity: 0.7; }
 
-.ticket-cuerpo {
-  min-width: 0; padding: var(--esp-5) var(--esp-5) var(--esp-5);
-  display: flex; flex-direction: column;
-}
-.ticket-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); margin-bottom: var(--esp-4); }
-.marca-pase {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--texto-desactivado); white-space: nowrap;
-}
+.ticket-cuerpo { min-width: 0; padding: var(--esp-5); display: flex; flex-direction: column; }
+.ticket-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); margin-bottom: var(--esp-3); }
 
 .estado {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-  padding: 5px 12px 5px 10px; border-radius: var(--radio-full);
+  font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 5px 11px 5px 9px; border-radius: var(--radio-full);
 }
 .estado-punto { width: 6px; height: 6px; border-radius: var(--radio-full); background: currentColor; box-shadow: 0 0 8px currentColor; }
-.estado.pend { background: rgba(168,85,247,0.18); color: var(--morado-hover); border: 1px solid var(--borde-sutil); }
-.estado.pend .estado-punto { animation: latidoPunto 1.8s ease-in-out infinite; }
-.estado.ok { background: rgba(34,197,94,0.15); color: var(--color-exito); border: 1px solid rgba(34,197,94,0.3); }
-@keyframes latidoPunto { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.estado.live { background: rgba(34,197,94,0.15); color: var(--color-exito); border: 1px solid rgba(34,197,94,0.3); }
+.estado.live .estado-punto { animation: latido 1.6s ease-in-out infinite; }
+.estado.pend { background: rgba(168,85,247,0.16); color: var(--morado-hover); border: 1px solid var(--borde-sutil); }
+.estado.parcial { background: rgba(255,209,102,0.14); color: var(--color-alerta); border: 1px solid rgba(255,209,102,0.3); }
+.estado.parcial .estado-punto { animation: latido 1.6s ease-in-out infinite; }
+.estado.ok { background: rgba(34,197,94,0.14); color: var(--color-exito); border: 1px solid rgba(34,197,94,0.28); }
+.estado.muted { background: var(--fondo-tarjeta-alt); color: var(--texto-desactivado); border: 1px solid var(--borde-sutil); }
+@keyframes latido { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.chip-fecha {
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.03em;
+  padding: 4px 10px; border-radius: var(--radio-full);
+}
+.chip-fecha.hoy { background: rgba(34,197,94,0.16); color: var(--color-exito); }
+.chip-fecha.pronto { background: rgba(168,85,247,0.14); color: var(--morado-hover); }
+.chip-fecha.muted { background: var(--fondo-tarjeta-alt); color: var(--texto-desactivado); }
 
 .evento {
-  font-family: var(--fuente-titulo); font-size: clamp(1.3rem, 4.5vw, 1.7rem);
-  font-weight: 800; letter-spacing: -0.025em; line-height: 1.08;
-  color: var(--texto-principal); margin: 0; text-wrap: balance;
+  font-family: var(--fuente-titulo); font-size: clamp(1.2rem, 4.2vw, 1.5rem);
+  font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: var(--texto-principal); margin: 0;
 }
-.fecha {
-  margin-top: 0.4rem; color: var(--morado-hover); font-weight: 600;
-  font-size: 0.86rem; font-variant-numeric: tabular-nums; text-transform: capitalize;
-}
+.fecha { margin-top: 0.35rem; color: var(--morado-hover); font-weight: 600; font-size: 0.82rem; text-transform: capitalize; }
 
-.ticket-datos {
-  display: flex; flex-wrap: wrap; gap: var(--esp-4) var(--esp-5);
-  margin: var(--esp-4) 0 0;
-}
+.ticket-datos { display: flex; flex-wrap: wrap; gap: var(--esp-3) var(--esp-5); margin: var(--esp-4) 0 0; }
 .dato { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.dato dt {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--texto-desactivado);
-}
-.dato dd {
-  margin: 0; font-family: var(--fuente-titulo); font-size: 1.02rem; font-weight: 700;
-  letter-spacing: -0.01em; color: var(--texto-principal); line-height: 1.1;
-}
+.dato dt { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texto-desactivado); }
+.dato dd { margin: 0; font-family: var(--fuente-titulo); font-size: 0.98rem; font-weight: 700; color: var(--texto-principal); line-height: 1.1; }
 .dato dd em { font-style: normal; font-weight: 500; color: var(--texto-secundario); }
-.dato-pago dd {
-  display: inline-flex; align-items: baseline; gap: 4px;
-  color: var(--morado-hover); font-variant-numeric: tabular-nums;
-}
-.dato-pago .moneda { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; color: var(--texto-secundario); }
+.dato-pago dd { display: inline-flex; align-items: baseline; gap: 4px; color: var(--morado-hover); }
+.dato-pago .moneda { font-size: 0.66rem; font-weight: 600; color: var(--texto-secundario); }
 
-.codigo {
-  display: flex; flex-direction: column; gap: 4px;
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--texto-desactivado); margin-top: auto; padding-top: var(--esp-4);
-}
-.codigo b {
-  font-size: 1rem; font-weight: 700; letter-spacing: 0.2em; text-transform: none;
-  color: var(--texto-principal); font-variant-numeric: tabular-nums;
-}
+/* Progreso de ingreso */
+.progreso { margin-top: var(--esp-4); }
+.progreso-cab { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: var(--texto-secundario); margin-bottom: 5px; }
+.progreso-cab strong { color: var(--texto-principal); font-family: var(--fuente-titulo); }
+.progreso-barra { height: 7px; border-radius: var(--radio-full); background: var(--fondo-tarjeta-alt); overflow: hidden; }
+.progreso-relleno { display: block; height: 100%; border-radius: inherit; background: var(--gradiente-marca); transition: width 0.5s var(--ease-suave, ease); }
+.progreso-nota { margin-top: 6px; font-size: 0.72rem; color: var(--color-alerta); }
 
-/* Perforacion vertical con "muescas" recortadas */
-.ticket-perf {
-  position: relative; width: 2px; align-self: stretch; margin: 0 -1px;
-  background-image: linear-gradient(var(--borde-sutil) 55%, transparent 0);
-  background-size: 2px 12px; background-repeat: repeat-y;
-  background-position: center;
-}
-.ticket-perf::before,
-.ticket-perf::after {
-  content: ''; position: absolute; left: 50%; width: 22px; height: 22px;
-  border-radius: 50%; transform: translateX(-50%);
-  background: var(--fondo-app);
-  box-shadow: inset 0 0 0 1px var(--glass-borde);
-}
-.ticket-perf::before { top: -11px; }
-.ticket-perf::after { bottom: -11px; }
+.codigo { display: flex; flex-direction: column; gap: 4px; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texto-desactivado); margin-top: var(--esp-4); }
+.codigo b { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.18em; text-transform: none; color: var(--texto-principal); font-variant-numeric: tabular-nums; }
 
-/* Talon con el QR destacado */
+/* Botón + timeline de historial */
+.btn-historial {
+  display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+  margin-top: var(--esp-4); padding: 7px 12px; border-radius: var(--radio-md);
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil);
+  color: var(--texto-secundario); font-size: 0.76rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-historial:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.btn-historial svg { width: 15px; height: 15px; transition: transform 0.25s ease; }
+.btn-historial svg.girar { transform: rotate(180deg); }
+.timeline { list-style: none; margin: var(--esp-3) 0 0; padding: 0 0 0 6px; display: flex; flex-direction: column; gap: 12px; }
+.tl-item { display: flex; align-items: flex-start; gap: 12px; position: relative; }
+.tl-item:not(:last-child)::before { content: ''; position: absolute; left: 4px; top: 14px; bottom: -12px; width: 2px; background: var(--borde-sutil); }
+.tl-punto { width: 10px; height: 10px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; background: var(--color-exito); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.tl-item.salida .tl-punto { background: var(--color-alerta); box-shadow: 0 0 8px rgba(255,209,102,0.5); }
+.tl-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tl-texto b { font-size: 0.82rem; font-weight: 700; color: var(--texto-principal); }
+.tl-texto em { font-style: normal; font-size: 0.72rem; color: var(--texto-desactivado); text-transform: capitalize; }
+.expandir-enter-active, .expandir-leave-active { transition: opacity 0.25s ease, max-height 0.3s ease; overflow: hidden; }
+.expandir-enter-from, .expandir-leave-to { opacity: 0; max-height: 0; }
+.expandir-enter-to, .expandir-leave-from { opacity: 1; max-height: 400px; }
+
+/* Perforación */
+.ticket-perf { position: relative; width: 2px; align-self: stretch; margin: 0 -1px; background-image: linear-gradient(var(--borde-sutil) 55%, transparent 0); background-size: 2px 12px; background-repeat: repeat-y; background-position: center; }
+.ticket-perf::before, .ticket-perf::after { content: ''; position: absolute; left: 50%; width: 20px; height: 20px; border-radius: 50%; transform: translateX(-50%); background: var(--fondo-app); box-shadow: inset 0 0 0 1px var(--borde-sutil); }
+.ticket-perf::before { top: -10px; }
+.ticket-perf::after { bottom: -10px; }
+
+/* Talón */
 .ticket-talon {
   flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; padding: var(--esp-5);
-  background: radial-gradient(120% 120% at 50% 0%, rgba(168,85,247,0.1), transparent 60%);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(168,85,247,0.08), transparent 60%);
 }
 .qr-marco {
-  position: relative; padding: 8px; border-radius: var(--radio-lg);
-  background: #fff;
-  box-shadow: 0 8px 22px rgba(14, 8, 33, 0.55), inset 0 0 0 4px rgba(168,85,247,0.12);
-  transition: transform 0.3s var(--ease-cine, ease), box-shadow 0.3s ease;
+  position: relative; padding: 8px; border-radius: var(--radio-lg); background: #fff;
+  border: none; cursor: pointer; box-shadow: 0 8px 22px rgba(14, 8, 33, 0.5);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
-.qr-marco img {
-  display: block; width: 108px; height: 108px; border-radius: var(--radio-sm);
-}
-.ticket:hover .qr-marco { transform: scale(1.06); box-shadow: 0 14px 30px rgba(14, 8, 33, 0.6), 0 0 26px rgba(168,85,247,0.45), inset 0 0 0 4px rgba(168,85,247,0.18); }
-.qr-pie {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--texto-desactivado); text-align: center;
-}
-.validada .qr-pie { visibility: hidden; }
+.qr-marco:hover { transform: scale(1.05); box-shadow: 0 12px 28px rgba(14, 8, 33, 0.6), 0 0 22px rgba(168,85,247,0.4); }
+.qr-marco:focus-visible { outline: 2px solid var(--morado-hover); outline-offset: 3px; }
+.qr-marco img { display: block; width: 112px; height: 112px; border-radius: var(--radio-sm); }
+.qr-pie { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texto-desactivado); text-align: center; }
 
-/* ---------- Skeletons (forma de ticket) ---------- */
+/* Sello para entradas usadas / vencidas (en vez del QR) */
+.sello {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  color: var(--texto-desactivado);
+}
+.sello svg { width: 40px; height: 40px; padding: 12px; border-radius: 50%; border: 2px solid currentColor; box-sizing: content-box; }
+.sello span { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: pre-line; line-height: 1.3; }
+.sello.usada { color: var(--color-exito); }
+
+/* ---------- QR pantalla completa ---------- */
+.qr-fullscreen { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: var(--esp-5); background: #fff; cursor: pointer; animation: qrFs 0.2s ease-out both; }
+.qr-fs-img { width: min(78vw, 78vh, 420px); height: min(78vw, 78vh, 420px); image-rendering: pixelated; }
+.qr-fs-evento { margin: 0; color: #1a1030; font-weight: 800; font-size: 1.05rem; font-family: var(--fuente-titulo); text-align: center; }
+.qr-fs-codigo { margin: 0; color: #1a1030; font-weight: 800; font-size: 1.3rem; letter-spacing: 0.18em; }
+.qr-fs-hint { margin: 0; color: #6b6480; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
+@keyframes qrFs { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Skeleton ---------- */
 .esqueleto { pointer-events: none; }
-.esqueleto .ticket-cuerpo { gap: var(--esp-3); }
 .esqueleto .ticket-talon { background: none; }
-.sk {
-  display: block; border-radius: var(--radio-sm);
-  background: linear-gradient(100deg, rgba(139,92,246,0.08) 30%, rgba(139,92,246,0.2) 50%, rgba(139,92,246,0.08) 70%);
-  background-size: 200% 100%; animation: skBrillo 1.4s ease-in-out infinite;
-}
+.sk { display: block; border-radius: var(--radio-sm); background: linear-gradient(100deg, rgba(139,92,246,0.08) 30%, rgba(139,92,246,0.2) 50%, rgba(139,92,246,0.08) 70%); background-size: 200% 100%; animation: skB 1.4s ease-in-out infinite; }
 .sk-chip { width: 96px; height: 22px; border-radius: var(--radio-full); }
-.sk-titulo { width: 62%; height: 24px; }
-.sk-linea { width: 78%; height: 13px; }
+.sk-titulo { width: 62%; height: 22px; margin-top: 10px; }
+.sk-linea { width: 78%; height: 12px; margin-top: 8px; }
 .sk-linea.corta { width: 45%; }
-.sk-linea.media { width: 58%; }
-.sk-qr { width: 124px; height: 124px; border-radius: var(--radio-lg); }
-@keyframes skBrillo { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.sk-qr { width: 112px; height: 112px; border-radius: var(--radio-lg); }
+@keyframes skB { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-/* ---------- Responsive: colapso a talon inferior ---------- */
-@media (min-width: 560px) {
-  .qr-marco img { width: 128px; height: 128px; }
-}
-
+/* ---------- Responsive: talón abajo en móvil ---------- */
 @media (max-width: 520px) {
-  .hero { grid-template-columns: auto 1fr; }
-  .hero-contador { display: none; }
-
   .ticket { grid-template-columns: 1fr; }
-  .ticket-perf {
-    width: auto; height: 2px; align-self: auto; margin: -1px 0;
-    background-image: linear-gradient(90deg, var(--borde-sutil) 55%, transparent 0);
-    background-size: 12px 2px; background-repeat: repeat-x;
-  }
-  .ticket-perf::before,
-  .ticket-perf::after { top: 50%; left: auto; bottom: auto; transform: translateY(-50%); }
-  .ticket-perf::before { left: -11px; }
-  .ticket-perf::after { right: -11px; left: auto; }
-  .ticket-talon { flex-direction: row; justify-content: flex-start; gap: var(--esp-4); }
+  .ticket-perf { width: auto; height: 2px; align-self: auto; margin: -1px 0; background-image: linear-gradient(90deg, var(--borde-sutil) 55%, transparent 0); background-size: 12px 2px; background-repeat: repeat-x; }
+  .ticket-perf::before, .ticket-perf::after { top: 50%; left: auto; bottom: auto; transform: translateY(-50%); }
+  .ticket-perf::before { left: -10px; }
+  .ticket-perf::after { right: -10px; left: auto; }
+  .ticket-talon { flex-direction: row; justify-content: center; gap: var(--esp-4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ticket, .btn-volver, .qr-marco { transition: none; }
-  .btn-volver:hover, .ticket:hover .qr-marco { transform: none; }
-  .sk, .estado.pend .estado-punto { animation: none; }
+  .estado-punto, .sk { animation: none; }
+  .btn-volver:hover, .qr-marco:hover { transform: none; }
 }
 </style>

@@ -29,6 +29,7 @@ import VistaEventosCliente from '../vistas/cliente/VistaEventosCliente.vue'
 import VistaDetalleEventoCliente from '../vistas/cliente/VistaDetalleEventoCliente.vue'
 import VistaPerfil from '../vistas/cliente/VistaPerfil.vue'
 import VistaBilletera from '../vistas/cliente/VistaBilletera.vue'
+import VistaMovimientos from '../vistas/cliente/VistaMovimientos.vue'
 import VistaCarrito from '../vistas/cliente/VistaCarrito.vue'
 import VistaReservaMapa from '../vistas/cliente/VistaReservaMapa.vue'
 import VistaMisReservas from '../vistas/cliente/VistaMisReservas.vue'
@@ -100,6 +101,7 @@ const rutas = [
       { path: 'inicio', name: 'ClienteInicio', component: VistaInicioCliente },
       { path: 'catalogo', name: 'ClienteCatalogo', component: VistaCatalogo },
       { path: 'billetera', name: 'ClienteBilletera', component: VistaBilletera },
+      { path: 'movimientos', name: 'ClienteMovimientos', component: VistaMovimientos },
       { path: 'eventos', name: 'ClienteEventos', component: VistaEventosCliente },
       { path: 'eventos/:id', name: 'ClienteDetalleEvento', component: VistaDetalleEventoCliente },
       { path: 'reservar/:idEvento', name: 'ClienteReservar', component: VistaReservaMapa },

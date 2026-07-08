@@ -14,8 +14,8 @@ export const servicioBilletera = {
   /**
    * Actualizar PIN transaccional
    */
-  async actualizarPin(nuevo_pin) {
-    return api.post('/billetera/pin', { nuevo_pin })
+  async actualizarPin(nuevo_pin, pin_actual) {
+    return api.post('/billetera/pin', { nuevo_pin, ...(pin_actual ? { pin_actual } : {}) })
   },
 
   /**
@@ -46,6 +46,36 @@ export const servicioBilletera = {
    */
   async obtenerHistorial() {
     return api.get('/billetera/historial')
+  },
+
+  /**
+   * Movimientos unificados (recargas + consumos + reservas), más recientes primero
+   */
+  async obtenerMovimientos() {
+    return api.get('/billetera/movimientos')
+  },
+
+  /**
+   * Detalle de un consumo: productos, precios y quién atendió
+   */
+  async detalleConsumo(id_comanda) {
+    return api.get(`/billetera/movimientos/comanda/${id_comanda}`)
+  },
+
+  /**
+   * Config del premio por perfil completo (% y tope) para el estimado del carrito
+   */
+  async obtenerConfigPremio() {
+    return api.get('/billetera/config-premio')
+  },
+
+  /**
+   * "Ojito": revela el PIN del dueño confirmando su contraseña de cuenta.
+   * La respuesta trae un ticket de 5 minutos: mientras viva, se puede volver
+   * a llamar con { ticket } (sin contraseña) aunque el usuario haya navegado.
+   */
+  async revelarPin({ password, ticket } = {}) {
+    return api.post('/billetera/pin/revelar', ticket ? { ticket } : { password })
   },
 
   /**

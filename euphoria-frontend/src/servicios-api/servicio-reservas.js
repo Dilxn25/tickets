@@ -38,4 +38,15 @@ export const servicioReservas = {
   async misReservas() {
     return api.get('/reservas/mias')
   },
+
+  // ---- Recepción: reservas gestionadas para grupos grandes ----
+  /** Buscar un cliente por nombre/correo/CI (solo recepción/admin) */
+  async buscarCliente(q) {
+    return api.get('/reservas/buscar-cliente', { params: { q } })
+  },
+
+  /** Asignar una mesa a un cliente sin el tope de autoservicio (recepción/admin) */
+  async reservaGestionada({ id_cliente, id_mesa, metodo_pago }) {
+    return api.post('/reservas/gestionada', { id_cliente, id_mesa, metodo_pago })
+  },
 }

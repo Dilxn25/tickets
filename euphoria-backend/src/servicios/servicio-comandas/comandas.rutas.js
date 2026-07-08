@@ -17,7 +17,26 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
-const crypto = require('crypto')
+const { analizarComprobante, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
+const { leerConfigPremio } = require('../../utilidades/premio-perfil')
+
+// Titular de la cuenta receptora, editable en la tabla configuracion
+// (clave 'ocr_titular_destino'; admite varios nombres separados por |).
+// Se auto-siembra en el primer uso para que aparezca en la BD.
+async function obtenerTitularDestino() {
+  try {
+    const fila = await prisma.configuracion.findUnique({ where: { clave: 'ocr_titular_destino' } })
+    if (fila?.valor) return fila.valor
+    await prisma.configuracion.create({
+      data: {
+        clave: 'ocr_titular_destino',
+        valor: TITULAR_POR_DEFECTO,
+        descripcion: 'Titular(es) de la cuenta receptora para validar comprobantes OCR (separar alias con |)',
+      },
+    }).catch(() => {})
+  } catch (e) { /* respaldo abajo */ }
+  return TITULAR_POR_DEFECTO
+}
 
 // POST /api/comandas/validar-comprobante (IA OCR Real para comprobantes)
 router.post('/validar-comprobante', verificarToken, upload.single('comprobante'), async (req, res) => {
@@ -29,87 +48,39 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ error: 'Monto esperado de la comanda no especificado' })
     }
 
-    console.log(`[OCR] Procesando comprobante con Tesseract.js. URL del archivo: ${req.file.path}`)
-    console.log(`[OCR] Monto esperado a validar: Bs. ${montoEsperado}`)
-
     // 1. Ejecutar OCR usando Tesseract.js en español + inglés
     //    (los comprobantes bancarios bolivianos están en español; usar 'spa+eng'
     //    mejora mucho la precisión frente a solo 'eng').
     const { data: { text } } = await Tesseract.recognize(req.file.path, 'spa+eng')
 
     const cleanedText = text.replace(/\s+/g, ' ')
-    console.log(`[OCR] Texto extraído:`, cleanedText)
 
-    // Guardar el texto del OCR a un archivo solo en modo depuración (DEBUG_OCR=true en .env).
-    // Evita choques entre peticiones simultáneas y no deja archivos sueltos en producción.
+    // El texto del comprobante trae datos personales (nombres, cuentas): solo se
+    // registra en logs/archivo bajo depuración explícita (DEBUG_OCR=true en .env).
     if (process.env.DEBUG_OCR === 'true') {
+      console.log(`[OCR] Monto esperado: Bs. ${montoEsperado}`)
+      console.log(`[OCR] Texto extraído:`, cleanedText)
       const fs = require('fs')
       const path = require('path')
       fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
     }
 
-    // 2. Buscar monto esperado en el texto
-    const montoEsperadoStr = String(montoEsperado)
-    const montoEsperadoConDecimales = montoEsperado.toFixed(2)
-    const montoEsperadoConComa = montoEsperadoConDecimales.replace('.', ',')
-    const montoEsperadoEntero = String(Math.floor(montoEsperado))
+    // 2. Analizar contra las plantillas de bancos soportados (BCP/BNB/BISA/Yape):
+    //    reconoce el banco emisor, extrae monto y nro. de transacción DE SUS
+    //    etiquetas (no por aparición suelta) y exige fecha de hoy.
+    //    Reglas calibradas con comprobantes reales — ver utilidades/ocr-comprobantes.js
+    const titular = await obtenerTitularDestino()
+    const analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+    // Resumen sin datos personales (seguro para logs de operación)
+    console.log(`[OCR] banco: ${analisis.banco || '?'} | ok: ${analisis.ok} | TX: ${analisis.transaccionId || '-'}`)
 
-    const contieneMonto = 
-      cleanedText.includes(montoEsperadoStr) || 
-      cleanedText.includes(montoEsperadoConDecimales) || 
-      cleanedText.includes(montoEsperadoConComa) ||
-      (montoEsperado % 1 === 0 && cleanedText.includes(montoEsperadoEntero))
-
-    // 3. Buscar ID de transacción de forma extremadamente inteligente y priorizada
-    let transaccionId = null
-
-    // 3.1. Intentar buscar bancarizacion o codigo de procesamiento / operacion (prioritario)
-    const regexBanc = /(?:bancarizaci[oó]n|operaci[oó]n|nro\s*de\s*operaci[oó]n|c[oó]digo\s*de\s*procesamiento)\s*[:\-\.#]?\s*([a-z0-9\-]+)/i
-    const matchBanc = cleanedText.match(regexBanc)
-    if (matchBanc && /\d/.test(matchBanc[1])) {
-      transaccionId = matchBanc[1]
+    if (!analisis.ok) {
+      return res.status(400).json({ valido: false, banco: analisis.banco, error: analisis.error })
     }
 
-    // 3.2. Si no, intentar buscar transaccion, referencia o id que contenga dígitos
-    if (!transaccionId) {
-      const regexTrans = /(?:transacci[oó]n|referencia|nro|id)\s*[:\-\.#]?\s*([a-z0-9\-]+)/i
-      const matchTrans = cleanedText.match(regexTrans)
-      if (matchTrans && /\d/.test(matchTrans[1])) {
-        transaccionId = matchTrans[1]
-      }
-    }
+    const transaccionId = analisis.transaccionId
 
-    // 3.3. Si sigue sin encontrarse, buscar cualquier palabra alfanumérica de 6 a 15 caracteres que tenga números
-    if (!transaccionId) {
-      const regexSecuencias = /\b[a-z0-9\-]{6,15}\b/gi
-      const coincidencias = cleanedText.match(regexSecuencias) || []
-      for (const c of coincidencias) {
-        // Ignorar secuencias puramente alfabéticas o que no tengan dígitos para evitar falsos positivos
-        if (/\d/.test(c) && /[a-z]/i.test(c)) {
-          transaccionId = c
-          break
-        }
-      }
-    }
-
-    // 3.4. Si aún no, buscar cualquier número largo de 6 a 15 dígitos
-    if (!transaccionId) {
-      const regexDigitos = /\b[0-9]{6,15}\b/g
-      const coincidencias = cleanedText.match(regexDigitos) || []
-      if (coincidencias.length > 0) {
-        transaccionId = coincidencias[0]
-      }
-    }
-
-    // Si no se pudo leer el ID, generamos un hash único de la firma del texto para prevenir fraude de duplicado de imagen
-    if (!transaccionId) {
-      const hashTexto = crypto.createHash('md5').update(cleanedText).digest('hex').substring(0, 12).toUpperCase()
-      transaccionId = `HASH-${hashTexto}`
-    }
-
-    console.log(`[OCR] Datos extraídos -> Monto Válido: ${contieneMonto}, ID Transacción: ${transaccionId}`)
-
-    // 4. VALIDACIÓN DE SEGURIDAD 1: Evitar comprobantes ya usados (Duplicidad)
+    // 3. VALIDACIÓN DE SEGURIDAD: evitar comprobantes ya usados (duplicidad)
     const duplicadoComanda = await prisma.comanda.findFirst({
       where: { comprobante_url: { contains: `|TX:${transaccionId}` } }
     })
@@ -124,73 +95,12 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ valido: false, error: `Este comprobante ya fue utilizado para una recarga de billetera. ID Transacción duplicado: #${transaccionId}` })
     }
 
-    // 5. VALIDACIÓN DE SEGURIDAD 2: Verificar la cuenta / referencia (Consumo Euphoria)
-    // El OCR suele tener errores tipográficos menores (m por rn, ph por f, o por 0, etc.)
-    const txtNorm = cleanedText.toLowerCase().replace(/[^a-z0-9]/g, '');
-    
-    const referenciaValida = 
-      txtNorm.includes('consumoeuphoria') || 
-      txtNorm.includes('consumoeuforia') ||
-      /c[o0]ns[uv]?[mn][o0]?e[uv][pfb][hn]?[o0]r[il1]a/.test(txtNorm) ||
-      // Si la foto está cortada o borrosa, al menos aceptamos la palabra clave con errores típicos
-      txtNorm.includes('euphoria') || 
-      txtNorm.includes('euforia') ||
-      txtNorm.includes('eupboria') ||
-      txtNorm.includes('eupnoria');
-
-    if (!referenciaValida) {
-      return res.status(400).json({ 
-        valido: false, 
-        error: `El comprobante no es válido. La referencia debe decir 'Consumo Euphoria'. Asegúrate de que el texto sea legible.` 
-      })
-    }
-
-    // 6. VALIDACIÓN DE SEGURIDAD 3: Verificar Fecha y Hora (debe ser de hoy)
-    const hoy = new Date();
-    const dd = String(hoy.getDate()).padStart(2, '0');
-    const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-    const yyyy = hoy.getFullYear();
-    const yy = String(yyyy).slice(-2);
-    // Verificar si la fecha de hoy aparece en formatos DD/MM/YYYY o DD-MM-YYYY
-    const regexFechaHoy = new RegExp(`(${dd}[/-]${mm}[/-]${yyyy})|(${dd}[/-]${mm}[/-]${yy})`);
-    
-    if (!regexFechaHoy.test(cleanedText)) {
-      return res.status(400).json({ 
-        valido: false, 
-        error: `El comprobante está caducado o es de un día anterior. Debe tener la fecha de hoy (${dd}/${mm}/${yyyy}).` 
-      })
-    }
-
-    // 6. VALIDACIÓN DE SEGURIDAD 3: Verificar que el monto coincide
-    if (!contieneMonto) {
-      // Intentar extraer algún monto diferente en el comprobante para dar feedback descriptivo al usuario
-      const regexMontos = /\b[0-9]+(?:[\.,][0-9]{1,2})?\b/g
-      const todosMontos = cleanedText.match(regexMontos) || []
-      let montoLeido = null
-      
-      for (const m of todosMontos) {
-        const val = parseFloat(m.replace(',', '.'))
-        if (val > 10 && val !== montoEsperado) { // Evitar números pequeños como horas o fechas
-          montoLeido = val
-          break
-        }
-      }
-
-      const errorMsg = montoLeido 
-        ? `El monto del comprobante (Bs. ${montoLeido}) no coincide con el total de la orden (Bs. ${montoEsperado}).`
-        : `No se pudo encontrar el monto esperado de Bs. ${montoEsperado} en el comprobante. Por favor, asegúrate de subir una imagen nítida de la transferencia.`
-
-      return res.status(400).json({ 
-        valido: false, 
-        error: errorMsg 
-      })
-    }
-
     // Validación exitosa
-    res.json({ 
-      valido: true, 
-      mensaje: 'Comprobante verificado correctamente mediante IA', 
-      url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}`,
+    res.json({
+      valido: true,
+      banco: analisis.banco,
+      mensaje: `Comprobante ${analisis.nombreBanco} verificado correctamente`,
+      url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco}`,
       transaccionId
     })
 
@@ -332,16 +242,38 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
 
       if (!billetera) return res.status(404).json({ error: 'Billetera no encontrada con ese código' })
       
-      // Validación de PIN solo si el QR es privado (pago_con_pin)
-      if (billetera.pin_transaccional && esPrivado) {
-        if (!pin) return res.status(403).json({ error: 'PIN requerido' }) // El frontend capturará esto y pedirá el PIN
-        const bcrypt = require('bcryptjs')
-        const pinValido = await bcrypt.compare(pin, billetera.pin_transaccional)
-        if (!pinValido) return res.status(401).json({ error: 'PIN incorrecto' })
+      // Validación de PIN: si el QR es privado (pago_con_pin) O si el dueño de la
+      // billetera es quien paga desde su propia sesión y tiene PIN configurado
+      // (antes el pago del carrito lo bypasseaba mandando el qr_publico plano).
+      const pagaElDueno = billetera.id_usuario === req.usuario.id
+      if (billetera.pin_transaccional && (esPrivado || pagaElDueno)) {
+        if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
+        const { verificarPin } = require('../../utilidades/pin-billetera')
+        const pinValido = await verificarPin(pin, billetera.pin_transaccional)
+        // 400 (no 401): un 401 dispara el refresh de token del front y reintenta el cobro
+        if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
       }
       
+      // PREMIO POR PERFIL COMPLETO: si el dueño de la billetera paga su propio
+      // pedido y tiene el premio pendiente, se aplica un % de descuento (con
+      // tope en Bs) por única vez. % y tope los define el admin en el panel
+      // (utilidades/premio-perfil.js). Se marca 'usado' DENTRO de la transacción
+      // con un updateMany condicional para que no pueda usarse dos veces en paralelo.
+      let premioDescuento = 0
+      if (pagaElDueno) {
+        const duenoPremio = await prisma.usuario.findUnique({
+          where: { id_usuario: billetera.id_usuario },
+          select: { premio_perfil: true },
+        })
+        if (duenoPremio?.premio_perfil === 'pendiente') {
+          const { pct, max } = await leerConfigPremio()
+          premioDescuento = Math.min(Math.round(total_calculado * (pct / 100) * 100) / 100, max)
+        }
+      }
+      const total_cobrar = Math.max(0, Math.round((total_calculado - premioDescuento) * 100) / 100)
+
       // Chequeo rápido (mejora la experiencia); la garantía real es el descuento condicional atómico de abajo.
-      if (Number(billetera.saldo_actual) < total_calculado) {
+      if (Number(billetera.saldo_actual) < total_cobrar) {
         return res.status(400).json({ error: 'Saldo insuficiente en la billetera' })
       }
 
@@ -352,12 +284,21 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         // updateMany con filtro saldo_actual >= total evita el doble gasto y el saldo negativo
         // aunque lleguen dos cobros al mismo tiempo.
         saldo_nuevo = await prisma.$transaction(async (tx) => {
+          if (premioDescuento > 0) {
+            const premio = await tx.usuario.updateMany({
+              where: { id_usuario: billetera.id_usuario, premio_perfil: 'pendiente' },
+              data: { premio_perfil: 'usado' },
+            })
+            // Otro cobro simultáneo ya lo usó: se cobra el total sin descuento
+            if (premio.count === 0) throw new Error('PREMIO_YA_USADO')
+          }
+
           const descuento = await tx.billetera.updateMany({
             where: {
               id_billetera: billetera.id_billetera,
-              saldo_actual: { gte: total_calculado }
+              saldo_actual: { gte: total_cobrar }
             },
-            data: { saldo_actual: { decrement: total_calculado } }
+            data: { saldo_actual: { decrement: total_cobrar } }
           })
 
           // Si count === 0, otro cobro simultáneo dejó el saldo insuficiente: abortamos todo.
@@ -379,14 +320,14 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           })
           idComandaBilletera = nuevaComanda.id_comanda
 
-          // Registrar movimiento
+          // Registrar movimiento (por lo realmente cobrado, con premio aplicado)
           await tx.transaccion.create({
             data: {
               id_billetera: billetera.id_billetera,
               id_comanda: nuevaComanda.id_comanda,
               id_responsable: req.usuario.id,
               tipo_operacion: 'Consumo',
-              monto: total_calculado,
+              monto: total_cobrar,
               fecha_hora: new Date()
             }
           })
@@ -414,22 +355,26 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         if (e.message === 'SIN_STOCK') {
           return res.status(400).json({ error: 'Un producto se quedó sin stock durante el cobro. Revisa la orden.' })
         }
+        if (e.message === 'PREMIO_YA_USADO') {
+          return res.status(409).json({ error: 'Tu premio ya fue usado. Vuelve a intentar el pago.' })
+        }
         throw e
       }
 
       // Sincronización en tiempo real: saldo del cliente + aviso de nueva comanda a la barra
       if (global.io) {
-        global.io.emit('billetera_actualizada', {
-          id_usuario: billetera.id_usuario,
-          saldo_nuevo
-        })
+        global.io.emit('billetera_actualizada', { id_usuario: billetera.id_usuario })
         global.io.emit('nueva_comanda', { id_comanda: idComandaBilletera })
       }
 
       return res.status(201).json({
         mensaje: 'Cobro de billetera exitoso',
         saldo_restante: saldo_nuevo,
-        nombres_cliente: billetera.usuario.nombres
+        nombres_cliente: billetera.usuario.nombres,
+        ...(premioDescuento > 0 && {
+          premio_aplicado: premioDescuento,
+          total_cobrado: total_cobrar,
+        }),
       })
     }
     
@@ -487,6 +432,8 @@ router.get('/filtros', verificarToken, async (req, res) => {
       prisma.comanda.findMany({ distinct: ['metodo_pago'], select: { metodo_pago: true } }),
       prisma.comanda.findMany({
         distinct: ['id_mesero'],
+        // Los CLIENTES que compran desde su celular no son cajeros: fuera del filtro
+        where: { usuario_comanda_id_meseroTousuario: { rol: { nombre_rol: { not: 'Cliente' } } } },
         select: { id_mesero: true, usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true } } },
       }),
     ])
@@ -628,7 +575,8 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
       prisma.$queryRawUnsafe(
         `SELECT CONCAT(u.nombres,' ',COALESCE(u.apellidos,'')) nombre, COUNT(DISTINCT c.id_comanda) cantidad, COALESCE(SUM(d.subtotal),0) total
          FROM comanda c JOIN detalle_comanda d ON d.id_comanda=c.id_comanda
-         JOIN usuario u ON u.id_usuario=c.id_mesero ${W}
+         JOIN usuario u ON u.id_usuario=c.id_mesero
+         JOIN rol r ON r.id_rol=u.id_rol AND r.nombre_rol <> 'Cliente' ${W}
          GROUP BY c.id_mesero, nombre ORDER BY total DESC LIMIT 10`, ...params),
       prisma.$queryRawUnsafe(
         `SELECT c.id_comanda, c.fecha_registro, COALESCE(SUM(d.subtotal),0) total

@@ -56,3 +56,11 @@ Thumbs.db
 
 # ---- Artefactos de Playwright (capturas/snapshots de pruebas) ----
 .playwright-mcp/
+
+# ---- OCR: dato de idioma de Tesseract (binario regenerable) y volcado de depuracion ----
+**/spa.traineddata
+**/comprobante.txt
+
+# ---- Capturas de verificacion y muestras (temporales / datos personales) ----
+generados/capturas-*/
+generados/muestras-ocr/

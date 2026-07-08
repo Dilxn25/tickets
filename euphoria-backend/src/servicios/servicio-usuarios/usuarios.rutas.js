@@ -45,6 +45,149 @@ const esquemaEstado = z.object({
 })
 
 
+// El usuario del perfil se responde SIEMPRE con la misma forma que el login
+// (id, no id_usuario) para que el store del front nunca quede con un shape roto.
+function usuarioParaFront(u) {
+  return {
+    id: u.id_usuario,
+    nombres: u.nombres,
+    apellidos: u.apellidos,
+    correo: u.correo,
+    telefono: u.telefono,
+    ci_carnet: u.ci_carnet,
+    pregunta_seguridad: u.pregunta_seguridad,
+    url_foto_perfil: u.url_foto_perfil,
+    rol: u.rol?.nombre_rol,
+    premio_perfil: u.premio_perfil ?? null,
+  }
+}
+
+// Premio por perfil completo (solo clientes): al llenar los 6 datos se otorga
+// UNA VEZ un 10% de descuento (tope Bs 30) para su siguiente pedido con
+// billetera. El descuento real lo aplica el backend de comandas al cobrar.
+function perfilEstaCompleto(u) {
+  return !!(u.nombres && u.apellidos && u.ci_carnet && u.telefono && u.url_foto_perfil && u.pregunta_seguridad)
+}
+
+// Devuelve true si acaba de otorgarse (para que el front celebre una sola vez)
+async function otorgarPremioSiCorresponde(u) {
+  if (!u || u.premio_perfil || u.rol?.nombre_rol !== 'Cliente') return false
+  if (!perfilEstaCompleto(u)) return false
+  await prisma.usuario.update({
+    where: { id_usuario: u.id_usuario },
+    data: { premio_perfil: 'pendiente' },
+  })
+  u.premio_perfil = 'pendiente'
+  return true
+}
+
+// ---- Solicitudes de recuperación de cuenta (solo ADMIN) ----
+// El admin valida identidad comparando lo que el cliente DEJÓ en la solicitud
+// contra lo REGISTRADO en la cuenta (CI/teléfono); las coincidencias se marcan.
+router.get('/solicitudes-recuperacion', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const estado = req.query.estado || 'pendiente'
+    const solicitudes = await prisma.solicitud_recuperacion.findMany({
+      where: estado === 'todas' ? {} : { estado },
+      orderBy: { fecha_solicitud: 'desc' },
+      take: 50,
+    })
+
+    const conCuenta = await Promise.all(solicitudes.map(async s => {
+      const cuenta = await prisma.usuario.findUnique({
+        where: { correo: s.correo },
+        select: { id_usuario: true, nombres: true, apellidos: true, ci_carnet: true, telefono: true },
+      })
+      const limpiar = v => String(v || '').replace(/\D/g, '')
+      return {
+        ...s,
+        cuenta: cuenta ? {
+          id_usuario: cuenta.id_usuario,
+          nombre: `${cuenta.nombres} ${cuenta.apellidos}`.trim(),
+          ci_coincide: !!(cuenta.ci_carnet && s.ci_contacto && limpiar(cuenta.ci_carnet) === limpiar(s.ci_contacto)),
+          telefono_coincide: !!(cuenta.telefono && s.telefono && limpiar(cuenta.telefono) === limpiar(s.telefono)),
+          tiene_ci_registrado: !!cuenta.ci_carnet,
+          tiene_telefono_registrado: !!cuenta.telefono,
+        } : null,
+      }
+    }))
+
+    res.json({ solicitudes: conCuenta })
+  } catch (error) {
+    console.error('Error listando solicitudes de recuperación:', error)
+    res.status(500).json({ error: 'Error al listar solicitudes' })
+  }
+})
+
+router.patch('/solicitudes-recuperacion/:id/atender', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    await prisma.solicitud_recuperacion.update({
+      where: { id_solicitud: id },
+      data: { estado: 'atendida', fecha_atencion: new Date() },
+    })
+    res.json({ mensaje: 'Solicitud marcada como atendida' })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al atender la solicitud' })
+  }
+})
+
+// PATCH /solicitudes-recuperacion/:id/resolver — el admin ya validó la identidad:
+// resetea la contraseña de la cuenta a una temporal, marca la solicitud atendida
+// y DEVUELVE la clave temporal + el contacto del cliente para que el admin se lo
+// avise por WhatsApp/llamada/correo (el cliente no tiene acceso a la app aún).
+router.patch('/solicitudes-recuperacion/:id/resolver', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const solicitud = await prisma.solicitud_recuperacion.findUnique({ where: { id_solicitud: id } })
+    if (!solicitud) return res.status(404).json({ error: 'Solicitud no encontrada' })
+
+    const cuenta = await prisma.usuario.findUnique({ where: { correo: solicitud.correo } })
+    if (!cuenta) {
+      return res.status(400).json({ error: 'No existe una cuenta con ese correo: no se puede restablecer.' })
+    }
+
+    const passwordTemporal = '123456'
+    await prisma.usuario.update({
+      where: { id_usuario: cuenta.id_usuario },
+      data: { password_hash: await bcrypt.hash(passwordTemporal, 12) },
+    })
+    await prisma.solicitud_recuperacion.update({
+      where: { id_solicitud: id },
+      data: { estado: 'atendida', fecha_atencion: new Date() },
+    })
+
+    res.json({
+      mensaje: 'Contraseña restablecida. Avisa al cliente su nueva clave temporal.',
+      password_temporal: passwordTemporal,
+      contacto: {
+        nombre: `${cuenta.nombres} ${cuenta.apellidos}`.trim(),
+        correo: cuenta.correo,
+        // el teléfono de la solicitud o el registrado en la cuenta
+        telefono: solicitud.telefono || cuenta.telefono || null,
+      },
+    })
+  } catch (error) {
+    console.error('Error resolviendo solicitud de recuperación:', error)
+    res.status(500).json({ error: 'Error al restablecer la contraseña' })
+  }
+})
+
+// ---- GET /api/usuarios/perfil — datos frescos del propio usuario ----
+// (el login no incluye teléfono/CI/pregunta; el formulario de perfil los necesita)
+router.get('/perfil', verificarToken, async (req, res) => {
+  try {
+    const u = await prisma.usuario.findUnique({
+      where: { id_usuario: req.usuario.id },
+      include: { rol: true },
+    })
+    if (!u) return res.status(404).json({ error: 'Usuario no encontrado' })
+    res.json({ usuario: usuarioParaFront(u) })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener el perfil' })
+  }
+})
+
 // ---- Endpoint para el propio usuario (Cliente/Cajero/etc) ----
 router.put('/perfil', verificarToken, subirFotoPerfil.single('imagen'), async (req, res) => {
   try {
@@ -61,15 +204,16 @@ router.put('/perfil', verificarToken, subirFotoPerfil.single('imagen'), async (r
       data: {
         ...(nombres   && { nombres }),
         ...(apellidos && { apellidos }),
-        ...(telefono  && { telefono }),
-        ...(ci_carnet && { ci_carnet }),
+        // Teléfono y CI SÍ se pueden vaciar (el front manda '' para limpiarlos)
+        ...(telefono  !== undefined && { telefono: telefono || null }),
+        ...(ci_carnet !== undefined && { ci_carnet: ci_carnet || null }),
         ...(req.file  && { url_foto_perfil: req.file.path })
       },
       include: { rol: true }
     })
-    
-    const { password_hash, ...datos } = actualizado
-    res.json({ mensaje: 'Perfil actualizado', usuario: { ...datos, rol: datos.rol.nombre_rol } })
+
+    const premioOtorgado = await otorgarPremioSiCorresponde(actualizado)
+    res.json({ mensaje: 'Perfil actualizado', usuario: usuarioParaFront(actualizado), premio_otorgado: premioOtorgado })
   } catch (error) {
     res.status(500).json({ error: 'Error al actualizar perfil' })
   }
@@ -80,9 +224,15 @@ router.put('/perfil/password', verificarToken, async (req, res) => {
     const { passwordActual, passwordNuevo } = req.body
     const id = req.usuario.id
 
+    // Validación del body (sin esto, bcrypt truena con undefined → 500)
+    if (!passwordActual) return res.status(400).json({ error: 'Ingresa tu contraseña actual' })
+    if (!passwordNuevo || String(passwordNuevo).length < 6) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' })
+    }
+
     const user = await prisma.usuario.findUnique({ where: { id_usuario: id } })
     const esValido = await bcrypt.compare(passwordActual, user.password_hash)
-    if (!esValido) return res.status(401).json({ error: 'La contraseña actual es incorrecta' })
+    if (!esValido) return res.status(400).json({ error: 'La contraseña actual es incorrecta' })
 
     const hashNuevo = await bcrypt.hash(passwordNuevo, 12)
     await prisma.usuario.update({
@@ -117,8 +267,8 @@ router.put('/perfil/seguridad', verificarToken, async (req, res) => {
       include: { rol: true }
     })
 
-    const { password_hash, respuesta_seguridad, ...datos } = actualizado
-    res.json({ mensaje: 'Pregunta de seguridad actualizada', usuario: { ...datos, rol: datos.rol.nombre_rol } })
+    const premioOtorgado = await otorgarPremioSiCorresponde(actualizado)
+    res.json({ mensaje: 'Pregunta de seguridad actualizada', usuario: usuarioParaFront(actualizado), premio_otorgado: premioOtorgado })
   } catch (error) {
     console.error(error)
     res.status(500).json({ error: 'Error al guardar la pregunta de seguridad' })

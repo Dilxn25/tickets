@@ -146,6 +146,77 @@
         </div>
       </section>
     </div>
+
+    <!-- ==== Reserva gestionada para grupos grandes ==== -->
+    <section class="panel gestionada">
+      <div class="panel-cab">
+        <div class="panel-icono">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </div>
+        <div class="panel-cab-txt">
+          <h2 class="panel-titulo">Reserva para grupo grande</h2>
+          <p class="panel-desc">Asigna mesas a un cliente sin el tope de autoservicio (empresas, cumpleaños)</p>
+        </div>
+      </div>
+
+      <div class="gest-grid">
+        <!-- Paso 1: cliente -->
+        <div class="gest-col">
+          <label class="gest-lbl">1 · Cliente</label>
+          <div v-if="!clienteSel" class="gest-buscar">
+            <input v-model="busquedaCliente" @input="buscarClientes" class="input-codigo gest-input" placeholder="Nombre, correo o CI…" autocomplete="off" />
+            <ul v-if="clientesEncontrados.length" class="gest-resultados">
+              <li v-for="c in clientesEncontrados" :key="c.id_usuario" @click="seleccionarCliente(c)">
+                <b>{{ c.nombre }}</b>
+                <span>{{ c.correo }}{{ c.ci_carnet ? ' · CI ' + c.ci_carnet : '' }}</span>
+              </li>
+            </ul>
+            <p v-else-if="busquedaCliente.trim().length >= 2 && !buscandoCliente" class="gest-vacio">Sin coincidencias.</p>
+          </div>
+          <div v-else class="gest-cliente-sel">
+            <div class="gcs-datos">
+              <b>{{ clienteSel.nombre }}</b>
+              <span>{{ clienteSel.correo }}</span>
+            </div>
+            <button class="btn-cambiar" type="button" @click="cambiarCliente">Cambiar</button>
+          </div>
+        </div>
+
+        <!-- Paso 2: mesa -->
+        <div class="gest-col">
+          <label class="gest-lbl">2 · Mesa a asignar</label>
+          <div class="gest-select">
+            <BaseSelect v-model="mesaSelGestion" :options="opcionesMesa" placeholder="Elige una mesa libre" />
+          </div>
+          <p v-if="clienteSel && !mesasLibres.length" class="gest-vacio">No quedan mesas libres en este evento.</p>
+          <label class="gest-check">
+            <input type="checkbox" v-model="cortesia" />
+            <span>Cortesía (sin costo)</span>
+          </label>
+        </div>
+
+        <!-- Paso 3: asignar -->
+        <div class="gest-col gest-accion">
+          <button class="btn-primario btn-asignar" type="button" :disabled="!clienteSel || !mesaSelGestion || asignando" @click="asignarReserva">
+            {{ asignando ? 'Asignando…' : 'Asignar mesa' }}
+          </button>
+          <p class="gest-tip">Puedes asignar varias mesas al mismo cliente, una por una.</p>
+        </div>
+      </div>
+
+      <transition name="fade">
+        <div v-if="resultadoGestion" class="resultado" :class="resultadoGestion.tipo">
+          <div class="res-icono">
+            <svg v-if="resultadoGestion.tipo === 'ok'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="res-texto">
+            <b>{{ resultadoGestion.titulo }}</b>
+            <p>{{ resultadoGestion.detalle }}</p>
+          </div>
+        </div>
+      </transition>
+    </section>
   </div>
 </template>
 
@@ -154,6 +225,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import { Html5Qrcode } from 'html5-qrcode'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
+import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const eventos = ref([])
@@ -173,6 +245,99 @@ const pendiente = ref(null)
 const camaraActiva = ref(false)
 let scanner = null
 let socket = null
+
+// ---- Reserva gestionada (grupos grandes) ----
+const busquedaCliente = ref('')
+const clientesEncontrados = ref([])
+const buscandoCliente = ref(false)
+const clienteSel = ref(null)
+const mesasLibres = ref([])
+const mesaSelGestion = ref(null)
+const cortesia = ref(false)
+const asignando = ref(false)
+const resultadoGestion = ref(null)
+let debounceBuscar = null
+
+const opcionesMesa = computed(() => mesasLibres.value.map(m => ({
+  value: m.id_mesa,
+  label: `${m.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${m.numero_nombre} · ${m.capacidad_sillas || 1} pers${m.precio != null ? ' · Bs ' + Number(m.precio).toFixed(0) : ''}`,
+})))
+
+function buscarClientes() {
+  clearTimeout(debounceBuscar)
+  const q = busquedaCliente.value.trim()
+  if (q.length < 2) { clientesEncontrados.value = []; return }
+  buscandoCliente.value = true
+  debounceBuscar = setTimeout(async () => {
+    try {
+      const r = await servicioReservas.buscarCliente(q)
+      clientesEncontrados.value = r.clientes || []
+    } catch { clientesEncontrados.value = [] }
+    finally { buscandoCliente.value = false }
+  }, 350)
+}
+
+function seleccionarCliente(c) {
+  clienteSel.value = c
+  clientesEncontrados.value = []
+  busquedaCliente.value = ''
+  cargarMesasLibres()
+}
+
+function cambiarCliente() {
+  clienteSel.value = null
+  mesaSelGestion.value = null
+  resultadoGestion.value = null
+}
+
+// Mesas libres del evento seleccionado (para asignarlas)
+async function cargarMesasLibres() {
+  if (!idEventoSel.value) { mesasLibres.value = []; return }
+  try {
+    const zonasMapa = await servicioReservas.obtenerMapaEvento(idEventoSel.value)
+    const libres = []
+    for (const z of zonasMapa || []) {
+      for (const m of z.mesa_espacio || []) {
+        if ((m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && m.es_seleccionable && m.estado_ocupacion === 'libre') {
+          libres.push(m)
+        }
+      }
+    }
+    mesasLibres.value = libres
+    // Si la mesa elegida ya no está libre, se limpia
+    if (mesaSelGestion.value && !libres.some(m => m.id_mesa === mesaSelGestion.value)) {
+      mesaSelGestion.value = null
+    }
+  } catch { mesasLibres.value = [] }
+}
+
+async function asignarReserva() {
+  if (!clienteSel.value || !mesaSelGestion.value) return
+  asignando.value = true
+  resultadoGestion.value = null
+  try {
+    const r = await servicioReservas.reservaGestionada({
+      id_cliente: clienteSel.value.id_usuario,
+      id_mesa: mesaSelGestion.value,
+      metodo_pago: cortesia.value ? 'cortesia' : 'efectivo',
+    })
+    const e = r.entrada
+    resultadoGestion.value = {
+      tipo: 'ok',
+      titulo: `Mesa ${e.mesa} asignada a ${e.cliente}`,
+      detalle: `Código ${e.codigo_ingreso} · ${e.cantidad_personas} pers · ${e.metodo_pago === 'cortesia' ? 'Cortesía' : 'Bs ' + Number(e.monto_pagado).toFixed(2) + ' (efectivo)'} · aparece en «Mis reservas» del cliente`,
+    }
+    setTimeout(() => { if (resultadoGestion.value?.tipo === 'ok') resultadoGestion.value = null }, 9000)
+    mesaSelGestion.value = null
+    await cargarMesasLibres()  // la mesa asignada ya no está libre
+    await cargarAforo()
+  } catch (err) {
+    const data = err?.response?.data || err
+    resultadoGestion.value = { tipo: 'error', titulo: 'No se pudo asignar', detalle: data?.error || 'Intenta de nuevo.' }
+  } finally {
+    asignando.value = false
+  }
+}
 
 const zonasEnAlerta = computed(() => zonas.value.filter(z => z.estado === 'alerta' || z.estado === 'lleno'))
 
@@ -194,6 +359,8 @@ async function cargarAforo() {
   } finally {
     cargando.value = false
   }
+  // Si hay un cliente en la reserva gestionada, refresca sus mesas libres
+  if (clienteSel.value) cargarMesasLibres()
 }
 
 function mostrarResultado(tipo, titulo, detalle) {
@@ -514,6 +681,41 @@ onUnmounted(() => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s var(--ease-suave); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ---- Reserva gestionada (grupos grandes) ---- */
+.gestionada { margin-top: var(--esp-5); }
+.gest-grid { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: var(--esp-4); align-items: start; }
+@media (max-width: 860px) { .gest-grid { grid-template-columns: 1fr; } }
+.gest-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gest-lbl { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--texto-desactivado); }
+.gest-buscar { position: relative; }
+.gest-input { width: 100%; box-sizing: border-box; text-transform: none; letter-spacing: normal; }
+.gest-resultados {
+  list-style: none; margin: 6px 0 0; padding: 4px;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); border-radius: var(--radio-md);
+  position: absolute; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(10,6,26,0.6);
+}
+.gest-resultados li { display: flex; flex-direction: column; gap: 1px; padding: 9px 11px; border-radius: var(--radio-sm); cursor: pointer; transition: background 0.15s ease; }
+.gest-resultados li:hover { background: rgba(168,85,247,0.14); }
+.gest-resultados li b { font-size: 0.9rem; color: var(--texto-principal); }
+.gest-resultados li span { font-size: 0.76rem; color: var(--texto-secundario); }
+.gest-vacio { font-size: 0.8rem; color: var(--texto-desactivado); }
+.gest-cliente-sel {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3);
+  padding: 10px 14px; border-radius: var(--radio-md); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-activo);
+}
+.gcs-datos { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.gcs-datos b { font-size: 0.92rem; color: var(--texto-principal); }
+.gcs-datos span { font-size: 0.76rem; color: var(--texto-secundario); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-cambiar { flex-shrink: 0; background: none; border: 1px solid var(--borde-sutil); color: var(--morado-hover); padding: 6px 12px; border-radius: var(--radio-md); font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: var(--trans-rapida); }
+.btn-cambiar:hover { background: rgba(168,85,247,0.12); border-color: var(--borde-activo); }
+.gest-select { position: relative; }
+.gest-check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--texto-secundario); cursor: pointer; margin-top: 2px; }
+.gest-check input { width: 17px; height: 17px; accent-color: var(--morado-brillante); cursor: pointer; }
+.gest-accion { justify-content: flex-start; }
+.btn-asignar { width: 100%; padding: 13px 20px; }
+.gest-tip { font-size: 0.72rem; color: var(--texto-desactivado); margin-top: 2px; line-height: 1.4; }
 
 @media (max-width: 520px) {
   .panel { padding: var(--esp-4); }

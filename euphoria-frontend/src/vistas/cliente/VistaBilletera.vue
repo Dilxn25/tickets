@@ -4,7 +4,7 @@
     <header class="hero-billetera">
       <div class="hero-billetera-contenido">
         <h1 class="titulo-principal-billetera">Mi billetera</h1>
-        <p class="hero-billetera-sub">Recarga, paga con QR y sigue tus movimientos en tiempo real.</p>
+        <p class="hero-billetera-sub">Tu dinero para la noche.</p>
       </div>
     </header>
 
@@ -37,14 +37,37 @@
             <div class="columna-pin">
               <p class="etiqueta-pequena">PIN transaccional</p>
               <div class="pin-display-flex">
-                <span class="pin-oculto-nuevo">••••</span>
+                <button
+                  v-if="pinRevelado"
+                  class="pin-cajas"
+                  type="button"
+                  title="Toca para ocultar"
+                  @click="ocultarPinRevelado"
+                >
+                  <span v-for="(digito, i) in pinRevelado.split('')" :key="i" class="pin-caja">{{ digito }}</span>
+                  <span class="pin-cuenta" aria-hidden="true">{{ segundosPin }}</span>
+                </button>
+                <span v-else class="pin-oculto-nuevo">••••</span>
+                <button
+                  v-if="tienePin && !pinRevelado"
+                  class="btn-ojo-pin"
+                  type="button"
+                  aria-label="Ver mi PIN"
+                  title="Ver mi PIN"
+                  @click="abrirRevelarPin"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
                 <span class="pin-estado" :class="{ 'pin-estado-activo': tienePin }">{{ tienePin ? 'Configurado' : 'Sin configurar' }}</span>
               </div>
             </div>
 
             <div class="columna-acciones-tarjeta">
-              <button class="btn-pildora" @click="abrirModalCambiarPin" type="button">
-                Cambiar PIN
+              <button class="btn-pildora" @click="intentarConfigurarPin" type="button">
+                {{ tienePin ? 'Cambiar PIN' : 'Configurar PIN' }}
               </button>
               <button class="btn-pildora btn-pildora-resaltado" @click="abrirModalRecarga" type="button">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -57,92 +80,144 @@
           </div>
         </div>
 
-    <!-- Acciones para Generar QRs (Pago) -->
-    <p class="acciones-titulo">Pagar en barra</p>
-    <div class="acciones-billetera escalonar">
-      <button class="btn-abrir-recarga btn-pagar" @click="mostrarQRRapido('sin_pin')" type="button">
-        <span class="qr-tile-icono">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <path d="M7 7h.01"></path>
-            <path d="M17 7h.01"></path>
-            <path d="M7 17h.01"></path>
-            <path d="M17 17h.01"></path>
-          </svg>
-        </span>
-        <span class="qr-tile-texto">
-          <span class="qr-tile-titulo">QR público</span>
-          <span class="qr-tile-sub">Cobro directo</span>
-        </span>
-      </button>
-      <button class="btn-abrir-recarga btn-pagar btn-privado" @click="mostrarQRRapido('con_pin')" type="button">
-        <span class="qr-tile-icono">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <path d="M7 7h.01"></path>
-            <path d="M17 7h.01"></path>
-            <path d="M7 17h.01"></path>
-            <path d="M17 17h.01"></path>
-            <rect x="10" y="10" width="4" height="4" rx="1" ry="1"></rect>
-          </svg>
-        </span>
-        <span class="qr-tile-texto">
-          <span class="qr-tile-titulo">QR privado</span>
-          <span class="qr-tile-sub">Protegido con PIN</span>
-        </span>
-      </button>
-    </div>
+        <!-- Acciones para Generar QRs (Pago) -->
+        <p class="acciones-titulo">Pagar en barra</p>
+        <div class="acciones-billetera escalonar">
+          <button class="btn-abrir-recarga btn-pagar" @click="mostrarQRRapido('sin_pin')" type="button">
+            <span class="qr-tile-icono">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <path d="M7 7h.01"></path>
+                <path d="M17 7h.01"></path>
+                <path d="M7 17h.01"></path>
+                <path d="M17 17h.01"></path>
+              </svg>
+            </span>
+            <span class="qr-tile-texto">
+              <span class="qr-tile-titulo">QR público</span>
+              <span class="qr-tile-sub">Cobro directo</span>
+            </span>
+          </button>
+          <button class="btn-abrir-recarga btn-pagar btn-privado" @click="mostrarQRRapido('con_pin')" type="button">
+            <span class="qr-tile-icono">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <path d="M7 7h.01"></path>
+                <path d="M17 7h.01"></path>
+                <path d="M7 17h.01"></path>
+                <path d="M17 17h.01"></path>
+                <rect x="10" y="10" width="4" height="4" rx="1" ry="1"></rect>
+              </svg>
+            </span>
+            <span class="qr-tile-texto">
+              <span class="qr-tile-titulo">QR privado</span>
+              <span class="qr-tile-sub">Protegido con PIN</span>
+            </span>
+          </button>
+        </div>
 
       </div> <!-- Fin Panel Izquierdo -->
 
-      <!-- Columna Derecha: Historial -->
+      <!-- Columna Derecha: Movimientos -->
       <div class="panel-derecho">
-        <!-- HISTORIAL RECARGAS -->
-        <div class="seccion-historial">
-      <div class="historial-encabezado">
-        <h2>Historial de recargas</h2>
-      </div>
-      <div v-if="historial.length === 0" class="historial-vacio">
-        <div class="icono-vacio">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
-            <path d="M2 10h20"></path>
-          </svg>
-        </div>
-        <p class="titulo-vacio">Aún no tienes recargas</p>
-        <p class="subtitulo-vacio">Cuando recargues tu saldo, cada movimiento aparecerá aquí.</p>
-      </div>
-      <div v-else class="tabla-historial">
-        <div class="fila-encabezado">
-          <div class="columna-monto">Monto</div>
-          <div class="columna-transaccion">Transacción</div>
-          <div class="columna-fecha">Fecha</div>
-          <div class="columna-estado">Estado</div>
-          <div class="columna-acciones">Acciones</div>
-        </div>
-        <div v-for="recarga in historial" :key="recarga.id_recarga" class="fila-historial">
-          <div class="columna-monto">Bs. {{ Number(recarga.monto || 0).toFixed(2) }}</div>
-          <div class="columna-transaccion">{{ recarga.numero_transaccion }}</div>
-          <div class="columna-fecha">{{ formatoFecha(recarga.fecha_solicitud) }}</div>
-          <div class="columna-estado">
-            <span :class="['badge', `badge-${recarga.estado}`]">
-              {{ recarga.estado }}
-            </span>
+        <section class="seccion-movimientos">
+          <div class="movimientos-encabezado">
+            <h2>Tus movimientos</h2>
           </div>
-          <div class="columna-acciones">
-            <button class="btn-detalles" @click="mostrarDetalles(recarga)" type="button">Detalles</button>
+
+          <!-- Skeleton mientras carga -->
+          <div v-if="cargandoMovimientos" class="lista-movimientos" aria-hidden="true">
+            <div v-for="n in 3" :key="n" class="mov-fila mov-esqueleto">
+              <span class="mov-icono"></span>
+              <span class="mov-info">
+                <span class="esq-linea esq-ancha"></span>
+                <span class="esq-linea"></span>
+              </span>
+            </div>
           </div>
-        </div>
-      </div>
-      </div> <!-- Fin Seccion Historial -->
+
+          <div v-else-if="movimientos.length === 0" class="historial-vacio">
+            <div class="icono-vacio">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                <path d="M2 10h20"></path>
+              </svg>
+            </div>
+            <p class="titulo-vacio">Tu historia empieza con una recarga</p>
+            <p class="subtitulo-vacio">Recarga saldo y cada recarga, trago y reserva de tus noches aparecerá aquí.</p>
+          </div>
+
+          <div v-else class="lista-movimientos escalonar">
+            <component
+              :is="esConsumoTocable(mov) ? 'button' : 'div'"
+              v-for="mov in movimientosVisibles"
+              :key="`${mov.tipo}-${mov.id}`"
+              class="mov-fila"
+              :class="[`mov-${mov.tipo}`, { 'mov-tocable': esConsumoTocable(mov) }]"
+              :type="esConsumoTocable(mov) ? 'button' : undefined"
+              @click="esConsumoTocable(mov) && abrirDetalleConsumo(mov)"
+            >
+              <span class="mov-icono" aria-hidden="true">
+                <!-- Recarga: flecha entrando -->
+                <svg v-if="mov.tipo === 'recarga'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                  <line x1="4" y1="21" x2="20" y2="21"></line>
+                </svg>
+                <!-- Consumo: copa -->
+                <svg v-else-if="mov.tipo === 'consumo'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M8 22h8"></path>
+                  <path d="M12 11v11"></path>
+                  <path d="m19 3-7 8-7-8Z"></path>
+                </svg>
+                <!-- Reserva: ticket -->
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path>
+                  <path d="M13 5v2"></path>
+                  <path d="M13 11v2"></path>
+                  <path d="M13 17v2"></path>
+                </svg>
+              </span>
+
+              <span class="mov-info">
+                <span class="mov-titulo">{{ mov.titulo }}</span>
+                <span v-if="mov.detalle" class="mov-detalle">{{ mov.detalle }}</span>
+                <span class="mov-fecha">{{ formatoFecha(mov.fecha) }}</span>
+              </span>
+
+              <span class="mov-lado">
+                <span class="mov-monto" :class="{ 'mov-monto-positivo': Number(mov.monto) > 0 }">{{ formatoMonto(mov.monto) }}</span>
+                <span v-if="mov.estado && mov.estado !== 'completada'" :class="['badge', `badge-${mov.estado}`]">{{ mov.estado }}</span>
+                <span v-if="esConsumoTocable(mov)" class="mov-ver">Ver detalle
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </span>
+              </span>
+            </component>
+
+            <button
+              v-if="movimientos.length > LIMITE_MOVIMIENTOS"
+              class="btn-ver-todos"
+              type="button"
+              @click="router.push('/cliente/movimientos')"
+            >
+              Ver todos ({{ movimientos.length }})
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </section>
       </div> <!-- Fin Panel Derecho -->
     </div> <!-- Fin Billetera Layout Grid -->
 
     <!-- MODAL CAMBIAR PIN -->
+    <Teleport to="body">
     <div v-if="modalCambiarPin" class="modal-overlay" @click.self="abrirModalCambiarPin">
       <div class="modal-cambiar-pin">
         <div class="modal-header">
-          <h2>Cambiar PIN transaccional</h2>
+          <h2>{{ tienePin ? 'Cambiar PIN transaccional' : 'Configurar PIN transaccional' }}</h2>
           <button class="btn-cerrar" @click="abrirModalCambiarPin" type="button">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -151,6 +226,25 @@
           </button>
         </div>
         <div class="modal-body">
+          <div v-if="tienePin" class="campo-pin">
+            <label>PIN actual</label>
+            <div class="input-pin-wrapper">
+              <input
+                v-model="pinActual"
+                :type="mostrarPinActual ? 'text' : 'password'"
+                placeholder="0000"
+                maxlength="4"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                @keypress="soloNumeros"
+                class="input-pin"
+              />
+              <button class="btn-ojo-input" @click="mostrarPinActual = !mostrarPinActual" type="button" title="Mostrar/ocultar PIN">
+                <svg v-if="mostrarPinActual" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+              </button>
+            </div>
+          </div>
           <div class="campo-pin">
             <label>Nuevo PIN (4 dígitos)</label>
             <div class="input-pin-wrapper">
@@ -159,6 +253,8 @@
                 :type="mostrarNuevoPin ? 'text' : 'password'"
                 placeholder="0000"
                 maxlength="4"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 @keypress="soloNumeros"
                 class="input-pin"
               />
@@ -176,6 +272,8 @@
                 :type="mostrarConfirmarPin ? 'text' : 'password'"
                 placeholder="0000"
                 maxlength="4"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 @keypress="soloNumeros"
                 class="input-pin"
               />
@@ -195,8 +293,140 @@
         </div>
       </div>
     </div>
+    </Teleport>
+
+    <!-- MODAL VER PIN (ojito con contraseña) -->
+    <Teleport to="body">
+      <div v-if="modalRevelarPin" class="modal-overlay" @click.self="cerrarRevelarPin">
+        <div class="modal-ver-pin" role="dialog" aria-modal="true" aria-label="Ver mi PIN">
+          <div class="verpin-candado" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 class="verpin-titulo">Ver mi PIN</h2>
+          <p class="verpin-sub">Confirma tu contraseña.</p>
+
+          <div class="input-pin-wrapper">
+            <input
+              v-model="passwordRevelar"
+              :type="mostrarPasswordRevelar ? 'text' : 'password'"
+              placeholder="Tu contraseña"
+              aria-label="Contraseña de tu cuenta"
+              autocomplete="current-password"
+              class="input-pin input-password"
+              @keyup.enter="confirmarRevelarPin"
+            />
+            <button class="btn-ojo-input" @click="mostrarPasswordRevelar = !mostrarPasswordRevelar" type="button" title="Mostrar/ocultar contraseña">
+              <svg v-if="mostrarPasswordRevelar" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+            </button>
+          </div>
+
+          <p v-if="errorRevelar" class="error-mensaje verpin-error">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            {{ errorRevelar }}
+          </p>
+          <button v-if="requiereReconfigurar" class="btn-guardar btn-reconfigurar" type="button" @click="irAReconfigurarPin">
+            Configurar un PIN nuevo
+          </button>
+
+          <div class="verpin-acciones">
+            <button class="btn-cancelar" @click="cerrarRevelarPin" type="button">Cancelar</button>
+            <button class="btn-guardar" @click="confirmarRevelarPin" :disabled="!passwordRevelar || revelandoPin" type="button">
+              {{ revelandoPin ? 'Verificando…' : 'Ver PIN' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- MODAL DETALLE DE CONSUMO -->
+    <Teleport to="body">
+      <div v-if="modalConsumo" class="modal-overlay" @click.self="cerrarDetalleConsumo">
+        <div class="modal-detalles modal-consumo">
+          <div class="modal-header">
+            <h2>Tu consumo</h2>
+            <button class="btn-cerrar" @click="cerrarDetalleConsumo" type="button">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div v-if="cargandoConsumo" class="consumo-cargando">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+              </svg>
+              <p>Trayendo tu pedido…</p>
+            </div>
+
+            <template v-else-if="consumoDetalle">
+              <div class="consumo-items">
+                <div v-for="(item, i) in consumoDetalle.items" :key="i" class="consumo-item">
+                  <img v-if="item.imagen" :src="item.imagen" :alt="item.nombre" class="consumo-img" loading="lazy" />
+                  <span v-else class="consumo-img consumo-img-ph" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M8 22h8"></path>
+                      <path d="M12 11v11"></path>
+                      <path d="m19 3-7 8-7-8Z"></path>
+                    </svg>
+                  </span>
+                  <span class="consumo-item-info">
+                    <span class="consumo-item-nombre">{{ item.nombre }}</span>
+                    <span class="consumo-item-cant">{{ item.cantidad }} × Bs. {{ formatoMoneda(item.precio) }}</span>
+                  </span>
+                  <span class="consumo-item-subtotal">Bs. {{ formatoMoneda(item.subtotal) }}</span>
+                </div>
+              </div>
+
+              <div class="consumo-total">
+                <span>Total de la ronda</span>
+                <strong>Bs. {{ formatoMoneda(consumoDetalle.total) }}</strong>
+              </div>
+
+              <div class="consumo-meta">
+                <p v-if="consumoDetalle.atendido_por" class="consumo-meta-fila">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  {{ consumoDetalle.atendido_por === 'Pedido desde tu app' ? consumoDetalle.atendido_por : `Te atendió ${consumoDetalle.atendido_por}` }}
+                </p>
+                <p v-if="consumoDetalle.metodo_pago" class="consumo-meta-fila">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                    <path d="M2 10h20"></path>
+                  </svg>
+                  Pagado con {{ consumoDetalle.metodo_pago }}
+                </p>
+                <p v-if="consumoDetalle.fecha" class="consumo-meta-fila">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  {{ formatoFecha(consumoDetalle.fecha) }}
+                </p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- MODAL RECARGAR SALDO -->
+    <Teleport to="body">
     <div v-if="modalRecarga" class="modal-overlay" @click.self="abrirModalRecarga">
       <div class="modal-recarga">
         <div class="modal-header">
@@ -209,6 +439,9 @@
           </button>
         </div>
         <div class="modal-body">
+          <p v-if="sinBilletera" class="nota-primera-recarga">
+            Esta será tu primera recarga: tu billetera se creará automáticamente al completarla.
+          </p>
           <!-- QR Predeterminado -->
           <div class="info-recarga-paso"><span class="num-paso">1</span> Escanea el QR para transferir</div>
           <div class="subseccion-qr-predeterminado">
@@ -229,15 +462,30 @@
           <!-- Monto Input -->
           <div class="info-recarga-paso"><span class="num-paso">2</span> Ingresa el monto transferido</div>
           <div class="campo-monto">
-            <div class="input-monto" :class="{ 'input-monto-error': errorMonto, 'input-monto-valido': montoIngresado >= 10 && !errorMonto }">
+            <div class="montos-rapidos">
+              <button
+                v-for="m in MONTOS_RAPIDOS"
+                :key="m"
+                type="button"
+                class="chip-monto"
+                :class="{ activo: montoIngresado === m }"
+                :disabled="procesandoOCR || !!archivoComprobante"
+                @click="usarMontoRapido(m)"
+              >
+                Bs. {{ m }}
+              </button>
+            </div>
+            <div class="input-monto" :class="{ 'input-monto-error': errorMonto, 'input-monto-valido': montoIngresado >= 10 && !errorMonto, 'input-monto-bloqueado': procesandoOCR || !!archivoComprobante }">
               <span class="prefijo">Bs.</span>
               <input
                 v-model.number="montoIngresado"
                 type="number"
+                inputmode="decimal"
                 placeholder="50"
                 min="10"
                 max="100000"
                 step="0.01"
+                :disabled="procesandoOCR || !!archivoComprobante"
                 @blur="validarMonto"
                 class="input-field"
               />
@@ -256,29 +504,38 @@
           <!-- Subir Comprobante -->
           <div class="info-recarga-paso"><span class="num-paso">3</span> Sube tu comprobante para validarlo</div>
           <div class="campo-comprobante">
-            <div class="zona-carga" @click="triggerUpload">
-              <svg v-if="!archivoComprobante" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              <p v-if="!archivoComprobante">Haz clic para buscar una imagen</p>
-              
-              <div v-else class="vista-previa-comprobante" @click.stop>
-                <div class="info-archivo">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                  <span class="nombre-archivo">{{ archivoComprobante.name }}</span>
-                </div>
-                <button class="btn-eliminar-archivo" @click.stop="limpiarArchivo" type="button" title="Eliminar archivo">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+            <div v-if="!archivoComprobante" class="opciones-comprobante">
+              <button type="button" class="btn-opcion-comprobante" :disabled="procesandoOCR" @click="triggerUpload">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Subir imagen</span>
+              </button>
+              <button type="button" class="btn-opcion-comprobante" :disabled="procesandoOCR" @click="abrirCamara">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <span>Tomar foto</span>
+              </button>
+            </div>
+
+            <div v-else class="vista-previa-comprobante">
+              <div class="info-archivo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span class="nombre-archivo">{{ archivoComprobante.name }}</span>
               </div>
+              <button class="btn-eliminar-archivo" @click="limpiarArchivo" type="button" title="Eliminar archivo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
             </div>
             <input
               ref="inputFile"
@@ -322,53 +579,60 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
-    <!-- Ya no se usa el MODAL CÓDIGOS QR GENERADOS (Grid) -->
-
-    <!-- MODAL AMPLIAR QR -->
-    <div v-if="qrAmpliado" class="modal-overlay" @click.self="qrAmpliado = null">
-      <div class="modal-qr-ampliado">
-        <button class="btn-cerrar" @click="qrAmpliado = null" type="button" style="position:absolute; top: 1rem; right: 1rem;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-        <div v-if="qrAmpliado === 'sin_pin'" class="contenedor-qr-identificador">
-          <img :src="datosQR.qr_sin_pin.imagen" alt="Código QR de pago público ampliado" class="qr-modal-imagen" />
-          <p class="qr-identificador">ID: {{ datosQR.qr_sin_pin.identificador }}</p>
+    <!-- CÁMARA PARA FOTOGRAFIAR EL COMPROBANTE -->
+    <Teleport to="body">
+      <div v-if="camaraAbierta" class="camara-overlay">
+        <video ref="videoCamara" class="camara-video" autoplay playsinline muted></video>
+        <div class="camara-guia">
+          <div class="guia-marco" aria-hidden="true">
+            <span class="guia-esquina ge-tl"></span>
+            <span class="guia-esquina ge-tr"></span>
+            <span class="guia-esquina ge-bl"></span>
+            <span class="guia-esquina ge-br"></span>
+          </div>
+          <p class="guia-texto">Encuadra tu comprobante aquí</p>
         </div>
-        <div v-else-if="qrAmpliado === 'con_pin'" class="contenedor-qr-identificador">
-          <img :src="datosQR.qr_con_pin.imagen" alt="Código QR de pago privado ampliado" class="qr-modal-imagen" />
-          <p class="qr-identificador">ID: {{ datosQR.qr_con_pin.identificador }}</p>
-        </div>
-        <img v-else src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR de pago a Euphoria ampliado" class="qr-modal-imagen" />
-      </div>
-    </div>
-
-    <!-- MODAL DETALLES DE TRANSACCIÓN -->
-    <div v-if="recargaSeleccionada" class="modal-overlay" @click.self="recargaSeleccionada = null">
-      <div class="modal-detalles">
-        <div class="modal-header">
-          <h2>Detalle de recarga</h2>
-          <button class="btn-cerrar" @click="recargaSeleccionada = null" type="button">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+        <div class="camara-controles">
+          <button type="button" class="btn-camara-cancelar" @click="cerrarCamara">Cancelar</button>
+          <button type="button" class="btn-capturar" aria-label="Capturar foto" @click="capturarFoto">
+            <span class="btn-capturar-interno" aria-hidden="true"></span>
           </button>
-        </div>
-        <div class="modal-body">
-          <div class="detalle-fila"><strong>Estado</strong> <span :class="['badge', `badge-${recargaSeleccionada.estado}`]">{{ recargaSeleccionada.estado }}</span></div>
-          <div class="detalle-fila"><strong>Monto</strong> Bs. {{ Number(recargaSeleccionada.monto || 0).toFixed(2) }}</div>
-          <div class="detalle-fila"><strong>ID de transacción OCR</strong> <span class="texto-resaltado">{{ recargaSeleccionada.numero_transaccion }}</span></div>
-          <div class="detalle-fila"><strong>Fecha de solicitud</strong> {{ formatoFecha(recargaSeleccionada.fecha_solicitud) }}</div>
-          <div class="detalle-fila"><strong>Fecha de confirmación</strong> {{ recargaSeleccionada.fecha_confirmacion ? formatoFecha(recargaSeleccionada.fecha_confirmacion) : 'No confirmada' }}</div>
+          <span class="camara-espaciador" aria-hidden="true"></span>
         </div>
       </div>
-    </div>
+    </Teleport>
+
+    <!-- QR A PANTALLA COMPLETA (fondo blanco, brillo alto para el escáner) -->
+    <Teleport to="body">
+      <div v-if="qrAmpliado" class="qr-fullscreen" @click="qrAmpliado = null">
+        <p class="qr-fs-titulo">{{ tituloQRAmpliado }}</p>
+        <img
+          v-if="qrAmpliado === 'sin_pin'"
+          :src="datosQR.qr_sin_pin.imagen"
+          alt="Código QR de pago público ampliado"
+          class="qr-fs-img"
+        />
+        <img
+          v-else-if="qrAmpliado === 'con_pin'"
+          :src="datosQR.qr_con_pin.imagen"
+          alt="Código QR de pago privado ampliado"
+          class="qr-fs-img"
+        />
+        <img
+          v-else
+          src="@/activos/imagenes/QRPago euphoria.jpeg"
+          alt="Código QR de pago a Euphoria ampliado"
+          class="qr-fs-img"
+        />
+        <p v-if="identificadorQRAmpliado" class="qr-fs-codigo">ID: {{ identificadorQRAmpliado }}</p>
+        <p class="qr-fs-hint">Toca para cerrar</p>
+      </div>
+    </Teleport>
 
     <!-- MODAL ÉXITO -->
+    <Teleport to="body">
     <div v-if="modalExito" class="modal-overlay" @click.self="modalExito = false">
       <div class="modal-detalles modal-exito">
         <div class="icono-exito">
@@ -377,25 +641,28 @@
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
         </div>
-        <h2 style="color: white; margin-top: 1rem;">Recarga completada</h2>
+        <h2 style="color: white; margin-top: 1rem;">{{ tituloExito }}</h2>
         <p style="color: var(--texto-secundario); margin: 1rem 0;">{{ mensajeExito }}</p>
         <button class="btn-pildora" @click="modalExito = false" type="button" style="margin-top: 1rem; width: 100%;">
           Entendido
         </button>
       </div>
     </div>
+    </Teleport>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
+const router = useRouter()
 const tienda = useTiendaAutenticacion()
 const notif = useNotificaciones()
 const usuario = computed(() => tienda.usuario?.nombre || 'Cliente')
@@ -404,16 +671,20 @@ const usuario = computed(() => tienda.usuario?.nombre || 'Cliente')
 const saldo = ref(0)
 // Nunca guardamos ni mostramos el PIN en claro. Solo reflejamos si existe.
 const tienePin = ref(false)
-const historial = ref([])
+const sinBilletera = ref(false)
+const generandoQR = ref(false)
 const modalExito = ref(false)
+const tituloExito = ref('Operación exitosa')
 const mensajeExito = ref('')
 let socketBilletera = null
 
 // Modal cambiar PIN
 const modalCambiarPin = ref(false)
+const pinActual = ref('')
 const nuevoPin = ref('')
 const confirmarPin = ref('')
 const errorPin = ref('')
+const mostrarPinActual = ref(false)
 const mostrarNuevoPin = ref(false)
 const mostrarConfirmarPin = ref(false)
 
@@ -435,10 +706,178 @@ function triggerUpload() {
   }
 }
 
-const recargaSeleccionada = ref(null)
+// ===== OJITO DEL PIN: revelar con contraseña (con ticket de 5 minutos) =====
+const modalRevelarPin = ref(false)
+const passwordRevelar = ref('')
+const mostrarPasswordRevelar = ref(false)
+const errorRevelar = ref('')
+const requiereReconfigurar = ref(false)
+const revelandoPin = ref(false)
+// El PIN revelado vive solo en memoria unos segundos y se limpia al salir.
+const pinRevelado = ref('')
+const segundosPin = ref(0)
+let intervaloPin = null
 
-function mostrarDetalles(recarga) {
-  recargaSeleccionada.value = recarga
+// Ticket temporal: mientras viva (5 min en backend, 4.5 aquí por margen),
+// el ojito muestra el PIN directo sin volver a pedir la contraseña.
+const CLAVE_TICKET_PIN = 'euphoria_ticket_pin'
+
+function ticketPinVigente() {
+  try {
+    const datos = JSON.parse(sessionStorage.getItem(CLAVE_TICKET_PIN) || 'null')
+    if (datos?.ticket && Number(datos.hasta) > Date.now()) return datos.ticket
+  } catch (e) { /* valor corrupto: se descarta */ }
+  sessionStorage.removeItem(CLAVE_TICKET_PIN)
+  return null
+}
+
+function guardarTicketPin(ticket) {
+  if (!ticket) return
+  sessionStorage.setItem(CLAVE_TICKET_PIN, JSON.stringify({ ticket, hasta: Date.now() + 4.5 * 60 * 1000 }))
+}
+
+// Éxito compartido (contraseña o ticket): guarda el ticket nuevo y muestra el PIN.
+function aplicarPinRevelado(res) {
+  guardarTicketPin(res?.ticket)
+  pinRevelado.value = String(res?.pin ?? '')
+  segundosPin.value = 10
+  if (intervaloPin) clearInterval(intervaloPin)
+  intervaloPin = setInterval(() => {
+    segundosPin.value -= 1
+    if (segundosPin.value <= 0) ocultarPinRevelado()
+  }, 1000)
+}
+
+function abrirModalPassword() {
+  modalRevelarPin.value = true
+  passwordRevelar.value = ''
+  errorRevelar.value = ''
+  requiereReconfigurar.value = false
+  mostrarPasswordRevelar.value = false
+}
+
+// Toque del ojito: si hay ticket vigente se muestra directo; si no, contraseña.
+async function abrirRevelarPin() {
+  if (revelandoPin.value) return
+  const ticket = ticketPinVigente()
+  if (ticket) {
+    revelandoPin.value = true
+    try {
+      const res = await servicioBilletera.revelarPin({ ticket })
+      if (res?.requiere_reconfigurar) {
+        abrirModalPassword()
+        requiereReconfigurar.value = true
+        errorRevelar.value = res.mensaje || res.error || 'Tu PIN no puede mostrarse. Configúralo de nuevo para poder verlo.'
+        return
+      }
+      aplicarPinRevelado(res)
+      return
+    } catch (error) {
+      // Ticket vencido o inválido: se limpia y se pide la contraseña.
+      sessionStorage.removeItem(CLAVE_TICKET_PIN)
+      console.error('Ticket de PIN no aceptado:', error)
+    } finally {
+      revelandoPin.value = false
+    }
+  }
+  abrirModalPassword()
+}
+
+function cerrarRevelarPin() {
+  modalRevelarPin.value = false
+  passwordRevelar.value = ''
+  errorRevelar.value = ''
+  requiereReconfigurar.value = false
+}
+
+async function confirmarRevelarPin() {
+  if (!passwordRevelar.value || revelandoPin.value) return
+  revelandoPin.value = true
+  errorRevelar.value = ''
+  try {
+    const res = await servicioBilletera.revelarPin({ password: passwordRevelar.value })
+    // Algunos backends responden 200 con el flag; se cubre igual que el error.
+    if (res?.requiere_reconfigurar) {
+      requiereReconfigurar.value = true
+      errorRevelar.value = res.mensaje || res.error || 'Tu PIN no puede mostrarse. Configúralo de nuevo para poder verlo.'
+      return
+    }
+    aplicarPinRevelado(res)
+    cerrarRevelarPin()
+  } catch (error) {
+    if (error?.requiere_reconfigurar) {
+      requiereReconfigurar.value = true
+      errorRevelar.value = error.error || 'Tu PIN no puede mostrarse. Configúralo de nuevo para poder verlo.'
+    } else {
+      errorRevelar.value = error?.error || 'Contraseña incorrecta. Inténtalo de nuevo.'
+    }
+    console.error('Error revelando PIN:', error)
+  } finally {
+    revelandoPin.value = false
+  }
+}
+
+function ocultarPinRevelado() {
+  pinRevelado.value = ''
+  segundosPin.value = 0
+  if (intervaloPin) {
+    clearInterval(intervaloPin)
+    intervaloPin = null
+  }
+}
+
+function irAReconfigurarPin() {
+  cerrarRevelarPin()
+  abrirModalCambiarPin()
+}
+
+// ===== MOVIMIENTOS (recargas + consumos + reservas) =====
+const movimientos = ref([])
+const cargandoMovimientos = ref(true)
+
+// Solo se muestran los primeros 5; "Ver todos (N)" abre /cliente/movimientos.
+const LIMITE_MOVIMIENTOS = 5
+const movimientosVisibles = computed(() => movimientos.value.slice(0, LIMITE_MOVIMIENTOS))
+
+async function cargarMovimientos() {
+  try {
+    const res = await servicioBilletera.obtenerMovimientos()
+    movimientos.value = res?.movimientos || []
+  } catch (error) {
+    console.error('Error cargando movimientos:', error)
+  } finally {
+    cargandoMovimientos.value = false
+  }
+}
+
+function esConsumoTocable(mov) {
+  return mov.tipo === 'consumo' && !!mov.id_comanda
+}
+
+// Detalle de un consumo (productos con imagen, quién atendió, total)
+const modalConsumo = ref(false)
+const cargandoConsumo = ref(false)
+const consumoDetalle = ref(null)
+
+async function abrirDetalleConsumo(mov) {
+  if (!esConsumoTocable(mov)) return
+  modalConsumo.value = true
+  cargandoConsumo.value = true
+  consumoDetalle.value = null
+  try {
+    consumoDetalle.value = await servicioBilletera.detalleConsumo(mov.id_comanda)
+  } catch (error) {
+    console.error('Error cargando detalle de consumo:', error)
+    modalConsumo.value = false
+    notif.error('No pudimos traer el detalle de tu consumo. Inténtalo de nuevo.')
+  } finally {
+    cargandoConsumo.value = false
+  }
+}
+
+function cerrarDetalleConsumo() {
+  modalConsumo.value = false
+  consumoDetalle.value = null
 }
 
 // QR
@@ -446,6 +885,18 @@ const qrAmpliado = ref(null)
 const datosQR = ref({
   qr_sin_pin: { identificador: '', imagen: '' },
   qr_con_pin: { identificador: '', imagen: '' }
+})
+
+const tituloQRAmpliado = computed(() => {
+  if (qrAmpliado.value === 'sin_pin') return 'QR público · Cobro directo'
+  if (qrAmpliado.value === 'con_pin') return 'QR privado · Protegido con PIN'
+  return 'QR de recarga Euphoria'
+})
+
+const identificadorQRAmpliado = computed(() => {
+  if (qrAmpliado.value === 'sin_pin') return datosQR.value.qr_sin_pin.identificador
+  if (qrAmpliado.value === 'con_pin') return datosQR.value.qr_con_pin.identificador
+  return ''
 })
 
 // Abrir Modal Recarga
@@ -465,10 +916,12 @@ function limpiarFormularioRecarga() {
   errorOCR.value = ''
 }
 
-function cerrarQRGeneradoModal() {
-  qrGeneradoModal.value = false
-  abrirModalRecarga() // Cierra el de recarga tambien
-  cargarHistorial()
+// Montos rápidos de recarga
+const MONTOS_RAPIDOS = [50, 100, 200, 500]
+function usarMontoRapido(monto) {
+  if (procesandoOCR.value || archivoComprobante.value) return
+  montoIngresado.value = monto
+  errorMonto.value = ''
 }
 
 // Validar monto
@@ -502,10 +955,21 @@ function soloNumeros(e) {
   }
 }
 
+// El PIN vive en la billetera: si aún no existe (se crea con la primera recarga),
+// el backend rechazaría el POST /pin, así que se guía al usuario antes de abrir el modal.
+function intentarConfigurarPin() {
+  if (sinBilletera.value) {
+    notif.advertencia('Tu billetera se crea con tu primera recarga. Recarga saldo y luego configura tu PIN.')
+    return
+  }
+  abrirModalCambiarPin()
+}
+
 // Abrir/cerrar modal cambiar PIN
 function abrirModalCambiarPin() {
   modalCambiarPin.value = !modalCambiarPin.value
   if (!modalCambiarPin.value) {
+    pinActual.value = ''
     nuevoPin.value = ''
     confirmarPin.value = ''
     errorPin.value = ''
@@ -515,6 +979,7 @@ function abrirModalCambiarPin() {
 // Validar y guardar PIN
 const puedoGuardarPin = computed(() => {
   if (!nuevoPin.value || !confirmarPin.value) return false
+  if (tienePin.value && pinActual.value.length !== 4) return false
   if (nuevoPin.value.length !== 4 || confirmarPin.value.length !== 4) return false
   if (!/^\d+$/.test(nuevoPin.value)) return false
   if (nuevoPin.value !== confirmarPin.value) {
@@ -527,17 +992,20 @@ const puedoGuardarPin = computed(() => {
 
 async function guardarPin() {
   if (!puedoGuardarPin.value) return
-  
+
   try {
-    await servicioBilletera.actualizarPin(nuevoPin.value)
+    await servicioBilletera.actualizarPin(nuevoPin.value, tienePin.value ? pinActual.value : undefined)
     // No persistimos el PIN en claro; solo marcamos que ya existe uno configurado.
     tienePin.value = true
     abrirModalCambiarPin()
-    
+
     // Mostrar modal de éxito
+    tituloExito.value = 'PIN actualizado'
     mensajeExito.value = 'Tu PIN transaccional ha sido actualizado con éxito.'
     modalExito.value = true
   } catch (error) {
+    // requiere_pin_actual: el backend exige el PIN vigente para poder cambiarlo.
+    if (error?.requiere_pin_actual && !tienePin.value) tienePin.value = true
     errorPin.value = error.error || 'Error al guardar el PIN en el servidor'
     console.error(error)
   }
@@ -563,6 +1031,79 @@ function cargarComprobante(event) {
 
   archivoComprobante.value = file
   procesarOCR(file)
+}
+
+// ===== TOMAR FOTO AL COMPROBANTE (cámara trasera) =====
+const camaraAbierta = ref(false)
+const videoCamara = ref(null)
+let streamCamara = null
+
+async function abrirCamara() {
+  if (procesandoOCR.value || camaraAbierta.value) return
+
+  // Mismo camino que subir archivo: primero un monto válido.
+  validarMonto()
+  if (!montoIngresado.value || errorMonto.value) {
+    errorOCR.value = 'Ingresa un monto válido primero'
+    return
+  }
+  errorOCR.value = ''
+
+  // Sin cámara disponible (permiso, hardware o contexto no seguro): respaldo con archivos.
+  if (!navigator.mediaDevices?.getUserMedia) {
+    notif.advertencia('No pudimos abrir la cámara en este dispositivo. Elige la foto desde tus archivos.')
+    triggerUpload()
+    return
+  }
+
+  try {
+    streamCamara = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+      audio: false
+    })
+    camaraAbierta.value = true
+    await nextTick()
+    if (videoCamara.value) {
+      videoCamara.value.srcObject = streamCamara
+    } else {
+      cerrarCamara()
+    }
+  } catch (error) {
+    console.error('Error abriendo la cámara:', error)
+    cerrarCamara()
+    notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
+    triggerUpload()
+  }
+}
+
+function cerrarCamara() {
+  if (streamCamara) {
+    streamCamara.getTracks().forEach(t => t.stop())
+    streamCamara = null
+  }
+  camaraAbierta.value = false
+}
+
+function capturarFoto() {
+  const video = videoCamara.value
+  if (!video || !video.videoWidth) return
+
+  const canvas = document.createElement('canvas')
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+
+  canvas.toBlob((blob) => {
+    cerrarCamara()
+    if (!blob) {
+      notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
+      return
+    }
+    // La foto sigue EXACTAMENTE el mismo camino que un archivo elegido.
+    const file = new File([blob], 'comprobante-foto.jpg', { type: 'image/jpeg' })
+    archivoComprobante.value = file
+    procesarOCR(file)
+  }, 'image/jpeg', 0.92)
 }
 
 // Limpiar el archivo subido si hubo un error o seleccionó mal
@@ -607,7 +1148,11 @@ async function procesarOCR(file) {
     }
   } catch (error) {
     console.error('Error en OCR:', error)
-    errorOCR.value = error.response?.data?.error || error.error || 'No se pudo validar el comprobante mediante IA'
+    // limpiarArchivo() resetea errorOCR, por eso se asigna el mensaje después;
+    // sin esto el input queda "ocupado" y no se puede reintentar con el mismo archivo.
+    const mensaje = error.response?.data?.error || error.error || 'No se pudo validar el comprobante mediante IA'
+    limpiarArchivo()
+    errorOCR.value = mensaje
   } finally {
     procesandoOCR.value = false
   }
@@ -631,10 +1176,12 @@ async function completarRecarga() {
   try {
     const res = await servicioBilletera.iniciarRecarga(parseFloat(montoIngresado.value), urlComprobanteGenerado.value)
     saldo.value = res.saldo_nuevo
-    await cargarHistorial()
+    sinBilletera.value = false
+    await cargarMovimientos()
     modalRecarga.value = false
-    
+
     // Mostrar modal en vez de alert
+    tituloExito.value = 'Recarga completada'
     mensajeExito.value = `Tu nuevo saldo es Bs. ${res.saldo_nuevo.toFixed(2)}`
     modalExito.value = true
   } catch (error) {
@@ -645,6 +1192,12 @@ async function completarRecarga() {
 
 // Mostrar QR Rápido (Pago)
 async function mostrarQRRapido(tipo) {
+  if (sinBilletera.value) {
+    notif.advertencia('Aún no tienes billetera: se crea con tu primera recarga de saldo.')
+    return
+  }
+  if (generandoQR.value) return
+  generandoQR.value = true
   try {
     const res = await servicioBilletera.generarQRsPago()
 
@@ -655,11 +1208,9 @@ async function mostrarQRRapido(tipo) {
   } catch (error) {
     console.error('Error generando QRs:', error)
     notif.error('Error al generar los QRs de pago')
+  } finally {
+    generandoQR.value = false
   }
-}
-
-function ampliarQR(tipo) {
-  qrAmpliado.value = tipo
 }
 
 function ampliarQRDefault() {
@@ -671,22 +1222,13 @@ async function cargarSaldo() {
   try {
     const res = await servicioBilletera.obtenerSaldo()
     saldo.value = res.saldo_actual || 0
+    sinBilletera.value = !!res.sin_billetera
     // Requiere que el backend exponga el flag booleano tiene_pin en GET /saldo.
     if (res.tiene_pin !== undefined) {
       tienePin.value = !!res.tiene_pin
     }
   } catch (error) {
     console.error('Error cargando saldo:', error)
-  }
-}
-
-// Cargar historial
-async function cargarHistorial() {
-  try {
-    const res = await servicioBilletera.obtenerHistorial()
-    historial.value = res || []
-  } catch (error) {
-    console.error('Error cargando historial:', error)
   }
 }
 
@@ -698,25 +1240,32 @@ function formatoMoneda(valor) {
   })
 }
 
-// Formato fecha
+// Monto de movimiento con signo (+ recargas / − consumos y reservas)
+function formatoMonto(monto) {
+  const n = Number(monto) || 0
+  return `${n > 0 ? '+' : n < 0 ? '−' : ''} Bs. ${formatoMoneda(Math.abs(n))}`
+}
+
+// Formato fecha (fecha y hora por separado, criterio global del proyecto)
 function formatoFecha(fecha) {
   if (!fecha) return '-'
   const d = new Date(fecha)
   if (isNaN(d.getTime())) return '-'
-  return d.toLocaleDateString('es-BO')
+  return `${d.toLocaleDateString('es-BO')} · ${d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 onMounted(async () => {
   await cargarSaldo()
-  await cargarHistorial()
+  await cargarMovimientos()
 
   // Conectar WebSocket para sincronización en tiempo real
   socketBilletera = io() // Por defecto usa el mismo host/puerto y la ruta de vite se encarga del proxy
-  
+
   socketBilletera.on('billetera_actualizada', async (datos) => {
     if (datos.id_usuario === tienda.usuario?.id) {
-      saldo.value = datos.saldo_nuevo
-      await cargarHistorial()
+      // El evento ya no trae el saldo (privacidad); se consulta autenticado.
+      await cargarSaldo()
+      await cargarMovimientos()
     }
   })
 })
@@ -725,6 +1274,8 @@ onUnmounted(() => {
   if (socketBilletera) {
     socketBilletera.disconnect()
   }
+  ocultarPinRevelado()
+  cerrarCamara()
 })
 </script>
 
@@ -735,7 +1286,6 @@ onUnmounted(() => {
   --azul-profundo:   var(--rosa-acento);
   --verde-fresco:    var(--color-exito);
   --rojo-suave:      var(--color-error);
-  --rojo-coral:      var(--color-error);
   --fondo-principal: var(--fondo-app);
   --borde-color:     var(--borde-sutil);
 }
@@ -743,9 +1293,7 @@ onUnmounted(() => {
 .contenedor-billetera {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem;
-  padding-top: 2rem;
-  padding-bottom: 96px;
+  padding: 2rem 1rem 96px;
 }
 
 .billetera-layout-grid {
@@ -755,7 +1303,7 @@ onUnmounted(() => {
   align-items: start;
 }
 
-/* Tablet: dos columnas (tarjeta + historial) para aprovechar el ancho */
+/* Tablet: dos columnas (tarjeta + movimientos) para aprovechar el ancho */
 @media (min-width: 640px) {
   .billetera-layout-grid {
     grid-template-columns: minmax(320px, 400px) 1fr;
@@ -768,29 +1316,14 @@ onUnmounted(() => {
     gap: 3rem;
   }
 }
-/* El historial se adapta segun el ancho de SU columna (no del viewport) */
-.panel-derecho { container-type: inline-size; }
+.panel-derecho { min-width: 0; }
+.panel-izquierdo { min-width: 0; }
 
-/* Encabezado compacto (sin eyebrow ni degradado: menos ruido, mas profesional) */
+/* Encabezado compacto */
 .hero-billetera {
   position: relative;
   margin-bottom: 1.35rem;
   padding: 0.25rem 0.15rem 0;
-}
-
-.orbe-hero-a {
-  width: 300px;
-  height: 300px;
-  top: -160px;
-  left: -80px;
-}
-
-.orbe-hero-b {
-  width: 240px;
-  height: 240px;
-  top: -120px;
-  right: -60px;
-  opacity: 0.28;
 }
 
 .hero-billetera-contenido {
@@ -844,8 +1377,7 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
-  /* Mantiene proporción de tarjeta: no se estira a full-width dejando huecos.
-     Se centra en su columna; en desktop (grid 2-col) la columna ya es angosta. */
+  /* Mantiene proporción de tarjeta: no se estira a full-width dejando huecos. */
   max-width: 460px;
   margin: 0 auto 1.75rem;
   display: flex;
@@ -925,10 +1457,6 @@ onUnmounted(() => {
   color: rgba(255,255,255,0.7);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tarjeta-billetera:hover .tarjeta-brillo { transform: rotate(8deg) translateX(-30%); }
-}
-
 .fila-superior {
   display: flex;
   justify-content: space-between;
@@ -952,10 +1480,6 @@ onUnmounted(() => {
   opacity: 0.9;
 }
 
-.espaciador-tarjeta {
-  height: 4rem;
-}
-
 .fila-inferior {
   display: flex;
   justify-content: space-between;
@@ -967,24 +1491,106 @@ onUnmounted(() => {
 .columna-pin {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .pin-display-flex {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-
-.pin-valor, .pin-oculto-nuevo {
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: 4px;
-  color: white;
+  flex-wrap: wrap;
 }
 
 .pin-oculto-nuevo {
+  font-size: 1.4rem;
+  font-weight: 700;
   letter-spacing: 6px;
+  color: white;
   margin-top: 5px;
+}
+
+/* PIN revelado: 4 dígitos en cajitas elegantes + cuenta regresiva sutil */
+.pin-cajas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.pin-caja {
+  width: 30px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(19, 6, 48, 0.35);
+  color: #fff;
+  font-family: var(--fuente-titulo);
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+  animation: pinCajaEntra 0.3s var(--ease-suave) both;
+}
+
+.pin-caja:nth-child(2) { animation-delay: 0.05s; }
+.pin-caja:nth-child(3) { animation-delay: 0.1s; }
+.pin-caja:nth-child(4) { animation-delay: 0.15s; }
+
+@keyframes pinCajaEntra {
+  from { opacity: 0; transform: translateY(6px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pin-cuenta {
+  margin-left: 0.3rem;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-full);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-ojo-pin {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radio-full);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--trans-normal);
+}
+
+.btn-ojo-pin:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.btn-ojo-pin:active { transform: scale(0.94); }
+
+.btn-ojo-pin:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
 }
 
 .pin-estado {
@@ -1005,22 +1611,6 @@ onUnmounted(() => {
   color: #bbf7d0;
 }
 
-.btn-ojo-nuevo {
-  background: none;
-  border: none;
-  color: var(--texto-secundario);
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  opacity: 0.8;
-  transition: opacity 0.3s;
-}
-
-.btn-ojo-nuevo:hover {
-  opacity: 1;
-}
-
 .columna-acciones-tarjeta {
   display: flex;
   flex-direction: column;
@@ -1029,7 +1619,7 @@ onUnmounted(() => {
 }
 
 .btn-pildora {
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.32);
   border: 1px solid rgba(255, 255, 255, 0.25);
   color: white;
   padding: 0.5rem 1.2rem;
@@ -1041,7 +1631,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   transition: var(--trans-normal);
-  backdrop-filter: blur(5px);
   width: 100%;
   justify-content: center;
 }
@@ -1106,20 +1695,19 @@ onUnmounted(() => {
 @media (max-width: 900px) {
   .tarjeta-billetera { padding: 2rem; }
   .valor-grande { font-size: 2.4rem; }
-  .espaciador-tarjeta { height: 3rem; }
 }
 
 @media (max-width: 600px) {
   .tarjeta-billetera { padding: 1.2rem; }
   .valor-grande { font-size: 2rem; }
-  .espaciador-tarjeta { height: 1rem; } /* Minimizar espacio en el centro */
-  
+
   /* Mantener en la misma fila para no desperdiciar la esquina inferior derecha */
   .fila-inferior { flex-direction: row; align-items: flex-end; gap: 0.5rem; }
-  
-  /* Reducir tamaño de botones para que quepan bien al lado del PIN */
+
   .columna-acciones-tarjeta { width: auto; align-items: flex-end; }
   .btn-pildora { font-size: 0.8rem; padding: 0.5rem 0.8rem; }
+  .pin-caja { width: 25px; height: 33px; font-size: 1.1rem; }
+  .pin-cuenta { width: 22px; height: 22px; font-size: 0.62rem; }
 }
 
 /* ACCIONES BILLETERA (PAGOS) */
@@ -1130,8 +1718,9 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--texto-secundario);
-  margin: 0 0 0.85rem 0;
+  margin: 0 auto 0.85rem;
   padding-left: 0.15rem;
+  max-width: 460px;
 }
 
 .acciones-billetera {
@@ -1141,8 +1730,6 @@ onUnmounted(() => {
   margin: 0 auto 1.5rem;
   max-width: 460px;
 }
-/* La etiqueta "Pagar en barra" también alineada con la tarjeta */
-.acciones-titulo { max-width: 460px; margin-left: auto; margin-right: auto; }
 
 .btn-abrir-recarga {
   position: relative;
@@ -1159,6 +1746,7 @@ onUnmounted(() => {
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  min-width: 0;
   transition: transform 0.3s var(--ease-cine), box-shadow 0.3s var(--ease-cine), border-color 0.3s ease;
 }
 
@@ -1234,672 +1822,15 @@ onUnmounted(() => {
   .acciones-billetera { grid-template-columns: 1fr; }
 }
 
-/* MODALES GLOBALES */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-cambiar-pin,
-.modal-recarga,
-.modal-detalles {
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.14), transparent 55%),
-    linear-gradient(165deg, rgba(36, 21, 86, 0.96), rgba(20, 10, 46, 0.97));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border: 1px solid var(--borde-activo);
-  border-radius: var(--radio-xl);
-  padding: 2rem;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.28);
-  animation: modalAparece 0.28s var(--ease-suave) both;
-}
-
-@keyframes modalAparece {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .modal-cambiar-pin,
-  .modal-recarga,
-  .modal-detalles { animation: none; }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  padding-bottom: 1rem;
-}
-
-.modal-header h2 {
-  margin: 0;
-  color: var(--texto-principal);
-  font-size: 1.3rem;
-}
-
-.btn-cerrar {
-  background: none;
-  border: none;
-  color: var(--texto-secundario);
-  cursor: pointer;
-  padding: 0.35rem;
-  border-radius: var(--radio-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--trans-normal);
-}
-
-.btn-cerrar:hover {
-  color: var(--texto-principal);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.btn-cerrar:active {
-  transform: scale(0.92);
-}
-
-.btn-cerrar:focus-visible {
-  outline: 2px solid var(--borde-activo);
-  outline-offset: 2px;
-}
-
-.modal-body {
-  margin-bottom: 1.5rem;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  border-top: 1px solid rgba(255,255,255,0.1);
-  padding-top: 1rem;
-}
-
-.btn-cancelar,
-.btn-guardar {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s;
-}
-
-.btn-cancelar {
-  background: rgba(255,255,255,0.05);
-  color: var(--texto-principal);
-}
-
-.btn-cancelar:hover {
-  background: rgba(255,255,255,0.1);
-}
-
-.btn-guardar {
-  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
-  color: white;
-}
-
-.btn-guardar:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(168, 85, 247, 0.35);
-}
-
-.btn-guardar:active:not(:disabled),
-.btn-cancelar:active {
-  transform: translateY(0) scale(0.98);
-}
-
-.btn-guardar:focus-visible,
-.btn-cancelar:focus-visible {
-  outline: 2px solid var(--borde-activo);
-  outline-offset: 2px;
-}
-
-.btn-guardar:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* CAMBIO PIN */
-.campo-pin {
-  margin-bottom: 1.5rem;
-}
-
-.campo-pin label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: var(--texto-secundario);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.input-pin-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-pin {
-  width: 100%;
-  padding: 1rem;
-  padding-right: 3rem;
-  background: var(--fondo-principal);
-  border: 1px solid var(--borde-color);
-  border-radius: 8px;
-  color: var(--texto-principal);
-  font-size: 1.5rem;
-  letter-spacing: 4px;
-  text-align: center;
-  transition: border-color 0.3s;
-}
-
-.btn-ojo-input {
-  position: relative;
-  right: 10px;
-  background: none;
-  border: none;
-  color: var(--texto-secundario);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.btn-ojo-input:hover {
-  color: var(--texto-principal);
-}
-
-.info-recarga-paso {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-weight: 600;
-  color: var(--texto-principal);
-  margin-bottom: 0.6rem;
-  font-size: 0.95rem;
-  letter-spacing: 0;
-}
-
-.num-paso {
-  flex-shrink: 0;
-  width: 1.5rem;
-  height: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radio-full);
-  background: var(--gradiente-marca);
-  color: white;
-  font-size: 0.8rem;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.35);
-}
-
-.input-pin:focus {
-  outline: none;
-  border-color: var(--morado-brillante);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-}
-
-/* Ajuste de inputs de PIN en pantallas muy pequeñas */
-@media (max-width: 480px) {
-  .modal-cambiar-pin,
-  .modal-recarga {
-    padding: 1.25rem;
-    width: 94%;
-  }
-  .input-pin {
-    font-size: 1.25rem;
-    letter-spacing: 3px;
-    padding: 0.85rem;
-    padding-right: 2.75rem;
-  }
-}
-
-/* RECARGA */
-.subseccion-qr-predeterminado {
-  background: var(--fondo-principal);
-  border: 1px solid var(--borde-color);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.qr-acciones-lado {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.qr-texto-ayuda {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--texto-secundario);
-}
-
-.contenedor-qr-default {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.qr-imagen {
-  width: 100px;
-  height: 100px;
-  border-radius: 8px;
-  background: white;
-  padding: 5px;
-}
-
-.btn-ampliar-qr {
-  background: transparent;
-  border: 1px solid var(--borde-color);
-  color: var(--texto-principal);
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-}
-
-.btn-ampliar-qr:hover {
-  background: rgba(255,255,255,0.05);
-}
-
-.campo-monto,
-.campo-comprobante {
-  background: var(--fondo-principal);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.campo-monto label,
-.campo-comprobante label {
-  display: block;
-  margin-bottom: 0.75rem;
-  color: var(--texto-principal);
-  font-weight: 600;
-}
-
-.input-monto {
-  display: flex;
-  align-items: center;
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color var(--trans-normal), box-shadow var(--trans-normal);
-}
-
-.input-monto:focus-within {
-  border-color: var(--morado-brillante);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-}
-
-.prefijo {
-  padding: 0 1rem;
-  color: var(--texto-secundario);
-  font-weight: 600;
-}
-
-.input-field {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--texto-principal);
-  padding: 0.75rem 1rem;
-  font-size: 1.1rem;
-}
-
-.input-field:focus {
-  outline: none;
-}
-
-.error-mensaje,
-.exito-mensaje {
-  margin: 0.5rem 0 0 0;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.error-mensaje {
-  color: var(--rojo-suave);
-}
-
-.exito-mensaje {
-  color: var(--verde-fresco);
-}
-
-.zona-carga {
-  background: var(--fondo-tarjeta);
-  border: 2px dashed var(--borde-color);
-  border-radius: 8px;
-  padding: 2rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.8rem;
-}
-
-.zona-carga:hover {
-  border-color: var(--morado-brillante);
-  background: rgba(157, 78, 221, 0.08);
-}
-
-.zona-carga:active {
-  transform: scale(0.995);
-}
-
-.zona-carga svg {
-  color: var(--texto-secundario);
-}
-
-.zona-carga p {
-  margin: 0;
-  color: var(--texto-secundario);
-  font-size: 0.9rem;
-}
-
-.nombre-archivo {
-  color: var(--verde-fresco) !important;
-  font-weight: 600;
-}
-
-.input-file-hidden {
-  display: none;
-}
-
-.estado-ocr {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(157, 78, 221, 0.1);
-  border: 1px solid var(--morado-brillante);
-  border-radius: 8px;
-  padding: 1rem;
-  color: var(--texto-principal);
-  margin-top: 1rem;
-  font-size: 0.9rem;
-}
-
-.spin {
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
-.seccion-generar {
-  margin-top: 1.5rem;
-}
-
-.descripcion-qr {
-  color: var(--texto-secundario);
-  font-size: 0.9rem;
-  margin-bottom: 0.8rem;
-}
-
-.btn-generar-qr {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
-  border: none;
-  color: white;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-generar-qr:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(157, 78, 221, 0.4);
-}
-
-.btn-generar-qr:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* MODAL QR GENERADOS */
-.modal-qr-generados {
-  max-width: 600px;
-}
-
-.grid-qr {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.tarjeta-qr {
-  background: var(--fondo-principal);
-  border-radius: 12px;
-  padding: 1.5rem;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.qr-titulo {
-  margin: 0 0 1rem 0;
-  color: var(--texto-principal);
-  font-weight: 600;
-}
-
-.qr-imagen-grande {
-  width: 100%;
-  max-width: 180px;
-  height: auto;
-  background: white;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-}
-
-.pin-badge {
-  background: rgba(6, 214, 160, 0.1);
-  border: 1px solid rgba(6, 214, 160, 0.3);
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  margin-bottom: 1rem;
-}
-
-.pin-etiqueta {
-  color: var(--texto-secundario);
-  margin-right: 0.5rem;
-}
-
-.pin-codigo {
-  color: var(--verde-fresco);
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-.espacio-pin {
-  height: 42px; /* same height as pin-badge roughly */
-  margin-bottom: 1rem;
-}
-
-.qr-descripcion {
-  color: var(--texto-secundario);
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
-  flex: 1;
-}
-
-.btn-ampliar-qr-gen {
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  color: var(--texto-principal);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  width: 100%;
-}
-
-.btn-ampliar-qr-gen:hover {
-  background: rgba(255,255,255,0.05);
-}
-
-.modal-qr-ampliado {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-}
-
-.qr-modal-imagen {
-  max-width: 100%;
-  max-height: 90vh;
-  border-radius: 12px;
-}
-
-.btn-detalles {
-  background: rgba(168,85,247,0.1);
-  color: var(--morado-hover);
-  border: 1px solid var(--borde-activo);
-  padding: 0.35rem 0.75rem;
-  border-radius: var(--radio-full);
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: var(--trans-normal);
-}
-.btn-detalles:hover {
-  background: var(--gradiente-marca);
-  border-color: transparent;
-  color: white;
-  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.3);
-}
-
-.btn-detalles:active {
-  transform: scale(0.96);
-}
-
-.btn-detalles:focus-visible {
-  outline: 2px solid var(--borde-activo);
-  outline-offset: 2px;
-}
-
-.columna-acciones {
-  flex: 1;
-  text-align: right;
-}
-
-/* DETALLES TRANSACCIÓN */
-.modal-detalles {
-  width: 90%;
-  max-width: 420px;
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.12), transparent 55%),
-    linear-gradient(165deg, rgba(36, 21, 86, 0.96), rgba(20, 10, 46, 0.97));
-  border: 1px solid var(--borde-activo);
-  border-radius: var(--radio-xl);
-  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.22);
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-exito {
-  text-align: center;
-  padding: 2rem !important;
-  align-items: center;
-}
-
-.icono-exito {
-  background: rgba(6, 214, 160, 0.1);
-  border-radius: 50%;
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
-}
-
-@media (max-width: 600px) {
-  .modal-detalles {
-    padding: 1rem;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-}
-
-.detalle-fila {
-  padding: 0.8rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+/* ============ MOVIMIENTOS ============ */
+.movimientos-encabezado {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.95rem;
-  color: var(--texto-principal);
-}
-.detalle-fila:last-child {
-  border-bottom: none;
-}
-.detalle-fila strong {
-  color: var(--texto-secundario);
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.texto-resaltado {
-  background: rgba(255,255,255,0.05);
-  padding: 0.3rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9rem;
-  color: var(--morado-brillante);
-}
-
-/* HISTORIAL */
-.historial-encabezado {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.7rem;
   margin-bottom: 1.4rem;
 }
 
-.seccion-historial h2 {
+.seccion-movimientos h2 {
   font-family: var(--fuente-titulo);
   font-size: clamp(1.5rem, 3vw, 1.9rem);
   font-weight: 800;
@@ -1909,6 +1840,197 @@ onUnmounted(() => {
   text-wrap: balance;
 }
 
+.lista-movimientos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.mov-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  min-width: 0;
+  background: linear-gradient(155deg, var(--fondo-tarjeta-alt), var(--fondo-tarjeta));
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  padding: 0.9rem 1rem;
+  text-align: left;
+  color: var(--texto-principal);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button.mov-fila {
+  cursor: pointer;
+  transition: transform 0.25s var(--ease-cine), border-color 0.25s ease, box-shadow 0.25s var(--ease-cine);
+}
+
+button.mov-fila:hover {
+  transform: translateY(-2px);
+  border-color: var(--borde-activo);
+  box-shadow: 0 14px 30px -14px rgba(168, 85, 247, 0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+button.mov-fila:active { transform: translateY(0) scale(0.995); }
+
+button.mov-fila:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
+.mov-icono {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--glass-borde);
+}
+
+.mov-recarga .mov-icono {
+  color: var(--color-exito);
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.mov-consumo .mov-icono {
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.mov-reserva .mov-icono {
+  color: var(--rosa-suave);
+  background: rgba(236, 72, 153, 0.14);
+  border-color: rgba(236, 72, 153, 0.35);
+}
+
+.mov-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mov-titulo {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--texto-principal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mov-detalle {
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mov-fecha {
+  font-size: 0.72rem;
+  color: var(--texto-desactivado);
+  font-variant-numeric: tabular-nums;
+}
+
+.mov-lado {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+
+.mov-monto {
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mov-monto-positivo { color: var(--color-exito); }
+
+.mov-ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--morado-hover);
+}
+
+@media (max-width: 420px) {
+  .mov-fila { padding: 0.8rem 0.8rem; gap: 0.7rem; }
+  .mov-icono { width: 38px; height: 38px; }
+  .mov-ver span { display: none; }
+}
+
+/* Botón Ver todos / Ver menos */
+.btn-ver-todos {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem 1.4rem;
+  border-radius: var(--radio-full);
+  border: 1px solid var(--borde-sutil);
+  background: var(--fondo-tarjeta);
+  color: var(--morado-hover);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s var(--ease-suave);
+}
+
+.btn-ver-todos:hover {
+  border-color: var(--borde-activo);
+  background: rgba(168, 85, 247, 0.12);
+  transform: translateY(-2px);
+}
+
+.btn-ver-todos:active { transform: translateY(0) scale(0.98); }
+
+.btn-ver-todos:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
+/* Skeleton de movimientos */
+.mov-esqueleto { pointer-events: none; }
+.mov-esqueleto .mov-icono {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: var(--borde-sutil);
+}
+.esq-linea {
+  display: block;
+  height: 10px;
+  width: 45%;
+  border-radius: 6px;
+  background: rgba(196, 181, 224, 0.14);
+  animation: esqPulso 1.4s ease-in-out infinite;
+}
+.esq-ancha { width: 70%; height: 12px; }
+@keyframes esqPulso {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+/* Estado vacío */
 .historial-vacio {
   background: var(--fondo-tarjeta);
   border: 1px dashed var(--borde-sutil);
@@ -1951,134 +2073,712 @@ onUnmounted(() => {
   text-wrap: pretty;
 }
 
-.tabla-historial {
-  background: linear-gradient(180deg, rgba(36, 21, 86, 0.55), rgba(27, 16, 64, 0.75));
-  border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-xl);
-  overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 48px rgba(10, 6, 26, 0.4);
-}
-
-.fila-encabezado {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr 1fr 1fr 0.8fr;
-  gap: 1rem;
-  background: rgba(168, 85, 247, 0.1);
-  padding: 1rem 1.5rem;
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--texto-secundario);
-  border-bottom: 1px solid var(--borde-sutil);
-}
-
-.fila-historial {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr 1fr 1fr 0.8fr;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--borde-sutil);
-  align-items: center;
-  transition: background var(--trans-rapida);
-}
-.fila-historial:hover {
-  background: rgba(168, 85, 247, 0.06);
-}
-
-.fila-historial:last-child {
-  border-bottom: none;
-}
-
-/* Transformación de tabla a tarjetas según el ancho de la columna del historial */
-@container (max-width: 560px) {
-  .tabla-historial {
-    background: transparent;
-    border: none;
-  }
-  .fila-encabezado {
-    display: none;
-  }
-  .fila-historial {
-    display: grid;
-    grid-template-columns: 1fr auto; /* Dos columnas: Izquierda contenido, Derecha badge/botón */
-    grid-template-areas:
-      "monto estado"
-      "transaccion transaccion"
-      "fecha boton";
-    align-items: center;
-    padding: 1rem;
-    background: var(--fondo-tarjeta);
-    border: 1px solid var(--borde-color);
-    border-radius: 12px;
-    margin-bottom: 0.8rem;
-    gap: 0.5rem;
-  }
-  .columna-monto {
-    grid-area: monto;
-    font-size: 1.1rem;
-    margin: 0;
-  }
-  .columna-estado {
-    grid-area: estado;
-    text-align: right;
-  }
-  .columna-transaccion {
-    grid-area: transaccion;
-    font-size: 0.8rem;
-    word-break: break-all;
-  }
-  .columna-fecha {
-    grid-area: fecha;
-    font-size: 0.85rem;
-  }
-  .columna-acciones {
-    grid-area: boton;
-    text-align: right;
-    margin: 0;
-  }
-}
-
-.columna-monto,
-.columna-transaccion,
-.columna-fecha,
-.columna-estado {
-  color: var(--texto-secundario);
-  font-size: 0.95rem;
-}
-
-.columna-monto {
-  color: var(--texto-principal);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
+/* Badges de estado (recargas pendientes / rechazadas) */
 .badge {
   display: inline-block;
-  padding: 0.3rem 0.6rem;
+  padding: 0.22rem 0.5rem;
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
 }
 
-.badge-completada {
-  background: rgba(6, 214, 160, 0.15);
+.badge-completada, .badge-completado {
+  background: rgba(34, 197, 94, 0.15);
   color: var(--color-exito);
-  border: 1px solid rgba(6, 214, 160, 0.3);
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .badge-pendiente {
-  background: rgba(255, 209, 102, 0.15);
+  background: rgba(245, 158, 11, 0.15);
   color: var(--color-alerta);
-  border: 1px solid rgba(255, 209, 102, 0.3);
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .badge-rechazada, .badge-rechazado {
-  background: rgba(239, 71, 111, 0.15);
+  background: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
-  border: 1px solid rgba(239, 71, 111, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* ============ MODALES ============ */
+/* Todos los overlays van en Teleport a body con z-index >= 1000 para quedar
+   por encima del navbar inferior del cliente (z-index 50). */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 3, 20, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+}
+
+.modal-cambiar-pin,
+.modal-recarga,
+.modal-detalles {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.14), transparent 55%),
+    linear-gradient(165deg, #241556 0%, #150a30 100%);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl);
+  padding: 2rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+  max-width: 500px;
+  width: 90%;
+  max-height: 90dvh;
+  overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.28);
+  animation: modalAparece 0.28s var(--ease-suave) both;
+}
+
+@keyframes modalAparece {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 1rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--texto-principal);
+  font-family: var(--fuente-titulo);
+  font-size: 1.3rem;
+}
+
+.btn-cerrar {
+  background: none;
+  border: none;
+  color: var(--texto-secundario);
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: var(--radio-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--trans-normal);
+}
+
+.btn-cerrar:hover {
+  color: var(--texto-principal);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-cerrar:active { transform: scale(0.92); }
+
+.btn-cerrar:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
+.modal-body { margin-bottom: 1.5rem; }
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding-top: 1rem;
+}
+
+.btn-cancelar,
+.btn-guardar {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-cancelar {
+  background: rgba(255,255,255,0.05);
+  color: var(--texto-principal);
+}
+
+.btn-cancelar:hover { background: rgba(255,255,255,0.1); }
+
+.btn-guardar {
+  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
+  color: white;
+}
+
+.btn-guardar:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(168, 85, 247, 0.35);
+}
+
+.btn-guardar:active:not(:disabled),
+.btn-cancelar:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-guardar:focus-visible,
+.btn-cancelar:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
+.btn-guardar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* CAMBIO PIN */
+.campo-pin { margin-bottom: 1.5rem; }
+
+.campo-pin label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--texto-secundario);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.input-pin-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-pin {
+  width: 100%;
+  padding: 1rem;
+  padding-right: 3rem;
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  border-radius: 8px;
+  color: var(--texto-principal);
+  font-size: 1.5rem;
+  letter-spacing: 4px;
+  text-align: center;
+  transition: border-color 0.3s;
+}
+
+.input-pin:focus {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+/* La contraseña de la cuenta no es un PIN: tipografía normal */
+.input-password {
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.btn-ojo-input {
+  position: relative;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--texto-secundario);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn-ojo-input:hover { color: var(--texto-principal); }
+
+/* MODAL VER PIN (compacto y centrado) */
+.modal-ver-pin {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(236,72,153,0.14), transparent 55%),
+    linear-gradient(165deg, #241556 0%, #150a30 100%);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl);
+  padding: 1.75rem 1.5rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 350px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(7, 3, 20, 0.8), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 30px rgba(168, 85, 247, 0.28);
+  animation: modalAparece 0.28s var(--ease-suave) both;
+}
+
+.verpin-candado {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-full);
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid var(--borde-sutil);
+}
+
+.verpin-titulo {
+  margin: 0.8rem 0 0.2rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--texto-principal);
+}
+
+.verpin-sub {
+  margin: 0 0 1.15rem;
+  color: var(--texto-secundario);
+  font-size: 0.88rem;
+}
+
+.verpin-error {
+  justify-content: center;
+  text-align: left;
+}
+
+.verpin-error svg { flex-shrink: 0; }
+
+.verpin-acciones {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 1.25rem;
+}
+
+.verpin-acciones .btn-cancelar,
+.verpin-acciones .btn-guardar {
+  flex: 1;
+  padding: 0.75rem 1rem;
+}
+
+.btn-reconfigurar {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.info-recarga-paso {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  color: var(--texto-principal);
+  margin-bottom: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.num-paso {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-full);
+  background: var(--gradiente-marca);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.35);
+}
+
+/* Ajuste de inputs de PIN en pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .modal-cambiar-pin,
+  .modal-recarga {
+    padding: 1.25rem;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    width: 94%;
+  }
+  .modal-ver-pin {
+    padding: 1.5rem 1.25rem;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+  .input-pin {
+    font-size: 1.25rem;
+    letter-spacing: 3px;
+    padding: 0.85rem;
+    padding-right: 2.75rem;
+  }
+  .input-password { font-size: 1rem; letter-spacing: normal; }
+}
+
+/* RECARGA */
+.subseccion-qr-predeterminado {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.contenedor-qr-default {
+  position: relative;
+  display: inline-block;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.contenedor-qr-default .qr-imagen {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  height: auto;
+  background: white;
+  padding: 8px;
+}
+
+.btn-ampliar-qr {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 10, 46, 0.92);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  border-radius: 20px;
+  color: white;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-ampliar-qr:hover {
+  background: var(--morado-brillante);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.btn-ampliar-qr:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+.btn-ampliar-qr:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.campo-monto,
+.campo-comprobante {
+  background: var(--fondo-principal);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.input-monto {
+  display: flex;
+  align-items: center;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-color);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color var(--trans-normal), box-shadow var(--trans-normal);
+}
+
+.input-monto:focus-within {
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.input-monto-bloqueado { opacity: 0.6; }
+
+.input-monto-valido {
+  border-color: var(--color-exito) !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.input-monto-error {
+  border-color: var(--color-error) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.icono-check-valido { margin-right: 1rem; }
+
+.montos-rapidos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.chip-monto {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--borde-color);
+  background: var(--fondo-tarjeta);
+  color: var(--texto-principal);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--trans-normal), background var(--trans-normal), color var(--trans-normal);
+}
+
+.chip-monto:hover:not(:disabled) { border-color: var(--morado-brillante); }
+
+.chip-monto.activo {
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--morado-brillante);
+}
+
+.chip-monto:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nota-primera-recarga {
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: var(--texto-principal);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  margin-bottom: 1.25rem;
+}
+
+.prefijo {
+  padding: 0 1rem;
+  color: var(--texto-secundario);
+  font-weight: 600;
+}
+
+.input-field {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--texto-principal);
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+}
+
+.input-field:focus { outline: none; }
+
+.error-mensaje,
+.exito-mensaje {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.error-mensaje { color: var(--rojo-suave); }
+.exito-mensaje { color: var(--verde-fresco); }
+
+.warning-mensaje {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-alerta);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Dos opciones para el comprobante: subir imagen o tomar foto */
+.opciones-comprobante {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.btn-opcion-comprobante {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  background: var(--fondo-tarjeta);
+  border: 2px dashed var(--borde-color);
+  border-radius: 10px;
+  padding: 1.4rem 0.75rem;
+  color: var(--texto-secundario);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease, transform 0.2s ease;
+}
+
+.btn-opcion-comprobante:hover:not(:disabled) {
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.08);
+  color: var(--texto-principal);
+}
+
+.btn-opcion-comprobante:active:not(:disabled) { transform: scale(0.98); }
+
+.btn-opcion-comprobante:focus-visible {
+  outline: 2px solid var(--borde-activo);
+  outline-offset: 2px;
+}
+
+.btn-opcion-comprobante:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-file-hidden { display: none; }
+
+/* ============ CÁMARA DEL COMPROBANTE ============ */
+.camara-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: #000;
+}
+
+.camara-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camara-guia {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: 1.5rem 1.5rem 9rem;
+  pointer-events: none;
+}
+
+/* Recuadro guía vertical ~3:4 con esquinas resaltadas */
+.guia-marco {
+  position: relative;
+  width: min(78vw, 42dvh);
+  aspect-ratio: 3 / 4;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+}
+
+.guia-esquina {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border: 4px solid var(--morado-hover);
+}
+
+.ge-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 18px; }
+.ge-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 18px; }
+.ge-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 18px; }
+.ge-br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 18px; }
+
+.guia-texto {
+  margin: 0;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+}
+
+.camara-controles {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 1.25rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+}
+
+.btn-camara-cancelar {
+  justify-self: start;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radio-full);
+  color: #fff;
+  padding: 0.55rem 1.15rem;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+
+.btn-camara-cancelar:hover { background: rgba(255, 255, 255, 0.18); }
+
+.btn-camara-cancelar:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.btn-capturar {
+  justify-self: center;
+  width: 74px;
+  height: 74px;
+  border-radius: var(--radio-full);
+  background: rgba(255, 255, 255, 0.22);
+  border: 3px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-capturar-interno {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radio-full);
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.btn-capturar:hover .btn-capturar-interno { transform: scale(0.94); }
+.btn-capturar:active .btn-capturar-interno { transform: scale(0.85); }
+
+.btn-capturar:focus-visible {
+  outline: 3px solid var(--morado-hover);
+  outline-offset: 3px;
+}
+
+.camara-espaciador { justify-self: end; }
+
+.estado-ocr {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--morado-brillante);
+  border-radius: 8px;
+  padding: 1rem;
+  color: var(--texto-principal);
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.spin { animation: spin 2s linear infinite; }
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
 }
 
 .vista-previa-comprobante {
@@ -2105,11 +2805,12 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   max-width: 200px;
   font-size: 0.9rem;
-  color: var(--texto-principal);
+  color: var(--verde-fresco);
+  font-weight: 600;
 }
 
 .btn-eliminar-archivo {
-  background: rgba(239, 71, 111, 0.1);
+  background: rgba(239, 68, 68, 0.1);
   color: var(--color-error);
   border: none;
   border-radius: 50%;
@@ -2119,6 +2820,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
   transition: all 0.3s;
 }
 
@@ -2128,196 +2830,250 @@ onUnmounted(() => {
   transform: scale(1.1);
 }
 
-.btn-eliminar-archivo:active {
-  transform: scale(0.95);
-}
+.btn-eliminar-archivo:active { transform: scale(0.95); }
 
 .btn-eliminar-archivo:focus-visible {
   outline: 2px solid var(--color-error);
   outline-offset: 2px;
 }
 
-.contenedor-qr-identificador {
+/* MODAL DETALLE CONSUMO */
+.modal-consumo { max-width: 440px; }
+
+.consumo-cargando {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.8rem;
+  padding: 2rem 0;
+  color: var(--texto-secundario);
 }
 
-.qr-modal-imagen {
-  width: 90%;
-  max-width: 350px;
-  height: auto;
-  border-radius: 12px;
-  background: white;
-  padding: 10px;
-}
+.consumo-cargando p { margin: 0; font-size: 0.9rem; }
+.consumo-cargando svg { color: var(--morado-hover); }
 
-.qr-identificador {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.8rem 1.5rem;
-  border-radius: 12px;
-  color: var(--texto-principal);
-  font-family: monospace;
-  font-size: 1.5rem;
-  letter-spacing: 2px;
-  margin: 0;
-  font-weight: 700;
-  max-width: 100%;
-  text-align: center;
-  word-break: break-all;
-  box-sizing: border-box;
-}
-
-/* RESPONSIVIDAD MODAL QR AMPLIADO */
-@media (max-width: 480px) {
-  .modal-qr-ampliado {
-    max-width: 94vw;
-    width: 94vw;
-  }
-  .contenedor-qr-identificador {
-    gap: 0.75rem;
-    width: 100%;
-  }
-  .qr-modal-imagen {
-    width: 100%;
-    max-width: min(300px, 80vw);
-    padding: 8px;
-  }
-  .qr-identificador {
-    font-size: clamp(0.95rem, 4.5vw, 1.25rem);
-    letter-spacing: 1px;
-    padding: 0.7rem 1rem;
-  }
-}
-
-/* Nuevos Ajustes Diseño */
-.subseccion-qr-predeterminado {
+.consumo-items {
   display: flex;
-  justify-content: center;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.1rem;
 }
 
-.contenedor-qr-default {
-  position: relative;
-  display: inline-block;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-}
-
-.contenedor-qr-default .qr-imagen {
-  display: block;
-  width: 100%;
-  max-width: 180px;
-  height: auto;
-  background: white;
-  padding: 8px;
-}
-
-.btn-ampliar-qr {
-  position: absolute;
-  bottom: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(22, 33, 62, 0.85);
-  border: 1px solid rgba(157, 78, 221, 0.5);
-  border-radius: 20px;
-  color: white;
-  padding: 0.4rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+.consumo-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: all 0.3s;
-  white-space: nowrap;
+  gap: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radio-md);
+  padding: 0.6rem 0.8rem;
+  min-width: 0;
 }
 
-.btn-ampliar-qr:hover {
-  background: var(--morado-brillante);
-  transform: translateX(-50%) scale(1.05);
+.consumo-img {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radio-md);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
 }
 
-.btn-ampliar-qr:active {
-  transform: translateX(-50%) scale(0.98);
+.consumo-img-ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.12);
 }
 
-.btn-ampliar-qr:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  outline-offset: 2px;
+.consumo-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
-.icono-check-valido {
-  margin-right: 1rem;
+.consumo-item-nombre {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--texto-principal);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.input-monto-valido {
-  border-color: var(--color-exito) !important;
-  box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.2);
+.consumo-item-cant {
+  font-size: 0.78rem;
+  color: var(--texto-secundario);
+  font-variant-numeric: tabular-nums;
 }
 
-.input-monto-error {
-  border-color: var(--color-error) !important;
-  box-shadow: 0 0 0 2px rgba(239, 71, 111, 0.2);
+.consumo-item-subtotal {
+  flex-shrink: 0;
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
 }
 
-.warning-mensaje {
+.consumo-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radio-md);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  margin-bottom: 1rem;
+}
+
+.consumo-total span {
+  color: var(--texto-secundario);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.consumo-total strong {
+  font-family: var(--fuente-titulo);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+}
+
+.consumo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.consumo-meta-fila {
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--color-alerta);
+  color: var(--texto-secundario);
   font-size: 0.85rem;
-  margin-top: 0.5rem;
-  background: rgba(255, 209, 102, 0.1);
-  padding: 0.6rem;
+}
+
+.consumo-meta-fila svg {
+  color: var(--morado-hover);
+  flex-shrink: 0;
+}
+
+/* MODAL DETALLES / ÉXITO */
+.modal-detalles { max-width: 420px; }
+
+.modal-exito {
+  text-align: center;
+  padding: 2rem !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.icono-exito {
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+  .modal-detalles {
+    padding: 1.25rem;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+}
+
+/* ============ QR A PANTALLA COMPLETA (fondo blanco) ============ */
+.qr-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: var(--esp-5, 24px);
+  background: #fff;
+  cursor: pointer;
+  animation: qrFsEntrada 0.2s ease-out both;
+}
+
+.qr-fs-img {
+  width: min(80vw, 80vh);
+  max-width: 100%;
+  max-height: 80vh;
+  height: auto;
+  object-fit: contain;
   border-radius: 8px;
-  border: 1px solid rgba(255, 209, 102, 0.3);
 }
 
-.badge-completado {
-  background: rgba(6, 214, 160, 0.15);
-  color: var(--verde-fresco);
+.qr-fs-titulo {
+  margin: 0;
+  color: #1a1030;
+  font-weight: 800;
+  font-size: 1.05rem;
+  font-family: var(--fuente-titulo);
+  letter-spacing: -0.01em;
+  text-align: center;
 }
 
-.badge-pendiente {
-  background: rgba(255, 193, 7, 0.15);
-  color: var(--color-alerta);
+.qr-fs-codigo {
+  margin: 0;
+  color: #1a1030;
+  font-weight: 800;
+  font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  font-family: monospace;
+  text-align: center;
+  word-break: break-all;
+  max-width: 90vw;
 }
 
-.badge-rechazado {
-  background: rgba(239, 71, 111, 0.15);
-  color: var(--rojo-suave);
+.qr-fs-hint {
+  margin: 0;
+  color: #6b6480;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
 }
 
-@media (max-width: 768px) {
-  .tarjeta-billetera {
-    height: auto;
-    padding: 1.5rem;
-    min-height: 220px;
-  }
-  
-  .seccion-monto {
-    position: static;
-    transform: none;
-    margin: 1.5rem 0;
-    text-align: left;
-  }
-  
-  .seccion-pin-tarjeta {
-    position: static;
-  }
-  
-  .btn-cambiar-pin {
-    position: static;
-    width: 100%;
-    margin-top: 1rem;
-  }
-  
-  .grid-qr {
-    grid-template-columns: 1fr;
-  }
+@keyframes qrFsEntrada {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ============ MOVIMIENTO REDUCIDO ============ */
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta-billetera:hover .tarjeta-brillo { transform: rotate(8deg) translateX(-30%); }
+  .modal-cambiar-pin,
+  .modal-recarga,
+  .modal-detalles,
+  .modal-ver-pin,
+  .qr-fullscreen { animation: none; }
+  .pin-caja { animation: none; }
+  .esq-linea { animation: none; opacity: 0.7; }
+  .btn-abrir-recarga:hover,
+  button.mov-fila:hover,
+  .btn-pildora:hover,
+  .btn-ver-todos:hover,
+  .btn-ojo-pin:hover { transform: none; }
 }
 </style>

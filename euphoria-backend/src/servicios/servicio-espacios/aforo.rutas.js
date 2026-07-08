@@ -22,6 +22,26 @@ function estadoAforo(porcentaje) {
   return 'ok'
 }
 
+// Ventana en la que una entrada es válida: SOLO el día del evento (con un
+// margen antes para la llegada temprana / apertura de puertas). Evita que
+// alguien use su entrada en otra fecha u otro evento.
+const HORAS_ANTES = 4   // margen de apertura antes del inicio
+const HORAS_DESPUES = 12 // duración por defecto si el evento no tiene fin
+function ventanaEvento(evento, ahora = new Date()) {
+  if (!evento || !evento.fecha_hora_inicio) {
+    return { estado: 'vigente', inicio: null, fin: null } // sin fecha: no bloquear
+  }
+  const inicio = new Date(evento.fecha_hora_inicio)
+  const fin = evento.fecha_hora_fin
+    ? new Date(evento.fecha_hora_fin)
+    : new Date(inicio.getTime() + HORAS_DESPUES * 3600 * 1000)
+  const ventanaInicio = new Date(inicio.getTime() - HORAS_ANTES * 3600 * 1000)
+  let estado = 'vigente'
+  if (ahora < ventanaInicio) estado = 'proxima'
+  else if (ahora > fin) estado = 'finalizada'
+  return { estado, inicio, fin, ventanaInicio }
+}
+
 // Aforo actual de una zona = suma de personas realmente ingresadas (por tandas).
 // Con el QR multi-uso, una entrada puede tener 3 de 8 dentro; contamos ingresados.
 async function aforoActualZona(id_zona, tx = prisma) {
@@ -95,6 +115,10 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     const yaAdentro = entrada.cantidad_ingresada || 0
     const restantes = total - yaAdentro
 
+    // La entrada SOLO vale el día de su evento (con margen de apertura). Impide
+    // usarla en otra fecha u otro evento.
+    const ventana = ventanaEvento(entrada.zona.evento)
+
     // Modo CONSULTA: solo devuelve el estado de la entrada, sin admitir a nadie.
     // Permite al recepcionista ver cuántos cupos quedan y elegir cuántos entran.
     if (req.body.consultar) {
@@ -109,6 +133,24 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
         zona: entrada.zona.nombre_zona,
         id_zona: entrada.id_zona,
         evento: entrada.zona.evento ? entrada.zona.evento.nombre_evento : null,
+        fecha_evento: entrada.zona.evento ? entrada.zona.evento.fecha_hora_inicio : null,
+        estado_fecha: ventana.estado, // proxima | vigente | finalizada
+      })
+    }
+
+    // Rechazar admisión fuera del día del evento
+    if (ventana.estado === 'proxima') {
+      return res.status(409).json({
+        error: `Esta entrada aún no está activa. Es válida el ${new Date(ventana.inicio).toLocaleDateString('es-BO', { day: '2-digit', month: 'long' })}.`,
+        fuera_de_fecha: true,
+        estado_fecha: 'proxima',
+      })
+    }
+    if (ventana.estado === 'finalizada') {
+      return res.status(409).json({
+        error: 'Esta entrada corresponde a un evento que ya terminó.',
+        fuera_de_fecha: true,
+        estado_fecha: 'finalizada',
       })
     }
 
@@ -165,6 +207,7 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
           id_entrada: entrada.id_entrada,
           id_recepcionista: req.usuario.id,
           tipo_movimiento: 'ingreso',
+          cantidad,
           fecha_hora: new Date(),
         },
       })
@@ -211,7 +254,8 @@ router.post('/salida', soloRoles('Recepcionista', 'Administrador'), async (req, 
       entrada = await resolverEntrada(req.body)
     }
 
-    if ((entrada.cantidad_ingresada || 0) <= 0) {
+    const salieron = entrada.cantidad_ingresada || 0
+    if (salieron <= 0) {
       return res.status(409).json({ error: 'Esta entrada no tiene personas marcadas como dentro.' })
     }
 
@@ -229,6 +273,7 @@ router.post('/salida', soloRoles('Recepcionista', 'Administrador'), async (req, 
           id_entrada: entrada.id_entrada,
           id_recepcionista: req.usuario.id,
           tipo_movimiento: 'salida',
+          cantidad: salieron,
           fecha_hora: new Date(),
         },
       })

@@ -62,7 +62,14 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error.response?.data || error)
+    // Se adjunta el status HTTP al objeto rechazado: las vistas pueden distinguir
+    // 409 (conflicto: mesa tomada), 400, etc. sin depender de err.response
+    const data = error.response?.data
+    if (data && typeof data === 'object') {
+      data.__status = error.response.status
+      return Promise.reject(data)
+    }
+    return Promise.reject(data || error)
   }
 )
 

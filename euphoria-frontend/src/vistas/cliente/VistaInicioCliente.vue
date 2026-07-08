@@ -9,7 +9,7 @@
       <!-- Banner Superior de Evento Actual -->
       <div v-if="eventoActual" class="banner-evento-actual brillo-hover" @click="router.push('/cliente/catalogo')">
         <div class="banner-contenido">
-          <span class="punto-verde"></span>
+          <span class="eq-vivo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <div class="banner-texto">
             <span class="banner-label">Estás en vivo</span>
             <span class="banner-nombre">{{ eventoActual.nombre }}</span>
@@ -24,60 +24,102 @@
       </div>
     </header>
 
-    <!-- BILLETERA PREMIUM (double-bezel tipo tarjeta física) -->
-    <section class="billetera-bezel bezel hover-elevar">
-      <div class="billetera-core bezel-core textura-grano">
-        <div class="orbe-deco rosa billetera-orbe"></div>
+    <!-- SALDO + PAGO INMEDIATO -->
+    <section class="zona-pago">
+      <!-- Billetera premium (double-bezel tipo tarjeta física) -->
+      <div class="billetera-bezel bezel hover-elevar">
+        <div class="billetera-core bezel-core textura-grano">
+          <div class="orbe-deco rosa billetera-orbe"></div>
 
-        <div class="billetera-top">
-          <span class="billetera-titulo">Billetera Euphoria</span>
-          <span class="billetera-chip" aria-hidden="true"></span>
-        </div>
+          <div class="billetera-top">
+            <span class="billetera-titulo">Billetera Euphoria</span>
+            <span class="billetera-chip" aria-hidden="true"></span>
+          </div>
 
-        <div class="billetera-saldo">
-          <span class="saldo-etiqueta">Saldo disponible</span>
-          <h2 class="saldo-monto" v-if="!cargandoBilletera">Bs. {{ saldoBilletera.toFixed(2) }}</h2>
-          <div v-else class="saldo-cargando">Cargando saldo...</div>
-        </div>
+          <div class="billetera-saldo">
+            <span class="saldo-etiqueta">Saldo disponible</span>
+            <h2 class="saldo-monto" v-if="!cargandoBilletera">Bs. {{ saldoBilletera.toFixed(2) }}</h2>
+            <div v-else class="saldo-cargando">Cargando saldo...</div>
+          </div>
 
-        <div class="billetera-footer">
-          <span class="billetera-marca">EUPHORIA · CLUB</span>
-          <button class="cta-isla" @click="router.push('/cliente/billetera')">
-            Recargar
-            <span class="cta-icono">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 6v6m0 0l-3-3m3 3l3-3"></path>
-                <path d="M12 18a6 6 0 0 1-6-6"></path>
-              </svg>
-            </span>
-          </button>
+          <div class="billetera-footer">
+            <span class="billetera-marca">EUPHORIA · CLUB</span>
+            <button class="cta-isla" @click="router.push('/cliente/billetera')">
+              Recargar
+              <span class="cta-icono">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 6v6m0 0l-3-3m3 3l3-3"></path>
+                  <path d="M12 18a6 6 0 0 1-6-6"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- Pago rápido: QRs sin salir del inicio -->
+      <div class="fila-qr escalonar">
+        <button
+          class="qr-tile qr-tile-publico"
+          type="button"
+          :disabled="generandoQR"
+          @click="mostrarQRRapido('sin_pin')"
+        >
+          <span class="qr-tile-icono" :class="{ girando: generandoQR && qrSolicitado === 'sin_pin' }">
+            <svg v-if="!(generandoQR && qrSolicitado === 'sin_pin')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+              <path d="M14 14h3v3h-3zM21 14v.01M21 21h-4M14 21v-2"></path>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 1 1-6.2-8.56"></path>
+            </svg>
+          </span>
+          <span class="qr-tile-texto">
+            <span class="qr-tile-titulo">QR público</span>
+            <span class="qr-tile-sub">Muestra y paga al toque</span>
+          </span>
+          <span class="qr-tile-flecha" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"></path></svg>
+          </span>
+        </button>
+
+        <button
+          class="qr-tile qr-tile-privado"
+          type="button"
+          :disabled="generandoQR"
+          @click="mostrarQRRapido('con_pin')"
+        >
+          <span class="qr-tile-icono" :class="{ girando: generandoQR && qrSolicitado === 'con_pin' }">
+            <svg v-if="!(generandoQR && qrSolicitado === 'con_pin')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              <path d="M12 15v2"></path>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 1 1-6.2-8.56"></path>
+            </svg>
+          </span>
+          <span class="qr-tile-texto">
+            <span class="qr-tile-titulo">QR privado</span>
+            <span class="qr-tile-sub">Solo con tu PIN</span>
+          </span>
+          <span class="qr-tile-flecha" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"></path></svg>
+          </span>
+        </button>
       </div>
     </section>
 
-    <!-- Combos / Promociones recomendadas -->
-    <div v-if="combos.length > 0" class="seccion-combos">
-      <div class="combos-encabezado">
-        <h3 class="combos-titulo">Combos que rinden más</h3>
-        <p class="combos-sub">Pedidos que suelen ir juntos, con descuento aplicado.</p>
-      </div>
-      <div class="combos-scroll escalonar">
-        <div v-for="(combo, i) in combos" :key="i" class="tarjeta-combo hover-elevar" @click="agregarCombo(combo)">
-          <div class="combo-badge">-{{ combo.descuento_pct }}%</div>
-          <div class="combo-nombre">{{ combo.nombre }}</div>
-          <div class="combo-precios">
-            <span class="combo-normal">Bs {{ combo.precio_normal.toFixed(2) }}</span>
-            <span class="combo-final">Bs {{ combo.precio_combo.toFixed(2) }}</span>
-          </div>
-          <button class="btn-combo" type="button">Agregar combo</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- HERO CAROUSEL: Promociona eventos al estilo E-commerce -->
-    <section class="seccion-carrusel" v-if="!cargandoEventos && eventos.length > 0">
+    <!-- HERO CAROUSEL: los eventos van ARRIBA — son lo primero que vende la noche -->
+    <section class="seccion-carrusel reveal" v-if="!cargandoEventos && eventos.length > 0">
       <div class="carrusel-cabecera">
+        <span class="kicker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Agenda tu previa
+        </span>
         <h3 class="carrusel-titulo">Próximos eventos</h3>
       </div>
       <div class="hero-carrusel bezel">
@@ -115,8 +157,8 @@
     </section>
 
     <!-- Accesos Rápidos estilo bento -->
-    <section class="seccion-accesos">
-      <h3 class="bloque-titulo">Explora Euphoria</h3>
+    <section class="seccion-accesos reveal">
+      <h3 class="bloque-titulo">Tu noche, a un toque</h3>
       <div class="grid-accesos-mini escalonar">
         <div class="acceso-mini hover-elevar" @click="router.push('/cliente/eventos')">
           <div class="icono-svg">
@@ -145,10 +187,66 @@
       </div>
     </section>
 
+    <!-- Combos / Promociones recomendadas -->
+    <div v-if="combos.length > 0" class="seccion-combos reveal">
+      <div class="combos-encabezado">
+        <span class="kicker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+          Promos de la noche
+        </span>
+        <h3 class="combos-titulo">Combos para encender la noche</h3>
+        <p class="combos-sub">Los favoritos para compartir con tu mesa.</p>
+      </div>
+      <div class="combos-scroll escalonar">
+        <div v-for="(combo, i) in combos" :key="i" class="tarjeta-combo hover-elevar" @click="agregarCombo(combo)">
+          <div class="combo-visual">
+            <div class="combo-visual-glow" aria-hidden="true"></div>
+            <template v-if="imagenesCombo(combo).length">
+              <div class="combo-fotos" :class="`fotos-${imagenesCombo(combo).length}`">
+                <img
+                  v-for="(img, j) in imagenesCombo(combo)"
+                  :key="j"
+                  :src="img"
+                  class="combo-foto"
+                  alt=""
+                  loading="lazy"
+                />
+              </div>
+            </template>
+            <div v-else class="combo-visual-vacio" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 22L16 22"></path><path d="M12 18L12 22"></path><path d="M12 15C16.4183 15 20 11.4183 20 7L4 7C4 11.4183 7.58172 15 12 15Z"></path><path d="M4 3L20 3"></path></svg>
+            </div>
+            <div class="combo-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+              -{{ combo.descuento_pct }}%
+            </div>
+          </div>
+          <div class="combo-cuerpo">
+            <div class="combo-nombre">{{ combo.nombre }}</div>
+            <div class="combo-precios">
+              <span class="combo-normal">Bs {{ combo.precio_normal.toFixed(2) }}</span>
+              <span class="combo-flecha" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+              </span>
+              <span class="combo-final">Bs {{ combo.precio_combo.toFixed(2) }}</span>
+            </div>
+            <button class="btn-combo" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+              Lo quiero
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Sección: Productos Destacados (Infinite Marquee) -->
-    <section class="seccion-marquee">
+    <section class="seccion-marquee reveal">
       <div class="seccion-cabecera">
         <div class="seccion-cabecera-txt">
+          <span class="kicker">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.9L21 9.2l-5.3 4.4L17.5 21 12 17l-5.5 4 1.8-7.4L3 9.2l6.6-.3L12 2z"></path></svg>
+            En barra esta noche
+          </span>
           <h2>Catálogo exclusivo</h2>
         </div>
         <RouterLink to="/cliente/catalogo" class="link-ver-todo subrayado-anim">Ver menú</RouterLink>
@@ -165,10 +263,10 @@
       <div v-else class="marquee-contenedor">
         <div class="marquee-track" :style="{ 'animation-play-state': pausaMarquee ? 'paused' : 'running' }">
           <!-- Multiplicamos los productos para el efecto infinito -->
-          <div 
-            v-for="(prod, index) in [...productos, ...productos, ...productos]" 
-            :key="index" 
-            class="tarjeta-marquee-producto" 
+          <div
+            v-for="(prod, index) in [...productos, ...productos, ...productos]"
+            :key="index"
+            class="tarjeta-marquee-producto"
             @click="router.push('/cliente/catalogo')"
             @mouseenter="pausaMarquee = true"
             @mouseleave="pausaMarquee = false"
@@ -176,14 +274,15 @@
             @touchend="pausaMarquee = false"
           >
             <div class="img-prod-contenedor">
-              <img v-if="prod.url_imagen" :src="prod.url_imagen" class="img-prod" />
+              <img v-if="prod.url_imagen" :src="prod.url_imagen" class="img-prod" loading="lazy" />
               <div v-else class="img-prod-placeholder">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 22L16 22"></path><path d="M12 18L12 22"></path><path d="M12 15C16.4183 15 20 11.4183 20 7L4 7C4 11.4183 7.58172 15 12 15Z"></path><path d="M4 3L20 3"></path></svg>
               </div>
+              <div class="img-prod-velo" aria-hidden="true"></div>
+              <p class="precio-flotante">Bs. {{ (parseFloat(prod.precio_base) || 0).toFixed(2) }}</p>
             </div>
             <div class="info-prod-mini">
               <h4>{{ prod.nombre_producto }}</h4>
-              <p class="precio">Bs. {{ prod.precio_base }}</p>
             </div>
           </div>
         </div>
@@ -211,20 +310,37 @@
       </div>
     </Teleport>
 
+    <!-- QR de pago a pantalla completa: fondo blanco para el escáner de barra -->
+    <Teleport to="body">
+      <Transition name="qr-fs">
+        <div v-if="qrPantalla && qrActivo" class="qr-fullscreen" @click="qrPantalla = null" role="dialog" aria-label="Código QR de pago">
+          <p class="qr-fs-nombre">{{ tienda.usuario?.nombres || 'Cliente Euphoria' }}</p>
+          <span class="qr-fs-tipo" :class="{ privado: qrPantalla === 'con_pin' }">
+            {{ qrPantalla === 'con_pin' ? 'QR privado · protegido con PIN' : 'QR público · cobro directo' }}
+          </span>
+          <img :src="qrActivo.imagen" alt="Código QR de pago ampliado" class="qr-fs-img" />
+          <p class="qr-fs-codigo">{{ qrActivo.identificador }}</p>
+          <p class="qr-fs-hint">Muestra la pantalla en barra · Toca para cerrar</p>
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const router = useRouter()
+const notif = useNotificaciones()
 const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()
 const nombreCorto = computed(() => tienda.usuario?.nombres?.split(' ')[0] || 'Invitado')
@@ -251,6 +367,20 @@ const pausaMarquee = ref(false)
 // Billetera
 const saldoBilletera = ref(0)
 const cargandoBilletera = ref(true)
+const sinBilletera = ref(false)
+
+// Pago rápido con QR (sin salir del inicio)
+const generandoQR = ref(false)
+const qrSolicitado = ref(null)   // tipo que se está generando ('sin_pin' | 'con_pin')
+const qrPantalla = ref(null)     // tipo mostrado a pantalla completa
+const datosQR = ref(null)
+const qrActivo = computed(() => {
+  if (!datosQR.value) return null
+  return qrPantalla.value === 'con_pin' ? datosQR.value.qr_con_pin : datosQR.value.qr_sin_pin
+})
+
+// Reveals al hacer scroll
+let observadorReveal = null
 
 async function cargarDatosInicio() {
   // Cargar eventos activos
@@ -267,8 +397,8 @@ async function cargarDatosInicio() {
   try {
     const dataP = await servicioProductos.listar()
     productosCompletos.value = dataP
-    // Si hay muchos, tomamos los primeros 6 para el marquee
-    productos.value = dataP.slice(0, 6)
+    // Solo productos CON imagen para el marquee (los combos no traen url_imagen)
+    productos.value = dataP.filter(p => p.url_imagen).slice(0, 8)
   } catch (error) {
     console.error('Error cargando productos:', error)
   } finally {
@@ -279,6 +409,7 @@ async function cargarDatosInicio() {
   try {
     const dataSaldo = await servicioBilletera.obtenerSaldo()
     saldoBilletera.value = dataSaldo.saldo_actual || 0
+    sinBilletera.value = !!dataSaldo.sin_billetera
   } catch (error) {
     console.error('Error cargando saldo:', error)
     saldoBilletera.value = 0
@@ -295,12 +426,79 @@ async function cargarDatosInicio() {
   }
 }
 
-// Agrega ambos productos del combo al carrito y lleva al carrito
-function agregarCombo(combo) {
-  combo.productos.forEach(p => {
+// Genera y muestra el QR de pago elegido a pantalla completa, sin salir del inicio.
+// Mismo flujo que en la Billetera: el identificador se muestra EXACTO (el cajero lo busca en la BD).
+async function mostrarQRRapido(tipo) {
+  if (sinBilletera.value) {
+    notif.advertencia('Aún no tienes billetera: se crea con tu primera recarga de saldo.')
+    return
+  }
+  if (generandoQR.value) return
+  generandoQR.value = true
+  qrSolicitado.value = tipo
+  try {
+    const res = await servicioBilletera.generarQRsPago()
+    datosQR.value = res
+    qrPantalla.value = tipo
+  } catch (error) {
+    console.error('Error generando QRs:', error)
+    notif.error('Error al generar los QRs de pago')
+  } finally {
+    generandoQR.value = false
+    qrSolicitado.value = null
+  }
+}
+
+// Hasta 3 imágenes de los productos protagonistas del combo
+function imagenesCombo(combo) {
+  const imgs = []
+  for (const p of combo.productos || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
-    if (prod) tiendaCarrito.agregarItem(prod)
-  })
+    if (prod?.url_imagen) imgs.push(prod.url_imagen)
+    if (imgs.length >= 3) break
+  }
+  return imgs
+}
+
+// Agrega el combo al carrito. Si el local ya lo tiene como COMBO REAL (producto
+// es_combo con la misma composición), se agrega ESE producto y el descuento es real.
+// Si no, se agregan los productos sueltos a precio de catálogo y se avisa con claridad.
+async function agregarCombo(combo) {
+  // El catálogo completo puede seguir cargando si el usuario toca rápido:
+  // sin esta espera, no se encontraba el combo real y se cobraba precio suelto.
+  if (!productosCompletos.value.length) {
+    try { productosCompletos.value = await servicioProductos.listar() } catch (e) { /* sigue con lo que haya */ }
+  }
+  const firmaSugerida = combo.productos.map(p => `${p.id_producto}:1`).sort().join('|')
+  const comboReal = productosCompletos.value.find(p =>
+    p.es_combo && (p.combos_como_padre || []).length &&
+    p.combos_como_padre.map(c => `${c.id_producto_hijo}:${c.cantidad}`).sort().join('|') === firmaSugerida &&
+    p.stock_actual > 0
+  )
+  if (comboReal) {
+    // Los combos van al carrito con su COMPOSICIÓN (2-3 fotos solapadas, como su tarjeta)
+    const imagenesCombo = combo.productos.map(p => p.url_imagen).filter(Boolean).slice(0, 3)
+    const r = tiendaCarrito.agregarItem({
+      ...comboReal,
+      url_imagen: comboReal.url_imagen || imagenesCombo[0] || '',
+      imagenes_combo: imagenesCombo,
+    })
+    if (r && r.ok === false) { notif.advertencia(r.mensaje || 'Sin stock del combo.'); return }
+    router.push('/cliente/carrito')
+    return
+  }
+
+  let agregados = 0, omitidos = 0
+  for (const p of combo.productos) {
+    const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
+    if (!prod || prod.stock_actual <= 0) { omitidos++; continue }
+    const r = tiendaCarrito.agregarItem(prod)
+    if (r && r.ok === false) omitidos++
+    else agregados++
+  }
+  if (!agregados) { notif.error('No se pudo agregar el combo: productos sin stock.'); return }
+  if (omitidos) notif.advertencia('Algunos productos del combo no tenían stock y no se agregaron.')
+  else notif.info('Productos agregados a precio de catálogo (el precio rebajado aplica cuando el local activa el combo).')
   router.push('/cliente/carrito')
 }
 
@@ -312,6 +510,19 @@ function iniciarCarrusel() {
   }, 4000) // Cambia cada 4 segundos
 }
 
+function iniciarReveals() {
+  if (typeof IntersectionObserver === 'undefined') return
+  observadorReveal = new IntersectionObserver((entradas) => {
+    entradas.forEach(entrada => {
+      if (entrada.isIntersecting) {
+        entrada.target.classList.add('visible')
+        observadorReveal.unobserve(entrada.target)
+      }
+    })
+  }, { threshold: 0.12 })
+  document.querySelectorAll('.vista-inicio .reveal').forEach(el => observadorReveal.observe(el))
+}
+
 onMounted(async () => {
   // Revisar si ya reservó un evento
   const eventoGuardado = localStorage.getItem('euphoria_evento_actual')
@@ -320,7 +531,7 @@ onMounted(async () => {
       const parsed = JSON.parse(eventoGuardado)
       try {
         await servicioEventos.obtenerDisponible(parsed.id)
-        eventoActual.value = parsed 
+        eventoActual.value = parsed
       } catch (err) {
         localStorage.removeItem('euphoria_evento_actual')
         eventoActual.value = null
@@ -333,18 +544,22 @@ onMounted(async () => {
 
   await cargarDatosInicio()
   iniciarCarrusel()
+  await nextTick()
+  iniciarReveals()
 })
 
 onUnmounted(() => {
   if (carruselInterval) clearInterval(carruselInterval)
+  if (observadorReveal) observadorReveal.disconnect()
 })
 </script>
 
 <style scoped>
 /* ============================================================
-   HOME CLIENTE — "Euphoria Neon Nocturne" (rediseño bold)
-   Vidrio vantablack, orbes de neon, double-bezel de hardware,
-   tipografia display grande. Marca morado/magenta intacta.
+   HOME CLIENTE — "Euphoria Neon Nocturne" v2
+   Resumen breve y accionable: saludo → saldo + pago inmediato
+   → accesos → combos → catálogo → eventos.
+   Fondos sólidos/gradientes (sin backdrop-filter).
    ============================================================ */
 .vista-inicio {
   padding: var(--esp-4);
@@ -353,6 +568,19 @@ onUnmounted(() => {
   flex-direction: column;
   gap: var(--esp-6);
 }
+
+/* ---------- Kickers de sección (etiqueta pequeña con icono) ---------- */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rosa-suave);
+}
+.kicker svg { width: 13px; height: 13px; flex-shrink: 0; }
 
 /* ---------- HERO (saludo grande + evento en vivo) ---------- */
 .hero-inicio {
@@ -388,14 +616,12 @@ onUnmounted(() => {
   text-wrap: pretty;
 }
 
-/* Banner evento en vivo (pildora de vidrio) */
+/* Banner evento en vivo (píldora sólida con ecualizador) */
 .banner-evento-actual {
   position: relative;
   z-index: 1;
   cursor: pointer;
-  background: var(--glass-fondo);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(120deg, var(--fondo-tarjeta-alt) 0%, var(--fondo-tarjeta) 60%, #22104d 100%);
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-full);
   padding: 10px 12px 10px 18px;
@@ -403,25 +629,54 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   gap: var(--esp-3);
-  box-shadow: var(--sombra-tarjeta);
+  box-shadow: var(--sombra-tarjeta), inset 0 1px 0 rgba(255,255,255,0.06);
   animation: deslizarAbajo 0.55s var(--ease-rebote);
   transition: border-color var(--trans-normal), box-shadow var(--trans-normal), transform var(--trans-normal);
 }
+.banner-evento-actual::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(34,197,94,0.55), transparent 40%, rgba(236,72,153,0.4));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.7;
+}
 .banner-evento-actual:hover { border-color: var(--borde-activo); box-shadow: var(--sombra-tarjeta), var(--sombra-glow); transform: translateY(-1px); }
 @keyframes deslizarAbajo { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes latido { from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.3); opacity: 1; } }
 
 .banner-contenido { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.punto-verde { flex-shrink: 0; width: 9px; height: 9px; background: var(--color-exito); border-radius: 50%; box-shadow: 0 0 12px var(--color-exito); animation: latido 1.4s infinite alternate; }
+
+/* Ecualizador "en vivo" */
+.eq-vivo { flex-shrink: 0; display: flex; align-items: flex-end; gap: 2.5px; height: 16px; }
+.eq-vivo i {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-exito);
+  box-shadow: 0 0 8px var(--color-exito);
+  animation: eqBarra 0.9s ease-in-out infinite alternate;
+}
+.eq-vivo i:nth-child(1) { height: 40%; animation-delay: 0s; }
+.eq-vivo i:nth-child(2) { height: 90%; animation-delay: 0.18s; }
+.eq-vivo i:nth-child(3) { height: 55%; animation-delay: 0.36s; }
+.eq-vivo i:nth-child(4) { height: 75%; animation-delay: 0.54s; }
+@keyframes eqBarra { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }
+
 .banner-texto { display: flex; flex-direction: column; min-width: 0; }
-.banner-label { font-size: 0.6rem; color: var(--texto-desactivado); text-transform: uppercase; letter-spacing: 0.16em; font-weight: 700; }
+.banner-label { font-size: 0.6rem; color: var(--color-exito); text-transform: uppercase; letter-spacing: 0.16em; font-weight: 800; }
 .banner-nombre { font-size: 0.98rem; font-weight: 800; color: var(--texto-principal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
 .btn-pedir-ahora { flex-shrink: 0; background: var(--gradiente-marca); color: #fff; border: none; padding: 9px 18px; border-radius: var(--radio-full); font-weight: 700; font-size: 0.8rem; cursor: pointer; box-shadow: 0 4px 15px rgba(236,72,153,0.4); transition: transform var(--trans-rapida), box-shadow var(--trans-normal); }
 .btn-pedir-ahora:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(236,72,153,0.5), var(--glow-morado); }
 .btn-pedir-ahora:active { transform: scale(0.94); }
 .btn-pedir-ahora:focus-visible { outline: none; box-shadow: var(--anillo-foco), 0 8px 22px rgba(236,72,153,0.5); }
 
-/* ---------- BILLETERA PREMIUM (double-bezel tipo tarjeta) ---------- */
+/* ---------- ZONA PAGO: BILLETERA + QRs ---------- */
+.zona-pago { display: flex; flex-direction: column; gap: var(--esp-3); }
+
 .billetera-bezel { cursor: default; }
 .billetera-core {
   position: relative;
@@ -463,6 +718,95 @@ onUnmounted(() => {
 .billetera-marca { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.22em; color: var(--texto-desactivado); }
 .billetera-footer .cta-isla svg { width: 18px; height: 18px; }
 
+/* Tiles de pago rápido con QR */
+.fila-qr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.qr-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--radio-lg);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--sombra-tarjeta);
+  transition: transform var(--trans-rapida), box-shadow var(--trans-normal), border-color var(--trans-normal), filter var(--trans-normal);
+}
+.qr-tile:disabled { cursor: progress; filter: saturate(0.7); }
+.qr-tile:active:not(:disabled) { transform: scale(0.97); }
+.qr-tile:focus-visible { outline: none; box-shadow: var(--anillo-foco), var(--sombra-tarjeta); }
+
+.qr-tile-publico {
+  background: var(--gradiente-marca);
+  border: none;
+  color: #fff;
+}
+.qr-tile-publico:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236,72,153,0.45); }
+.qr-tile-publico .qr-tile-sub { color: rgba(255,255,255,0.8); }
+.qr-tile-publico .qr-tile-icono { background: rgba(255,255,255,0.18); color: #fff; }
+
+.qr-tile-privado {
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  color: var(--texto-principal);
+}
+.qr-tile-privado:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--borde-activo); box-shadow: var(--sombra-tarjeta), var(--sombra-glow); }
+.qr-tile-privado .qr-tile-sub { color: var(--texto-secundario); }
+.qr-tile-privado .qr-tile-icono { background: rgba(168,85,247,0.16); color: var(--morado-hover); }
+
+.qr-tile-icono {
+  flex-shrink: 0;
+  width: 42px; height: 42px;
+  border-radius: var(--radio-md);
+  display: flex; align-items: center; justify-content: center;
+}
+.qr-tile-icono svg { width: 22px; height: 22px; }
+.qr-tile-icono.girando svg { animation: girar 0.8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.qr-tile-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qr-tile-titulo { font-family: var(--fuente-titulo); font-size: 0.92rem; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.qr-tile-sub { font-size: 0.7rem; font-weight: 600; line-height: 1.3; }
+.qr-tile-flecha { margin-left: auto; flex-shrink: 0; opacity: 0.55; display: flex; }
+.qr-tile-flecha svg { width: 16px; height: 16px; }
+
+/* ---------- QR A PANTALLA COMPLETA (fondo blanco para el escáner) ---------- */
+.qr-fullscreen {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: var(--esp-5);
+  background: #fff;
+  cursor: pointer;
+}
+.qr-fs-nombre {
+  margin: 0; color: #1a1030; font-weight: 800; font-size: 1.1rem;
+  font-family: var(--fuente-titulo); letter-spacing: -0.01em; text-align: center;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.qr-fs-tipo {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em;
+  color: #fff; background: var(--rosa-acento);
+  padding: 5px 14px; border-radius: var(--radio-full); text-align: center;
+}
+.qr-fs-tipo.privado { background: var(--morado-medio); }
+.qr-fs-img {
+  width: min(80vw, 80vh);
+  height: min(80vw, 80vh);
+  max-width: 480px; max-height: 480px;
+  image-rendering: pixelated;
+}
+.qr-fs-codigo {
+  margin: 0; color: #1a1030; font-weight: 800; font-size: 1rem;
+  letter-spacing: 0.08em; font-variant-numeric: tabular-nums; text-align: center;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.qr-fs-hint {
+  margin: 0; color: #6b6480; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; text-align: center;
+}
+.qr-fs-enter-active, .qr-fs-leave-active { transition: opacity 0.2s ease; }
+.qr-fs-enter-from, .qr-fs-leave-to { opacity: 0; }
+
 /* ---------- COMBOS ---------- */
 .seccion-combos { display: flex; flex-direction: column; gap: var(--esp-4); }
 .combos-encabezado { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 2px; }
@@ -478,46 +822,101 @@ onUnmounted(() => {
 }
 .tarjeta-combo {
   position: relative;
-  flex: 0 0 200px;
+  flex: 0 0 220px;
+  min-width: 0;
   scroll-snap-align: start;
   background: var(--gradiente-sutil);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-lg);
-  padding: 18px;
+  overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   box-shadow: var(--sombra-tarjeta);
 }
 .tarjeta-combo:hover { border-color: var(--borde-activo); }
 .tarjeta-combo:active { transform: translateY(-1px) scale(0.99); }
+
+/* Vitrina del combo: productos protagonistas */
+.combo-visual {
+  position: relative;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 130% at 50% 0%, #2c1863 0%, var(--fondo-tarjeta) 78%);
+  overflow: hidden;
+}
+.combo-visual-glow {
+  position: absolute;
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(236,72,153,0.35) 0%, transparent 70%);
+  top: -50px;
+  pointer-events: none;
+}
+.combo-fotos { display: flex; align-items: center; justify-content: center; }
+.combo-foto {
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--fondo-tarjeta-alt);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  background: var(--fondo-tarjeta);
+  transition: transform 0.35s var(--ease-rebote);
+}
+.fotos-2 .combo-foto, .fotos-3 .combo-foto { width: 76px; height: 76px; }
+.combo-foto + .combo-foto { margin-left: -22px; }
+.fotos-2 .combo-foto:nth-child(2), .fotos-3 .combo-foto:nth-child(2) { z-index: 1; transform: scale(1.08); }
+.tarjeta-combo:hover .combo-foto:nth-child(1) { transform: translateX(-5px) rotate(-4deg); }
+.tarjeta-combo:hover .combo-foto:nth-child(2) { transform: scale(1.14); }
+.tarjeta-combo:hover .combo-foto:nth-child(3) { transform: translateX(5px) rotate(4deg); }
+.tarjeta-combo:hover .fotos-1 .combo-foto { transform: scale(1.1); }
+.combo-visual-vacio { color: var(--texto-desactivado); }
+.combo-visual-vacio svg { width: 44px; height: 44px; }
+
 .combo-badge {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: var(--gradiente-marca);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 800;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: var(--radio-full);
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 3px 12px rgba(236,72,153,0.4);
+  box-shadow: 0 3px 14px rgba(236,72,153,0.5);
+  animation: pulsoBadge 2.2s ease-in-out infinite;
 }
+.combo-badge svg { width: 11px; height: 11px; }
+@keyframes pulsoBadge {
+  0%, 100% { box-shadow: 0 3px 14px rgba(236,72,153,0.5); transform: scale(1); }
+  50% { box-shadow: 0 3px 22px rgba(236,72,153,0.85); transform: scale(1.06); }
+}
+
+.combo-cuerpo { display: flex; flex-direction: column; gap: 10px; padding: 14px; flex: 1; }
 .combo-nombre {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--texto-principal);
   line-height: 1.3;
-  padding-right: 44px;
   min-height: 2.4em;
 }
-.combo-precios { display: flex; align-items: baseline; gap: 8px; }
+.combo-precios { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .combo-normal { color: var(--texto-desactivado); text-decoration: line-through; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
-.combo-final { color: var(--color-exito); font-weight: 800; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.combo-flecha { display: flex; color: var(--rosa-suave); }
+.combo-flecha svg { width: 13px; height: 13px; }
+.combo-final { color: var(--color-exito); font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .btn-combo {
   margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: rgba(168, 85, 247, 0.15);
   border: 1px solid var(--borde-activo);
   color: var(--morado-hover);
@@ -528,6 +927,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background var(--trans-normal), border-color var(--trans-normal), color var(--trans-normal), transform var(--trans-rapida);
 }
+.btn-combo svg { width: 15px; height: 15px; }
 .btn-combo:active { transform: scale(0.97); }
 .tarjeta-combo:hover .btn-combo { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
 
@@ -626,8 +1026,8 @@ onUnmounted(() => {
   box-shadow: var(--sombra-tarjeta);
 }
 .acceso-mini:active { transform: translateY(-1px) scale(0.98); }
-.acceso-mini .icono-svg { width: 52px; height: 52px; border-radius: var(--radio-md); background: rgba(168,85,247,0.14); display: flex; align-items: center; justify-content: center; color: var(--morado-hover); transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal); border: 1px solid var(--borde-sutil); }
-.acceso-mini:hover .icono-svg { background: var(--gradiente-marca); color: #fff; border-color: transparent; box-shadow: var(--sombra-glow); }
+.acceso-mini .icono-svg { width: 52px; height: 52px; border-radius: var(--radio-md); background: rgba(168,85,247,0.14); display: flex; align-items: center; justify-content: center; color: var(--morado-hover); transition: background var(--trans-normal), color var(--trans-normal), border-color var(--trans-normal), box-shadow var(--trans-normal), transform var(--trans-normal); border: 1px solid var(--borde-sutil); }
+.acceso-mini:hover .icono-svg { background: var(--gradiente-marca); color: #fff; border-color: transparent; box-shadow: var(--sombra-glow); transform: translateY(-2px) rotate(-4deg); }
 .acceso-mini .icono-svg svg { width: 24px; height: 24px; }
 .acceso-mini span { font-size: 0.82rem; font-weight: 700; color: var(--texto-secundario); letter-spacing: 0.01em; transition: color var(--trans-normal); }
 .acceso-mini:hover span { color: var(--texto-principal); }
@@ -641,8 +1041,7 @@ onUnmounted(() => {
 .link-ver-todo:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
 .marquee-contenedor {
-  width: 100vw;
-  margin-left: calc(-1 * var(--esp-4)); /* rompe el padding del padre para tocar los bordes */
+  margin-inline: calc(-1 * var(--esp-4)); /* rompe el padding del padre para tocar los bordes */
   overflow: hidden;
   position: relative;
 }
@@ -650,39 +1049,67 @@ onUnmounted(() => {
   display: flex;
   gap: 15px;
   width: max-content;
-  animation: desplazarMarquee 30s linear infinite;
+  animation: desplazarMarquee 32s linear infinite;
   padding-left: var(--esp-4);
 }
 @keyframes desplazarMarquee {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); } /* contenido triplicado: loop fluido */
+  100% { transform: translateX(-33.333%); } /* contenido triplicado: 1/3 exacto = loop sin salto */
 }
 
-/* Tarjetas Mini Producto */
-.tarjeta-marquee-producto { flex: 0 0 168px; background: var(--gradiente-sutil); border-radius: var(--radio-lg); padding: 12px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--borde-sutil); cursor: pointer; transition: transform 0.3s var(--ease-suave), border-color var(--trans-normal), box-shadow var(--trans-normal); box-shadow: var(--sombra-tarjeta); }
+/* Tarjetas Mini Producto (imagen protagonista) */
+.tarjeta-marquee-producto {
+  flex: 0 0 190px;
+  background: var(--gradiente-sutil);
+  border-radius: var(--radio-lg);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--borde-sutil);
+  cursor: pointer;
+  transition: transform 0.3s var(--ease-suave), border-color var(--trans-normal), box-shadow var(--trans-normal);
+  box-shadow: var(--sombra-tarjeta);
+}
 .tarjeta-marquee-producto:hover { border-color: var(--borde-activo); transform: translateY(-4px); box-shadow: 0 14px 34px rgba(10,6,26,0.5), var(--sombra-glow); }
 .tarjeta-marquee-producto:active { transform: scale(0.95); }
-.img-prod-contenedor { width: 100%; height: 144px; border-radius: var(--radio-md); overflow: hidden; background: rgba(168,85,247,0.06); display: flex; align-items: center; justify-content: center; }
+.img-prod-contenedor { position: relative; width: 100%; height: 176px; border-radius: var(--radio-md); overflow: hidden; background: rgba(168,85,247,0.06); display: flex; align-items: center; justify-content: center; }
 .img-prod { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s var(--ease-suave); }
 .tarjeta-marquee-producto:hover .img-prod { transform: scale(1.08); }
+.img-prod-velo { position: absolute; inset: 0; background: linear-gradient(to top, rgba(9,5,22,0.78) 0%, transparent 42%); pointer-events: none; }
+.precio-flotante {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  margin: 0;
+  background: var(--gradiente-marca);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 4px 11px;
+  border-radius: var(--radio-full);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  box-shadow: 0 3px 12px rgba(236,72,153,0.45);
+}
 .img-prod-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--texto-desactivado); }
 .img-prod-placeholder svg { width: 48px; height: 48px; }
-.info-prod-mini h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--texto-principal); line-height: 1.25; }
-.info-prod-mini .precio { font-size: 1.1rem; font-weight: 800; color: var(--rosa-suave); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.info-prod-mini { padding: 0 4px 4px; }
+.info-prod-mini h4 { font-size: 0.92rem; font-weight: 700; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--texto-principal); line-height: 1.25; }
 
 /* Skeleton de carga (coincide con la forma de las tarjetas) */
 .marquee-skeleton { display: flex; gap: 15px; overflow: hidden; padding: 0 2px; }
 .skeleton-card {
-  flex: 0 0 168px;
+  flex: 0 0 190px;
   background: var(--gradiente-sutil);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-lg);
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.skeleton-img { width: 100%; height: 144px; border-radius: var(--radio-md); }
+.skeleton-img { width: 100%; height: 176px; border-radius: var(--radio-md); }
 .skeleton-linea { height: 12px; border-radius: var(--radio-sm); }
 .skeleton-linea-titulo { width: 85%; }
 .skeleton-linea-precio { width: 45%; height: 16px; }
@@ -694,8 +1121,14 @@ onUnmounted(() => {
 }
 @keyframes brilloSkeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ---------- REVEALS AL SCROLL ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s var(--ease-suave), transform 0.6s var(--ease-suave); }
+  .reveal.visible { opacity: 1; transform: none; }
+}
+
 /* ---------- MODAL EVENTO SUSPENDIDO ---------- */
-.modal-fondo { position: fixed; inset: 0; background: rgba(9,5,22,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+.modal-fondo { position: fixed; inset: 0; background: rgba(9,5,22,0.86); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
 .modal { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-xl); width: 100%; box-shadow: var(--sombra-modal); }
 .modal-cancelado {
   max-width: 400px;
@@ -739,14 +1172,18 @@ onUnmounted(() => {
 .btn-modal-entendido:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4); }
 
 /* ---------- RESPONSIVE ---------- */
+@media (max-width: 419px) {
+  .fila-qr { grid-template-columns: 1fr; }
+}
 @media (min-width: 560px) {
   .grid-accesos-mini { grid-template-columns: repeat(4, 1fr); }
 }
 @media (min-width: 768px) {
   .vista-inicio { padding: var(--esp-5); padding-bottom: 104px; }
-  .marquee-contenedor { margin-left: calc(-1 * var(--esp-5)); }
+  .marquee-contenedor { margin-inline: calc(-1 * var(--esp-5)); }
   .marquee-track { padding-left: var(--esp-5); }
   .hero-carrusel { height: 320px; }
+  .zona-pago { gap: var(--esp-4); }
 }
 @media (max-width: 480px) {
   .billetera-footer { flex-direction: column; align-items: stretch; gap: 12px; }
@@ -757,9 +1194,12 @@ onUnmounted(() => {
 /* ---------- MENOS MOVIMIENTO ---------- */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track { animation: none; }
-  .punto-verde { animation: none; }
+  .eq-vivo i { animation: none; }
   .banner-evento-actual { animation: none; }
   .skeleton-img, .skeleton-linea { animation: none; }
   .brillo-hover:hover::after { animation: none; }
+  .combo-badge { animation: none; }
+  .qr-fs-enter-active, .qr-fs-leave-active { transition: none; }
+  .combo-foto, .acceso-mini .icono-svg, .tarjeta-marquee-producto, .img-prod { transition: none; }
 }
 </style>

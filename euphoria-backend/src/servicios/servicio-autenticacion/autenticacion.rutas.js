@@ -119,6 +119,7 @@ router.post('/login', limiteLogin, async (req, res) => {
         correo: usuario.correo,
         rol: usuario.rol.nombre_rol,
         url_foto_perfil: usuario.url_foto_perfil,
+        premio_perfil: usuario.premio_perfil ?? null,
       },
     })
   } catch (error) {
@@ -250,6 +251,45 @@ router.post('/recuperar/reset', limiteRecuperacion, async (req, res) => {
   } catch (error) {
     console.error('Error en reset:', error)
     res.status(500).json({ error: 'Error al restablecer la contraseña' })
+  }
+})
+
+// POST /api/auth/recuperar/solicitud
+// Último recurso: no recuerda NI la contraseña NI su pregunta de seguridad.
+// Deja sus datos de identidad y la solicitud aparece en la campana del ADMIN,
+// que valida contra lo registrado (CI/teléfono) y resetea la contraseña.
+router.post('/recuperar/solicitud', limiteRecuperacion, async (req, res) => {
+  try {
+    const { correo, nombre_contacto, ci_contacto, telefono, mensaje } = req.body
+    if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(correo))) {
+      return res.status(400).json({ error: 'Escribe el correo de tu cuenta.' })
+    }
+    if (!ci_contacto && !telefono) {
+      return res.status(400).json({ error: 'Deja tu CI o tu teléfono para que el local pueda verificar que eres tú.' })
+    }
+
+    // Una pendiente por correo basta (evita spam a la campana del admin)
+    const existente = await prisma.solicitud_recuperacion.findFirst({
+      where: { correo: String(correo), estado: 'pendiente' },
+    })
+    if (existente) {
+      return res.json({ mensaje: 'Ya tenemos tu solicitud: el local te contactará pronto.' })
+    }
+
+    await prisma.solicitud_recuperacion.create({
+      data: {
+        correo: String(correo).slice(0, 100),
+        nombre_contacto: nombre_contacto ? String(nombre_contacto).slice(0, 120) : null,
+        ci_contacto: ci_contacto ? String(ci_contacto).slice(0, 20) : null,
+        telefono: telefono ? String(telefono).slice(0, 20) : null,
+        mensaje: mensaje ? String(mensaje).slice(0, 400) : null,
+      },
+    })
+
+    res.status(201).json({ mensaje: 'Solicitud enviada. El local verificará tus datos y te contactará para recuperar tu cuenta.' })
+  } catch (error) {
+    console.error('Error registrando solicitud de recuperación:', error)
+    res.status(500).json({ error: 'No se pudo registrar la solicitud. Intenta de nuevo.' })
   }
 })
 

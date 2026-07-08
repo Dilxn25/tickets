@@ -10,6 +10,7 @@ const { generarQRRecarga, generarIDUnico } = require('./qr-utilidades')
 const QRCode = require('qrcode')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { cifrarPin, descifrarPin, verificarPin } = require('../../utilidades/pin-billetera')
 
 // ============ GET /api/billetera/saldo ============
 // Obtener saldo actual del cliente
@@ -20,17 +21,32 @@ router.get('/saldo', verificarToken, async (req, res) => {
     })
 
     if (!billetera) {
-      return res.status(404).json({ error: 'El usuario no tiene billetera' })
+      // Cliente nuevo: aún no tiene billetera (se crea con la primera recarga).
+      // 200 con flag para que el front lo muestre bien, sin errores engañosos.
+      return res.json({ sin_billetera: true, saldo_actual: 0, tiene_pin: false })
     }
 
     res.json({
       id_billetera: billetera.id_billetera,
       saldo_actual: parseFloat(billetera.saldo_actual),
-      qr_publico: billetera.qr_publico
+      qr_publico: billetera.qr_publico,
+      tiene_pin: !!billetera.pin_transaccional
     })
   } catch (error) {
     console.error('Error obteniendo saldo:', error)
     res.status(500).json({ error: 'Error al obtener saldo' })
+  }
+})
+
+// ============ GET /api/billetera/config-premio ============
+// El carrito necesita el % y el tope del premio para mostrar el estimado
+// correcto (el cobro real lo calcula el backend de comandas). Autenticado.
+router.get('/config-premio', verificarToken, async (req, res) => {
+  try {
+    const { leerConfigPremio } = require('../../utilidades/premio-perfil')
+    res.json(await leerConfigPremio())
+  } catch (error) {
+    res.json({ pct: 10, max: 50 })
   }
 })
 
@@ -100,10 +116,8 @@ router.post('/recargar', verificarToken, async (req, res) => {
 
     // Emitir evento por WebSockets para actualizar en tiempo real
     if (global.io) {
-      global.io.emit('billetera_actualizada', {
-        id_usuario: id_usuario,
-        saldo_nuevo: parseFloat(billeteraActualizada.saldo_actual)
-      })
+      // Privacidad: solo se emite el id; el saldo se refetchea autenticado
+      global.io.emit('billetera_actualizada', { id_usuario })
     }
 
     res.json({
@@ -206,6 +220,139 @@ router.get('/historial', verificarToken, async (req, res) => {
   }
 })
 
+// ============ GET /api/billetera/movimientos ============
+// Historial UNIFICADO para el cliente: recargas (entra dinero) y gastos
+// (consumos en barra y reservas de espacios), ordenado del más reciente.
+// Cada movimiento dice lo que al cliente le importa: qué fue, cuánto,
+// cuándo y cómo; el detalle fino de un consumo se pide por comanda.
+router.get('/movimientos', verificarToken, async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
+    if (!billetera) return res.json({ movimientos: [] })
+
+    const [recargas, transacciones, entradas] = await Promise.all([
+      prisma.recarga_billetera.findMany({
+        where: { id_usuario },
+        orderBy: { fecha_solicitud: 'desc' },
+        take: 100,
+      }),
+      prisma.transaccion.findMany({
+        where: { id_billetera: billetera.id_billetera, tipo_operacion: { in: ['Consumo', 'Reserva'] } },
+        include: {
+          usuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
+          comanda: { select: { id_comanda: true, metodo_pago: true, _count: { select: { detalle_comanda: true } } } },
+        },
+        orderBy: { fecha_hora: 'desc' },
+        take: 100,
+      }),
+      prisma.entrada.findMany({
+        where: { id_usuario },
+        include: {
+          zona: { select: { nombre_zona: true, evento: { select: { nombre_evento: true } } } },
+          mesa_espacio: { select: { numero_nombre: true, tipo_elemento: true } },
+        },
+        orderBy: { fecha_reserva: 'desc' },
+        take: 100,
+      }),
+    ])
+
+    const movimientos = []
+
+    for (const r of recargas) {
+      // El banco quedó etiquetado en la URL del comprobante (|B:BCP) por el OCR
+      const banco = (r.comprobante_url || '').match(/\|B:([A-Z]+)/)?.[1] || null
+      movimientos.push({
+        id: `R-${r.id_recarga}`,
+        tipo: 'recarga',
+        titulo: 'Recarga de saldo',
+        detalle: banco ? `Vía ${banco}` : 'Vía transferencia',
+        monto: parseFloat(r.monto_recarga),
+        fecha: r.fecha_solicitud,
+        estado: r.estado,
+        numero_transaccion: r.numero_transaccion,
+      })
+    }
+
+    for (const t of transacciones) {
+      const esConsumo = t.tipo_operacion === 'Consumo'
+      const responsable = t.usuario ? `${t.usuario.nombres} ${t.usuario.apellidos}`.trim() : null
+      const esAutoservicio = t.usuario?.rol?.nombre_rol === 'Cliente'
+      let entradaAsociada = null
+      if (!esConsumo) {
+        // La transacción de reserva no guarda la entrada: se asocia por
+        // cercanía de fecha y monto (misma operación atómica, segundos de diferencia)
+        entradaAsociada = entradas.find(e =>
+          Math.abs(new Date(e.fecha_reserva) - new Date(t.fecha_hora)) < 60000 &&
+          Number(e.monto_pagado) === Number(t.monto)
+        )
+      }
+      movimientos.push({
+        id: `T-${t.id_transaccion}`,
+        tipo: esConsumo ? 'consumo' : 'reserva',
+        titulo: esConsumo ? 'Pedido en barra' : 'Reserva de espacio',
+        detalle: esConsumo
+          ? (esAutoservicio ? 'Pedido desde tu app' : (responsable ? `Te atendió ${responsable}` : 'Pago con billetera'))
+          : (entradaAsociada
+              ? `${entradaAsociada.mesa_espacio ? `${entradaAsociada.mesa_espacio.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${entradaAsociada.mesa_espacio.numero_nombre}` : 'Entrada general'} · ${entradaAsociada.zona?.evento?.nombre_evento || entradaAsociada.zona?.nombre_zona || 'Evento'}`
+              : 'Pago de reserva'),
+        monto: -parseFloat(t.monto),
+        fecha: t.fecha_hora,
+        estado: 'completada',
+        id_comanda: esConsumo ? t.id_comanda : null,
+        items: esConsumo ? (t.comanda?._count?.detalle_comanda ?? null) : null,
+      })
+    }
+
+    movimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    res.json({ movimientos: movimientos.slice(0, 120) })
+  } catch (error) {
+    console.error('Error obteniendo movimientos:', error)
+    res.status(500).json({ error: 'Error al obtener los movimientos' })
+  }
+})
+
+// ============ GET /api/billetera/movimientos/comanda/:id ============
+// Detalle de un consumo: qué productos fueron, a qué precio y quién atendió.
+router.get('/movimientos/comanda/:id', verificarToken, async (req, res) => {
+  try {
+    const id_comanda = Number(req.params.id)
+    const comanda = await prisma.comanda.findUnique({
+      where: { id_comanda },
+      include: {
+        detalle_comanda: { include: { producto: { select: { nombre_producto: true, url_imagen: true } } } },
+        usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
+      },
+    })
+    if (!comanda || comanda.id_cliente !== req.usuario.id) {
+      return res.status(404).json({ error: 'Pedido no encontrado' })
+    }
+
+    const atendio = comanda.usuario_comanda_id_meseroTousuario
+    const esAutoservicio = atendio?.rol?.nombre_rol === 'Cliente'
+    const items = comanda.detalle_comanda.map(d => ({
+      nombre: d.producto?.nombre_producto || 'Producto',
+      imagen: d.producto?.url_imagen || null,
+      cantidad: d.cantidad,
+      precio: parseFloat(d.precio_cobrado),
+      subtotal: parseFloat(d.subtotal),
+    }))
+
+    res.json({
+      id_comanda,
+      fecha: comanda.fecha_registro,
+      metodo_pago: comanda.metodo_pago,
+      estado: comanda.estado_despacho,
+      atendido_por: esAutoservicio ? 'Pedido desde tu app' : (atendio ? `${atendio.nombres} ${atendio.apellidos}`.trim() : null),
+      items,
+      total: items.reduce((s, i) => s + i.subtotal, 0),
+    })
+  } catch (error) {
+    console.error('Error obteniendo detalle de consumo:', error)
+    res.status(500).json({ error: 'Error al obtener el detalle del pedido' })
+  }
+})
+
 // ============ GET /api/billetera/qrs-pago ============
 // Obtener los QRs de pago (Público y Privado)
 router.get('/qrs-pago', verificarToken, async (req, res) => {
@@ -231,10 +378,12 @@ router.get('/qrs-pago', verificarToken, async (req, res) => {
       usuario: req.usuario.correo
     }
 
-    // Asegurar los datos del QR usando JWT para que no puedan ser modificados por un malware
+    // Asegurar los datos del QR usando JWT para que no puedan ser modificados por un malware.
+    // EXPIRAN en 15 minutos: un QR de pago capturado en pantalla no vale para siempre
+    // (el front los regenera al abrir el modal, así que el cliente nunca lo nota).
     const firmaSecreta = process.env.JWT_SECRETO_QR
-    const tokenSinPin = jwt.sign(datosQRSinPin, firmaSecreta)
-    const tokenConPin = jwt.sign(datosQRConPin, firmaSecreta)
+    const tokenSinPin = jwt.sign(datosQRSinPin, firmaSecreta, { expiresIn: '15m' })
+    const tokenConPin = jwt.sign(datosQRConPin, firmaSecreta, { expiresIn: '15m' })
 
     const imagenQRSinPin = await QRCode.toDataURL(tokenSinPin, {
       errorCorrectionLevel: 'H',
@@ -265,28 +414,85 @@ router.get('/qrs-pago', verificarToken, async (req, res) => {
 })
 
 // ============ POST /api/billetera/pin ============
-// Actualizar el PIN transaccional del usuario
+// Actualizar el PIN transaccional del usuario.
+// Si ya existe un PIN, se exige el actual (evita que alguien con el teléfono
+// desbloqueado cambie el PIN y anule la protección del QR privado).
 router.post('/pin', verificarToken, async (req, res) => {
   try {
-    const { nuevo_pin } = req.body
+    const { nuevo_pin, pin_actual } = req.body
 
-    if (!nuevo_pin || nuevo_pin.length !== 4) {
+    if (!nuevo_pin || String(nuevo_pin).length !== 4 || !/^\d{4}$/.test(String(nuevo_pin))) {
       return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos' })
     }
 
-    // Hashear el PIN por seguridad
-    const salt = await bcrypt.genSalt(10)
-    const pinHasheado = await bcrypt.hash(nuevo_pin, salt)
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario: req.usuario.id } })
+    if (!billetera) {
+      return res.status(400).json({ error: 'Aún no tienes billetera: se crea con tu primera recarga. Después puedes configurar tu PIN.' })
+    }
 
+    if (billetera.pin_transaccional) {
+      if (!pin_actual) return res.status(400).json({ error: 'Ingresa tu PIN actual para cambiarlo.', requiere_pin_actual: true })
+      const actualValido = await verificarPin(pin_actual, billetera.pin_transaccional)
+      if (!actualValido) return res.status(400).json({ error: 'El PIN actual es incorrecto.', requiere_pin_actual: true })
+    }
+
+    // Se guarda cifrado (reversible con la clave del servidor) para que el
+    // dueño pueda VERLO con el ojito de la tarjeta confirmando su contraseña.
     await prisma.billetera.update({
       where: { id_usuario: req.usuario.id },
-      data: { pin_transaccional: pinHasheado }
+      data: { pin_transaccional: cifrarPin(nuevo_pin) }
     })
 
     res.json({ mensaje: 'PIN actualizado exitosamente' })
   } catch (error) {
     console.error('Error actualizando PIN:', error)
     res.status(500).json({ error: 'Error al actualizar el PIN' })
+  }
+})
+
+// ============ POST /api/billetera/pin/revelar ============
+// "Ojito" de la tarjeta: muestra el PIN al dueño si confirma su contraseña
+// de la cuenta (así, si lo olvidó, lo ve sin tener que cambiarlo).
+// Devuelve además un TICKET de 5 minutos: mientras sea válido, el cliente
+// puede volver a ver su PIN (incluso tras navegar) sin reingresar la
+// contraseña — se envía { ticket } en lugar de { password }.
+router.post('/pin/revelar', verificarToken, async (req, res) => {
+  try {
+    const { password, ticket } = req.body
+
+    let autorizado = false
+    if (ticket) {
+      try {
+        const datos = jwt.verify(String(ticket), process.env.JWT_SECRETO)
+        autorizado = datos.uso === 'ver-pin' && datos.id === req.usuario.id
+      } catch (e) { /* expirado o inválido: cae a pedir contraseña */ }
+      if (!autorizado) return res.status(400).json({ error: 'Confirma tu contraseña para ver el PIN.', ticket_vencido: true })
+    } else {
+      if (!password) return res.status(400).json({ error: 'Confirma tu contraseña para ver el PIN.' })
+      const usuario = await prisma.usuario.findUnique({ where: { id_usuario: req.usuario.id } })
+      autorizado = usuario && await bcrypt.compare(String(password), usuario.password_hash)
+      if (!autorizado) return res.status(400).json({ error: 'Contraseña incorrecta.' })
+    }
+
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario: req.usuario.id } })
+    if (!billetera?.pin_transaccional) {
+      return res.status(400).json({ error: 'Aún no tienes un PIN configurado.' })
+    }
+
+    const pin = descifrarPin(billetera.pin_transaccional)
+    if (!pin) {
+      // PIN guardado con el formato antiguo (hash irreversible)
+      return res.status(400).json({
+        error: 'Tu PIN fue guardado con el formato anterior y no puede mostrarse. Configúralo de nuevo y desde ahí podrás verlo.',
+        requiere_reconfigurar: true,
+      })
+    }
+
+    const ticketNuevo = jwt.sign({ id: req.usuario.id, uso: 'ver-pin' }, process.env.JWT_SECRETO, { expiresIn: '5m' })
+    res.json({ pin, ticket: ticketNuevo })
+  } catch (error) {
+    console.error('Error revelando PIN:', error)
+    res.status(500).json({ error: 'Error al revelar el PIN' })
   }
 })
 

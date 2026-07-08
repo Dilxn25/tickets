@@ -145,51 +145,116 @@
     </div>
 
     <!-- Modal Recuperar Contraseña -->
-    <div v-if="modalRecuperar" class="modal-overlay fade-in" role="dialog" aria-modal="true" aria-labelledby="titulo-recuperar">
-      <div class="modal-recuperar">
-        <button class="btn-cerrar" aria-label="Cerrar" @click="cerrarRecuperacion">×</button>
-        <h3 id="titulo-recuperar">Recuperar contraseña</h3>
-        
-        <!-- Paso 1: Correo -->
-        <div v-if="pasoRecuperacion === 1">
-          <p class="desc">Ingresa tu correo para buscar tu pregunta de seguridad.</p>
-          <input v-model="correoRecuperacion" type="email" class="campo w-full mb-3" placeholder="tu@correo.com" />
-          <button class="btn btn-primario w-full" @click="buscarPregunta" :disabled="cargandoRec">
-            {{ cargandoRec ? 'Buscando...' : 'Continuar' }}
-          </button>
-        </div>
+    <Teleport to="body">
+      <Transition name="modal-rec">
+        <div v-if="modalRecuperar" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="titulo-recuperar" @click.self="cerrarRecuperacion">
+          <div class="modal-recuperar">
+            <button type="button" class="btn-cerrar" aria-label="Cerrar" @click="cerrarRecuperacion">×</button>
+            <h3 id="titulo-recuperar">{{ pasoRecuperacion === 'ayuda' || pasoRecuperacion === 'ayuda-ok' ? 'Pedir ayuda al local' : 'Recuperar contraseña' }}</h3>
 
-        <!-- Paso 2: Pregunta y Nueva Contraseña -->
-        <div v-if="pasoRecuperacion === 2">
-          <p class="desc">Responde correctamente a tu pregunta secreta para restablecer tu contraseña.</p>
-          
-          <div class="pregunta-box">{{ preguntaRecuperacion }}</div>
-          
-          <div class="grupo-campo mb-3">
-            <label class="etiqueta">Tu respuesta</label>
-            <input v-model="respuestaRecuperacion" type="text" class="campo w-full" placeholder="Escribe tu respuesta..." />
+            <!-- Paso 1: Correo -->
+            <form v-if="pasoRecuperacion === 1" @submit.prevent="buscarPregunta">
+              <p class="desc">Escribe el correo de tu cuenta.</p>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Correo electrónico</label>
+                <input v-model="correoRecuperacion" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
+              </div>
+              <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || !correoRecuperacion">
+                <span v-if="cargandoRec" class="spinner"></span>
+                <span v-else>Continuar</span>
+              </button>
+            </form>
+
+            <!-- Paso 2: Pregunta + nueva contraseña -->
+            <form v-else-if="pasoRecuperacion === 2" @submit.prevent="restablecerPassword">
+              <p class="desc">Responde tu pregunta y elige una contraseña nueva.</p>
+
+              <div class="pregunta-box">{{ preguntaRecuperacion }}</div>
+
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Tu respuesta</label>
+                <input v-model="respuestaRecuperacion" type="text" class="campo w-full" placeholder="Tu respuesta secreta" required />
+              </div>
+
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Nueva contraseña</label>
+                <div class="campo-icono">
+                  <input v-model="nuevaPasswordRec" :type="verPassRec ? 'text' : 'password'" class="campo w-full" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+                  <button type="button" class="ojo" :aria-label="verPassRec ? 'Ocultar contraseña' : 'Mostrar contraseña'" @click="verPassRec = !verPassRec">
+                    {{ verPassRec ? 'Ocultar' : 'Ver' }}
+                  </button>
+                </div>
+                <p v-if="errorPassRec" class="error-mini">{{ errorPassRec }}</p>
+              </div>
+
+              <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || !puedeRestablecer">
+                <span v-if="cargandoRec" class="spinner"></span>
+                <span v-else>Cambiar contraseña</span>
+              </button>
+            </form>
+
+            <!-- Paso: pedir ayuda al local (no recuerda contraseña ni pregunta) -->
+            <form v-else-if="pasoRecuperacion === 'ayuda'" @submit.prevent="enviarAyudaLocal">
+              <p class="desc">Déjanos tus datos y el local te ayudará a recuperar tu cuenta.</p>
+
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Correo de la cuenta</label>
+                <input v-model="ayudaForm.correo" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
+              </div>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Nombre completo</label>
+                <input v-model="ayudaForm.nombre" type="text" class="campo w-full" placeholder="Tu nombre y apellidos" required />
+              </div>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">CI / carnet</label>
+                <input v-model="ayudaForm.ci" type="text" class="campo w-full" placeholder="Tu número de carnet" />
+              </div>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Teléfono</label>
+                <input v-model="ayudaForm.telefono" type="tel" class="campo w-full" placeholder="Tu número de teléfono" />
+                <p v-if="faltaIdentidadAyuda" class="nota-minima">Necesitamos al menos tu CI o tu teléfono.</p>
+              </div>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Mensaje (opcional)</label>
+                <textarea v-model="ayudaForm.mensaje" class="campo w-full campo-area" rows="2" placeholder="Cuéntanos qué pasó"></textarea>
+              </div>
+
+              <p class="nota-verifica">El local comparará estos datos con los registrados en tu cuenta para verificar que eres tú.</p>
+
+              <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || !puedeEnviarAyuda">
+                <span v-if="cargandoRec" class="spinner"></span>
+                <span v-else>Enviar solicitud</span>
+              </button>
+              <button type="button" class="btn-volver" @click="pasoRecuperacion = 1; errorRecuperacion = ''">Volver</button>
+            </form>
+
+            <!-- Paso: solicitud enviada -->
+            <div v-else-if="pasoRecuperacion === 'ayuda-ok'" class="rec-exito">
+              <div class="alerta-exito" role="status" aria-live="polite">{{ exitoAyuda }}</div>
+              <button type="button" class="btn btn-primario w-full mt-3" @click="cerrarRecuperacion">Entendido</button>
+            </div>
+
+            <!-- Paso 3: Éxito -->
+            <div v-else class="rec-exito">
+              <div class="alerta-exito" role="status" aria-live="polite">{{ exitoRecuperacion || 'Contraseña actualizada.' }}</div>
+              <button type="button" class="btn btn-primario w-full mt-3" @click="volverAlLogin">Iniciar sesión</button>
+            </div>
+
+            <div v-if="errorRecuperacion" class="alerta-error mt-3" role="alert" aria-live="assertive">{{ errorRecuperacion }}</div>
+
+            <p v-if="pasoRecuperacion === 1 || pasoRecuperacion === 2" class="rec-ayuda">
+              ¿No recuerdas tu pregunta?
+              <button type="button" class="link-contacto btn-como-link" @click="abrirAyudaLocal">Pedir ayuda al local</button>
+            </p>
           </div>
-
-          <div class="grupo-campo mb-3">
-            <label class="etiqueta">Nueva contraseña</label>
-            <input v-model="nuevaPasswordRec" type="password" class="campo w-full" placeholder="Mínimo 6 caracteres" />
-          </div>
-
-          <button class="btn btn-primario w-full" @click="restablecerPassword" :disabled="cargandoRec">
-            {{ cargandoRec ? 'Restableciendo...' : 'Restablecer Contraseña' }}
-          </button>
         </div>
-
-        <!-- Error / Exito de Recuperación -->
-        <div v-if="errorRecuperacion" class="alerta-error mt-3" role="alert" aria-live="assertive">{{ errorRecuperacion }}</div>
-        <div v-if="exitoRecuperacion" class="alerta-exito mt-3" role="status" aria-live="polite">{{ exitoRecuperacion }}</div>
-      </div>
-    </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { servicioAuth } from '@/servicios-api/servicio-autenticacion.js'
@@ -230,9 +295,32 @@ const correoRecuperacion = ref('')
 const preguntaRecuperacion = ref('')
 const respuestaRecuperacion = ref('')
 const nuevaPasswordRec = ref('')
+const verPassRec = ref(false)
 const cargandoRec = ref(false)
 const errorRecuperacion = ref('')
 const exitoRecuperacion = ref('')
+let temporizadorCierre = null
+
+const errorPassRec = computed(() => {
+  const p = nuevaPasswordRec.value
+  if (p && p.length < 6) return 'Mínimo 6 caracteres.'
+  return ''
+})
+
+const puedeRestablecer = computed(() =>
+  !!respuestaRecuperacion.value.trim() && nuevaPasswordRec.value.length >= 6
+)
+
+// Solicitud de ayuda al local (cuando no recuerda ni contraseña ni pregunta)
+const ayudaForm = reactive({ correo: '', nombre: '', ci: '', telefono: '', mensaje: '' })
+const exitoAyuda = ref('')
+
+const faltaIdentidadAyuda = computed(() =>
+  !ayudaForm.ci.trim() && !ayudaForm.telefono.trim()
+)
+const puedeEnviarAyuda = computed(() =>
+  !!ayudaForm.correo.trim() && !!ayudaForm.nombre.trim() && !faltaIdentidadAyuda.value
+)
 
 async function manejarSubmit() {
   if (esRegistro.value) await manejarRegistro()
@@ -315,16 +403,70 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 function iniciarRecuperacion() {
   modalRecuperar.value = true
   pasoRecuperacion.value = 1
-  correoRecuperacion.value = ''
+  // Si ya escribió su correo en el login, se lo dejamos listo.
+  correoRecuperacion.value = formulario.correo || ''
   preguntaRecuperacion.value = ''
   respuestaRecuperacion.value = ''
   nuevaPasswordRec.value = ''
+  verPassRec.value = false
   errorRecuperacion.value = ''
   exitoRecuperacion.value = ''
+  exitoAyuda.value = ''
+  ayudaForm.nombre = ''
+  ayudaForm.ci = ''
+  ayudaForm.telefono = ''
+  ayudaForm.mensaje = ''
+}
+
+// Abre el paso de ayuda con el correo listo si ya lo escribió
+function abrirAyudaLocal() {
+  ayudaForm.correo = correoRecuperacion.value || formulario.correo || ''
+  errorRecuperacion.value = ''
+  exitoAyuda.value = ''
+  pasoRecuperacion.value = 'ayuda'
+}
+
+async function enviarAyudaLocal() {
+  if (!puedeEnviarAyuda.value) return
+  cargandoRec.value = true
+  errorRecuperacion.value = ''
+  try {
+    const res = await clienteHttp.post('/auth/recuperar/solicitud', {
+      correo: ayudaForm.correo.trim(),
+      nombre_contacto: ayudaForm.nombre.trim(),
+      ci_contacto: ayudaForm.ci.trim() || undefined,
+      telefono: ayudaForm.telefono.trim() || undefined,
+      mensaje: ayudaForm.mensaje.trim() || undefined,
+    })
+    exitoAyuda.value = res.mensaje || 'Listo, el local recibió tu solicitud.'
+    pasoRecuperacion.value = 'ayuda-ok'
+  } catch (err) {
+    errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No pudimos enviar tu solicitud. Intenta de nuevo.')
+  } finally {
+    cargandoRec.value = false
+  }
 }
 
 function cerrarRecuperacion() {
   modalRecuperar.value = false
+  if (temporizadorCierre) {
+    clearTimeout(temporizadorCierre)
+    temporizadorCierre = null
+  }
+}
+
+// Deja el login listo con el correo recuperado.
+function volverAlLogin() {
+  esRegistro.value = false
+  formulario.correo = correoRecuperacion.value
+  formulario.password = ''
+  error.value = ''
+  cerrarRecuperacion()
+}
+
+function mensajeErrorRecuperacion(err, porDefecto) {
+  if (err?.__status === 429) return 'Demasiados intentos, espera un momento.'
+  return err?.error || porDefecto
 }
 
 async function buscarPregunta() {
@@ -335,36 +477,36 @@ async function buscarPregunta() {
     const res = await clienteHttp.post('/auth/recuperar/pregunta', { correo: correoRecuperacion.value })
     preguntaRecuperacion.value = res.pregunta
     pasoRecuperacion.value = 2
-  } catch (error) {
-    errorRecuperacion.value = error.error || 'Error al buscar cuenta'
+  } catch (err) {
+    errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No pudimos buscar tu cuenta. Intenta de nuevo.')
   } finally {
     cargandoRec.value = false
   }
 }
 
 async function restablecerPassword() {
-  if (!respuestaRecuperacion.value || !nuevaPasswordRec.value) {
-    errorRecuperacion.value = 'Completa todos los campos'
-    return
-  }
+  if (!puedeRestablecer.value) return
   cargandoRec.value = true
   errorRecuperacion.value = ''
   try {
     const res = await clienteHttp.post('/auth/recuperar/reset', {
       correo: correoRecuperacion.value,
-      respuesta: respuestaRecuperacion.value,
+      respuesta: respuestaRecuperacion.value.trim(),
       nuevaPassword: nuevaPasswordRec.value
     })
-    exitoRecuperacion.value = res.mensaje
-    setTimeout(() => {
-      cerrarRecuperacion()
-    }, 3000)
-  } catch (error) {
-    errorRecuperacion.value = error.error || 'Error al restablecer'
+    exitoRecuperacion.value = res.mensaje || 'Contraseña actualizada.'
+    pasoRecuperacion.value = 3
+    temporizadorCierre = setTimeout(volverAlLogin, 3000)
+  } catch (err) {
+    errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No se pudo cambiar la contraseña. Intenta de nuevo.')
   } finally {
     cargandoRec.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (temporizadorCierre) clearTimeout(temporizadorCierre)
+})
 </script>
 
 <style scoped>
@@ -384,13 +526,13 @@ async function restablecerPassword() {
   background-repeat: no-repeat;
 }
 
-/* Capa oscura para garantizar que el formulario sea legible */
+/* Capa oscura para garantizar que el formulario sea legible
+   (sin backdrop-filter: causa artefactos en algunas GPU) */
 .login-pagina::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(15, 10, 25, 0.65); /* Oscurece la imagen un 65% */
-  backdrop-filter: blur(4px); /* Difumina ligeramente el fondo */
+  background: rgba(15, 10, 25, 0.72);
   z-index: 0;
 }
 
@@ -475,10 +617,8 @@ async function restablecerPassword() {
   color: var(--texto-principal);
   padding: 11px 16px;
   border-radius: var(--radio-full);
-  background: rgba(46, 26, 102, 0.32);
+  background: rgba(36, 21, 86, 0.85);
   border: 1px solid var(--glass-borde);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   transition: transform 0.3s var(--ease-cine), border-color 0.3s ease, background 0.3s ease;
 }
 .hero-chip:hover {
@@ -501,8 +641,6 @@ async function restablecerPassword() {
      de la imagen de fondo (antes usaba --glass-fondo al 35% y las letras
      apagadas se perdían sobre el fondo brillante). */
   background: linear-gradient(160deg, rgba(27, 16, 64, 0.97), rgba(16, 9, 38, 0.98));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-xl);
   padding: 2.6rem 2.2rem;
@@ -784,18 +922,27 @@ async function restablecerPassword() {
 .link-contacto:hover { color: var(--rosa-suave); text-shadow: 0 0 8px var(--rosa-acento); }
 .link-contacto:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.5); }
 
-/* Modal Recuperar */
+/* Modal Recuperar (Teleport a body: por encima de cualquier navbar) */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
-  z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  position: fixed; inset: 0; background: rgba(8, 4, 20, 0.82);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
 }
 .modal-recuperar {
   background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-xl); padding: 2rem; max-width: 350px; width: 100%;
+  border-radius: var(--radio-xl); padding: 2rem; max-width: 380px; width: 100%;
   box-shadow: var(--sombra-modal), 0 0 40px rgba(168, 85, 247, 0.18);
   position: relative;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: modalEntra 0.35s var(--ease-suave) both;
 }
+.modal-rec-enter-active { transition: opacity 0.25s ease; }
+.modal-rec-leave-active { transition: opacity 0.18s ease; }
+.modal-rec-enter-from,
+.modal-rec-leave-to { opacity: 0; }
 @keyframes modalEntra {
   from { opacity: 0; transform: translateY(18px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -824,6 +971,69 @@ async function restablecerPassword() {
 .mb-3 { margin-bottom: 1rem; }
 .mt-3 { margin-top: 1rem; }
 
+/* Detalles del modal de recuperación */
+.error-mini {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--color-error);
+}
+.rec-ayuda {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--borde-sutil);
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--texto-secundario);
+}
+.rec-exito { text-align: center; }
+
+/* Paso "Pedir ayuda al local" */
+.btn-como-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.campo-area {
+  resize: vertical;
+  min-height: 58px;
+  font-family: var(--fuente-principal);
+  line-height: 1.45;
+}
+.nota-verifica {
+  font-size: 0.78rem;
+  color: var(--texto-desactivado);
+  line-height: 1.45;
+  margin-bottom: 1rem;
+  text-wrap: pretty;
+}
+.nota-minima {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--texto-desactivado);
+}
+.btn-volver {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radio-sm);
+  color: var(--texto-secundario);
+  font-family: var(--fuente-principal);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.btn-volver:hover { color: var(--texto-principal); text-decoration: underline; text-underline-offset: 3px; }
+.btn-volver:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5); }
+
 /* ===== ACCESIBILIDAD: MOVIMIENTO REDUCIDO ===== */
 @media (prefers-reduced-motion: reduce) {
   .orbe,
@@ -839,6 +1049,8 @@ async function restablecerPassword() {
     animation: none !important;
   }
   .tab-indicador { transition: none; }
+  .modal-rec-enter-active,
+  .modal-rec-leave-active { transition: opacity 0.15s ease; }
 }
 
 /* ===== RESPONSIVIDAD ===== */

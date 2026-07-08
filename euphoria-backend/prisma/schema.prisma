@@ -227,6 +227,7 @@ model registro_aforo {
   id_entrada        Int?
   id_recepcionista  Int
   tipo_movimiento   String   @db.VarChar(10)
+  cantidad          Int      @default(1)
   fecha_hora        DateTime
   entrada           entrada? @relation(fields: [id_entrada], references: [id_entrada], map: "REGISTRO_AFORO_id_entrada_fkey")
   usuario           usuario  @relation(fields: [id_recepcionista], references: [id_usuario], map: "REGISTRO_AFORO_id_recepcionista_fkey")
@@ -273,6 +274,7 @@ model usuario {
   respuesta_seguridad                 String?             @db.VarChar(255)
   url_foto_perfil                     String?             @db.VarChar(255)
   estado_cuenta                       String              @db.VarChar(20)
+  premio_perfil                       String?             @db.VarChar(20)
   billetera                           billetera?
   recarga_billetera                   recarga_billetera[]
   comanda_comanda_id_clienteTousuario comanda[]           @relation("comanda_id_clienteTousuario")
@@ -285,6 +287,22 @@ model usuario {
   rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")
+}
+
+// Solicitudes "no recuerdo nada" (ni contraseña ni pregunta): el cliente deja
+// sus datos de identidad y el ADMIN las ve en su campana, valida y resetea.
+model solicitud_recuperacion {
+  id_solicitud    Int      @id @default(autoincrement())
+  correo          String   @db.VarChar(100)
+  nombre_contacto String?  @db.VarChar(120)
+  ci_contacto     String?  @db.VarChar(20)
+  telefono        String?  @db.VarChar(20)
+  mensaje         String?  @db.VarChar(400)
+  estado          String   @default("pendiente") @db.VarChar(20)
+  fecha_solicitud DateTime @default(now())
+  fecha_atencion  DateTime?
+
+  @@index([estado])
 }
 
 model zona {

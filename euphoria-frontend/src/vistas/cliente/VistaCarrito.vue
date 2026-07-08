@@ -1,35 +1,83 @@
 <template>
-  <div class="contenedor-carrito entrada-cine textura-grano">
-    <!-- Orbes de neon ambientales -->
-    <div class="orbe-deco morado orbe-uno"></div>
-    <div class="orbe-deco rosa orbe-dos"></div>
-
+  <div class="contenedor-carrito entrada-cine">
+    <!-- Sin orbes decorativos: el fondo es el UNO uniforme de la app, sin
+         recuadros ni bordes recortados (se veían como líneas en escritorio) -->
+    <div class="carrito-interior">
     <!-- ENCABEZADO -->
     <header class="carrito-hero">
       <div class="hero-fila">
         <h1 class="titulo-vista">Tu pedido</h1>
-        <span v-if="items.length > 0" class="badge-items">
-          {{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}
+        <span class="badge-items" :class="{ 'badge-vacio': items.length === 0 }">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+          <template v-if="items.length > 0">
+            <Transition name="pop" mode="out-in">
+              <span :key="items.length" class="badge-num">{{ items.length }}</span>
+            </Transition>
+            <span>{{ items.length === 1 ? 'producto' : 'productos' }}</span>
+          </template>
+          <span v-else>Vacío</span>
         </span>
-        <span v-else class="badge-items">Vacío</span>
       </div>
-      <p class="hero-sub">Revisa tus productos y paga con tu billetera.</p>
+      <p class="hero-sub">La previa empieza aquí: revisa tu pedido y paga con tu billetera.</p>
     </header>
 
 
-    <!-- Carrito Vacío -->
-    <div v-if="items.length === 0" class="carrito-vacio superficie textura-grano aparecer-subir">
-      <div class="icono-vacio-envoltura efecto-flotar">
-        <svg class="icono-vacio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="21" r="1"></circle>
-          <circle cx="20" cy="21" r="1"></circle>
-          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+    <!-- Pago exitoso (estado propio: antes el mensaje quedaba oculto al vaciarse el carrito) -->
+    <div v-if="mensajeExito" class="carrito-vacio exito-panel superficie textura-grano aparecer-subir">
+      <div class="confeti" aria-hidden="true">
+        <i v-for="n in 14" :key="n" class="papel" :style="{ '--i': n }"></i>
+      </div>
+      <div class="icono-vacio-envoltura exito-check">
+        <svg class="icono-vacio" viewBox="0 0 24 24" fill="none" stroke="var(--color-exito)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
       </div>
-      <h2 class="titulo-vacio">Tu carrito está vacío</h2>
-      <p>Agrega bebidas o productos desde el catálogo para verlos aquí.</p>
+      <h2 class="titulo-vacio">¡Pedido pagado!</h2>
+      <p>{{ mensajeExito }}</p>
+      <p v-if="premioAplicado > 0" class="premio-exito">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+        Premio aplicado: −Bs. {{ premioAplicado.toFixed(2) }} · Pagaste Bs. {{ totalCobrado.toFixed(2) }}
+      </p>
+      <p class="saldo-exito">Saldo restante: <b>Bs. {{ saldo.toFixed(2) }}</b></p>
       <RouterLink to="/cliente/catalogo" class="cta-isla brillo-hover">
-        <span>Ver productos</span>
+        <span>Seguir pidiendo</span>
+        <span class="cta-icono">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </span>
+      </RouterLink>
+    </div>
+
+    <!-- Carrito Vacío -->
+    <div v-else-if="items.length === 0" class="pedido-vacio aparecer-subir">
+      <div class="pv-arte" aria-hidden="true">
+        <svg class="pv-copa" viewBox="0 0 120 120" fill="none">
+          <defs>
+            <linearGradient id="pvGradCopa" x1="24" y1="16" x2="94" y2="102" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#A855F7"/>
+              <stop offset="1" stop-color="#EC4899"/>
+            </linearGradient>
+          </defs>
+          <!-- Copa martini -->
+          <path d="M32 26h56L60 64z" stroke="url(#pvGradCopa)" stroke-width="3.2" stroke-linejoin="round"/>
+          <path d="M41 38h38" stroke="url(#pvGradCopa)" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
+          <line x1="60" y1="64" x2="60" y2="92" stroke="url(#pvGradCopa)" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M45 96h30" stroke="url(#pvGradCopa)" stroke-width="3.2" stroke-linecap="round"/>
+          <!-- Cereza con palillo -->
+          <circle cx="75" cy="21" r="4.5" stroke="#F472B6" stroke-width="2.4"/>
+          <line x1="73" y1="25.5" x2="66.5" y2="38" stroke="#F472B6" stroke-width="2.4" stroke-linecap="round"/>
+          <!-- Chispas -->
+          <path class="pv-chispa pv-chispa-a" d="M26 12v8M22 16h8" stroke="#C084FC" stroke-width="2.2" stroke-linecap="round"/>
+          <path class="pv-chispa pv-chispa-b" d="M99 42v6M96 45h6" stroke="#F472B6" stroke-width="2" stroke-linecap="round"/>
+          <circle class="pv-chispa pv-chispa-c" cx="92" cy="12" r="2" fill="#C084FC"/>
+        </svg>
+      </div>
+      <h2 class="pv-titulo">Tu pedido está vacío</h2>
+      <p class="pv-sub">Tragos, combos y más te esperan en el catálogo.</p>
+      <RouterLink to="/cliente/catalogo" class="cta-isla brillo-hover pv-cta">
+        <span>Ir al catálogo</span>
         <span class="cta-icono">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
         </span>
@@ -43,28 +91,65 @@
         <div class="lista-encabezado">
           <h2 class="lista-titulo">Productos</h2>
           <span class="lista-hairline"></span>
+          <span class="lista-conteo">{{ totalItems }} {{ totalItems === 1 ? 'unidad' : 'unidades' }}</span>
         </div>
-        <div class="lista-items escalonar">
-          <div v-for="item in items" :key="item.id" class="item-carrito hover-elevar">
-            <div class="item-media">
-              <img :src="item.imagen" :alt="item.nombre" class="imagen-item" />
+        <TransitionGroup name="item" tag="div" class="lista-items escalonar">
+          <article v-for="item in items" :key="item.id" class="item-carrito">
+            <!-- Combos: su composición en fotos solapadas, igual que en su tarjeta -->
+            <div
+              class="item-media"
+              :class="{ 'media-combo': (item.imagenes?.length || 0) > 1, 'solapa-3': (item.imagenes?.length || 0) >= 3 }">
+              <template v-if="(item.imagenes?.length || 0) > 1">
+                <img v-for="(img, j) in item.imagenes.slice(0, 3)" :key="j" :src="img" class="foto-combo" alt="" />
+              </template>
+              <img v-else-if="item.imagen || item.imagenes?.[0]" :src="item.imagen || item.imagenes[0]" :alt="item.nombre" class="imagen-item" />
+              <div v-else class="imagen-item imagen-inicial" aria-hidden="true">{{ (item.nombre || '?')[0] }}</div>
             </div>
+
             <div class="info-item">
               <h3>{{ item.nombre }}</h3>
               <p class="precio-unitario">Bs. {{ item.precio.toFixed(2) }} <span class="por-unidad">c/u</span></p>
             </div>
-            <div class="cantidad-control">
-              <button class="btn-cantidad" @click="disminuirCantidad(item.id)" type="button" aria-label="Disminuir">−</button>
-              <span class="cantidad">{{ item.cantidad }}</span>
-              <button class="btn-cantidad" @click="aumentarCantidad(item.id)" type="button" aria-label="Aumentar">+</button>
-            </div>
-            <div class="subtotal">
-              <p class="label">Subtotal</p>
-              <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
-            </div>
-            <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Eliminar" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+
+            <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Quitar del pedido" aria-label="Quitar del pedido" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
             </button>
+
+            <div class="item-acciones">
+              <div class="cantidad-control">
+                <button class="btn-cantidad" @click="disminuirCantidad(item.id)" type="button" aria-label="Disminuir">−</button>
+                <Transition name="pop" mode="out-in">
+                  <span :key="item.cantidad" class="cantidad">{{ item.cantidad }}</span>
+                </Transition>
+                <button class="btn-cantidad" @click="aumentarCantidad(item.id)" type="button" aria-label="Aumentar">+</button>
+              </div>
+
+              <div class="subtotal">
+                <p class="label">Subtotal</p>
+                <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
+              </div>
+            </div>
+          </article>
+        </TransitionGroup>
+
+        <!-- Pie de la lista: rellena y equilibra la columna, da confianza al pagar -->
+        <div class="lista-pie" aria-hidden="false">
+          <div class="pie-item">
+            <span class="pie-icono">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            </span>
+            Pago protegido con tu billetera Euphoria.
+          </div>
+          <div class="pie-item">
+            <span class="pie-icono">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </span>
+            Preparamos tu pedido apenas confirmes.
           </div>
         </div>
       </div>
@@ -76,18 +161,63 @@
             <h2 class="resumen-titulo">Resumen</h2>
 
             <div class="fila-mini">
-              <span>Unidades</span>
+              <span class="fila-etiqueta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+                Unidades
+              </span>
               <span>{{ totalItems }}</span>
             </div>
             <div class="fila-mini">
-              <span>Subtotal</span>
+              <span class="fila-etiqueta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                Subtotal
+              </span>
               <span>Bs. {{ subtotal.toFixed(2) }}</span>
+            </div>
+            <div class="fila-mini fila-saldo">
+              <span class="fila-etiqueta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="6" width="20" height="14" rx="2"></rect>
+                  <path d="M2 10h20"></path>
+                  <path d="M17 15h.01"></path>
+                </svg>
+                Tu saldo
+              </span>
+              <span :class="saldoInsuficiente ? 'saldo-rojo' : 'saldo-verde'">{{ cargandoSaldo ? '…' : 'Bs. ' + saldo.toFixed(2) }}</span>
+            </div>
+
+            <!-- Premio por perfil completo (se descuenta al pagar) -->
+            <div v-if="premioPendiente" class="premio-resumen">
+              <div class="premio-fila">
+                <span class="premio-etiqueta">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                  Premio perfil completo −{{ premioPct }}%
+                </span>
+                <span class="premio-monto">−Bs. {{ descuentoPremio.toFixed(2) }}</span>
+              </div>
+              <div class="premio-fila premio-total">
+                <span>Pagarías</span>
+                <span>Bs. {{ totalConPremio.toFixed(2) }}</span>
+              </div>
+              <p class="premio-nota">El descuento se aplica al pagar con tu billetera.</p>
             </div>
 
             <div class="total-mini">
-              <span class="total-etiqueta">Total a pagar</span>
+              <span class="total-etiqueta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                Total a pagar
+              </span>
               <span class="total-cifra">
-                <span class="total-moneda">Bs.</span>{{ total.toFixed(2) }}
+                <span class="total-moneda">Bs.</span>{{ totalAnimado.toFixed(2) }}
               </span>
             </div>
 
@@ -108,11 +238,8 @@
             </div>
 
             <div v-else-if="!cargandoSaldo && saldoInsuficiente" class="alerta alerta-error">
-              Tu saldo de Bs. {{ saldo.toFixed(2) }} es insuficiente. Te falta Bs. {{ (total - saldo).toFixed(2) }}
-            </div>
-
-            <div v-if="mensajeExito" class="alerta alerta-exito">
-              {{ mensajeExito }}
+              Te falta Bs. {{ (total - saldo).toFixed(2) }} para completar el pago.
+              <RouterLink to="/cliente/billetera" class="cta-recargar">Recargar billetera</RouterLink>
             </div>
 
             <div v-if="errorPago" class="alerta alerta-error">
@@ -122,11 +249,32 @@
         </div>
       </aside>
     </div>
+    </div><!-- /carrito-interior -->
+
+    <!-- Modal PIN: la billetera protegida pide el PIN también al pagar el carrito -->
+    <Teleport to="body">
+      <div v-if="pidiendoPin" class="modal-pin-overlay">
+        <div class="modal-pin-caja">
+          <h3>Confirma con tu PIN</h3>
+          <p>Tu billetera está protegida. Ingresa tu PIN de 4 dígitos para autorizar el pago de Bs. {{ total.toFixed(2) }}.</p>
+          <input
+            v-model="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+            class="input-pin-carrito" placeholder="••••" @keyup.enter="pin.length === 4 && irAPagar()" />
+          <p v-if="errorPago" class="pin-error">{{ errorPago }}</p>
+          <div class="modal-pin-acciones">
+            <button class="btn-pin-cancelar" type="button" @click="cancelarPin">Cancelar</button>
+            <button class="btn-pin-ok" type="button" :disabled="cargandoPago || pin.length !== 4" @click="irAPagar">
+              {{ cargandoPago ? 'Verificando…' : 'Confirmar pago' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
@@ -147,7 +295,43 @@ const cargandoPago = ref(false)
 const mensajeExito = ref('')
 const errorPago = ref('')
 
+// Premio por perfil completo: el backend descuenta un % (con tope) al pagar.
+// El % y el tope se leen de la config real (obtenerConfigPremio); si falla,
+// caemos a 10% / Bs 50 para no romper el estimado del resumen.
+const premioAplicado = ref(0)
+const totalCobrado = ref(0)
+const premioPct = ref(10)
+const premioMax = ref(50)
+const premioPendiente = computed(() => tienda.usuario?.premio_perfil === 'pendiente' && items.value.length > 0)
+const descuentoPremio = computed(() => Math.min(subtotal.value * (premioPct.value / 100), premioMax.value))
+const totalConPremio = computed(() => Math.max(total.value - descuentoPremio.value, 0))
+
 // Subtotal y total se manejan en el store directamente
+
+// --- UI: total que "cuenta" al cambiar (solo presentación, no toca la lógica) ---
+const totalAnimado = ref(total.value || 0)
+let rafTotal = null
+function animarTotal(desde, hasta) {
+  if (typeof window === 'undefined') { totalAnimado.value = hasta; return }
+  const reducirMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reducirMovimiento || !Number.isFinite(desde) || !Number.isFinite(hasta)) {
+    totalAnimado.value = hasta
+    return
+  }
+  if (rafTotal) cancelAnimationFrame(rafTotal)
+  const duracion = 450
+  const inicio = performance.now()
+  const paso = (t) => {
+    const progreso = Math.min((t - inicio) / duracion, 1)
+    const suavizado = 1 - Math.pow(1 - progreso, 3)
+    totalAnimado.value = desde + (hasta - desde) * suavizado
+    if (progreso < 1) rafTotal = requestAnimationFrame(paso)
+    else rafTotal = null
+  }
+  rafTotal = requestAnimationFrame(paso)
+}
+watch(total, (nuevo, viejo) => animarTotal(viejo ?? 0, nuevo ?? 0))
+onBeforeUnmount(() => { if (rafTotal) cancelAnimationFrame(rafTotal) })
 
 const saldoInsuficiente = computed(() => {
   // No consideramos insuficiente el saldo hasta tenerlo cargado
@@ -175,20 +359,34 @@ const getRazonDeshabilitado = computed(() => {
 })
 
 function aumentarCantidad(id) {
-  tiendaCarrito.aumentarCantidad(id)
+  const r = tiendaCarrito.aumentarCantidad(id)
+  if (r && r.ok === false) errorPago.value = r.mensaje || 'No hay más stock disponible.'
+  else errorPago.value = ''
 }
 
 function disminuirCantidad(id) {
   tiendaCarrito.disminuirCantidad(id)
+  errorPago.value = ''
 }
 
 function eliminarItem(id) {
   tiendaCarrito.eliminarItem(id)
 }
 
+// PIN de la billetera (si está protegida, el backend lo exige también aquí)
+const pidiendoPin = ref(false)
+const pin = ref('')
+function cancelarPin() {
+  pidiendoPin.value = false
+  pin.value = ''
+  errorPago.value = ''
+  cargandoPago.value = false
+}
+
 async function irAPagar() {
-  if (!puedeComprar.value || cargandoPago.value) return
+  if ((!puedeComprar.value && !pidiendoPin.value) || cargandoPago.value) return
   cargandoPago.value = true
+  errorPago.value = ''
 
   try {
     // Reutilizamos el qr_publico obtenido al cargar el saldo para evitar una segunda petición
@@ -198,6 +396,7 @@ async function irAPagar() {
     formData.append('metodo_pago', 'Billetera')
     formData.append('qr_billetera', qrPublico.value)
     formData.append('id_cliente', tienda.usuario.id)
+    if (pidiendoPin.value && pin.value) formData.append('pin', pin.value)
 
     // Preparar el array de productos esperado por el backend
     const productosParaBackend = items.value.map(i => ({
@@ -213,15 +412,32 @@ async function irAPagar() {
       saldo.value = resPago.saldo_restante
     }
 
+    // Premio de perfil completo aplicado por el backend en este pago
+    if (resPago && Number(resPago.premio_aplicado) > 0) {
+      premioAplicado.value = Number(resPago.premio_aplicado)
+      totalCobrado.value = Number(resPago.total_cobrado ?? 0)
+      // El premio ya se usó: lo reflejamos en el store local para ocultar la fila del resumen
+      if (tienda.usuario) {
+        tienda.usuario.premio_perfil = 'usado'
+        localStorage.setItem('euphoria_usuario', JSON.stringify(tienda.usuario))
+      }
+    }
+
+    pidiendoPin.value = false
+    pin.value = ''
     tiendaCarrito.vaciarCarrito()
-    mensajeExito.value = '¡Pedido pagado exitosamente! Pasando a preparación.'
-    setTimeout(() => {
-      router.push('/cliente/catalogo') // Volver al catálogo
-    }, 2000)
+    mensajeExito.value = 'Tu pedido pasó a preparación. Te avisamos apenas esté listo.'
 
   } catch (error) {
     console.error('Error al pagar:', error)
-    errorPago.value = error.error || error.message || 'Error al procesar el pago'
+    if (error?.requiere_pin) {
+      // La billetera pide PIN: abrimos el modal (o avisamos si fue incorrecto)
+      pidiendoPin.value = true
+      errorPago.value = error?.error === 'PIN incorrecto' ? 'PIN incorrecto, intenta de nuevo' : ''
+      pin.value = ''
+    } else {
+      errorPago.value = error.error || error.message || 'Error al procesar el pago'
+    }
   } finally {
     cargandoPago.value = false
   }
@@ -242,8 +458,31 @@ async function cargarSaldo() {
   }
 }
 
+// El % y tope del premio salen de la config real; si falla, dejamos 10 / 50.
+async function cargarConfigPremio() {
+  try {
+    const cfg = await servicioBilletera.obtenerConfigPremio()
+    const pct = Number(cfg?.pct)
+    const max = Number(cfg?.max)
+    if (Number.isFinite(pct) && pct > 0) premioPct.value = pct
+    if (Number.isFinite(max) && max > 0) premioMax.value = max
+  } catch {
+    premioPct.value = 10
+    premioMax.value = 50
+  }
+}
+
 onMounted(async () => {
   await cargarSaldo()
+  // Config del premio (estimado del resumen): no bloquea el saldo ni el pago
+  cargarConfigPremio()
+  // Sincronizar los precios del carrito con el catálogo vigente
+  // (el backend cobra el precio actual: lo mostrado debe coincidir)
+  try {
+    const prods = await clienteHttp.get('/productos')
+    const cambio = tiendaCarrito.actualizarPrecios(Array.isArray(prods) ? prods : (prods.productos || []))
+    if (cambio) errorPago.value = 'Algunos precios del catálogo cambiaron: tu carrito ya está actualizado.'
+  } catch { /* si falla, el backend igual cobra el precio vigente */ }
 })
 </script>
 
@@ -258,10 +497,21 @@ onMounted(async () => {
 
 .contenedor-carrito {
   position: relative;
-  max-width: 1180px;
+  /* Fondo único de la app: sin orbes ni texturas que se recorten en bordes. */
+  min-height: calc(100dvh - 180px);
+  padding-bottom: 120px;
+}
+
+/* Contenido centrado */
+.carrito-interior {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: clamp(1.5rem, 1rem + 2vw, 3rem) 1rem 120px;
-  overflow: clip;
+  padding: clamp(1.5rem, 1rem + 2vw, 2.75rem) 1rem 0;
+  min-height: inherit;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Orbes ambientales */
@@ -269,12 +519,12 @@ onMounted(async () => {
 .orbe-uno {
   width: 460px; height: 460px;
   top: -160px; right: -120px;
-  opacity: 0.28;
+  opacity: 0.26;
 }
 .orbe-dos {
-  width: 400px; height: 400px;
-  bottom: 40px; left: -160px;
-  opacity: 0.22;
+  width: 420px; height: 420px;
+  bottom: -60px; left: -180px;
+  opacity: 0.2;
 }
 
 /* ===== ENCABEZADO ===== */
@@ -313,6 +563,9 @@ onMounted(async () => {
 }
 
 .badge-items {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   background: rgba(168, 85, 247, 0.12);
   color: var(--morado-hover);
   border: 1px solid var(--borde-activo);
@@ -326,11 +579,23 @@ onMounted(async () => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 20px rgba(168, 85, 247, 0.22);
   align-self: center;
 }
+.badge-items svg { flex-shrink: 0; }
+.badge-num { display: inline-block; min-width: 1ch; text-align: center; }
+.badge-vacio { opacity: 0.75; }
 
-/* ===== CARRITO VACÍO ===== */
+/* Contador animado (badge y stepper) */
+.pop-enter-active,
+.pop-leave-active {
+  transition: transform 0.18s var(--ease-rebote), opacity 0.18s ease;
+}
+.pop-enter-from { transform: translateY(7px) scale(0.6); opacity: 0; }
+.pop-leave-to { transform: translateY(-7px) scale(0.6); opacity: 0; }
+
+/* ===== CARRITO VACÍO / ÉXITO ===== */
 .carrito-vacio {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -338,6 +603,77 @@ onMounted(async () => {
   text-align: center;
   padding: clamp(3rem, 2rem + 4vw, 5.5rem) 2rem;
   border-radius: var(--radio-xl);
+  overflow: hidden;
+}
+
+/* --- Estado vacío: ilustración + CTA, centrado vertical --- */
+.pedido-vacio {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: min(56dvh, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.pv-arte {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--esp-4);
+}
+.pv-arte::before {
+  content: '';
+  position: absolute;
+  inset: -22px;
+  border-radius: var(--radio-full);
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.07) 55%, transparent 72%);
+  pointer-events: none;
+}
+.pv-copa {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.45));
+  animation: pvFlotar 4.5s ease-in-out infinite;
+}
+@keyframes pvFlotar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.pv-chispa { animation: pvTitila 2.8s ease-in-out infinite; }
+.pv-chispa-b { animation-delay: 0.9s; }
+.pv-chispa-c { animation-delay: 1.6s; }
+@keyframes pvTitila {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+.pv-titulo {
+  margin: 0 0 var(--esp-2);
+  font-family: var(--fuente-titulo);
+  font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.7rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--texto-principal);
+}
+.pv-sub {
+  margin: 0 0 var(--esp-5);
+  color: var(--texto-secundario);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 34ch;
+  text-wrap: pretty;
+}
+.pv-cta {
+  text-decoration: none;
+  padding: 15px 18px 15px 28px;
+  font-size: 1rem;
 }
 
 .icono-vacio-envoltura {
@@ -389,24 +725,79 @@ onMounted(async () => {
   text-decoration: none;
 }
 
-/* ===== CONTENIDO CARRITO (BENTO) ===== */
+/* --- Estado de éxito celebratorio --- */
+.exito-panel {
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+.exito-check {
+  background: radial-gradient(circle at 50% 32%, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.02) 72%);
+  border-color: rgba(34, 197, 94, 0.3);
+  animation: latidoExito 1.8s var(--ease-suave) 0.2s 3;
+}
+.exito-check .icono-vacio {
+  animation: brotarCheck 0.6s var(--ease-rebote) 0.1s backwards;
+}
+@keyframes latidoExito {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 0 rgba(34, 197, 94, 0.35); }
+  40% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 26px rgba(34, 197, 94, 0); }
+}
+@keyframes brotarCheck {
+  from { transform: scale(0.4) rotate(-12deg); opacity: 0; }
+  to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Confeti CSS (una sola pasada, sin librerías) */
+.confeti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+}
+.papel {
+  position: absolute;
+  top: -16px;
+  left: calc(2% + var(--i) * 6.6%);
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--morado-brillante);
+  opacity: 0;
+  animation: caerConfeti 2.9s ease-in calc(var(--i) * 0.09s) forwards;
+}
+.papel:nth-child(3n) { background: var(--rosa-acento); width: 7px; height: 11px; }
+.papel:nth-child(4n) { background: var(--color-exito); }
+.papel:nth-child(5n) { background: #FDE68A; height: 9px; border-radius: 50%; }
+@keyframes caerConfeti {
+  0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+  8% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(min(420px, 70vh)) rotate(560deg); }
+}
+
+/* ===== CONTENIDO CARRITO (dos columnas equilibradas y centradas) ===== */
 .carrito-contenido {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 372px;
-  align-items: start;
-  gap: clamp(1.25rem, 0.75rem + 1.5vw, 2.25rem);
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: 1fr;
+  align-items: stretch;
+  gap: clamp(1.25rem, 0.75rem + 1.5vw, 2rem);
 }
 
 .columna-items {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .lista-encabezado {
   display: flex;
   align-items: center;
-  gap: var(--esp-4);
+  gap: var(--esp-3);
   margin-bottom: var(--esp-4);
 }
 
@@ -426,27 +817,63 @@ onMounted(async () => {
   background: linear-gradient(90deg, var(--borde-sutil), transparent);
 }
 
+.lista-conteo {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-desactivado);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .lista-items {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
 }
 
-/* ---- Item premium ---- */
+/* Micro-animaciones de la lista (TransitionGroup) */
+.item-move,
+.item-enter-active {
+  transition: all 0.4s var(--ease-cine);
+}
+.item-leave-active {
+  transition: all 0.32s var(--ease-cine);
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+.item-enter-from {
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+}
+.item-leave-to {
+  opacity: 0;
+  transform: translateX(36px) scale(0.94);
+}
+
+/* ---- Item: imagen protagonista + grid fluido ---- */
 .item-carrito {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "media info control subtotal eliminar";
   align-items: center;
   gap: var(--esp-4);
-  background: var(--glass-fondo);
+  background: linear-gradient(160deg, var(--fondo-tarjeta-alt), var(--fondo-tarjeta));
   border: 1px solid var(--glass-borde);
   border-radius: var(--radio-lg);
-  padding: 0.85rem 1.1rem;
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  padding: 0.9rem 1.05rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(10, 6, 26, 0.4);
   overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.item-carrito:hover {
+  border-color: var(--borde-activo);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 14px 36px rgba(10, 6, 26, 0.5), 0 0 24px rgba(168, 85, 247, 0.14);
 }
 .item-carrito::before {
   content: '';
@@ -459,25 +886,67 @@ onMounted(async () => {
 }
 .item-carrito:hover::before { opacity: 1; }
 
+/* Stepper + subtotal: en escritorio son columnas del grid;
+   en móvil se agrupan en su propia fila (ver media query) */
+.item-acciones {
+  display: contents;
+}
+
 .item-media {
-  padding: 4px;
-  border-radius: calc(var(--radio-md) + 4px);
-  background: rgba(168, 85, 247, 0.08);
-  border: 1px solid var(--glass-borde);
+  grid-area: media;
+  width: 84px;
+  height: 84px;
+  padding: 3px;
+  border-radius: var(--radio-lg);
+  background: linear-gradient(140deg, rgba(168, 85, 247, 0.55), rgba(236, 72, 153, 0.35));
+  box-shadow: 0 8px 22px rgba(168, 85, 247, 0.22);
   flex-shrink: 0;
 }
 
 .imagen-item {
   display: block;
-  width: 58px;
-  height: 58px;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
   object-fit: cover;
-  border-radius: var(--radio-md);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  border-radius: calc(var(--radio-lg) - 3px);
 }
 
+/* ---- Combos: 2-3 fotos de su composición solapadas (como su tarjeta) ---- */
+.item-media.media-combo {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(95% 95% at 22% 14%, rgba(168, 85, 247, 0.28), transparent 62%),
+    radial-gradient(100% 105% at 82% 88%, rgba(236, 72, 153, 0.22), transparent 58%),
+    var(--fondo-tarjeta);
+  border: 1px solid var(--borde-sutil);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 22px rgba(10, 6, 26, 0.35);
+}
+.foto-combo {
+  width: 58%;
+  aspect-ratio: 1;
+  height: auto;
+  flex-shrink: 0;
+  border-radius: var(--radio-full);
+  object-fit: cover;
+  border: 2px solid var(--fondo-tarjeta-alt);
+  background: var(--fondo-tarjeta);
+  box-shadow: 0 4px 12px rgba(6, 3, 18, 0.5);
+}
+.foto-combo + .foto-combo { margin-left: -26%; }
+.media-combo .foto-combo:nth-child(2) {
+  position: relative;
+  z-index: 1;
+  transform: scale(1.08);
+}
+.media-combo.solapa-3 .foto-combo { width: 46%; }
+.media-combo.solapa-3 .foto-combo + .foto-combo { margin-left: -20%; }
+
 .info-item {
-  flex: 1 1 130px;
+  grid-area: info;
   min-width: 0;
 }
 
@@ -486,32 +955,39 @@ onMounted(async () => {
   font-size: 1.08rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.25;
   color: var(--texto-principal);
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.3rem 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .precio-unitario {
   color: var(--texto-secundario);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
 .por-unidad {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   opacity: 0.7;
 }
 
 .cantidad-control {
-  display: flex;
+  grid-area: control;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(10, 6, 26, 0.45);
+  gap: 0.4rem;
+  background: rgba(10, 6, 26, 0.5);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-full);
-  padding: 0.32rem;
+  padding: 4px;
+  width: max-content;
 }
 
 .btn-cantidad {
@@ -520,13 +996,13 @@ onMounted(async () => {
   color: #fff;
   font-weight: 700;
   cursor: pointer;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radio-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   line-height: 1;
   box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
   transition: transform 0.25s var(--ease-cine), box-shadow 0.25s ease;
@@ -545,16 +1021,19 @@ onMounted(async () => {
 }
 
 .cantidad {
+  display: inline-block;
   min-width: 26px;
   text-align: center;
   font-weight: 700;
+  font-size: 1.05rem;
   color: var(--texto-principal);
   font-variant-numeric: tabular-nums;
 }
 
 .subtotal {
+  grid-area: subtotal;
   text-align: right;
-  min-width: 84px;
+  min-width: 88px;
   white-space: nowrap;
 }
 
@@ -563,7 +1042,7 @@ onMounted(async () => {
   font-size: 0.64rem;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--texto-terciario, var(--texto-secundario));
+  color: var(--texto-desactivado);
   margin: 0 0 0.15rem 0;
 }
 
@@ -571,27 +1050,30 @@ onMounted(async () => {
   font-family: var(--fuente-titulo);
   font-weight: 800;
   color: var(--morado-hover);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
 
 .btn-eliminar {
+  grid-area: eliminar;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--texto-secundario);
   cursor: pointer;
-  padding: 0.5rem;
-  font-size: 1rem;
+  padding: 0;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radio-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 .btn-eliminar:hover {
   color: var(--color-error);
   background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 .btn-eliminar:active { transform: scale(0.9); }
 .btn-eliminar:focus-visible {
@@ -600,10 +1082,41 @@ onMounted(async () => {
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
 }
 
+/* ---- Pie de lista: sella y equilibra la columna izquierda ---- */
+.lista-pie {
+  margin-top: auto;
+  padding-top: var(--esp-5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.pie-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--texto-secundario);
+}
+.pie-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radio-full);
+  color: var(--morado-hover);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--borde-sutil);
+}
+
 /* ===== RESUMEN DESTACADO ===== */
 .resumen-mini {
   position: sticky;
   top: 24px;
+  align-self: start;
+  min-width: 0;
 }
 
 .resumen-mini-contenido {
@@ -611,13 +1124,13 @@ onMounted(async () => {
 }
 
 .resumen-core {
-  padding: clamp(1.4rem, 1rem + 1vw, 1.9rem);
+  padding: clamp(1.5rem, 1.1rem + 1vw, 2rem);
 }
 
 .resumen-titulo {
   margin: 0 0 var(--esp-5);
   font-family: var(--fuente-titulo);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--texto-principal);
@@ -626,7 +1139,7 @@ onMounted(async () => {
 .fila-mini {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   font-size: 0.92rem;
   color: var(--texto-secundario);
   padding: 0.55rem 0;
@@ -634,15 +1147,25 @@ onMounted(async () => {
 .fila-mini + .fila-mini {
   border-top: 1px solid var(--borde-sutil);
 }
-.fila-mini span:last-child {
+.fila-mini > span:last-child {
   font-variant-numeric: tabular-nums;
   color: var(--texto-principal);
   font-weight: 600;
 }
 
+.fila-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fila-etiqueta svg {
+  color: var(--morado-hover);
+  flex-shrink: 0;
+}
+
 /* Total protagonista */
 .total-mini {
-  margin: var(--esp-4) 0 var(--esp-5);
+  margin: var(--esp-5) 0;
   padding: var(--esp-4) var(--esp-4) calc(var(--esp-4) + 2px);
   border-radius: var(--radio-lg);
   background: linear-gradient(150deg, rgba(168, 85, 247, 0.16), rgba(236, 72, 153, 0.1));
@@ -651,13 +1174,16 @@ onMounted(async () => {
 }
 
 .total-etiqueta {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
   color: var(--morado-hover);
   margin-bottom: 0.4rem;
 }
+.total-etiqueta svg { flex-shrink: 0; }
 
 .total-cifra {
   display: flex;
@@ -679,6 +1205,75 @@ onMounted(async () => {
   align-self: center;
 }
 
+/* Premio por perfil completo en el resumen */
+.premio-resumen {
+  margin: var(--esp-5) 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radio-lg);
+  background: linear-gradient(150deg, rgba(245, 158, 11, 0.14), rgba(236, 72, 153, 0.08));
+  border: 1px solid rgba(253, 230, 138, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 20px rgba(245, 158, 11, 0.14);
+}
+.premio-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+.premio-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-weight: 700;
+  color: #FDE68A;
+  line-height: 1.3;
+}
+.premio-etiqueta svg { flex-shrink: 0; }
+.premio-monto {
+  font-weight: 800;
+  color: #FDE68A;
+  white-space: nowrap;
+}
+.premio-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(253, 230, 138, 0.3);
+  color: var(--texto-secundario);
+}
+.premio-total span:last-child {
+  font-family: var(--fuente-titulo);
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--texto-principal);
+}
+.premio-nota {
+  margin: 7px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--texto-desactivado);
+}
+
+/* Premio aplicado en el estado de éxito */
+.carrito-vacio .premio-exito {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 var(--esp-3);
+  padding: 9px 16px;
+  border-radius: var(--radio-full);
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(253, 230, 138, 0.4);
+  color: #FDE68A;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.18);
+}
+.carrito-vacio .premio-exito svg { flex-shrink: 0; }
+
 .botones-mini {
   display: flex;
   flex-direction: column;
@@ -689,8 +1284,8 @@ onMounted(async () => {
 .btn-pago-mini {
   width: 100%;
   justify-content: space-between;
-  padding: 15px 15px 15px 24px;
-  font-size: 1rem;
+  padding: 16px 16px 16px 24px;
+  font-size: 1.02rem;
 }
 .pago-texto { line-height: 1; }
 .btn-pago-mini:disabled {
@@ -744,6 +1339,60 @@ onMounted(async () => {
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+/* Imagen faltante: inicial del producto (evita el ícono de imagen rota) */
+.imagen-inicial {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--fuente-titulo); font-weight: 800; font-size: 1.9rem;
+  color: var(--morado-hover); background: var(--fondo-tarjeta-alt);
+}
+/* Saldo siempre visible en el resumen */
+.fila-saldo { border-top: 1px dashed var(--borde-sutil); padding-top: 8px; margin-top: 4px; }
+.saldo-verde { color: var(--color-exito) !important; font-weight: 700; }
+.saldo-rojo { color: var(--color-error) !important; font-weight: 700; }
+.cta-recargar {
+  display: inline-block; margin-top: 8px; padding: 7px 14px;
+  border-radius: var(--radio-md); background: var(--gradiente-marca);
+  color: #fff; font-weight: 700; font-size: 0.82rem; text-decoration: none;
+}
+.saldo-exito { margin-top: 6px; color: var(--texto-secundario); }
+.saldo-exito b { color: var(--color-exito); }
+.exito-check svg { stroke: var(--color-exito); }
+
+/* Modal PIN del pago (fondo sólido oscuro, sin blur) */
+.modal-pin-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(6, 3, 18, 0.86);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.2rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+}
+.modal-pin-caja {
+  width: 100%; max-width: 360px; padding: 1.6rem;
+  max-height: 90dvh; overflow-y: auto;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-xl); box-shadow: var(--sombra-modal), 0 0 40px rgba(168, 85, 247, 0.18);
+  text-align: center;
+  animation: subirEntrada 0.3s var(--ease-cine) both;
+}
+.modal-pin-caja h3 { font-family: var(--fuente-titulo); font-size: 1.25rem; margin-bottom: 0.4rem; }
+.modal-pin-caja p { font-size: 0.85rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
+.input-pin-carrito {
+  width: 140px; max-width: 100%; padding: 12px; text-align: center; letter-spacing: 12px;
+  font-size: 1.4rem; font-weight: 800; border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta-alt); color: var(--texto-principal);
+}
+.input-pin-carrito:focus { outline: none; border-color: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.22); }
+.pin-error { margin-top: 10px; color: var(--color-error); font-size: 0.82rem; font-weight: 600; }
+.modal-pin-acciones { display: flex; gap: 10px; margin-top: 1.2rem; }
+.btn-pin-cancelar {
+  flex: 1; padding: 11px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil);
+  background: none; color: var(--texto-secundario); font-weight: 600; cursor: pointer;
+}
+.btn-pin-ok {
+  flex: 1.4; padding: 11px; border-radius: var(--radio-md); border: none;
+  background: var(--gradiente-marca); color: #fff; font-weight: 700; cursor: pointer;
+}
+.btn-pin-ok:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .alerta-exito {
   background: rgba(34, 197, 94, 0.1);
   color: var(--color-exito);
@@ -752,71 +1401,129 @@ onMounted(async () => {
 
 /* ===== RESPONSIVE ===== */
 
-/* Tablet: colapsa a una columna, resumen deja de ser sticky */
+/* Escritorio: fila de item con proporciones estables
+   (imagen | nombre+precio | stepper | subtotal | eliminar) */
+@media (min-width: 1025px) {
+  .carrito-contenido {
+    grid-template-columns: minmax(0, 1fr) 384px;
+    gap: 2rem;
+  }
+  .item-carrito {
+    grid-template-columns: 72px minmax(0, 1fr) auto 116px 40px;
+    column-gap: var(--esp-4);
+    padding: 0.85rem 1.15rem;
+  }
+  .item-media {
+    width: 72px;
+    height: 72px;
+  }
+  .info-item h3 {
+    font-size: 1.02rem;
+    -webkit-line-clamp: 1;
+  }
+  .cantidad-control { padding: 3px; }
+  .btn-cantidad {
+    width: 34px;
+    height: 34px;
+    font-size: 1.1rem;
+  }
+  .cantidad {
+    min-width: 24px;
+    font-size: 1rem;
+  }
+  .subtotal { min-width: 116px; }
+  .subtotal .valor { font-size: 1.18rem; }
+}
+
+/* Tablet: colapsa a una columna, resumen deja de ser sticky y va debajo */
 @media (max-width: 1024px) {
   .carrito-contenido {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
   }
   .resumen-mini {
     position: static;
   }
-}
-
-@media (max-width: 768px) {
-  .info-item {
-    flex: 1 1 100%;
-    margin-bottom: 0.25rem;
-  }
-  .cantidad-control {
-    margin-right: auto;
+  /* En una sola columna el pie ya no equilibra nada: queda pegado a la lista */
+  .lista-pie {
+    margin-top: var(--esp-4);
   }
 }
 
-/* Móvil: reordena la fila inferior para que respire */
+/* Item en dos filas: imagen + nombre arriba; stepper y subtotal en su
+   propia fila separada por un filo, alineados entre sí */
+@media (max-width: 640px) {
+  .item-carrito {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "media info eliminar"
+      "acciones acciones acciones";
+    row-gap: 0.8rem;
+    column-gap: var(--esp-3);
+    align-items: center;
+  }
+
+  .item-media {
+    width: 72px;
+    height: 72px;
+  }
+
+  .btn-eliminar { align-self: start; }
+
+  .item-acciones {
+    grid-area: acciones;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--esp-3);
+    min-width: 0;
+    border-top: 1px solid var(--borde-sutil);
+    padding-top: 0.8rem;
+  }
+
+  /* Subtotal en línea: "SUBTOTAL  Bs. 70.00" con baseline alineada */
+  .subtotal {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .subtotal .label { margin: 0; }
+  .subtotal .valor { font-size: 1.2rem; }
+}
+
+/* Móvil chico: márgenes ajustados, todo sigue dentro de 390px */
 @media (max-width: 480px) {
   .contenedor-carrito {
     padding: 1rem 0.75rem 110px;
+    min-height: calc(100dvh - 150px);
   }
 
   .item-carrito {
-    gap: 0.75rem;
-    padding: 0.8rem;
+    padding: 0.85rem 0.9rem;
   }
 
-  .info-item {
-    flex: 1 1 calc(100% - 74px);
-    margin-bottom: 0;
+  .item-media {
+    width: 66px;
+    height: 66px;
   }
 
-  .cantidad-control {
-    order: 2;
-    margin-right: 0;
-    padding: 0.35rem;
-    gap: 0.7rem;
-  }
+  .info-item h3 { font-size: 1rem; }
 
   .btn-cantidad {
-    width: 34px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
+    font-size: 1.15rem;
   }
-
-  .subtotal {
-    order: 3;
-    flex: 1;
-    min-width: 0;
-    text-align: right;
-  }
+  .cantidad { min-width: 22px; font-size: 1rem; }
 
   .subtotal .valor {
-    font-size: 1.08rem;
+    font-size: 1.15rem;
   }
 
   .btn-eliminar {
-    order: 1;
-    align-self: flex-start;
-    padding: 0.4rem;
-    min-width: 34px;
-    min-height: 34px;
+    width: 36px;
+    height: 36px;
   }
 }
 
@@ -828,8 +1535,21 @@ onMounted(async () => {
   .btn-cantidad,
   .btn-eliminar,
   .btn-volver-mini,
-  .efecto-flotar {
+  .efecto-flotar,
+  .exito-check,
+  .exito-check .icono-vacio,
+  .pv-copa,
+  .pv-chispa,
+  .modal-pin-caja {
     animation: none;
+    transition: none;
+  }
+  .papel { display: none; }
+  .item-move,
+  .item-enter-active,
+  .item-leave-active,
+  .pop-enter-active,
+  .pop-leave-active {
     transition: none;
   }
   .item-carrito:hover,

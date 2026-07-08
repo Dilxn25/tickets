@@ -224,6 +224,28 @@
             </button>
           </label>
 
+          <!-- Premio por perfil completo (módulo cliente): % y tope en Bs -->
+          <div class="campo-config">
+            <span class="campo-config-label">Premio por perfil completo</span>
+            <span class="campo-config-ayuda">Descuento único que gana el cliente al completar su perfil, en su próximo pedido con billetera.</span>
+            <div class="premio-fila">
+              <div class="premio-campo">
+                <label class="premio-mini-label">Descuento</label>
+                <div class="premio-input-wrap">
+                  <input v-model.number="formPremioPct" type="number" min="0" max="90" step="5" class="premio-input" />
+                  <span class="premio-sufijo">%</span>
+                </div>
+              </div>
+              <div class="premio-campo">
+                <label class="premio-mini-label">Tope</label>
+                <div class="premio-input-wrap">
+                  <span class="premio-prefijo">Bs</span>
+                  <input v-model.number="formPremioMax" type="number" min="0" step="5" class="premio-input" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <button class="btn-guardar" :disabled="guardando || !hayCambios" @click="guardarConfig">
             {{ guardando ? 'Guardando...' : 'Guardar cambios' }}
           </button>
@@ -302,13 +324,17 @@ const estado = ref({ en_linea: false, url: '' })
 const cargandoEstado = ref(false)
 
 // Configuración
-const config = ref({ descuento_combos: 10, sugerencias_activas: true })
+const config = ref({ descuento_combos: 10, sugerencias_activas: true, premio_pct: 10, premio_max: 50 })
 const formDescuento = ref(10)
 const formSugerencias = ref(true)
+const formPremioPct = ref(10)
+const formPremioMax = ref(50)
 const guardando = ref(false)
 const hayCambios = computed(() =>
   formDescuento.value !== config.value.descuento_combos ||
-  formSugerencias.value !== config.value.sugerencias_activas
+  formSugerencias.value !== config.value.sugerencias_activas ||
+  Number(formPremioPct.value) !== config.value.premio_pct ||
+  Number(formPremioMax.value) !== config.value.premio_max
 )
 
 // Combos (tam 2 = pares, 3 = tríos) con caché local: el cambio es INSTANTÁNEO
@@ -424,6 +450,8 @@ async function cargarConfig() {
     config.value = await clienteHttp.get('/recomendaciones/config')
     formDescuento.value = config.value.descuento_combos
     formSugerencias.value = config.value.sugerencias_activas
+    formPremioPct.value = config.value.premio_pct
+    formPremioMax.value = config.value.premio_max
   } catch (e) { console.warn('Error cargando config IA:', e) }
 }
 
@@ -457,14 +485,28 @@ async function guardarConfig() {
     notif.advertencia('El descuento debe ser un número entre 0 y 90.')
     return
   }
+  const premioPct = Number(formPremioPct.value)
+  const premioMax = Number(formPremioMax.value)
+  if (isNaN(premioPct) || premioPct < 0 || premioPct > 90) {
+    notif.advertencia('El porcentaje del premio debe estar entre 0 y 90.')
+    return
+  }
+  if (isNaN(premioMax) || premioMax < 0) {
+    notif.advertencia('El tope del premio debe ser un número mayor o igual a 0.')
+    return
+  }
   guardando.value = true
   try {
     config.value = await clienteHttp.put('/recomendaciones/config', {
       descuento_combos: pct,
-      sugerencias_activas: formSugerencias.value
+      sugerencias_activas: formSugerencias.value,
+      premio_pct: premioPct,
+      premio_max: premioMax
     })
     formDescuento.value = config.value.descuento_combos
     formSugerencias.value = config.value.sugerencias_activas
+    formPremioPct.value = config.value.premio_pct
+    formPremioMax.value = config.value.premio_max
     notif.exito('Configuración de la IA guardada.')
     combosCache[2] = combosCache[3] = null // el descuento cambió: invalidar caché local
     cargarCombos().then(precargarCombos) // los precios reflejan el nuevo descuento
@@ -763,6 +805,23 @@ onActivated(() => {
 .campo-config { display: block; margin-bottom: 18px; }
 .campo-config-label { display: block; font-size: 0.84rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 6px; }
 .campo-config-ayuda { display: block; font-size: 0.74rem; color: var(--texto-secundario); margin-top: 5px; }
+/* Premio por perfil completo */
+.premio-fila { display: flex; gap: 12px; margin-top: 10px; }
+.premio-campo { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.premio-mini-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--texto-desactivado); }
+.premio-input-wrap {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--fondo-input, var(--fondo-tarjeta-alt));
+  border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+  padding: 0 12px;
+}
+.premio-input-wrap:focus-within { border-color: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168,85,247,0.18); }
+.premio-input {
+  flex: 1; min-width: 0; background: none; border: none; outline: none;
+  color: var(--texto-principal); font-family: var(--fuente-titulo);
+  font-size: 1.1rem; font-weight: 800; padding: 10px 0;
+}
+.premio-prefijo, .premio-sufijo { color: var(--texto-secundario); font-weight: 700; font-size: 0.9rem; }
 /* Stepper premium del descuento (− valor +) */
 .stepper-descuento {
   display: flex;

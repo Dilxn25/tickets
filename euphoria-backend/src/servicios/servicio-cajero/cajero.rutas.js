@@ -134,13 +134,12 @@ router.post('/resetear-pin', async (req, res) => {
   try {
     const { id_usuario, nuevo_pin } = req.body
     if (!nuevo_pin || nuevo_pin.length !== 4) return res.status(400).json({ error: 'PIN debe ser de 4 dígitos' })
-    
-    const bcrypt = require('bcryptjs')
-    const pinHash = await bcrypt.hash(nuevo_pin, 10)
-    
+
+    const { cifrarPin } = require('../../utilidades/pin-billetera')
+
     await prisma.billetera.update({
       where: { id_usuario },
-      data: { pin_transaccional: pinHash }
+      data: { pin_transaccional: cifrarPin(nuevo_pin) }
     })
     res.json({ mensaje: 'PIN actualizado exitosamente' })
   } catch (error) {
@@ -193,10 +192,7 @@ router.post('/resolver', async (req, res) => {
 
     // Sincronización en tiempo real (fuera de la transacción)
     if (estado === 'completada' && resultado.billetera && global.io) {
-      global.io.emit('billetera_actualizada', {
-        id_usuario: recarga.id_usuario,
-        saldo_nuevo: parseFloat(resultado.billetera.saldo_actual)
-      })
+      global.io.emit('billetera_actualizada', { id_usuario: recarga.id_usuario })
     }
 
     res.json({ mensaje: `Recarga ${estado} exitosamente` })
@@ -280,10 +276,7 @@ router.post('/recargar', async (req, res) => {
 
     // 4. Sincronización en tiempo real
     if (global.io) {
-      global.io.emit('billetera_actualizada', {
-        id_usuario: billetera.id_usuario,
-        saldo_nuevo: parseFloat(billeteraActualizada.saldo_actual)
-      })
+      global.io.emit('billetera_actualizada', { id_usuario: billetera.id_usuario })
       global.io.emit('recarga_registrada')
     }
 
@@ -326,7 +319,8 @@ router.post('/abrir-billetera', async (req, res) => {
     
     // Si envían un PIN personalizado lo usamos, si no, por defecto será 1234
     const pinFinal = req.body.pin || '1234'
-    const pinHash = await bcrypt.hash(pinFinal, 10)
+    const { cifrarPin } = require('../../utilidades/pin-billetera')
+    const pinHash = cifrarPin(pinFinal)
     
     // Obtener rol cliente
     const rolCliente = await prisma.rol.findFirst({ where: { nombre_rol: 'Cliente' } })

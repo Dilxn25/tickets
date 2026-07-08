@@ -1,24 +1,18 @@
 <template>
   <div class="vista-reserva entrada-cine">
-    <!-- Encabezado / hero -->
-    <header class="cabecera textura-grano">
-      <div class="orbe-deco morado orbe-a" aria-hidden="true"></div>
-      <div class="orbe-deco rosa orbe-b" aria-hidden="true"></div>
-
-      <div class="cabecera-top">
-        <button class="btn-volver" @click="volver" aria-label="Volver">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        </button>
-        <RouterLink to="/cliente/mis-reservas" class="btn-mias" title="Mis reservas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-          <span>Mis reservas</span>
-        </RouterLink>
-      </div>
-
+    <!-- Cabecera compacta: volver + título en una línea + subtítulo pequeño -->
+    <header class="cabecera">
+      <button class="btn-volver" @click="volver" aria-label="Volver">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
       <div class="cabecera-texto">
         <h1 class="titulo">Reservar mesa</h1>
         <p class="subtitulo">{{ nombreEvento || 'Elige tu mesa en el mapa' }}</p>
       </div>
+      <RouterLink to="/cliente/mis-reservas" class="btn-mias" title="Mis reservas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        <span>Mis reservas</span>
+      </RouterLink>
     </header>
 
     <!-- Cargando -->
@@ -70,10 +64,11 @@
 
       <!-- ZONA CON ASIENTOS: mapa para elegir mesa/silla -->
       <template v-else>
-        <!-- Leyenda -->
-        <div class="leyenda superficie">
+        <!-- Leyenda compacta -->
+        <div class="leyenda">
           <span class="lg"><i class="pt libre"></i> Libre</span>
           <span class="lg"><i class="pt ocupada"></i> Reservada</span>
+          <span class="lg"><i class="pt sel"></i> Tu elección</span>
           <span class="lg"><i class="pt deco"></i> Fijo</span>
         </div>
 
@@ -86,102 +81,130 @@
               :style="estiloElemento(el)"
               @click="seleccionar(el)">
               <span class="etq">{{ el.numero_nombre }}</span>
+              <span
+                v-if="el.tipo_elemento === 'mesa' && esReservable(el) && el.estado_ocupacion === 'libre'"
+                class="precio-tag" aria-hidden="true">
+                {{ formatoBsCorto(precioMesa(el)) }}
+              </span>
             </div>
           </div>
         </div>
 
-        <p class="ayuda-mapa">Toca una mesa o silla libre para reservarla.</p>
+        <p class="ayuda-mapa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ayuda-icono"><path d="M9 11.5a3 3 0 1 0 6 0v-6a3 3 0 1 0-6 0z"></path><path d="M5 10.5a7 7 0 0 0 14 0"></path><line x1="12" y1="17.5" x2="12" y2="21"></line></svg>
+          Toca una mesa o silla libre para reservarla.
+        </p>
       </template>
     </template>
 
-    <!-- Hoja inferior: mesa seleccionada -->
-    <div v-if="mesaSel" class="hoja-overlay" @click.self="mesaSel = null">
-      <div class="hoja">
-        <div class="hoja-barra"></div>
-        <div class="hoja-cab">
-          <div>
-            <h3>{{ mesaSel.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ mesaSel.numero_nombre }}</h3>
-            <p class="hoja-zona">{{ nombreZonaSel }}</p>
+    <!-- Panel de mesa seleccionada: bottom-sheet compacto que NO tapa el mapa -->
+    <Teleport to="body">
+      <Transition name="hoja">
+        <div v-if="mesaSel" class="hoja" role="dialog" aria-label="Mesa seleccionada">
+          <div class="hoja-barra" aria-hidden="true"></div>
+          <button class="hoja-cerrar" @click="mesaSel = null" aria-label="Cerrar panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+
+          <div class="hoja-cab">
+            <div class="hoja-tit">
+              <h3>{{ mesaSel.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ mesaSel.numero_nombre }}</h3>
+              <p class="hoja-zona">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                {{ nombreZonaSel }} · {{ mesaSel.tipo_elemento === 'silla' ? '1 persona' : (mesaSel.capacidad_sillas || 1) + ' personas' }}
+              </p>
+            </div>
+            <div class="precio">{{ formatoBs(precioMesa(mesaSel)) }}</div>
           </div>
-          <div class="precio">{{ formatoBs(precioMesa(mesaSel)) }}</div>
-        </div>
 
-        <div class="hoja-datos">
-          <div class="dato">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
-            <span v-if="mesaSel.tipo_elemento === 'silla'">Asiento individual · 1 persona</span>
-            <span v-else>Mesa completa · QR para {{ mesaSel.capacidad_sillas || 1 }} personas</span>
-          </div>
-        </div>
-        <p class="hoja-nota">
-          {{ mesaSel.tipo_elemento === 'silla'
-            ? 'Reservas un asiento para ti.'
-            : 'Compras la mesa entera. Tu QR sirve para ' + (mesaSel.capacidad_sillas || 1) + ' ingresos: puedes entrar por tandas (ej. 3 ahora y el resto después).' }}
-        </p>
+          <p class="hoja-nota">
+            {{ mesaSel.tipo_elemento === 'silla'
+              ? 'Reservas un asiento para ti.'
+              : 'Compras la mesa entera. Tu QR sirve para ' + (mesaSel.capacidad_sillas || 1) + ' ingresos: puedes entrar por tandas (ej. 3 ahora y el resto después).' }}
+          </p>
 
-        <p v-if="msgError" class="hoja-error">{{ msgError }}</p>
+          <p v-if="msgError" class="hoja-error">{{ msgError }}</p>
 
-        <button class="btn-primario grande brillo-hover" :disabled="reservando" @click="reservar">
-          {{ reservando ? 'Reservando...' : `Reservar por ${formatoBs(precioMesa(mesaSel))}` }}
-        </button>
-        <button class="btn-texto" @click="mesaSel = null">Cancelar</button>
-      </div>
-    </div>
-
-    <!-- Modal PIN -->
-    <div v-if="pidiendoPin" class="modal-overlay">
-      <div class="modal-pin">
-        <h3>Confirma con tu PIN</h3>
-        <p>Ingresa tu PIN de 4 dígitos para autorizar el pago.</p>
-        <input
-          v-model="pin" type="password" inputmode="numeric" maxlength="4"
-          class="input-pin" placeholder="••••" @keyup.enter="confirmarPin" />
-        <p v-if="msgError" class="hoja-error">{{ msgError }}</p>
-        <div class="modal-acciones">
-          <button class="btn-texto" @click="cancelarPin">Cancelar</button>
-          <button class="btn-primario" :disabled="reservando || pin.length !== 4" @click="confirmarPin">
-            {{ reservando ? 'Verificando...' : 'Confirmar' }}
+          <button class="btn-primario grande brillo-hover" :disabled="reservando" @click="reservar">
+            {{ reservando ? 'Reservando...' : `Reservar por ${formatoBs(precioMesa(mesaSel))}` }}
           </button>
         </div>
-      </div>
-    </div>
+      </Transition>
 
-    <!-- Modal éxito -->
-    <div v-if="reservaOk" class="modal-overlay">
-      <div class="modal-exito">
-        <div class="check-ok">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-        <h3>¡Reserva confirmada!</h3>
-        <p class="exito-sub">{{ reservaOk.entrada.mesa ? 'Mesa ' + reservaOk.entrada.mesa + ' · ' : '' }}{{ reservaOk.entrada.zona }}</p>
-
-        <img :src="reservaOk.qr" alt="QR de acceso" class="qr-img" />
-        <p class="codigo">Código: <b>{{ reservaOk.entrada.codigo_ingreso }}</b></p>
-        <p class="saldo-rest">Saldo restante: {{ formatoBs(reservaOk.saldo_restante) }}</p>
-
-        <!-- Combos sugeridos (tocar para agregarlos al carrito) -->
-        <div v-if="reservaOk.combos_sugeridos && reservaOk.combos_sugeridos.length" class="combos">
-          <p class="combos-titulo">Completa tu noche con un combo</p>
-          <div class="combos-lista">
-            <button
-              v-for="(c, i) in reservaOk.combos_sugeridos" :key="i"
-              class="combo-chip" type="button" @click="agregarCombo(c)">
-              <span class="combo-nombre">{{ c.nombre }}</span>
-              <span class="combo-precio">
-                <s>{{ formatoBs(c.precio_normal) }}</s>
-                <b>{{ formatoBs(c.precio_combo) }}</b>
-              </span>
-              <svg class="combo-add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+      <!-- Modal PIN -->
+      <div v-if="pidiendoPin" class="modal-overlay">
+        <div class="modal-pin">
+          <h3>Confirma con tu PIN</h3>
+          <p>Ingresa tu PIN de 4 dígitos para autorizar el pago.</p>
+          <input
+            v-model="pin" type="password" inputmode="numeric" maxlength="4"
+            class="input-pin" placeholder="••••" @keyup.enter="confirmarPin" />
+          <p v-if="msgError" class="hoja-error">{{ msgError }}</p>
+          <div class="modal-acciones">
+            <button class="btn-texto" @click="cancelarPin">Cancelar</button>
+            <button class="btn-primario" :disabled="reservando || pin.length !== 4" @click="confirmarPin">
+              {{ reservando ? 'Verificando...' : 'Confirmar' }}
             </button>
           </div>
         </div>
+      </div>
 
-        <div class="modal-acciones col">
-          <button class="btn-primario grande brillo-hover" @click="irMisReservas">Ver mis reservas</button>
-          <button class="btn-texto" @click="cerrarExito">Seguir en el mapa</button>
+      <!-- Modal éxito -->
+      <div v-if="reservaOk" class="modal-overlay">
+        <div class="modal-exito">
+          <div class="check-ok">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <h3>¡Reserva confirmada!</h3>
+          <p class="exito-sub">{{ reservaOk.entrada.mesa ? 'Mesa ' + reservaOk.entrada.mesa + ' · ' : '' }}{{ reservaOk.entrada.zona }}</p>
+
+          <img :src="reservaOk.qr" alt="QR de acceso" class="qr-img" />
+          <p class="codigo">Código: <b>{{ reservaOk.entrada.codigo_ingreso }}</b></p>
+          <p class="saldo-rest">Saldo restante: {{ formatoBs(reservaOk.saldo_restante) }}</p>
+
+          <!-- PACKS PARA MESA de la IA: patrones reales de mesas grandes, con imágenes -->
+          <div v-if="tipoReservado === 'mesa' && packs.length" class="packs-mesa">
+            <p class="combos-titulo">Arma tu mesa de una vez</p>
+            <div class="packs-mesa-lista">
+              <button v-for="(pk, i) in packs" :key="'pk' + i" class="pack-mesa" type="button" @click="agregarPack(pk)">
+                <span class="pack-mesa-imgs">
+                  <img v-for="(it, j) in pk.items.slice(0, 3)" :key="j" :src="it.url_imagen || ''"
+                       :alt="it.nombre" @error="$event.target.style.visibility = 'hidden'" />
+                </span>
+                <span class="pack-mesa-info">
+                  <span class="pack-mesa-nombre">{{ pk.nombre }}</span>
+                  <span class="pack-mesa-detalle">{{ resumenPack(pk) }}</span>
+                  <span class="pack-mesa-precio"><s>{{ formatoBs(pk.precio_normal) }}</s> <b>{{ formatoBs(pk.precio_pack) }}</b></span>
+                </span>
+                <svg class="pack-mesa-add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Combos sugeridos (tocar para agregarlos al carrito) -->
+          <div v-else-if="reservaOk.combos_sugeridos && reservaOk.combos_sugeridos.length" class="combos">
+            <p class="combos-titulo">Completa tu noche con un combo</p>
+            <div class="combos-lista">
+              <button
+                v-for="(c, i) in reservaOk.combos_sugeridos" :key="i"
+                class="combo-chip" type="button" @click="agregarCombo(c)">
+                <span class="combo-nombre">{{ c.nombre }}</span>
+                <span class="combo-precio">
+                  <s>{{ formatoBs(c.precio_normal) }}</s>
+                  <b>{{ formatoBs(c.precio_combo) }}</b>
+                </span>
+                <svg class="combo-add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="modal-acciones col">
+            <button class="btn-primario grande brillo-hover" @click="irMisReservas">Ver mis reservas</button>
+            <button class="btn-texto" @click="cerrarExito">Seguir en el mapa</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -191,6 +214,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 
 const route = useRoute()
@@ -207,6 +231,9 @@ const nombreEvento = ref('')
 
 const mesaSel = ref(null)
 const personas = ref(1)
+// Packs para mesa de la IA: se ofrecen al confirmar la reserva de una MESA
+const packs = ref([])
+const tipoReservado = ref('')
 const reservando = ref(false)
 const msgError = ref('')
 const pidiendoPin = ref(false)
@@ -239,6 +266,8 @@ function claseElemento(el) {
   const c = [`tipo-${el.tipo_elemento || 'mesa'}`]
   if (esReservable(el)) {
     c.push(el.estado_ocupacion === 'libre' ? 'libre' : 'ocupada')
+    // Resalta en el mapa la mesa que el cliente tiene elegida en el panel
+    if (mesaSel.value && mesaSel.value.id_mesa === el.id_mesa) c.push('sel')
   } else {
     c.push('deco')
   }
@@ -269,6 +298,12 @@ function formatoBs(n) {
   return `Bs ${Number(n || 0).toFixed(2)}`
 }
 
+// Version corta para la etiqueta de precio dentro del mapa (poco espacio)
+function formatoBsCorto(n) {
+  const v = Number(n || 0)
+  return `Bs ${Number.isInteger(v) ? v : v.toFixed(2)}`
+}
+
 function seleccionar(el) {
   if (!esReservable(el)) return
   if (el.estado_ocupacion !== 'libre') {
@@ -291,8 +326,13 @@ async function reservar() {
       pidiendoPin.value ? pin.value : undefined
     )
     reservaOk.value = r
+    tipoReservado.value = mesaSel.value.tipo_elemento
     pidiendoPin.value = false
     pin.value = ''
+    // El cliente ya está "dentro" de este evento: habilita el catálogo/carrito
+    // y el banner "Estás en vivo" del inicio
+    tiendaCarrito.setEventoActivo(String(idEvento))
+    localStorage.setItem('euphoria_evento_actual', JSON.stringify({ id: idEvento, nombre: nombreEvento.value || '' }))
     // Marcar la mesa como reservada localmente
     mesaSel.value.estado_ocupacion = 'reservada'
     mesaSel.value = null
@@ -305,7 +345,7 @@ async function reservar() {
     } else {
       msgError.value = data?.error || 'No se pudo completar la reserva'
       // Si la mesa fue tomada por otro, refrescamos el mapa
-      if (err?.response?.status === 409) {
+      if (data?.__status === 409) {
         mesaSel.value = null
         cargar()
       }
@@ -326,6 +366,9 @@ async function comprarCampoEntrada() {
       pidiendoPin.value ? pin.value : undefined
     )
     reservaOk.value = r
+    tipoReservado.value = 'campo'
+    tiendaCarrito.setEventoActivo(String(idEvento))
+    localStorage.setItem('euphoria_evento_actual', JSON.stringify({ id: idEvento, nombre: nombreEvento.value || '' }))
     pidiendoPin.value = false
     pin.value = ''
     cargar() // refresca disponibles
@@ -368,6 +411,41 @@ function agregarCombo(c) {
   if (agregado) router.push('/cliente/carrito')
   else msgError.value = 'No se pudo agregar el combo. Intenta desde el catálogo.'
 }
+
+// Agrega un PACK completo al carrito (cada producto con su cantidad del patrón)
+function agregarPack(pk) {
+  let agregado = false
+  for (const it of pk.items || []) {
+    const prod = productosCompletos.value.find(x => x.id_producto === it.id_producto)
+    if (prod) {
+      // Cada producto del pack va con su propia foto (sin mutar el original):
+      // - combos: su composición (2-3 fotos solapadas, como en su tarjeta)
+      // - simples sin foto: la foto que trae el item del pack
+      let prodConImagen = prod
+      if (prod.es_combo) {
+        const imagenes = (prod.combos_como_padre || [])
+          .map(c => c.url_imagen || c.producto?.url_imagen || '')
+          .filter(Boolean)
+          .slice(0, 3)
+        if (imagenes.length) {
+          prodConImagen = { ...prod, url_imagen: prod.url_imagen || imagenes[0], imagenes_combo: imagenes }
+        } else if (!prod.url_imagen && it.url_imagen) {
+          prodConImagen = { ...prod, url_imagen: it.url_imagen }
+        }
+      } else if (!prod.url_imagen && it.url_imagen) {
+        prodConImagen = { ...prod, url_imagen: it.url_imagen }
+      }
+      for (let n = 0; n < (it.cantidad || 1); n++) tiendaCarrito.agregarItem(prodConImagen)
+      agregado = true
+    }
+  }
+  if (agregado) router.push('/cliente/carrito')
+  else msgError.value = 'No se pudo agregar el pack. Intenta desde el catálogo.'
+}
+// Resumen corto del pack: "1× Ron + 4× RedBull"
+function resumenPack(pk) {
+  return (pk.items || []).map(it => `${it.cantidad}× ${it.nombre.split(' de ')[0].split(' (')[0]}`).join(' + ')
+}
 function irMisReservas() {
   router.push('/cliente/mis-reservas')
 }
@@ -398,6 +476,8 @@ onMounted(() => {
   cargar()
   // Catálogo completo para poder agregar combos sugeridos al carrito
   servicioProductos.listar().then(p => { productosCompletos.value = p || [] }).catch(() => {})
+  // Packs para mesa de la IA (patrones reales de mesas grandes) — se ofrecen al reservar
+  clienteHttp.get('/recomendaciones/packs').then(r => { packs.value = (r.packs || []).slice(0, 3) }).catch(() => {})
   // Tiempo real: si otra persona reserva una mesa, se refleja en el mapa
   socket = io()
   socket.on('mesa_actualizada', (datos) => {
@@ -416,46 +496,40 @@ onUnmounted(() => {
 <style scoped>
 .vista-reserva { padding: 1rem; padding-bottom: 90px; max-width: 680px; margin: 0 auto; }
 
-/* Cabecera / hero de vidrio con orbes de neon */
+/* Cabecera compacta: una fila (volver + título/subtítulo + mis reservas) */
 .cabecera {
-  position: relative; overflow: hidden; isolation: isolate;
-  border-radius: var(--radio-xl); padding: 1rem 1.35rem 1.25rem;
-  margin-bottom: 1.2rem;
-  background: var(--glass-fondo); border: 1px solid var(--glass-borde);
-  backdrop-filter: blur(22px) saturate(150%);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 20px 52px rgba(10,6,26,0.55);
+  display: flex; align-items: center; gap: 12px;
+  min-width: 0;
+  padding: var(--esp-1) 0;
+  margin-bottom: 0.9rem;
 }
-.cabecera .orbe-a { width: 260px; height: 260px; top: -140px; right: -70px; opacity: 0.4; }
-.cabecera .orbe-b { width: 210px; height: 210px; bottom: -150px; left: -80px; opacity: 0.3; }
-
-.cabecera-top { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 0.9rem; }
-.cabecera-texto { position: relative; z-index: 1; }
+.cabecera-texto { flex: 1; min-width: 0; }
 .titulo {
-  font-family: var(--fuente-titulo); font-size: 1.75rem; font-weight: 800;
-  letter-spacing: -0.02em; line-height: 1.1; color: var(--texto-principal);
+  font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 800;
+  letter-spacing: -0.02em; line-height: 1.15; color: var(--texto-principal);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.subtitulo { font-size: 0.9rem; color: var(--texto-secundario); margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subtitulo { font-size: 0.78rem; color: var(--texto-secundario); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .btn-volver {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; border-radius: 14px; flex-shrink: 0;
-  background: rgba(46,26,102,0.5); border: 1px solid var(--glass-borde);
+  width: 40px; height: 40px; border-radius: 13px; flex-shrink: 0;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
   color: var(--texto-principal); cursor: pointer;
   transition: transform 0.3s var(--ease-cine), border-color 0.25s, background 0.25s, box-shadow 0.3s;
 }
 .btn-mias {
-  display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0;
-  height: 44px; padding: 0 18px; border-radius: var(--radio-full);
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  height: 40px; padding: 0 15px; border-radius: var(--radio-full);
   background: rgba(236,72,153,0.1); border: 1px solid rgba(236,72,153,0.32);
   color: var(--rosa-suave); text-decoration: none; cursor: pointer;
-  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap;
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap;
   transition: transform 0.3s var(--ease-cine), border-color 0.25s, background 0.25s, box-shadow 0.3s;
 }
 .btn-volver:hover { border-color: var(--borde-activo); transform: translateY(-2px); box-shadow: var(--glow-morado); }
 .btn-mias:hover { border-color: rgba(236,72,153,0.6); transform: translateY(-2px); box-shadow: var(--glow-rosa); background: rgba(236,72,153,0.16); }
 .btn-volver:active, .btn-mias:active { transform: scale(0.94); }
-.btn-volver svg, .btn-mias svg { width: 20px; height: 20px; }
+.btn-volver svg, .btn-mias svg { width: 19px; height: 19px; }
 
 /* Estados */
 .cargando, .estado-msg { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.1rem; padding: 3.5rem 1.25rem; color: var(--texto-secundario); text-align: center; text-wrap: balance; }
@@ -465,7 +539,7 @@ onUnmounted(() => {
 
 /* Tabs de zona: control segmentado tipo pildora */
 .tabs-zona {
-  display: flex; gap: 8px; overflow-x: auto; padding: 5px; margin-bottom: 1rem;
+  display: flex; gap: 8px; overflow-x: auto; padding: 5px; margin-bottom: 0.85rem;
   border-radius: var(--radio-full);
   background: rgba(46,26,102,0.32); border: 1px solid var(--glass-borde);
   -webkit-overflow-scrolling: touch; scrollbar-width: none;
@@ -482,20 +556,28 @@ onUnmounted(() => {
 .tab-zona:active { transform: scale(0.96); }
 .tab-zona.activo { background: var(--gradiente-marca); color: #fff; box-shadow: 0 6px 20px rgba(168,85,247,0.4); }
 
-/* Leyenda: barra de vidrio con puntos luminosos */
+/* Leyenda: chips pequeños en UNA sola fila, scrolleable si no cabe */
 .leyenda {
-  display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
-  padding: 11px 18px; border-radius: var(--radio-full) !important;
-  margin-bottom: 0.85rem; font-size: 0.76rem; font-weight: 600; color: var(--texto-secundario);
+  display: flex; flex-wrap: nowrap; gap: 8px; align-items: center;
+  width: fit-content; max-width: 100%;
+  margin: 0 auto 0.85rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  font-size: 0.72rem; font-weight: 600; color: var(--texto-secundario);
 }
-.lg { display: inline-flex; align-items: center; gap: 8px; }
-.pt { width: 11px; height: 11px; border-radius: var(--radio-sm); display: inline-block; }
+.leyenda::-webkit-scrollbar { display: none; }
+.lg {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;
+  padding: 5px 11px; border-radius: var(--radio-full);
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
+}
+.pt { width: 10px; height: 10px; border-radius: var(--radio-sm); display: inline-block; flex-shrink: 0; }
 .pt.libre { background: #22C55E; box-shadow: 0 0 10px rgba(34,197,94,0.6); }
 .pt.ocupada { background: #EF4444; box-shadow: 0 0 10px rgba(239,68,68,0.5); }
+.pt.sel { background: var(--rosa-acento); box-shadow: 0 0 10px rgba(236,72,153,0.6); }
 .pt.deco { background: rgba(196,181,224,0.4); }
 
-/* Lienzo del mapa — acotado y centrado para que no crezca gigante ni se
-   sobreponga con la barra de pestañas en pantallas grandes. */
+/* Lienzo del mapa — acotado y centrado */
 .lienzo-wrap {
   width: 100%; max-width: 600px; margin: 0 auto;
   border-radius: 20px; overflow: hidden; position: relative; z-index: 0;
@@ -520,20 +602,49 @@ onUnmounted(() => {
 }
 .etq { padding: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.6); pointer-events: none; }
 
-/* Mesas reservables (segun el diseno: libre = verde, ocupada = rojo) */
+/* Etiqueta de precio dentro de las mesas libres */
+.precio-tag {
+  position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  padding: 1px 6px; border-radius: var(--radio-full);
+  background: rgba(6,3,18,0.65);
+  font-size: 0.56rem; font-weight: 700; letter-spacing: 0.01em;
+  color: #BBF7D0; white-space: nowrap; max-width: calc(100% - 4px);
+  overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+/* En móvil los elementos del plano son muy chicos: la etiqueta de precio
+   tapaba el nombre de la mesa. El precio se ve al seleccionarla. */
+@media (max-width: 700px) {
+  .precio-tag { display: none; }
+}
+
+/* Mesas libres: verdes y pulsando suavemente (afford de "tocables") */
 .elemento.libre {
   background: rgba(34,197,94,0.16);
   border: 2px solid rgba(34,197,94,0.55);
   color: #4ADE80; cursor: pointer;
   box-shadow: 0 4px 14px rgba(34,197,94,0.22);
-  transition: transform 0.12s, box-shadow 0.2s, background 0.2s;
+  transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
+  animation: pulsoLibre 2.6s ease-in-out infinite;
 }
-.elemento.libre:hover { background: rgba(34,197,94,0.26); box-shadow: 0 6px 20px rgba(34,197,94,0.35); }
-.elemento.libre:active { transform: scale(0.96); }
+@keyframes pulsoLibre {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0), 0 4px 14px rgba(34,197,94,0.22); }
+  50%      { box-shadow: 0 0 0 5px rgba(34,197,94,0.14), 0 4px 18px rgba(34,197,94,0.4); }
+}
+.elemento.libre:hover { background: rgba(34,197,94,0.28); border-color: rgba(74,222,128,0.85); }
 .elemento.ocupada {
   background: rgba(239,68,68,0.14); border: 2px solid rgba(239,68,68,0.5);
   color: #F87171; cursor: not-allowed;
 }
+
+/* Mesa elegida: resaltada en rosa neon por encima del resto */
+.elemento.sel {
+  background: rgba(236,72,153,0.32);
+  border: 2px solid var(--rosa-suave);
+  color: #fff; z-index: 3;
+  box-shadow: 0 0 0 4px rgba(236,72,153,0.22), 0 8px 24px rgba(236,72,153,0.5);
+  animation: none;
+}
+.elemento.sel .precio-tag { color: #FBCFE8; }
 
 /* Decorativos */
 .elemento.deco { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.14); color: var(--texto-secundario); }
@@ -556,7 +667,11 @@ onUnmounted(() => {
   text-shadow: none;
 }
 
-.ayuda-mapa { text-align: center; font-size: 0.8rem; color: var(--texto-secundario); margin-top: 0.9rem; }
+.ayuda-mapa {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  text-align: center; font-size: 0.8rem; color: var(--texto-secundario); margin-top: 0.9rem;
+}
+.ayuda-icono { width: 15px; height: 15px; flex-shrink: 0; color: var(--morado-hover); }
 
 /* Zona general / de pie (campo) */
 .campo-card {
@@ -581,42 +696,52 @@ onUnmounted(() => {
 .campo-sub { font-size: 0.86rem; color: var(--texto-secundario); margin-top: 0.35rem; margin-bottom: 1.1rem; }
 .campo-precio { font-family: var(--fuente-titulo); font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--rosa-acento); line-height: 1; text-shadow: 0 0 30px rgba(236,72,153,0.35); }
 .campo-disp {
-  display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--texto-secundario);
+  display: inline-block; font-size: 0.8rem; font-weight: 600;
   margin: 0.9rem 0 1.4rem; padding: 6px 14px; border-radius: var(--radio-full);
   background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.28); color: #4ADE80;
 }
 .campo-disp.agotado { color: var(--color-error); background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
 
-/* Hoja inferior */
-.hoja-overlay { position: fixed; inset: 0; background: rgba(6,3,18,0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 90; display: flex; align-items: flex-end; }
+/* ===== Bottom-sheet de mesa seleccionada =====
+   Sin overlay oscuro: el mapa sigue visible y tocable. Compacto y flotante. */
 .hoja {
-  position: relative; overflow: hidden; isolation: isolate;
-  width: 100%; background: var(--gradiente-sutil);
-  border: 1px solid var(--glass-borde); border-bottom: none;
-  border-top-left-radius: 28px; border-top-right-radius: 28px;
-  padding: 14px 1.4rem 1.8rem; box-shadow: 0 -18px 44px rgba(6,3,18,0.6);
-  animation: subir 0.32s var(--ease-cine); max-width: 640px; margin: 0 auto;
+  position: fixed; z-index: 1200;
+  left: 10px; right: 10px; bottom: 10px;
+  margin-inline: auto; max-width: 540px;
+  background: linear-gradient(165deg, var(--fondo-tarjeta-alt), var(--fondo-tarjeta));
+  border: 1px solid var(--borde-activo);
+  border-radius: 22px;
+  padding: 8px 1.2rem calc(1.1rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -6px 24px rgba(6,3,18,0.5), 0 18px 44px rgba(6,3,18,0.65), 0 0 30px rgba(168,85,247,0.28);
 }
-.hoja::before {
-  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: radial-gradient(90% 60% at 80% -5%, rgba(236,72,153,0.16), transparent 60%),
-              radial-gradient(90% 60% at 15% -5%, rgba(168,85,247,0.18), transparent 60%);
+.hoja-enter-active { transition: transform 0.35s var(--ease-cine), opacity 0.3s ease; }
+.hoja-leave-active { transition: transform 0.25s ease, opacity 0.2s ease; }
+.hoja-enter-from, .hoja-leave-to { transform: translateY(calc(100% + 24px)); opacity: 0; }
+
+.hoja-barra { width: 46px; height: 5px; border-radius: var(--radio-full); background: rgba(196,181,224,0.4); margin: 4px auto 12px; }
+.hoja-cerrar {
+  position: absolute; top: 12px; right: 12px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(168,85,247,0.1); border: 1px solid var(--borde-sutil);
+  color: var(--texto-secundario); cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
-@keyframes subir { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.hoja-barra { width: 46px; height: 5px; border-radius: var(--radio-full); background: rgba(196,181,224,0.4); margin: 0 auto 18px; }
-.hoja-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 1.1rem; }
-.hoja-cab h3 { font-family: var(--fuente-titulo); font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); line-height: 1.1; }
-.hoja-zona { font-size: 0.82rem; color: var(--texto-secundario); margin-top: 4px; }
-.precio { font-family: var(--fuente-titulo); font-size: 1.55rem; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--rosa-acento); white-space: nowrap; text-shadow: 0 0 22px rgba(236,72,153,0.3); }
+.hoja-cerrar:hover { color: var(--texto-principal); background: rgba(168,85,247,0.2); border-color: var(--borde-activo); }
+.hoja-cerrar svg { width: 16px; height: 16px; }
 
-.hoja-datos { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
-.dato { display: flex; align-items: center; gap: 10px; color: var(--texto-secundario); font-size: 0.88rem; }
-.dato svg { width: 20px; height: 20px; color: var(--morado-hover); flex-shrink: 0; }
-.stepper { display: flex; align-items: center; gap: 14px; }
-.stepper button { width: 34px; height: 34px; border-radius: 10px; background: var(--fondo-app); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-size: 1.2rem; font-weight: 700; }
-.stepper span { min-width: 20px; text-align: center; font-weight: 700; color: var(--texto-principal); }
+.hoja-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 0.8rem; padding-right: 38px; }
+.hoja-tit { min-width: 0; }
+.hoja-cab h3 { font-family: var(--fuente-titulo); font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); line-height: 1.1; }
+.hoja-zona {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; color: var(--texto-secundario); margin-top: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hoja-zona svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--morado-hover); }
+.precio { font-family: var(--fuente-titulo); font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--rosa-acento); white-space: nowrap; text-shadow: 0 0 22px rgba(236,72,153,0.3); }
 
-.hoja-nota { font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.55; text-wrap: pretty; background: rgba(168,85,247,0.1); border: 1px solid var(--glass-borde); border-radius: var(--radio-lg); padding: 13px 15px; margin-bottom: 1.1rem; }
+.hoja-nota { font-size: 0.8rem; color: var(--texto-secundario); line-height: 1.5; text-wrap: pretty; background: rgba(168,85,247,0.1); border: 1px solid var(--glass-borde); border-radius: var(--radio-lg); padding: 10px 13px; margin-bottom: 0.9rem; }
 .hoja-error { color: var(--color-error); font-size: 0.82rem; margin-bottom: 0.6rem; text-align: center; }
 
 /* Botones */
@@ -633,8 +758,8 @@ onUnmounted(() => {
 .btn-texto { width: 100%; background: none; border: none; color: var(--texto-secundario); padding: 11px; font-weight: 600; margin-top: 6px; cursor: pointer; border-radius: var(--radio-full); transition: color 0.2s, background 0.2s; }
 .btn-texto:hover { color: var(--texto-principal); background: rgba(168,85,247,0.08); }
 
-/* Modales */
-.modal-overlay { position: fixed; inset: 0; background: rgba(6,3,18,0.72); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+/* Modales (fondo oscurecido SIN blur) */
+.modal-overlay { position: fixed; inset: 0; background: rgba(6,3,18,0.8); z-index: 1300; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
 .modal-pin, .modal-exito {
   position: relative; overflow: hidden; isolation: isolate;
   background: var(--gradiente-sutil); border: 1px solid var(--glass-borde); border-radius: var(--radio-xl);
@@ -642,11 +767,19 @@ onUnmounted(() => {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), var(--sombra-modal), var(--sombra-glow);
   animation: aparecer-modal 0.4s var(--ease-cine);
 }
-.modal-pin::before, .modal-exito::before {
-  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: radial-gradient(100% 60% at 50% -10%, rgba(168,85,247,0.2), transparent 60%);
+/* El modal de exito puede crecer (QR + packs): scrollea DENTRO, nunca se sale */
+.modal-exito {
+  max-height: calc(100dvh - 2.4rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
-@keyframes aparecer-modal { from { opacity: 0; transform: translateY(14px) scale(0.96); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
+.modal-pin::before, .modal-exito::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 220px; z-index: -1; pointer-events: none;
+  background: radial-gradient(100% 100% at 50% -10%, rgba(168,85,247,0.2), transparent 70%);
+}
+@keyframes aparecer-modal { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
 .modal-pin h3, .modal-exito h3 { font-family: var(--fuente-titulo); font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); margin-bottom: 0.45rem; }
 .modal-pin p { font-size: 0.84rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
 .input-pin {
@@ -664,7 +797,7 @@ onUnmounted(() => {
 @keyframes aparecer-check { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .check-ok svg { width: 36px; height: 36px; }
 .exito-sub { font-size: 0.86rem; color: var(--texto-secundario); margin-bottom: 1.2rem; }
-.qr-img { width: 196px; height: 196px; border-radius: var(--radio-lg); background: #fff; padding: 10px; margin: 0 auto 1rem; display: block; box-shadow: 0 12px 30px rgba(6,3,18,0.5), var(--sombra-glow); }
+.qr-img { width: 196px; height: 196px; max-width: 100%; border-radius: var(--radio-lg); background: #fff; padding: 10px; margin: 0 auto 1rem; display: block; box-shadow: 0 12px 30px rgba(6,3,18,0.5), var(--sombra-glow); }
 .codigo { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 0.3rem; }
 .codigo b { color: var(--texto-principal); letter-spacing: 1px; font-variant-numeric: tabular-nums; }
 .saldo-rest {
@@ -676,6 +809,32 @@ onUnmounted(() => {
 /* Combos */
 .combos { text-align: left; margin-bottom: 1.2rem; }
 .combos-titulo { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--morado-hover); margin-bottom: 0.7rem; }
+
+/* Packs para mesa (IA): tarjetas con imágenes solapadas — "se conquista con la vista" */
+.packs-mesa { margin-top: 1.1rem; text-align: left; }
+.packs-mesa-lista { display: flex; flex-direction: column; gap: 9px; }
+.pack-mesa {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 13px; border-radius: var(--radio-lg);
+  background: rgba(46,26,102,0.4); border: 1px solid var(--glass-borde);
+  text-align: left; cursor: pointer; font: inherit;
+  transition: transform 0.3s var(--ease-cine), border-color 0.25s, box-shadow 0.3s, background 0.25s;
+}
+.pack-mesa:hover { border-color: var(--borde-activo); box-shadow: var(--glow-morado); transform: translateY(-2px); background: rgba(168,85,247,0.12); }
+.pack-mesa:active { transform: scale(0.98); }
+.pack-mesa-imgs { display: flex; flex-shrink: 0; }
+.pack-mesa-imgs img {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--morado-medio); background: var(--fondo-tarjeta);
+}
+.pack-mesa-imgs img + img { margin-left: -13px; }
+.pack-mesa-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pack-mesa-nombre { font-size: 0.86rem; font-weight: 700; color: var(--texto-principal); }
+.pack-mesa-detalle { font-size: 0.72rem; color: var(--texto-secundario); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pack-mesa-precio { font-size: 0.8rem; }
+.pack-mesa-precio s { color: var(--texto-desactivado); margin-right: 6px; }
+.pack-mesa-precio b { color: var(--color-exito); font-size: 0.92rem; }
+.pack-mesa-add { width: 20px; height: 20px; color: var(--morado-hover); flex-shrink: 0; }
 .combos-lista { display: flex; flex-direction: column; gap: 9px; }
 .combo-chip { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: var(--radio-lg); background: rgba(46,26,102,0.4); border: 1px solid var(--glass-borde); width: 100%; text-align: left; cursor: pointer; font: inherit; transition: transform 0.3s var(--ease-cine), border-color 0.25s, box-shadow 0.3s, background 0.25s; }
 .combo-chip:hover { border-color: var(--borde-activo); box-shadow: var(--glow-morado); transform: translateY(-2px); background: rgba(168,85,247,0.12); }
@@ -686,27 +845,37 @@ onUnmounted(() => {
 .combo-precio s { font-size: 0.75rem; color: var(--texto-desactivado); }
 .combo-precio b { font-size: 0.9rem; color: var(--rosa-acento); }
 
-/* Responsivo: colapso a 1 columna y hero mas compacto en movil */
+/* Responsivo: cabecera mas compacta en movil, hoja a todo el ancho */
 @media (max-width: 480px) {
   .vista-reserva { padding: 0.75rem; padding-bottom: 90px; }
-  .cabecera { padding: 1rem 1.1rem 1.35rem; }
   .btn-mias span { display: none; }
-  .btn-mias { padding: 0; width: 44px; justify-content: center; }
-  .leyenda { gap: 14px; padding: 10px 14px; }
+  .btn-mias { padding: 0; width: 40px; justify-content: center; }
+  .leyenda { font-size: 0.7rem; }
   .campo-card { padding: 2rem 1.35rem 1.75rem; }
+  .hoja { left: 8px; right: 8px; bottom: 8px; padding: 8px 1rem calc(1rem + env(safe-area-inset-bottom)); }
+  .hoja-cab h3 { font-size: 1.15rem; }
+  .precio { font-size: 1.25rem; }
+}
+
+/* Pantallas grandes: la hoja flota centrada sin ocupar todo el ancho */
+@media (min-width: 768px) {
+  .hoja { bottom: 18px; }
 }
 
 /* Foco visible para navegacion por teclado */
 .btn-volver:focus-visible, .btn-mias:focus-visible, .tab-zona:focus-visible,
 .btn-primario:focus-visible, .btn-texto:focus-visible, .combo-chip:focus-visible,
+.pack-mesa:focus-visible, .hoja-cerrar:focus-visible,
 .elemento.libre:focus-visible {
   outline: 2px solid var(--morado-hover); outline-offset: 2px;
 }
 
 /* Respeta la preferencia de menos movimiento */
 @media (prefers-reduced-motion: reduce) {
-  .modal-pin, .modal-exito, .check-ok, .hoja { animation: none; }
-  .btn-volver, .btn-mias, .tab-zona, .btn-primario, .combo-chip,
+  .modal-pin, .modal-exito, .check-ok { animation: none; }
+  .elemento.libre { animation: none; }
+  .hoja-enter-active, .hoja-leave-active { transition: none; }
+  .btn-volver, .btn-mias, .tab-zona, .btn-primario, .combo-chip, .pack-mesa,
   .elemento.libre, .input-pin { transition: none; }
 }
 </style>

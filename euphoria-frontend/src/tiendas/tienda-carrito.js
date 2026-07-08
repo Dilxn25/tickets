@@ -13,7 +13,11 @@ export const useTiendaCarrito = defineStore('carrito', () => {
           ...item,
           precio: parseFloat(item.precio) || 0,
           cantidad: parseInt(item.cantidad) || 1,
-          stock: Number.isFinite(parseInt(item.stock)) ? parseInt(item.stock) : null
+          stock: Number.isFinite(parseInt(item.stock)) ? parseInt(item.stock) : null,
+          // Los combos guardan su composición (2-3 fotos solapadas, como su tarjeta)
+          imagenes: Array.isArray(item.imagenes) && item.imagenes.length
+            ? item.imagenes.filter(Boolean)
+            : (item.imagen ? [item.imagen] : [])
         }))
       } else {
         localStorage.removeItem('euphoria_carrito')
@@ -69,13 +73,19 @@ export const useTiendaCarrito = defineStore('carrito', () => {
       // Solo aplicamos el precio de promo si es válido (mayor a 0 y menor al base);
       // si la promo está activa pero sin precio válido, cobramos el base (nunca 0).
       const enPromo = producto.estado_promocion && precioPromo > 0 && precioPromo < precioBase
+      // imagenes_combo: composición del combo (hasta 3 fotos) para mostrarlo
+      // en el carrito igual que en su tarjeta; productos simples llevan 1 foto.
+      const imagenes = (Array.isArray(producto.imagenes_combo) && producto.imagenes_combo.length)
+        ? producto.imagenes_combo.filter(Boolean).slice(0, 3)
+        : (producto.url_imagen ? [producto.url_imagen] : [])
       items.value.push({
         id: producto.id_producto,
         nombre: producto.nombre_producto,
         precio: enPromo ? precioPromo : precioBase,
         cantidad: 1,
         stock: stockActual,
-        imagen: producto.url_imagen || ''
+        imagen: imagenes[0] || '',
+        imagenes
       })
     }
     guardarCarrito()
@@ -113,6 +123,31 @@ export const useTiendaCarrito = defineStore('carrito', () => {
     guardarCarrito()
   }
 
+  // Sincroniza los precios/stock del carrito con el catálogo VIGENTE (el backend
+  // cobra siempre el precio actual de la BD; así lo mostrado nunca difiere del cobro).
+  // Devuelve true si algún precio cambió.
+  function actualizarPrecios(productosVigentes) {
+    let cambio = false
+    for (const item of items.value) {
+      const p = (productosVigentes || []).find(x => x.id_producto === item.id)
+      if (!p) continue
+      const precioVigente = (p.estado_promocion && parseFloat(p.precio_promocion) > 0)
+        ? parseFloat(p.precio_promocion)
+        : parseFloat(p.precio_base)
+      if (Number.isFinite(precioVigente) && precioVigente !== item.precio) {
+        item.precio = precioVigente
+        cambio = true
+      }
+      const stockVigente = parseInt(p.stock_actual)
+      if (Number.isFinite(stockVigente)) {
+        item.stock = stockVigente
+        if (item.cantidad > stockVigente) { item.cantidad = Math.max(1, stockVigente); cambio = true }
+      }
+    }
+    if (cambio) guardarCarrito()
+    return cambio
+  }
+
   const subtotal = computed(() => {
     return items.value.reduce((sum, item) => sum + (item.precio * item.cantidad), 0)
   })
@@ -134,6 +169,7 @@ export const useTiendaCarrito = defineStore('carrito', () => {
     disminuirCantidad,
     eliminarItem,
     vaciarCarrito,
+    actualizarPrecios,
     subtotal,
     total,
     totalItems
