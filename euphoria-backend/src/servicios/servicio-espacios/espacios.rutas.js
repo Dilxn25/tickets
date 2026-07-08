@@ -51,7 +51,7 @@ router.get('/eventos/:idEvento/zonas', async (req, res) => {
 // POST /api/espacios/zonas — crear zona (Admin)
 router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
   try {
-    const { id_evento, nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general } = req.body
+    const { id_evento, nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general, prioridad } = req.body
     if (!id_evento || !nombre_zona) {
       return res.status(400).json({ error: 'Evento y nombre de zona son requeridos' })
     }
@@ -63,6 +63,7 @@ router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
         precio_entrada_base: Number(precio_entrada_base) || 0,
         proporcion: proporcion != null ? Number(proporcion) : null,
         es_general: !!es_general,
+        prioridad: Number(prioridad) || 0,
       },
     })
     res.status(201).json(zona)
@@ -76,7 +77,7 @@ router.post('/zonas', soloRoles('Administrador'), async (req, res) => {
 router.put('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
   try {
     const id_zona = Number(req.params.id)
-    const { nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general } = req.body
+    const { nombre_zona, capacidad_maxima, precio_entrada_base, proporcion, es_general, prioridad } = req.body
     const zona = await prisma.zona.update({
       where: { id_zona },
       data: {
@@ -85,6 +86,7 @@ router.put('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
         ...(precio_entrada_base !== undefined && { precio_entrada_base: Number(precio_entrada_base) }),
         ...(proporcion !== undefined && { proporcion: proporcion == null ? null : Number(proporcion) }),
         ...(es_general !== undefined && { es_general: !!es_general }),
+        ...(prioridad !== undefined && { prioridad: Number(prioridad) }),
       },
     })
     res.json(zona)
@@ -424,6 +426,7 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
     const id_evento = Number(req.params.idEvento)
     const id_plantilla = Number(req.body.id_plantilla)
     const precio_base = Number(req.body.precio_base) || 0
+    const prioridad = Number(req.body.prioridad) || 0
     const nombre = (req.body.nombre && String(req.body.nombre).trim())
       ? String(req.body.nombre).trim().substring(0, 50)
       : null
@@ -448,6 +451,7 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
           precio_entrada_base: precio_base,
           proporcion: proporcion,
           es_general: false,
+          prioridad, // 0=normal, 1=alta, 2=vip (orden del bartender)
           id_plantilla, // vínculo con el plano: permite avisar/cascada al borrarlo
         },
       })
