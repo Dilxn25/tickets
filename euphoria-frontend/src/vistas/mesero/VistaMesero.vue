@@ -79,13 +79,23 @@
               </div>
             </div>
 
-            <button class="btn-entregar-full" @click="entregarPedido(ped.id_comanda)" :disabled="procesandoEntrega === ped.id_comanda">
-              <span v-if="procesandoEntrega === ped.id_comanda">Procesando...</span>
-              <span v-else style="display:flex; align-items:center; justify-content:center; gap: 8px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Marcar como Entregado
-              </span>
-            </button>
+            <div class="clf-acciones">
+              <button
+                v-if="ped.mesa_espacio"
+                class="btn-donde-llevar"
+                @click="abrirMapaDestino(ped.mesa_espacio.id_mesa, ped.mesa_espacio.numero_nombre, ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : null)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                Dónde llevar
+              </button>
+              <button class="btn-entregar-full" @click="entregarPedido(ped.id_comanda)" :disabled="procesandoEntrega === ped.id_comanda">
+                <span v-if="procesandoEntrega === ped.id_comanda">Procesando...</span>
+                <span v-else style="display:flex; align-items:center; justify-content:center; gap: 8px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Marcar como Entregado
+                </span>
+              </button>
+            </div>
           </div>
         </transition-group>
       </div>
@@ -690,7 +700,11 @@
       <div v-if="modalMapaMesa" class="mapa-overlay" @click.self="modalMapaMesa = false">
         <div class="mapa-sheet fade-in">
           <div class="mapa-header">
-            <div>
+            <div v-if="mesaDestino">
+              <h3>Lleva el pedido a la {{ mesaDestino.nombre ? 'mesa ' + mesaDestino.nombre : 'mesa' }}</h3>
+              <p class="mapa-sub">{{ mesaDestino.cliente ? 'Cliente: ' + mesaDestino.cliente + ' · ' : '' }}la mesa en verde es tu destino.</p>
+            </div>
+            <div v-else>
               <h3>Elige la mesa en el mapa</h3>
               <p class="mapa-sub">Toca una mesa para asignarla a la orden.</p>
             </div>
@@ -875,16 +889,23 @@ function seleccionarMesaObj(m) {
 const modalMapaMesa = ref(false)
 const mapaZonas = ref([])
 const cargandoMapa = ref(false)
-async function abrirMapaMesa() {
-  modalMapaMesa.value = true
+// Modo "destino": resalta SOLO una mesa (a dónde llevar un pedido listo)
+const mesaDestino = ref(null)      // { id_mesa, nombre, cliente }
+async function cargarMapaZonas() {
   cargandoMapa.value = true
-  try {
-    mapaZonas.value = await clienteHttp.get('/mesas/mapa')
-  } catch (e) {
-    mapaZonas.value = []
-  } finally {
-    cargandoMapa.value = false
-  }
+  try { mapaZonas.value = await clienteHttp.get('/mesas/mapa') }
+  catch { mapaZonas.value = [] }
+  finally { cargandoMapa.value = false }
+}
+async function abrirMapaMesa() {
+  mesaDestino.value = null
+  modalMapaMesa.value = true
+  await cargarMapaZonas()
+}
+async function abrirMapaDestino(idMesa, nombreMesa, cliente) {
+  mesaDestino.value = { id_mesa: idMesa, nombre: nombreMesa, cliente }
+  modalMapaMesa.value = true
+  await cargarMapaZonas()
 }
 // Posición del elemento en el lienzo (los datos vienen en % 0-100)
 function estiloElementoMapa(el) {
@@ -900,10 +921,15 @@ function estiloElementoMapa(el) {
 // Sin colores de estado: el mesero solo elige la mesa para llenar el campo.
 // 'elegible' = mesa/silla seleccionable (toca y listo); 'deco' = elemento fijo.
 function claseElementoMapa(el) {
+  // Modo destino: solo la mesa objetivo resalta (verde); el resto se atenúa.
+  if (mesaDestino.value) {
+    return el.id_mesa === mesaDestino.value.id_mesa ? 'destino' : 'atenuado'
+  }
   const elegible = (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && el.es_seleccionable
   return elegible ? 'elegible' : 'deco'
 }
 function elegirMesaMapa(el) {
+  if (mesaDestino.value) return // en modo destino no se selecciona, solo se muestra
   const elegible = (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && el.es_seleccionable
   if (!elegible) return
   // Usa la mesa de la lista plana si existe (misma forma), si no el propio elemento
@@ -3018,8 +3044,16 @@ onUnmounted(() => {
   font-size: 1rem;
 }
 
+.clf-acciones { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.btn-donde-llevar {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 10px; border-radius: var(--radio-md); cursor: pointer;
+  font-weight: 700; font-size: 0.9rem;
+  background: rgba(168,85,247,0.12); color: var(--morado-hover); border: 1px solid var(--borde-sutil);
+  transition: background var(--trans-normal), border-color var(--trans-normal);
+}
+.btn-donde-llevar:hover { background: rgba(168,85,247,0.22); border-color: var(--borde-activo); }
 .btn-entregar-full {
-  margin-top: auto;
   width: 100%;
   padding: 12px;
   background: rgba(34, 197, 94, 0.12);
@@ -3146,6 +3180,11 @@ onUnmounted(() => {
 .mapa-el.elegible { background: rgba(168,85,247,0.2); border: 2px solid rgba(168,85,247,0.6); color: #E9D5FF; cursor: pointer; transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
 .mapa-el.elegible:hover { background: rgba(168,85,247,0.38); transform: scale(1.06); box-shadow: 0 0 16px rgba(168,85,247,0.5); }
 .mapa-el.deco { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--texto-desactivado); }
+/* Modo destino: la mesa objetivo en verde pulsante, el resto atenuado */
+.mapa-el.destino { background: rgba(34,197,94,0.35); border: 2px solid #22C55E; color: #fff; box-shadow: 0 0 0 0 rgba(34,197,94,0.6); animation: pulso-destino 1.6s ease-out infinite; z-index: 2; }
+@keyframes pulso-destino { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.55); } 70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+.mapa-el.atenuado { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: var(--texto-desactivado); opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .mapa-el.destino { animation: none; } }
 @media (max-width: 480px) {
   .mapa-body { padding: 14px 16px; }
 }
