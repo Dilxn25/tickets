@@ -93,8 +93,9 @@
       <!-- Datos -->
       <div class="sg-campo">
         <label>¿Cuántas personas van?</label>
+        <p v-if="capacidadMarcada" class="sg-cap-info">Los lugares que marcaste caben unas <b>{{ capacidadMarcada }}</b> personas. Puedes ajustar si vienen más (ustedes se acomodan).</p>
         <div class="stepper">
-          <button type="button" @click="personas = Math.max(1, personas - 1)">−</button>
+          <button type="button" @click="personas = Math.max(minPersonas, personas - 1)">−</button>
           <span>{{ personas }}</span>
           <button type="button" @click="personas++">+</button>
         </div>
@@ -113,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
@@ -136,8 +137,9 @@ const respondiendo = ref(false)
 async function cargarMiSolicitud() {
   try {
     const lista = await servicioReservas.misSolicitudesGrupo()
-    // La solicitud activa más reciente (la lista viene ordenada por fecha desc)
-    miSolicitud.value = (lista || []).find(s => ['pendiente', 'propuesta', 'confirmada'].includes(s.estado)) || null
+    // Solo bloquea el formulario si hay una solicitud que requiere acción
+    // (pendiente de revisión o con una propuesta por responder).
+    miSolicitud.value = (lista || []).find(s => ['pendiente', 'propuesta'].includes(s.estado)) || null
   } catch { miSolicitud.value = null }
 }
 
@@ -181,8 +183,17 @@ function alternar(el) {
   if (!esElegible(el)) return
   const i = tentativas.value.findIndex(t => t.id_mesa === el.id_mesa)
   if (i >= 0) tentativas.value.splice(i, 1)
-  else tentativas.value.push({ id_mesa: el.id_mesa, nombre: `${el.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${el.numero_nombre}` })
+  else tentativas.value.push({
+    id_mesa: el.id_mesa,
+    nombre: `${el.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${el.numero_nombre}`,
+    capacidad: el.capacidad_sillas || (el.tipo_elemento === 'silla' ? 1 : 4),
+  })
 }
+
+// Capacidad total de las mesas marcadas; autollena "personas" pero deja subir.
+const capacidadMarcada = computed(() => tentativas.value.reduce((a, t) => a + (t.capacidad || 0), 0))
+const minPersonas = computed(() => Math.max(1, capacidadMarcada.value))
+watch(capacidadMarcada, (cap) => { if (personas.value < cap) personas.value = cap })
 function quitar(id) {
   const i = tentativas.value.findIndex(t => t.id_mesa === id)
   if (i >= 0) tentativas.value.splice(i, 1)
@@ -252,6 +263,8 @@ onMounted(async () => {
 .sg-campo > label { font-size: 0.8rem; font-weight: 700; color: var(--texto-principal); }
 .sg-campo textarea { background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); border-radius: 12px; padding: 12px; font-size: 0.9rem; resize: vertical; font-family: inherit; outline: none; }
 .sg-campo textarea:focus { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
+.sg-cap-info { font-size: 0.8rem; color: var(--texto-secundario); line-height: 1.4; background: rgba(168,85,247,0.08); border: 1px solid var(--borde-sutil); border-radius: 10px; padding: 8px 11px; }
+.sg-cap-info b { color: var(--morado-hover); }
 .stepper { display: inline-flex; align-items: center; gap: 16px; align-self: flex-start; }
 .stepper button { width: 42px; height: 42px; border-radius: 12px; background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-size: 1.3rem; font-weight: 700; cursor: pointer; }
 .stepper span { min-width: 30px; text-align: center; font-weight: 800; font-size: 1.2rem; color: var(--texto-principal); }

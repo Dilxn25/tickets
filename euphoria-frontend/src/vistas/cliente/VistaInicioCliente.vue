@@ -156,6 +156,37 @@
       </div>
     </section>
 
+    <!-- Reserva tu lugar: solo o grupo grande -->
+    <section class="seccion-reserva reveal">
+      <h3 class="bloque-titulo">Reserva tu lugar</h3>
+      <div class="reserva-modos">
+        <button class="rmodo solo hover-elevar" @click="irReservar">
+          <div class="rmodo-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </div>
+          <div class="rmodo-txt">
+            <b>Reservar para ti</b>
+            <span>Elige tu mesa en el mapa. Hasta 2 mesas por cuenta.</span>
+          </div>
+          <svg class="rmodo-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+        <button class="rmodo grupo hover-elevar" @click="irGrupo">
+          <div class="rmodo-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <div class="rmodo-txt">
+            <b>Grupo grande</b>
+            <span>¿Más de 2 mesas? Envía tu solicitud y el local la confirma.</span>
+          </div>
+          <svg class="rmodo-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+      <p class="reserva-nota">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        Máximo 2 mesas por cuenta en cada evento. Para empresas, cumpleaños o grupos, usa la solicitud de grupo grande.
+      </p>
+    </section>
+
     <!-- Accesos Rápidos estilo bento -->
     <section class="seccion-accesos reveal">
       <h3 class="bloque-titulo">Tu noche, a un toque</h3>
@@ -353,6 +384,19 @@ const modalCancelado = ref(false)
 
 const eventos = ref([])
 const cargandoEventos = ref(true)
+
+// Reserva: elige el evento destino (actual, o el primero disponible)
+function eventoDestino() {
+  return eventoActual.value?.id_evento || eventos.value[0]?.id_evento || null
+}
+function irReservar() {
+  const id = eventoDestino()
+  router.push(id ? `/cliente/reservar/${id}` : '/cliente/eventos')
+}
+function irGrupo() {
+  const id = eventoDestino()
+  router.push(id ? `/cliente/grupo/${id}` : '/cliente/eventos')
+}
 
 const productos = ref([])
 const cargandoProductos = ref(true)
@@ -583,6 +627,27 @@ onUnmounted(() => {
 .kicker svg { width: 13px; height: 13px; flex-shrink: 0; }
 
 /* ---------- HERO (saludo grande + evento en vivo) ---------- */
+.seccion-reserva { padding: 0 4px; margin-bottom: 8px; }
+.reserva-modos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .reserva-modos { grid-template-columns: 1fr; } }
+.rmodo { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 18px; background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); cursor: pointer; text-align: left; transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; overflow: hidden; position: relative; }
+.rmodo::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.25s ease; pointer-events: none; }
+.rmodo.solo::before { background: radial-gradient(120% 100% at 0% 0%, rgba(168,85,247,0.14), transparent 60%); }
+.rmodo.grupo::before { background: radial-gradient(120% 100% at 100% 0%, rgba(236,72,153,0.14), transparent 60%); }
+.rmodo:hover::before { opacity: 1; }
+.rmodo:hover { border-color: var(--borde-activo); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(10,6,26,0.4); }
+.rmodo-ic { flex-shrink: 0; width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.rmodo.solo .rmodo-ic { background: linear-gradient(135deg, #8B5CF6, #6366F1); }
+.rmodo.grupo .rmodo-ic { background: linear-gradient(135deg, #EC4899, #A855F7); }
+.rmodo-ic svg { width: 22px; height: 22px; }
+.rmodo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rmodo-txt b { color: var(--texto-principal); font-size: 0.98rem; font-weight: 700; }
+.rmodo-txt span { color: var(--texto-secundario); font-size: 0.78rem; line-height: 1.35; }
+.rmodo-flecha { width: 18px; height: 18px; flex-shrink: 0; color: var(--texto-desactivado); transition: transform 0.2s ease, color 0.2s ease; }
+.rmodo:hover .rmodo-flecha { color: var(--morado-hover); transform: translateX(3px); }
+.reserva-nota { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; font-size: 0.78rem; color: var(--texto-secundario); line-height: 1.4; }
+.reserva-nota svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--morado-hover); margin-top: 1px; }
+
 .hero-inicio {
   position: relative;
   overflow: hidden;
