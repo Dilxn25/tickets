@@ -340,19 +340,21 @@ async function manejarRegistro() {
   }
 
   try {
-    const res = await servicioAuth.registro(formulario)
-    mensajeExito.value = res.mensaje
-    // Volver a login después de un momento
-    setTimeout(() => {
+    await servicioAuth.registro(formulario)
+    // Auto-login: si el registro fue válido, inicia sesión directo (sin volver al login)
+    const correo = formulario.correo
+    const password = formulario.password
+    try {
+      const respuesta = await servicioAuth.login(correo, password)
+      tienda.iniciarSesion({ usuario: respuesta.usuario, token: respuesta.token })
+      if (respuesta.refresh) localStorage.setItem('euphoria_refresh', respuesta.refresh)
+      mensajeExito.value = '¡Cuenta creada! Entrando…'
+      await router.push(`/${tienda.rolRuta}`)
+    } catch {
+      // Si por algún motivo no se pudo autenticar, cae al login manual
+      mensajeExito.value = 'Cuenta creada. Inicia sesión para continuar.'
       esRegistro.value = false
-      mensajeExito.value = ''
-      formulario.nombres = ''
-      formulario.apellidos = ''
-      formulario.correo = ''
-      formulario.password = ''
-      formulario.pregunta_seguridad = ''
-      formulario.respuesta_seguridad = ''
-    }, 2000)
+    }
   } catch (err) {
     error.value = err.error || 'Error al registrar'
   } finally {
