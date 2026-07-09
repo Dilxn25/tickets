@@ -739,31 +739,129 @@ router.get('/mis-mesas', verificarToken, async (req, res) => {
   }
 })
 
-// GET /api/comandas/mis-pedidos (historial de pedidos del cliente logueado)
+// Comisión de cancelación/devolución que retiene el local (configurable por admin).
+const COMISION_REEMBOLSO_DEFECTO = 10
+async function obtenerComisionReembolso() {
+  try {
+    const fila = await prisma.configuracion.findUnique({ where: { clave: 'comision_cancelacion_pct' } })
+    const v = parseFloat(fila?.valor)
+    if (Number.isFinite(v) && v >= 0 && v <= 90) return v
+    if (!fila) {
+      await prisma.configuracion.create({
+        data: { clave: 'comision_cancelacion_pct', valor: String(COMISION_REEMBOLSO_DEFECTO), descripcion: 'Comisión (%) que retiene el local al devolver un pedido no consumido' },
+      }).catch(() => {})
+    }
+  } catch { /* respaldo abajo */ }
+  return COMISION_REEMBOLSO_DEFECTO
+}
+// Reembolso = total menos la comisión, redondeado hacia abajo a Bs entero.
+function calcularReembolso(total, comisionPct) {
+  return Math.floor(total * (1 - comisionPct / 100))
+}
+
+// GET /api/comandas/config-reembolso — el cliente ve la comisión vigente.
+router.get('/config-reembolso', verificarToken, async (req, res) => {
+  try {
+    res.json({ comision_pct: await obtenerComisionReembolso() })
+  } catch { res.status(500).json({ error: 'Error' }) }
+})
+
+// GET /api/comandas/mis-pedidos (pedidos del cliente; ?evento=id filtra por evento)
 router.get('/mis-pedidos', verificarToken, async (req, res) => {
   try {
+    const idEvento = req.query.evento ? Number(req.query.evento) : null
     const comandas = await prisma.comanda.findMany({
       where: { id_cliente: req.usuario.id },
       orderBy: { fecha_registro: 'desc' },
-      take: 50,
+      take: 80,
       include: {
         detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
-        mesa_espacio: { select: { numero_nombre: true } },
+        mesa_espacio: { select: { numero_nombre: true, zona: { select: { id_evento: true, evento: { select: { nombre_evento: true } } } } } },
+        entrada: { select: { zona: { select: { id_evento: true, evento: { select: { nombre_evento: true } } } } } },
       },
     })
-    res.json(comandas.map(c => ({
-      id_comanda: c.id_comanda,
-      fecha: c.fecha_registro,
-      estado: c.estado_despacho,
-      metodo_pago: c.metodo_pago,
-      origen: c.origen,              // app | mesero | caja
-      modo_entrega: c.modo_entrega,  // barra | llevar | null
-      mesa: c.mesa_espacio?.numero_nombre || null,
-      total: c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0),
-      items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad, subtotal: Number(d.subtotal) })),
-    })))
+    const comisionPct = await obtenerComisionReembolso()
+    let lista = comandas.map(c => {
+      const zonaEv = c.entrada?.zona || c.mesa_espacio?.zona || null
+      const total = c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
+      const estado = c.estado_despacho
+      const entregado = c.estado_entrega === 'entregado' || estado === 'Completada'
+      const cerrado = ['Cancelada', 'Reembolsada'].includes(estado)
+      // Reembolsable: pagado con billetera, no consumido, no cancelado/reembolsado.
+      const puede_reembolso = c.metodo_pago === 'Billetera' && !entregado && !cerrado && total > 0
+      return {
+        id_comanda: c.id_comanda,
+        fecha: c.fecha_registro,
+        estado,
+        estado_entrega: c.estado_entrega,
+        fecha_listo: c.fecha_listo,
+        metodo_pago: c.metodo_pago,
+        origen: c.origen,
+        modo_entrega: c.modo_entrega,
+        mesa: c.mesa_espacio?.numero_nombre || null,
+        id_evento: zonaEv?.id_evento || null,
+        evento: zonaEv?.evento?.nombre_evento || null,
+        total,
+        entregado,
+        puede_reembolso,
+        reembolso_estimado: puede_reembolso ? calcularReembolso(total, comisionPct) : 0,
+        items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad, subtotal: Number(d.subtotal) })),
+      }
+    })
+    if (idEvento) lista = lista.filter(p => p.id_evento === idEvento)
+    res.json(lista)
   } catch (error) {
+    console.error('Error mis-pedidos:', error)
     res.status(500).json({ error: 'Error al obtener tus pedidos' })
+  }
+})
+
+// POST /api/comandas/:id/solicitar-reembolso — el cliente pide la devolución de un
+// pedido pagado con billetera que no consumió. Se le devuelve el total menos la
+// comisión del local, se repone el stock y la comanda queda 'Reembolsada'.
+router.post('/:id/solicitar-reembolso', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const c = await prisma.comanda.findUnique({ where: { id_comanda: id }, include: { detalle_comanda: true } })
+    if (!c) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (c.id_cliente !== req.usuario.id) return res.status(403).json({ error: 'Este pedido no es tuyo' })
+    if (['Cancelada', 'Reembolsada'].includes(c.estado_despacho)) return res.status(409).json({ error: 'Este pedido ya fue devuelto o cancelado.' })
+    if (c.estado_entrega === 'entregado' || c.estado_despacho === 'Completada') return res.status(409).json({ error: 'Este pedido ya fue consumido: no aplica devolución.' })
+    if (c.metodo_pago !== 'Billetera') return res.status(400).json({ error: 'Solo se devuelven a la billetera los pedidos pagados con billetera.' })
+
+    const total = c.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
+    const comisionPct = await obtenerComisionReembolso()
+    const reembolso = calcularReembolso(total, comisionPct)
+
+    await prisma.$transaction(async (tx) => {
+      // Reponer stock
+      for (const d of c.detalle_comanda) {
+        await tx.producto.update({ where: { id_producto: d.id_producto }, data: { stock_actual: { increment: d.cantidad } } })
+      }
+      // Devolver a billetera (total - comisión)
+      if (reembolso > 0) {
+        const bill = await tx.billetera.findUnique({ where: { id_usuario: c.id_cliente } })
+        if (bill) {
+          await tx.billetera.update({ where: { id_billetera: bill.id_billetera }, data: { saldo_actual: { increment: reembolso }, ultima_actualizacion: new Date() } })
+          await tx.transaccion.create({
+            data: { id_billetera: bill.id_billetera, id_comanda: c.id_comanda, id_responsable: req.usuario.id, tipo_operacion: 'reembolso', monto: reembolso, fecha_hora: new Date() },
+          })
+        }
+      }
+      await tx.comanda.update({ where: { id_comanda: id }, data: { estado_despacho: 'Reembolsada', estado_entrega: 'reembolsado' } })
+    })
+
+    if (global.io) global.io.emit('billetera_actualizada', { id_usuario: c.id_cliente })
+    res.json({
+      mensaje: 'Devolución procesada',
+      total,
+      comision_pct: comisionPct,
+      comision_retenida: total - reembolso,
+      reembolsado: reembolso,
+    })
+  } catch (e) {
+    console.error('Error en solicitar-reembolso:', e)
+    res.status(500).json({ error: 'No se pudo procesar la devolución' })
   }
 })
 
@@ -843,7 +941,12 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
     // Emitir eventos por websocket
     if (global.io) {
       if (estado === 'Listo') {
-        global.io.emit('pedido_listo', { id_comanda: comanda.id_comanda, id_mesero: comanda.id_mesero })
+        global.io.emit('pedido_listo', {
+          id_comanda: comanda.id_comanda,
+          id_mesero: comanda.id_mesero,
+          id_cliente: comanda.id_cliente,        // el cliente escucha su aviso
+          modo_entrega: comanda.modo_entrega,    // barra = "pásalo a recoger"
+        })
       } else if (estado === 'Pendiente') {
         global.io.emit('nueva_comanda', { id_comanda: comanda.id_comanda })
       }
