@@ -49,4 +49,15 @@ export const servicioReservas = {
   async reservaGestionada({ id_cliente, id_mesa, metodo_pago }) {
     return api.post('/reservas/gestionada', { id_cliente, id_mesa, metodo_pago })
   },
+
+  // ---- Solicitudes de grupo grande (cliente) ----
+  /** El cliente envía una solicitud de grupo grande con lugares tentativos */
+  async solicitarGrupo({ id_evento, cantidad_personas, motivo, mesas_tentativas }) {
+    return api.post('/reservas/solicitudes-grupo', { id_evento, cantidad_personas, motivo, mesas_tentativas })
+  },
+
+  /** Solicitudes de grupo del propio cliente (para ver su estado) */
+  async misSolicitudesGrupo() {
+    return api.get('/reservas/mis-solicitudes-grupo')
+  },
 }

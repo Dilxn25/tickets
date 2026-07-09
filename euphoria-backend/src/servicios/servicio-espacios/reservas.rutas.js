@@ -690,4 +690,123 @@ router.post('/gestionada', soloRoles('Recepcionista', 'Administrador'), async (r
   }
 })
 
+// ============================================
+// Solicitudes de grupo grande (Fase I)
+// El cliente manda desde su app una solicitud con lugares TENTATIVOS + personas +
+// motivo; recepción la revisa y arma la reserva real (o la marca atendida).
+// ============================================
+
+// POST /api/reservas/solicitudes-grupo — el cliente crea una solicitud.
+// Body: { id_evento, cantidad_personas, motivo?, mesas_tentativas?: [{id_mesa, nombre}] }
+router.post('/solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const id_evento = Number(req.body.id_evento)
+    const cantidad = Math.max(1, parseInt(req.body.cantidad_personas) || 1)
+    if (!id_evento) return res.status(400).json({ error: 'Falta el evento.' })
+    const evento = await prisma.evento.findUnique({ where: { id_evento } })
+    if (!evento || evento.estado === 'terminado') return res.status(400).json({ error: 'Ese evento no está disponible.' })
+
+    // Sanea las mesas tentativas (solo id y nombre).
+    let tentativas = []
+    if (Array.isArray(req.body.mesas_tentativas)) {
+      tentativas = req.body.mesas_tentativas
+        .filter(m => m && m.id_mesa)
+        .slice(0, 20)
+        .map(m => ({ id_mesa: Number(m.id_mesa), nombre: String(m.nombre || '').slice(0, 50) }))
+    }
+
+    // Evita duplicar solicitudes pendientes del mismo cliente para el mismo evento.
+    const yaPendiente = await prisma.solicitud_grupo.findFirst({
+      where: { id_cliente: req.usuario.id, id_evento, estado: 'pendiente' },
+    })
+    if (yaPendiente) {
+      return res.status(409).json({ error: 'Ya tienes una solicitud pendiente para este evento. Espera a que el local la revise.' })
+    }
+
+    const sol = await prisma.solicitud_grupo.create({
+      data: {
+        id_cliente: req.usuario.id,
+        id_evento,
+        cantidad_personas: cantidad,
+        motivo: (req.body.motivo || '').toString().slice(0, 255) || null,
+        mesas_tentativas: tentativas.length ? JSON.stringify(tentativas) : null,
+        estado: 'pendiente',
+      },
+    })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: sol.id_solicitud, id_evento })
+    res.status(201).json({ ok: true, id_solicitud: sol.id_solicitud, mensaje: 'Solicitud enviada. El local la revisará y te contactará.' })
+  } catch (e) {
+    console.error('Error creando solicitud de grupo:', e)
+    res.status(500).json({ error: 'No se pudo enviar la solicitud' })
+  }
+})
+
+// GET /api/reservas/mis-solicitudes-grupo — el cliente ve el estado de sus solicitudes.
+router.get('/mis-solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const lista = await prisma.solicitud_grupo.findMany({
+      where: { id_cliente: req.usuario.id },
+      orderBy: { fecha_solicitud: 'desc' },
+      include: { evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } },
+    })
+    res.json(lista.map(s => ({
+      id_solicitud: s.id_solicitud,
+      evento: s.evento?.nombre_evento || '',
+      fecha_evento: s.evento?.fecha_hora_inicio || null,
+      cantidad_personas: s.cantidad_personas,
+      motivo: s.motivo,
+      mesas_tentativas: s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : [],
+      estado: s.estado,
+      fecha_solicitud: s.fecha_solicitud,
+    })))
+  } catch (e) {
+    console.error('Error listando mis solicitudes:', e)
+    res.status(500).json({ error: 'Error al obtener tus solicitudes' })
+  }
+})
+
+// GET /api/reservas/solicitudes-grupo — recepción ve las solicitudes pendientes.
+router.get('/solicitudes-grupo', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const lista = await prisma.solicitud_grupo.findMany({
+      where: { estado: 'pendiente' },
+      orderBy: { fecha_solicitud: 'asc' },
+      include: { usuario: { select: { nombres: true, apellidos: true, correo: true, telefono: true, ci_carnet: true } } },
+    })
+    res.json(lista.map(s => ({
+      id_solicitud: s.id_solicitud,
+      id_cliente: s.id_cliente,
+      id_evento: s.id_evento,
+      cliente: `${s.usuario.nombres} ${s.usuario.apellidos || ''}`.trim(),
+      correo: s.usuario.correo,
+      telefono: s.usuario.telefono,
+      ci_carnet: s.usuario.ci_carnet,
+      cantidad_personas: s.cantidad_personas,
+      motivo: s.motivo,
+      mesas_tentativas: s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : [],
+      fecha_solicitud: s.fecha_solicitud,
+    })))
+  } catch (e) {
+    console.error('Error listando solicitudes de grupo:', e)
+    res.status(500).json({ error: 'Error al obtener las solicitudes' })
+  }
+})
+
+// PATCH /api/reservas/solicitudes-grupo/:id/atender — recepción marca la solicitud atendida.
+router.patch('/solicitudes-grupo/:id/atender', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const upd = await prisma.solicitud_grupo.updateMany({
+      where: { id_solicitud: id, estado: 'pendiente' },
+      data: { estado: 'atendida' },
+    })
+    if (upd.count === 0) return res.status(404).json({ error: 'La solicitud ya no está pendiente.' })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: id })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('Error atendiendo solicitud:', e)
+    res.status(500).json({ error: 'No se pudo actualizar la solicitud' })
+  }
+})
+
 module.exports = router

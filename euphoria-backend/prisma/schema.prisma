@@ -147,6 +147,25 @@ model evento {
   tipo_evento       String    @default("estandar") @db.VarChar(20)
   aforo_total       Int?
   zona              zona[]
+  solicitud_grupo   solicitud_grupo[]
+}
+
+// Solicitud de reserva de grupo grande (empresa/cumpleaños): el cliente marca
+// mesas TENTATIVAS + personas + motivo desde su app; recepción la analiza y aprueba.
+model solicitud_grupo {
+  id_solicitud      Int      @id @default(autoincrement())
+  id_cliente        Int
+  id_evento         Int
+  cantidad_personas Int      @default(1)
+  motivo            String?  @db.VarChar(255)
+  mesas_tentativas  String?  @db.Text // JSON: [{ id_mesa, nombre }]
+  estado            String   @default("pendiente") @db.VarChar(20) // pendiente | atendida | cancelada
+  fecha_solicitud   DateTime @default(now())
+  usuario           usuario  @relation(fields: [id_cliente], references: [id_usuario])
+  evento            evento   @relation(fields: [id_evento], references: [id_evento])
+
+  @@index([id_cliente])
+  @@index([id_evento])
 }
 
 model mesa_espacio {
@@ -296,6 +315,7 @@ model usuario {
   transaccion                         transaccion[]
   historial_precio                    historial_precio[]
   asignacion_mesa                     asignacion_mesa[]
+  solicitud_grupo                     solicitud_grupo[]
   rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")

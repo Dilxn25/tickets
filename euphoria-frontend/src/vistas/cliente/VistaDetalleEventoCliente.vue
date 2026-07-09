@@ -85,6 +85,12 @@
         </aside>
       </div>
 
+      <!-- Grupo grande: el cliente solicita lugares tentativos y el local confirma -->
+      <button v-if="zonas.length && evento.estado !== 'lleno'" class="enlace-grupo" @click="router.push(`/cliente/grupo/${evento.id_evento}`)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>¿Vienen en grupo grande? <b>Solicita tus lugares</b></span>
+      </button>
+
       <!-- Barra de reserva: sticky DENTRO del contenido, por encima del navbar del cliente -->
       <div v-if="zonas.length" class="barra-reserva">
         <div class="reserva-info">
@@ -552,6 +558,11 @@ function formatearMonto(monto) {
   margin-right: 2px;
   vertical-align: 0.15em;
 }
+
+.enlace-grupo { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px; border: 1px dashed var(--borde-activo); background: rgba(168,85,247,0.06); color: var(--texto-secundario); font-size: 0.86rem; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+.enlace-grupo:hover { background: rgba(168,85,247,0.12); border-color: var(--morado-brillante); }
+.enlace-grupo svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--morado-hover); }
+.enlace-grupo b { color: var(--texto-principal); }
 
 /* Barra de reserva: sticky dentro del contenido. Se pega por ENCIMA de la
    píldora de navegación del cliente (fixed abajo), sin taparla ni ser tapada. */

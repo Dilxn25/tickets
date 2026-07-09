@@ -34,6 +34,7 @@ import VistaMovimientos from '../vistas/cliente/VistaMovimientos.vue'
 import VistaPedidos from '../vistas/cliente/VistaPedidos.vue'
 import VistaCarrito from '../vistas/cliente/VistaCarrito.vue'
 import VistaReservaMapa from '../vistas/cliente/VistaReservaMapa.vue'
+import VistaSolicitudGrupo from '../vistas/cliente/VistaSolicitudGrupo.vue'
 import VistaMisReservas from '../vistas/cliente/VistaMisReservas.vue'
 
 import VistaMesero from '../vistas/mesero/VistaMesero.vue'
@@ -109,6 +110,7 @@ const rutas = [
       { path: 'eventos', name: 'ClienteEventos', component: VistaEventosCliente },
       { path: 'eventos/:id', name: 'ClienteDetalleEvento', component: VistaDetalleEventoCliente },
       { path: 'reservar/:idEvento', name: 'ClienteReservar', component: VistaReservaMapa },
+      { path: 'grupo/:idEvento', name: 'ClienteGrupo', component: VistaSolicitudGrupo },
       { path: 'mis-reservas', name: 'ClienteMisReservas', component: VistaMisReservas },
       { path: 'carrito', name: 'ClienteCarrito', component: VistaCarrito },
       { path: 'perfil', name: 'ClientePerfil', component: VistaPerfil }
