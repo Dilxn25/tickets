@@ -24,13 +24,45 @@
         <button v-for="e in eventos" :key="e.id_evento" class="bf-chip" :class="{ activo: eventoFiltro === e.id_evento }" @click="setEvento(e.id_evento)">{{ e.nombre }}</button>
       </div>
       <div class="bf-buscar">
-        <input v-model="busquedaMesa" @input="recargarDebounce" class="bf-input" placeholder="Buscar mesa…" />
+        <input v-model="busquedaMesa" @input="recargarDebounce" class="bf-input" placeholder="Buscar mesa por texto…" />
         <input v-model="busquedaCliente" @input="recargarDebounce" class="bf-input" placeholder="Buscar cliente…" />
+        <button class="bf-mapa-btn" @click="abrirMapa" title="Buscar mesa en el mapa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+          Mapa
+        </button>
+        <button v-if="busquedaMesa" class="bf-limpiar" @click="busquedaMesa = ''; recargar()">Quitar filtro de mesa</button>
       </div>
     </div>
 
+    <!-- Modal de mapa para filtrar por mesa -->
+    <Teleport to="body">
+      <div v-if="mapaAbierto" class="bmapa-overlay" @click.self="mapaAbierto = false">
+        <div class="bmapa-modal">
+          <header class="bmapa-cab">
+            <b>Toca una mesa para ver sus pedidos</b>
+            <button class="bmapa-cerrar" @click="mapaAbierto = false" aria-label="Cerrar">×</button>
+          </header>
+          <div v-if="!planosMapa.length" class="bmapa-vacia">No hay planos con mesas en este evento.</div>
+          <div class="bmapa-scroll">
+            <div v-for="z in planosMapa" :key="z.id_zona" class="bmapa-zona">
+              <div class="bmapa-zona-tit">{{ z.nombre_zona }}</div>
+              <div class="bmapa-plano" :style="{ aspectRatio: z.proporcion || 1.6 }">
+                <button
+                  v-for="m in z.mesas" :key="m.id_mesa" type="button"
+                  class="bmapa-elem" :class="{ deco: !(m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') }"
+                  :style="estiloMapaElem(m)"
+                  @click="filtrarPorMesa(m)"
+                ><span>{{ m.numero_nombre }}</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <transition name="fade-tab" mode="out-in">
     <!-- ===== TABLERO KANBAN ===== -->
-    <div v-if="pestana === 'tablero'" class="kanban">
+    <div v-if="pestana === 'tablero'" key="tablero" class="kanban">
       <section v-for="col in columnasDef" :key="col.key" class="kb-col" :class="'col-' + col.key.toLowerCase()">
         <header class="kb-col-head">
           <span class="kb-col-tit">{{ col.titulo }}</span>
@@ -43,13 +75,13 @@
           <transition-group name="kb">
             <article
               v-for="c in columnas[col.key]" :key="c.id_comanda"
-              class="kb-card" :class="{ critico: colorTiempo(c) === 'rojo', alerta: colorTiempo(c) === 'amarillo' }"
+              class="kb-card" :class="{ critico: ['rojo','critico'].includes(colorTiempo(c)), alerta: colorTiempo(c) === 'amarillo' }"
             >
               <div class="kb-card-top">
                 <span class="kb-id">#{{ c.id_comanda }}</span>
                 <span class="kb-time" :class="colorTiempo(c)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  {{ formatoEspera(col.key === 'Listo' && c.minutos_listo != null ? c.minutos_listo : c.minutos_espera) }}
+                  {{ cronoVivo(c) }}
                 </span>
               </div>
 
@@ -84,7 +116,7 @@
     </div>
 
     <!-- ===== HISTORIAL ===== -->
-    <div v-else class="bar-hist">
+    <div v-else key="hist" class="bar-hist">
       <div v-if="cargandoHist" class="bar-cargando"><div class="spinner"></div></div>
       <div v-else-if="!historial.length" class="kb-vacia grande">No hay entregas con estos filtros.</div>
       <div v-else class="hist-lista">
@@ -105,6 +137,7 @@
         </article>
       </div>
     </div>
+    </transition>
   </div>
 </template>
 
@@ -112,9 +145,45 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
+
+// Filtro por mapa
+const mapaAbierto = ref(false)
+const planosMapa = ref([])
+async function abrirMapa() {
+  mapaAbierto.value = true
+  planosMapa.value = []
+  let idEv = eventoFiltro.value || eventos.value[0]?.id_evento
+  // Si no hay evento en el tablero, usa el evento en curso (con zonas)
+  if (!idEv) {
+    try {
+      const evs = await servicioAforo.listarEventos()
+      idEv = (evs || []).find(e => e.estado === 'en_transcurso' || e.estado === 'lleno' || e.estado === 'promocion')?.id_evento || evs?.[0]?.id_evento
+    } catch { /* sin eventos */ }
+  }
+  if (!idEv) return
+  try {
+    const r = await servicioAforo.obtenerPlanos(idEv)
+    planosMapa.value = (r.zonas || []).filter(z => (z.mesas || []).length)
+  } catch { planosMapa.value = [] }
+}
+function estiloMapaElem(m) {
+  return {
+    left: (m.posicion_x || 0) + '%', top: (m.posicion_y || 0) + '%',
+    width: (m.ancho || 8) + '%', height: (m.alto || 8) + '%',
+    transform: `translate(-50%, -50%) rotate(${m.rotacion || 0}deg)`,
+    borderRadius: m.forma === 'redondo' ? '50%' : '8px',
+  }
+}
+function filtrarPorMesa(m) {
+  if (m.tipo_elemento !== 'mesa' && m.tipo_elemento !== 'silla') return
+  busquedaMesa.value = String(m.numero_nombre)
+  mapaAbierto.value = false
+  recargar()
+}
 
 const pestana = ref('tablero')
 const columnas = ref({ Pendiente: [], Preparando: [], Listo: [] })
@@ -148,11 +217,27 @@ function paramsFiltro() {
   return p
 }
 
-async function cargarTablero() {
-  cargando.value = true
+// Merge suave: conserva los objetos existentes (por id) para que transition-group
+// no re-anime todas las tarjetas en cada refresco (evita el "parpadeo" de recarga).
+function mergeColumna(vieja, nueva) {
+  const mapa = new Map((vieja || []).map(c => [c.id_comanda, c]))
+  return (nueva || []).map(n => {
+    const v = mapa.get(n.id_comanda)
+    if (v) { Object.assign(v, n); return v }
+    return n
+  })
+}
+
+async function cargarTablero(conSpinner = false) {
+  if (conSpinner) cargando.value = true
   try {
     const r = await clienteHttp.get('/comandas/tablero', { params: paramsFiltro() })
-    columnas.value = r.columnas || { Pendiente: [], Preparando: [], Listo: [] }
+    const c = r.columnas || { Pendiente: [], Preparando: [], Listo: [] }
+    columnas.value = {
+      Pendiente: mergeColumna(columnas.value.Pendiente, c.Pendiente),
+      Preparando: mergeColumna(columnas.value.Preparando, c.Preparando),
+      Listo: mergeColumna(columnas.value.Listo, c.Listo),
+    }
     eventos.value = r.eventos || []
   } catch { /* deja lo previo */ }
   finally { cargando.value = false }
@@ -180,25 +265,36 @@ async function avanzar(c, nuevoEstado) {
   } finally { procesando.value = null }
 }
 
-// Cronómetro: color según minutos (base para Fase L: 2 amarillo, 6 rojo)
+// Cronómetro EN VIVO: cuenta desde que el pedido entró (o quedó listo), con el
+// tick de 1s. Formato s / m:s / h:m:s. Color: 2 min amarillo, 5 rojo, 7 crítico.
+function fechaBase(c) {
+  return (c.estado === 'Listo' && c.fecha_listo) ? c.fecha_listo : c.fecha_registro
+}
+function segundosVivo(c) {
+  const f = fechaBase(c)
+  if (!f) return 0
+  return Math.max(0, Math.floor((ahoraTick.value - new Date(f).getTime()) / 1000))
+}
+function cronoVivo(c) {
+  const s = segundosVivo(c)
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  if (m > 0) return `${m}:${String(sec).padStart(2, '0')}`
+  return `${sec}s`
+}
 function colorTiempo(c) {
-  const min = (c.minutos_listo != null && c.estado === 'Listo') ? c.minutos_listo : c.minutos_espera
-  if (min >= 6) return 'rojo'
+  const min = Math.floor(segundosVivo(c) / 60)
+  if (min >= 7) return 'critico'
+  if (min >= 5) return 'rojo'
   if (min >= 2) return 'amarillo'
   return ''
-}
-function formatoEspera(min) {
-  if (min == null) return ''
-  if (min < 60) return `${min} min`
-  if (min < 1440) return `${Math.floor(min / 60)} h`
-  return `${Math.floor(min / 1440)} d`
 }
 function formatoHora(f) { try { return new Date(f).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
 function formatoFechaHora(f) { try { return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
 
 onMounted(() => {
-  cargarTablero()
-  intervalo = setInterval(cargarTablero, 12000)
+  cargarTablero(true)
+  intervalo = setInterval(() => cargarTablero(false), 10000)
   tickTimer = setInterval(() => { ahoraTick.value = Date.now() }, 1000)
   const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
   socket = io(urlBackend)
@@ -236,10 +332,35 @@ onUnmounted(() => {
 .bf-buscar { display: flex; gap: 10px; flex-wrap: wrap; }
 .bf-input { flex: 1; min-width: 160px; background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 10px 14px; border-radius: var(--radio-md); font-size: 0.88rem; outline: none; }
 .bf-input:focus { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
+.bf-mapa-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: var(--radio-md); border: 1px solid var(--borde-activo); background: rgba(168,85,247,0.1); color: var(--morado-hover); font-weight: 700; font-size: 0.84rem; cursor: pointer; white-space: nowrap; }
+.bf-mapa-btn:hover { background: rgba(168,85,247,0.2); color: var(--texto-principal); }
+.bf-limpiar { padding: 10px 14px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: none; color: var(--texto-secundario); font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.bf-limpiar:hover { color: var(--color-error); border-color: rgba(239,68,68,0.4); }
+
+/* Modal de mapa (filtrar por mesa) */
+.bmapa-overlay { position: fixed; inset: 0; z-index: 1200; background: rgba(6,4,16,0.78); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.bmapa-modal { width: min(680px, 96vw); max-height: 90vh; display: flex; flex-direction: column; background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); border-radius: var(--radio-xl); overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+.bmapa-cab { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--borde-sutil); }
+.bmapa-cab b { color: var(--texto-principal); }
+.bmapa-cerrar { width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(255,255,255,0.08); color: var(--texto-principal); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.bmapa-vacia { padding: 2rem; text-align: center; color: var(--texto-desactivado); }
+.bmapa-scroll { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+.bmapa-zona-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.bmapa-plano { position: relative; width: 100%; background: var(--fondo-app); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); overflow: hidden; }
+.bmapa-elem { position: absolute; display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--morado-brillante); background: rgba(168,85,247,0.4); font-size: 0.62rem; font-weight: 700; color: #fff; cursor: pointer; padding: 0; }
+.bmapa-elem:hover { background: rgba(168,85,247,0.8); }
+.bmapa-elem span { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92%; }
+.bmapa-elem.deco { background: rgba(80,80,100,0.25); border-color: transparent; cursor: default; }
+
+/* Transición suave entre Tablero e Historial (evita el salto brusco) */
+.fade-tab-enter-active, .fade-tab-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.fade-tab-enter-from { opacity: 0; transform: translateY(6px); }
+.fade-tab-leave-to { opacity: 0; transform: translateY(-6px); }
 
 /* Kanban */
-.kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--esp-4); align-items: start; }
-@media (max-width: 900px) { .kanban { grid-template-columns: 1fr; } }
+.kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--esp-4); align-items: start; min-height: 280px; }
+@media (max-width: 1000px) { .kanban { grid-template-columns: 1fr; } }
+.bar-hist { min-height: 280px; }
 .kb-col { background: rgba(14,8,33,0.4); border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); padding: var(--esp-3); min-height: 120px; }
 .kb-col-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; border-bottom: 2px solid transparent; margin-bottom: 10px; }
 .col-pendiente .kb-col-head { border-color: var(--color-alerta); }
@@ -257,9 +378,11 @@ onUnmounted(() => {
 .kb-card.critico { border-color: rgba(239,68,68,0.5); box-shadow: 0 0 18px rgba(239,68,68,0.15); }
 .kb-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .kb-id { font-family: var(--fuente-titulo); font-weight: 800; color: var(--texto-principal); font-size: 1.05rem; }
-.kb-time { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 700; color: var(--texto-secundario); background: rgba(168,85,247,0.1); padding: 3px 8px; border-radius: 999px; }
+.kb-time { display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--texto-secundario); background: rgba(168,85,247,0.1); padding: 3px 9px; border-radius: 999px; min-width: 52px; justify-content: center; }
 .kb-time.amarillo { color: #FCD34D; background: rgba(245,158,11,0.15); }
 .kb-time.rojo { color: #FCA5A5; background: rgba(239,68,68,0.18); }
+.kb-time.critico { color: #fff; background: rgba(239,68,68,0.85); animation: kbCronoPulso 1s ease-in-out infinite; }
+@keyframes kbCronoPulso { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 4px rgba(239,68,68,0); } }
 .kb-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 .kb-chip { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; }
 .kb-chip.vip { background: linear-gradient(135deg, #FBBF24, #F59E0B); color: #1a1206; }

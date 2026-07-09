@@ -384,8 +384,9 @@ router.get('/evento/:idEvento', soloRoles('Recepcionista', 'Administrador'), asy
   }
 })
 
-// GET /api/aforo/eventos — eventos que tienen zonas (para elegir cual monitorear)
-router.get('/eventos', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+// GET /api/aforo/eventos — eventos que tienen zonas (para elegir cual monitorear
+// o para que el bartender abra el mapa del evento en curso)
+router.get('/eventos', soloRoles('Recepcionista', 'Administrador', 'Bartender', 'Mesero'), async (req, res) => {
   try {
     const eventos = await prisma.evento.findMany({
       where: { zona: { some: {} } },
@@ -504,8 +505,9 @@ async function usuarioIngresoGeneral() {
 }
 
 // GET /api/aforo/planos/:idEvento — planos (zonas) del evento con su precio de
-// entrada y mesas libres, para armar el ingreso de la noche desde recepción.
-router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+// entrada y mesas, para armar el ingreso de la noche (recepción) o filtrar por
+// mapa (bartender).
+router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bartender', 'Mesero'), async (req, res) => {
   try {
     const id_evento = Number(req.params.idEvento)
     const zonas = await prisma.zona.findMany({
