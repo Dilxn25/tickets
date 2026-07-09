@@ -6,6 +6,7 @@
 const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 
@@ -468,6 +469,214 @@ router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador'), asyn
   } catch (e) {
     console.error('Error asignando mesero:', e)
     res.status(500).json({ error: 'Error al asignar el mesero' })
+  }
+})
+
+// ============================================
+// Ingreso de la noche (walk-in) — Fase H
+// Gente que llega SIN reserva. El recepcionista elige el plano (zona) o una mesa;
+// el precio ya vive en el mapa (mesa.precio o zona.precio_entrada_base) y se cobra
+// en puerta. El ingreso al aforo es INMEDIATO (no es una reserva a futuro).
+// ============================================
+
+// Genera un código único para el qr_acceso de la entrada walk-in.
+function generarCodigoWalkIn(idUsuario) {
+  return `ENT-${idUsuario}-${crypto.randomBytes(9).toString('hex')}`
+}
+
+// Usuario genérico para ingresos anónimos de solo aforo (sin registrar cliente).
+// Se busca/crea una única vez y se reutiliza.
+async function usuarioIngresoGeneral() {
+  const correo = 'ingreso.general@euphoria.local'
+  let u = await prisma.usuario.findUnique({ where: { correo } })
+  if (u) return u
+  const rolCliente = await prisma.rol.findFirst({ where: { nombre_rol: 'Cliente' } })
+  return prisma.usuario.create({
+    data: {
+      nombres: 'Ingreso',
+      apellidos: 'General',
+      correo,
+      password_hash: crypto.randomBytes(16).toString('hex'), // no se usa para login
+      id_rol: rolCliente ? rolCliente.id_rol : undefined,
+      estado_cuenta: 'activo',
+    },
+  })
+}
+
+// GET /api/aforo/planos/:idEvento — planos (zonas) del evento con su precio de
+// entrada y mesas libres, para armar el ingreso de la noche desde recepción.
+router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const zonas = await prisma.zona.findMany({
+      where: { id_evento },
+      orderBy: { id_zona: 'asc' },
+      include: { mesa_espacio: true },
+    })
+    const detalle = await Promise.all(zonas.map(async (z) => {
+      const ocupado = await aforoActualZona(z.id_zona)
+      const capacidad = z.capacidad_maxima || 0
+      return {
+        id_zona: z.id_zona,
+        nombre_zona: z.nombre_zona,
+        es_general: z.es_general,
+        precio_entrada_base: Number(z.precio_entrada_base),
+        capacidad,
+        ocupado,
+        disponibles: Math.max(0, capacidad - ocupado),
+        proporcion: z.proporcion || 1.6,
+        mesas: (z.mesa_espacio || []).map(m => ({
+          id_mesa: m.id_mesa,
+          tipo_elemento: m.tipo_elemento,
+          numero_nombre: m.numero_nombre,
+          posicion_x: m.posicion_x, posicion_y: m.posicion_y,
+          ancho: m.ancho, alto: m.alto, rotacion: m.rotacion, forma: m.forma,
+          capacidad_sillas: m.capacidad_sillas,
+          precio: m.precio != null ? Number(m.precio) : null,
+          estado_ocupacion: m.estado_ocupacion,
+          es_seleccionable: m.es_seleccionable,
+        })),
+      }
+    }))
+    res.json({ id_evento, zonas: detalle })
+  } catch (e) {
+    console.error('Error obteniendo planos del evento:', e)
+    res.status(500).json({ error: 'Error al obtener los planos' })
+  }
+})
+
+// POST /api/aforo/walk-in — registra un ingreso de la noche (sin reserva previa).
+// Body: { id_zona, id_mesa?, cantidad, metodo_pago: 'efectivo'|'qr'|'cortesia', id_cliente? }
+// - Con id_mesa: cobra mesa.precio y ocupa la mesa.
+// - Sin mesa (zona general): cobra zona.precio_entrada_base * cantidad.
+router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const cantidad = Math.max(1, parseInt(req.body.cantidad) || 1)
+    const metodo = ['efectivo', 'qr', 'cortesia'].includes(req.body.metodo_pago) ? req.body.metodo_pago : 'efectivo'
+    const idMesa = req.body.id_mesa ? Number(req.body.id_mesa) : null
+
+    // Resolver zona (por mesa o directa) y precio.
+    let zona, mesa = null, precioUnitario, cantidadFinal = cantidad
+    if (idMesa) {
+      mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa: idMesa }, include: { zona: { include: { evento: true } } } })
+      if (!mesa) return res.status(404).json({ error: 'La mesa no existe' })
+      if (!mesa.es_seleccionable || (mesa.tipo_elemento !== 'mesa' && mesa.tipo_elemento !== 'silla')) {
+        return res.status(400).json({ error: 'Ese elemento no admite ingreso' })
+      }
+      if (mesa.estado_ocupacion !== 'libre') {
+        return res.status(409).json({ error: 'Esa mesa ya está ocupada. Elige otra.' })
+      }
+      zona = mesa.zona
+      // Una mesa se cobra completa; su cupo son sus sillas.
+      cantidadFinal = mesa.tipo_elemento === 'mesa' ? Math.max(cantidad, 1) : 1
+      precioUnitario = mesa.precio != null ? Number(mesa.precio) : Number(zona.precio_entrada_base)
+    } else {
+      const id_zona = Number(req.body.id_zona)
+      if (!id_zona) return res.status(400).json({ error: 'Elige un plano o una mesa.' })
+      zona = await prisma.zona.findUnique({ where: { id_zona }, include: { evento: true } })
+      if (!zona) return res.status(404).json({ error: 'El plano no existe' })
+      precioUnitario = Number(zona.precio_entrada_base)
+    }
+
+    // El evento debe estar en su ventana (no terminado / no a futuro lejano).
+    const ventana = ventanaEvento(zona.evento)
+    if (ventana.estado === 'finalizada') return res.status(409).json({ error: 'Este evento ya terminó.' })
+    if (ventana.estado === 'proxima') return res.status(409).json({ error: 'Este evento aún no abre sus puertas.' })
+
+    // Aforo: no exceder la capacidad de la zona.
+    const capacidad = zona.capacidad_maxima || 0
+    const aforoPrevio = await aforoActualZona(zona.id_zona)
+    if (capacidad > 0 && aforoPrevio + cantidadFinal > capacidad) {
+      return res.status(409).json({
+        error: `Aforo lleno en ${zona.nombre_zona} (${aforoPrevio}/${capacidad}).`,
+        aforo_lleno: true,
+      })
+    }
+
+    // Monto: mesa = precio de la mesa; zona = precio por persona. Cortesía = 0.
+    const monto = metodo === 'cortesia'
+      ? 0
+      : (idMesa ? precioUnitario : precioUnitario * cantidadFinal)
+
+    // Cliente: el registrado (si vino) o el usuario genérico de ingreso general.
+    let idUsuario = req.body.id_cliente ? Number(req.body.id_cliente) : null
+    if (idUsuario) {
+      const c = await prisma.usuario.findUnique({ where: { id_usuario: idUsuario } })
+      if (!c) idUsuario = null
+    }
+    if (!idUsuario) idUsuario = (await usuarioIngresoGeneral()).id_usuario
+
+    const codigo = generarCodigoWalkIn(idUsuario)
+    let entradaCreada
+    try {
+      entradaCreada = await prisma.$transaction(async (tx) => {
+        if (idMesa) {
+          const tomada = await tx.mesa_espacio.updateMany({
+            where: { id_mesa: idMesa, estado_ocupacion: 'libre' },
+            data: { estado_ocupacion: 'reservada' },
+          })
+          if (tomada.count === 0) throw new Error('MESA_OCUPADA')
+        }
+        const ent = await tx.entrada.create({
+          data: {
+            id_usuario: idUsuario,
+            id_zona: zona.id_zona,
+            id_mesa: idMesa,
+            qr_acceso: codigo,
+            codigo_ingreso: codigo.slice(-12).toUpperCase(),
+            cantidad_personas: cantidadFinal,
+            cantidad_ingresada: cantidadFinal, // ingreso inmediato
+            monto_pagado: monto,
+            estado_validacion: true,
+            fecha_reserva: new Date(),
+          },
+        })
+        await tx.registro_aforo.create({
+          data: {
+            id_zona: zona.id_zona,
+            id_entrada: ent.id_entrada,
+            id_recepcionista: req.usuario.id,
+            tipo_movimiento: 'ingreso',
+            cantidad: cantidadFinal,
+            fecha_hora: new Date(),
+          },
+        })
+        return ent
+      })
+    } catch (e) {
+      if (e.message === 'MESA_OCUPADA') return res.status(409).json({ error: 'Alguien tomó esa mesa antes. Elige otra.' })
+      throw e
+    }
+
+    const aforoNuevo = aforoPrevio + cantidadFinal
+    const resumen = resumenZona(zona, aforoNuevo)
+    if (global.io) {
+      global.io.emit('aforo_actualizado', resumen)
+      if (idMesa) global.io.emit('mesa_actualizada', { id_zona: zona.id_zona, id_mesa: idMesa, estado: 'reservada' })
+    }
+
+    // Si ingresó a una mesa, sugerir mesero (recepción confirma) igual que en el check-in.
+    let mesero_sugerido = null
+    if (idMesa) {
+      const sug = await meseroConMenosCarga()
+      if (sug) mesero_sugerido = { id_usuario: sug.id_usuario, nombre: `${sug.nombres} ${sug.apellidos || ''}`.trim(), carga: sug.carga }
+    }
+
+    res.status(201).json({
+      mensaje: 'Ingreso registrado',
+      id_entrada: entradaCreada.id_entrada,
+      id_mesa: idMesa,
+      mesa: mesa ? mesa.numero_nombre : null,
+      zona: zona.nombre_zona,
+      personas: cantidadFinal,
+      monto,
+      metodo_pago: metodo,
+      mesero_sugerido,
+      aforo: resumen,
+    })
+  } catch (e) {
+    console.error('Error en walk-in:', e)
+    res.status(500).json({ error: 'Error al registrar el ingreso' })
   }
 })
 
