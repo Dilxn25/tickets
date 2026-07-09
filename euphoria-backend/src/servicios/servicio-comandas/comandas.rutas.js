@@ -1121,6 +1121,21 @@ router.post('/:id/liberar', verificarToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'No se pudo liberar el pedido' }) }
 })
 
+// POST /api/comandas/:id/recogido — el MESERO marca que ya recogió el pedido de
+// la barra (pasa de "en barra" a "recogido"). Sigue Listo hasta entregarlo al cliente.
+router.post('/:id/recogido', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const r = await prisma.comanda.updateMany({
+      where: { id_comanda: id, estado_despacho: 'Listo', estado_entrega: { notIn: ['recogido', 'entregado', 'reembolsado'] } },
+      data: { estado_entrega: 'recogido', id_mesero: req.usuario.id },
+    })
+    if (r.count === 0) return res.status(409).json({ error: 'Ese pedido ya fue recogido o entregado.' })
+    if (global.io) global.io.emit('pedido_recogido', { id_comanda: id, id_mesero: req.usuario.id })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: 'No se pudo marcar como recogido' }) }
+})
+
 // POST /api/comandas/:id/tomar — otro mesero toma un pedido del pool (atómico)
 router.post('/:id/tomar', verificarToken, async (req, res) => {
   try {
@@ -1147,13 +1162,13 @@ async function revisarAutoPool() {
       where: {
         estado_despacho: 'Listo',
         fecha_listo: { not: null, lte: limite },
-        estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado'] },
+        estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado', 'recogido'] },
       },
       select: { id_comanda: true },
     })
     for (const c of candidatas) {
       const r = await prisma.comanda.updateMany({
-        where: { id_comanda: c.id_comanda, estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado'] } },
+        where: { id_comanda: c.id_comanda, estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado', 'recogido'] } },
         data: { estado_entrega: 'en_pool' },
       })
       if (r.count > 0 && global.io) global.io.emit('pedido_pool', { id_comanda: c.id_comanda, auto: true })

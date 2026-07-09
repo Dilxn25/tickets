@@ -85,61 +85,106 @@
         <button class="btn btn-primario mt-15" @click="mostrarModalListos = false">Volver al Menú</button>
       </div>
 
-      <div v-if="pedidosListos.length" class="grid-listos escalonar">
-        <transition-group name="list">
-          <div v-for="ped in pedidosListos" :key="ped.id_comanda" class="card-listo-full">
-            <div class="clf-header">
-              <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
-              <span class="clf-crono" :class="cronoClase(ped.fecha_listo)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                {{ cronoTexto(ped.fecha_listo) }}
-              </span>
-            </div>
-            <div class="clf-subhead">
-              <span class="clf-destino" v-if="ped.mesa_espacio">Mesa {{ ped.mesa_espacio.numero_nombre }}</span>
-              <span class="clf-destino vip" v-else>Barra</span>
-            </div>
-            
-            <div class="clf-cliente">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-              <span>{{ ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : 'Sin registro' }}</span>
-            </div>
-            
-            <div class="clf-prods">
-              <div v-for="det in ped.detalle_comanda" :key="det.id_detalle" class="clf-prod-item">
-                <span class="clf-cant">{{ det.cantidad }}x</span>
-                <span class="clf-nom">{{ det.producto?.nombre_producto }}</span>
+      <!-- APARTADO 1: EN BARRA (por recoger) -->
+      <div v-if="pedidosEnBarra.length" class="apartado-listos">
+        <h4 class="apartado-tit barra">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
+          En barra · por recoger
+          <span class="apartado-n">{{ pedidosEnBarra.length }}</span>
+        </h4>
+        <div class="grid-listos escalonar">
+          <transition-group name="list">
+            <div v-for="ped in pedidosEnBarra" :key="ped.id_comanda" class="card-listo-full">
+              <div class="clf-header">
+                <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
+                <span class="clf-crono" :class="cronoClase(ped.fecha_listo)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  {{ cronoTexto(ped.fecha_listo) }}
+                </span>
+              </div>
+              <div class="clf-subhead">
+                <span class="clf-destino" v-if="ped.mesa_espacio">Mesa {{ ped.mesa_espacio.numero_nombre }}</span>
+                <span class="clf-destino vip" v-else>Barra</span>
+              </div>
+              <div class="clf-cliente">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>{{ ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : 'Sin registro' }}</span>
+              </div>
+              <div class="clf-prods">
+                <div v-for="det in ped.detalle_comanda" :key="det.id_detalle" class="clf-prod-item">
+                  <span class="clf-cant">{{ det.cantidad }}x</span>
+                  <span class="clf-nom">{{ det.producto?.nombre_producto }}</span>
+                </div>
+              </div>
+              <div v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="clf-espera">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Lleva {{ minutosListo(ped) }} min listo. Recógelo o que lo lleve otro.
+              </div>
+              <div class="clf-acciones">
+                <button class="btn-recogido" @click="marcarRecogido(ped.id_comanda)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6 9 17l-5-5"></path></svg>
+                  Recogí de la barra
+                </button>
+                <button v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="btn-liberar" @click="liberarPedido(ped.id_comanda)">
+                  Que lo lleve otro
+                </button>
               </div>
             </div>
+          </transition-group>
+        </div>
+      </div>
 
-            <!-- Aviso cuando el pedido lleva mucho listo sin recoger -->
-            <div v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="clf-espera">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              Lleva {{ minutosListo(ped) }} min listo. ¿Lo llevas tú o que lo lleve otro?
-            </div>
-
-            <div class="clf-acciones">
-              <button
-                v-if="ped.mesa_espacio"
-                class="btn-donde-llevar"
-                @click="abrirMapaDestino(ped.mesa_espacio.id_mesa, ped.mesa_espacio.numero_nombre, ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : null)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                Dónde llevar
-              </button>
-              <button v-if="minutosListo(ped) >= UMBRAL_LISTO_MIN" class="btn-liberar" @click="liberarPedido(ped.id_comanda)">
-                Que lo lleve otro
-              </button>
-              <button class="btn-entregar-full" @click="entregarPedido(ped.id_comanda)" :disabled="procesandoEntrega === ped.id_comanda">
-                <span v-if="procesandoEntrega === ped.id_comanda">Procesando...</span>
-                <span v-else style="display:flex; align-items:center; justify-content:center; gap: 8px;">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  Marcar como Entregado
+      <!-- APARTADO 2: RECOGIDOS (por entregar al cliente) -->
+      <div v-if="pedidosRecogidos.length" class="apartado-listos">
+        <h4 class="apartado-tit recog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
+          Recogidos · entregar al cliente
+          <span class="apartado-n">{{ pedidosRecogidos.length }}</span>
+        </h4>
+        <div class="grid-listos escalonar">
+          <transition-group name="list">
+            <div v-for="ped in pedidosRecogidos" :key="ped.id_comanda" class="card-listo-full recogido">
+              <div class="clf-header">
+                <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
+                <span class="clf-crono" :class="cronoClase(ped.fecha_listo)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  {{ cronoTexto(ped.fecha_listo) }}
                 </span>
-              </button>
+              </div>
+              <div class="clf-subhead">
+                <span class="clf-destino" v-if="ped.mesa_espacio">Mesa {{ ped.mesa_espacio.numero_nombre }}</span>
+                <span class="clf-destino vip" v-else>Barra</span>
+              </div>
+              <div class="clf-cliente">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>{{ ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : 'Sin registro' }}</span>
+              </div>
+              <div class="clf-prods">
+                <div v-for="det in ped.detalle_comanda" :key="det.id_detalle" class="clf-prod-item">
+                  <span class="clf-cant">{{ det.cantidad }}x</span>
+                  <span class="clf-nom">{{ det.producto?.nombre_producto }}</span>
+                </div>
+              </div>
+              <div class="clf-acciones">
+                <button
+                  v-if="ped.mesa_espacio"
+                  class="btn-donde-llevar"
+                  @click="abrirMapaDestino(ped.mesa_espacio.id_mesa, ped.mesa_espacio.numero_nombre, ped.usuario_comanda_id_clienteTousuario ? ped.usuario_comanda_id_clienteTousuario.nombres : null)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  Dónde llevar
+                </button>
+                <button class="btn-entregar-full" @click="entregarPedido(ped.id_comanda)" :disabled="procesandoEntrega === ped.id_comanda">
+                  <span v-if="procesandoEntrega === ped.id_comanda">Procesando...</span>
+                  <span v-else style="display:flex; align-items:center; justify-content:center; gap: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Entregado al cliente
+                  </span>
+                </button>
+              </div>
             </div>
-          </div>
-        </transition-group>
+          </transition-group>
+        </div>
       </div>
     </div>
 
@@ -1681,13 +1726,24 @@ function cronoTexto(fecha) {
   const s = segundosDesde(fecha)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
-// Color por umbral: 2 min amarillo, 6 min rojo, 10 min rojo intenso (auto-pool)
+// Color por umbral: 2 min amarillo, 5 min rojo, 7 min rojo intenso
 function cronoClase(fecha) {
   const m = Math.floor(segundosDesde(fecha) / 60)
-  if (m >= 10) return 'crono-critico'
-  if (m >= 6) return 'crono-rojo'
+  if (m >= 7) return 'crono-critico'
+  if (m >= 5) return 'crono-rojo'
   if (m >= 2) return 'crono-amarillo'
   return ''
+}
+// Apartados: "en barra" (por recoger) vs "recogidos" (por entregar al cliente)
+const pedidosEnBarra = computed(() => pedidosListos.value.filter(p => p.estado_entrega !== 'recogido'))
+const pedidosRecogidos = computed(() => pedidosListos.value.filter(p => p.estado_entrega === 'recogido'))
+async function marcarRecogido(id) {
+  try {
+    await clienteHttp.post(`/comandas/${id}/recogido`)
+    const p = pedidosListos.value.find(x => x.id_comanda === id)
+    if (p) p.estado_entrega = 'recogido'
+    notif.exito('Pedido recogido de la barra. Ahora entrégalo al cliente.')
+  } catch (e) { notif.error(e?.error || 'No se pudo marcar como recogido.') }
 }
 async function cargarPool() {
   try { pedidosPool.value = await clienteHttp.get('/comandas/pool') }
@@ -3157,6 +3213,17 @@ onUnmounted(() => {
 .clf-crono.crono-critico { color: #fff; background: rgba(239,68,68,0.85); border-color: #ef4444; animation: cronoPulso 1s ease-in-out infinite; }
 @keyframes cronoPulso { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
 .clf-subhead { margin-bottom: 8px; }
+/* Apartados del mesero: en barra / recogidos (R8) */
+.apartado-listos { margin-bottom: 24px; }
+.apartado-tit { display: flex; align-items: center; gap: 8px; font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 800; margin-bottom: 12px; }
+.apartado-tit.barra { color: #FCD34D; }
+.apartado-tit.barra svg { color: #FBBF24; }
+.apartado-tit.recog { color: #86EFAC; }
+.apartado-tit.recog svg { color: #4ADE80; }
+.apartado-n { background: rgba(168,85,247,0.2); color: var(--morado-hover); font-size: 0.72rem; font-weight: 800; border-radius: 999px; padding: 1px 9px; }
+.card-listo-full.recogido { border-color: rgba(34,197,94,0.4); }
+.btn-recogido { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: var(--radio-md); border: 1px solid rgba(251,191,36,0.5); background: rgba(251,191,36,0.14); color: #FCD34D; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.15s ease; }
+.btn-recogido:hover { background: rgba(251,191,36,0.25); color: #fff; }
 .btn-liberar { width: 100%; padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.9rem; background: rgba(251,191,36,0.14); color: #FCD34D; border: 1px solid rgba(251,191,36,0.4); transition: background var(--trans-normal); }
 .btn-liberar:hover { background: rgba(251,191,36,0.24); }
 /* Pool de pedidos libres */
