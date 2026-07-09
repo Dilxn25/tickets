@@ -159,7 +159,8 @@ model solicitud_grupo {
   cantidad_personas Int      @default(1)
   motivo            String?  @db.VarChar(255)
   mesas_tentativas  String?  @db.Text // JSON: [{ id_mesa, nombre }]
-  estado            String   @default("pendiente") @db.VarChar(20) // pendiente | atendida | cancelada
+  mesas_propuestas  String?  @db.Text // JSON: [{ id_mesa, nombre }] — contrapropuesta de recepción
+  estado            String   @default("pendiente") @db.VarChar(20) // pendiente | propuesta | confirmada | rechazada | atendida
   fecha_solicitud   DateTime @default(now())
   usuario           usuario  @relation(fields: [id_cliente], references: [id_usuario])
   evento            evento   @relation(fields: [id_evento], references: [id_evento])

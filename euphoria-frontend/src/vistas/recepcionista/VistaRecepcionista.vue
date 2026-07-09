@@ -38,6 +38,7 @@
           <button class="rec-tab" :class="{ activo: pestana === 'grupos' }" @click="pestana = 'grupos'" role="tab">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Grupos grandes</span>
+            <span v-if="solicitudes.length" class="rec-tab-badge">{{ solicitudes.length }}</span>
           </button>
         </nav>
 
@@ -203,7 +204,7 @@
         <div v-show="pestana === 'grupos'" class="flujo">
           <p class="flujo-desc">Reservas de empresa, cumpleaños o grupos grandes. Los clientes pueden mandarte solicitudes desde su app con lugares tentativos; también puedes armar una directo aquí.</p>
 
-          <!-- Bandeja de solicitudes (Fase I) -->
+          <!-- Bandeja de solicitudes -->
           <div class="solicitudes">
             <div class="sol-cab">
               <b>Solicitudes de clientes</b>
@@ -219,49 +220,98 @@
                   <span class="sol-pers">{{ s.cantidad_personas }} pers</span>
                 </div>
                 <span class="sol-motivo">{{ s.motivo || 'Sin detalle' }}</span>
-                <span class="sol-tent">{{ (s.mesas_tentativas || []).length }} lugar(es) tentativo(s)</span>
+                <div class="sol-tent-chips">
+                  <span v-for="m in s.mesas_tentativas" :key="m.id_mesa" class="sol-mchip" :class="m.libre ? 'lib' : 'ocu'">{{ m.nombre }}</span>
+                  <span v-if="s.estado === 'propuesta'" class="sol-estado-chip">Propuesta enviada</span>
+                </div>
               </button>
             </div>
           </div>
 
-          <!-- Detalle/gestión de la solicitud o reserva directa -->
-          <div class="gest-grid">
-            <div class="gest-col">
-              <label class="gest-lbl">1 · Cliente</label>
-              <div v-if="!clienteSel" class="gest-buscar">
-                <input v-model="busquedaCliente" @input="buscarClientes" class="input-codigo gest-input" placeholder="Nombre, correo o CI…" autocomplete="off" />
-                <ul v-if="clientesEncontrados.length" class="gest-resultados">
-                  <li v-for="c in clientesEncontrados" :key="c.id_usuario" @click="seleccionarCliente(c)">
-                    <b>{{ c.nombre }}</b><span>{{ c.correo }}{{ c.ci_carnet ? ' · CI ' + c.ci_carnet : '' }}</span>
-                  </li>
-                </ul>
-                <p v-else-if="busquedaCliente.trim().length >= 2 && !buscandoCliente" class="gest-vacio">Sin coincidencias.</p>
+          <!-- Gestión de la solicitud seleccionada -->
+          <div v-if="solSel" class="sol-gestion">
+            <div class="sg-cab">
+              <div>
+                <b>{{ solSel.cliente }}</b>
+                <span class="sg-sub">{{ solSel.cantidad_personas }} personas · {{ solSel.motivo || 'sin detalle' }}</span>
+                <span v-if="solSel.telefono" class="sg-sub">Tel: {{ solSel.telefono }}</span>
               </div>
-              <div v-else class="gest-cliente-sel">
-                <div class="gcs-datos"><b>{{ clienteSel.nombre }}</b><span>{{ clienteSel.correo }}</span></div>
-                <button class="btn-cambiar" type="button" @click="cambiarCliente">Cambiar</button>
+              <button class="btn-cambiar" @click="solSel = null">Cerrar</button>
+            </div>
+
+            <div class="sg-tent">
+              <span class="sg-lbl">Lugares que pidió el cliente:</span>
+              <div class="sg-mesas">
+                <span v-for="m in solSel.mesas_tentativas" :key="m.id_mesa" class="sol-mchip" :class="m.libre ? 'lib' : 'ocu'">
+                  {{ m.nombre }} · {{ m.libre ? 'libre' : 'ocupada' }}
+                </span>
               </div>
             </div>
 
-            <div class="gest-col">
-              <label class="gest-lbl">2 · Mesa a asignar</label>
-              <SelectorMesa :zonas="planos" v-model="mesaSelGestion" />
-              <label class="gest-check">
-                <input type="checkbox" v-model="cortesia" />
-                <span>Cortesía (sin costo)</span>
-              </label>
-            </div>
-
-            <div class="gest-col gest-accion">
-              <button class="btn-primario btn-asignar" type="button" :disabled="!clienteSel || !mesaSelGestion || asignando" @click="asignarReserva">
-                {{ asignando ? 'Asignando…' : 'Asignar mesa' }}
+            <!-- Todas libres → confirmar tal cual -->
+            <div v-if="solSel.todas_libres" class="sg-ok">
+              <p>Todos los lugares están libres: puedes confirmar la reserva tal como la pidió.</p>
+              <button class="btn-primario" :disabled="gestionandoSol" @click="confirmarSolicitud">
+                {{ gestionandoSol ? 'Confirmando…' : 'Confirmar tal cual' }}
               </button>
-              <p class="gest-tip">Puedes asignar varias mesas al mismo cliente, una por una.</p>
-              <button v-if="solSel" class="btn-sec btn-cerrar-sol" type="button" @click="cerrarSolicitud">Marcar solicitud atendida</button>
+            </div>
+
+            <!-- Alguna ocupada → proponer alternativa -->
+            <div v-else class="sg-prop">
+              <p class="sg-aviso">Algún lugar ya no está libre. No puedes confirmar tal cual: arma una propuesta y envíasela al cliente para que la confirme.</p>
+              <span class="sg-lbl">Propón mesas disponibles (toca para elegir):</span>
+              <div class="sg-libres">
+                <button
+                  v-for="m in mesasLibresEvento" :key="m.id_mesa" type="button"
+                  class="sol-mchip elegible" :class="{ sel: propuestaSel.includes(m.id_mesa) }"
+                  @click="togglePropuesta(m)"
+                >{{ etiquetaMesaProp(m) }}</button>
+                <p v-if="!mesasLibresEvento.length" class="gest-vacio">No quedan mesas libres en el evento.</p>
+              </div>
+              <button class="btn-primario" :disabled="!propuestaSel.length || gestionandoSol" @click="proponerSolicitud">
+                {{ gestionandoSol ? 'Enviando…' : `Enviar propuesta (${propuestaSel.length})` }}
+              </button>
             </div>
           </div>
 
           <ResultadoRecep :resultado="resultadoGestion" />
+
+          <!-- Reserva directa (sin solicitud previa) -->
+          <details class="reserva-directa">
+            <summary>O arma una reserva directa en el mostrador</summary>
+            <div class="gest-grid">
+              <div class="gest-col">
+                <label class="gest-lbl">1 · Cliente</label>
+                <div v-if="!clienteSel" class="gest-buscar">
+                  <input v-model="busquedaCliente" @input="buscarClientes" class="input-codigo gest-input" placeholder="Nombre, correo o CI…" autocomplete="off" />
+                  <ul v-if="clientesEncontrados.length" class="gest-resultados">
+                    <li v-for="c in clientesEncontrados" :key="c.id_usuario" @click="seleccionarCliente(c)">
+                      <b>{{ c.nombre }}</b><span>{{ c.correo }}{{ c.ci_carnet ? ' · CI ' + c.ci_carnet : '' }}</span>
+                    </li>
+                  </ul>
+                  <p v-else-if="busquedaCliente.trim().length >= 2 && !buscandoCliente" class="gest-vacio">Sin coincidencias.</p>
+                </div>
+                <div v-else class="gest-cliente-sel">
+                  <div class="gcs-datos"><b>{{ clienteSel.nombre }}</b><span>{{ clienteSel.correo }}</span></div>
+                  <button class="btn-cambiar" type="button" @click="cambiarCliente">Cambiar</button>
+                </div>
+              </div>
+              <div class="gest-col">
+                <label class="gest-lbl">2 · Mesa a asignar</label>
+                <SelectorMesa :zonas="planos" v-model="mesaSelGestion" />
+                <label class="gest-check">
+                  <input type="checkbox" v-model="cortesia" />
+                  <span>Cortesía (sin costo)</span>
+                </label>
+              </div>
+              <div class="gest-col gest-accion">
+                <button class="btn-primario btn-asignar" type="button" :disabled="!clienteSel || !mesaSelGestion || asignando" @click="asignarReserva">
+                  {{ asignando ? 'Asignando…' : 'Asignar mesa' }}
+                </button>
+                <p class="gest-tip">Puedes asignar varias mesas al mismo cliente, una por una.</p>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -316,6 +366,9 @@ import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import SelectorMesa from '@/componentes/comunes/SelectorMesa.vue'
 import ResultadoRecep from './ResultadoRecep.vue'
 import PanelMesero from './PanelMesero.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+
+const notif = useNotificaciones()
 
 const eventos = ref([])
 const idEventoSel = ref(null)
@@ -415,10 +468,27 @@ const asignando = ref(false)
 const resultadoGestion = ref(null)
 let debounceBuscar = null
 
-// ---- Solicitudes de grupo grande (Fase I) ----
+// ---- Solicitudes de grupo grande (Fase I / R2) ----
 const solicitudes = ref([])
 const cargandoSol = ref(false)
 const solSel = ref(null)
+const gestionandoSol = ref(false)
+const propuestaSel = ref([])
+
+// Mesas libres del evento (para armar la contrapropuesta)
+const mesasLibresEvento = computed(() => {
+  const out = []
+  for (const z of planos.value) for (const m of (z.mesas || [])) {
+    if ((m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && m.es_seleccionable && m.estado_ocupacion === 'libre') out.push(m)
+  }
+  return out
+})
+function etiquetaMesaProp(m) { return `${m.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${m.numero_nombre}` }
+function togglePropuesta(m) {
+  const i = propuestaSel.value.indexOf(m.id_mesa)
+  if (i >= 0) propuestaSel.value.splice(i, 1)
+  else propuestaSel.value.push(m.id_mesa)
+}
 
 const zonasEnAlerta = computed(() => zonas.value.filter(z => z.estado === 'alerta' || z.estado === 'lleno'))
 
@@ -637,24 +707,43 @@ async function asignarReserva() {
 // ---------- Solicitudes de grupo grande (Fase I) ----------
 async function cargarSolicitudes() {
   cargandoSol.value = true
-  try { solicitudes.value = await clienteHttp.get('/reservas/solicitudes-grupo') }
+  try { solicitudes.value = await servicioReservas.solicitudesGrupo() }
   catch { solicitudes.value = [] }
   finally { cargandoSol.value = false }
 }
 function abrirSolicitud(s) {
   solSel.value = s
-  clienteSel.value = { id_usuario: s.id_cliente, nombre: s.cliente, correo: s.correo || '' }
+  propuestaSel.value = []
 }
-async function cerrarSolicitud() {
+async function confirmarSolicitud() {
   if (!solSel.value) return
+  gestionandoSol.value = true
   try {
-    await clienteHttp.patch(`/reservas/solicitudes-grupo/${solSel.value.id_solicitud}/atender`, {})
+    const r = await servicioReservas.confirmarSolicitudGrupo(solSel.value.id_solicitud)
+    mostrarResultado(resultadoGestion, 'ok', 'Reserva confirmada', r.mensaje || 'Se crearon las reservas del grupo.')
+    solSel.value = null
+    await Promise.all([cargarSolicitudes(), cargarPlanos(), cargarAforo()])
+  } catch (err) {
+    const data = err?.response?.data || err
+    mostrarResultado(resultadoGestion, 'error', 'No se pudo confirmar', data?.error || 'Intenta de nuevo')
+    await cargarSolicitudes()
+  } finally { gestionandoSol.value = false }
+}
+async function proponerSolicitud() {
+  if (!solSel.value || !propuestaSel.value.length) return
+  gestionandoSol.value = true
+  try {
+    const mesas = mesasLibresEvento.value
+      .filter(m => propuestaSel.value.includes(m.id_mesa))
+      .map(m => ({ id_mesa: m.id_mesa, nombre: etiquetaMesaProp(m) }))
+    const r = await servicioReservas.proponerSolicitudGrupo(solSel.value.id_solicitud, mesas)
+    mostrarResultado(resultadoGestion, 'ok', 'Propuesta enviada', r.mensaje || 'El cliente debe confirmarla.')
     solSel.value = null
     await cargarSolicitudes()
-    mostrarResultado(resultadoGestion, 'ok', 'Solicitud atendida', 'La solicitud se marcó como atendida.')
-  } catch (e) {
-    mostrarResultado(resultadoGestion, 'error', 'No se pudo cerrar', e?.error || 'Intenta de nuevo')
-  }
+  } catch (err) {
+    const data = err?.response?.data || err
+    mostrarResultado(resultadoGestion, 'error', 'No se pudo proponer', data?.error || 'Intenta de nuevo')
+  } finally { gestionandoSol.value = false }
 }
 
 function recomputarTotales() {
@@ -681,7 +770,11 @@ onMounted(async () => {
     recomputarTotales()
   })
   socket.on('mesa_actualizada', () => { if (idEventoSel.value) cargarPlanos() })
-  socket.on('solicitud_grupo', () => cargarSolicitudes())
+  socket.on('solicitud_grupo', (d) => {
+    cargarSolicitudes()
+    // Aviso activo cuando entra una solicitud NUEVA (no en respuesta a confirmada/propuesta)
+    if (!d || !d.estado) notif.info('Nueva solicitud de reserva de grupo grande')
+  })
 })
 
 onUnmounted(() => { if (socket) socket.disconnect() })
@@ -807,7 +900,34 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .sol-item-top b { color: var(--texto-principal); font-size: 0.9rem; }
 .sol-pers { font-size: 0.74rem; font-weight: 700; color: var(--morado-hover); background: rgba(168,85,247,0.14); padding: 2px 8px; border-radius: 999px; }
 .sol-motivo { font-size: 0.8rem; color: var(--texto-secundario); }
-.sol-tent { font-size: 0.72rem; color: var(--texto-desactivado); }
+.sol-tent-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.sol-mchip { font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; }
+.sol-mchip.lib { background: rgba(34,197,94,0.14); color: #86EFAC; border-color: rgba(34,197,94,0.3); }
+.sol-mchip.ocu { background: rgba(239,68,68,0.14); color: #FCA5A5; border-color: rgba(239,68,68,0.3); }
+.sol-mchip.elegible { background: var(--fondo-tarjeta); color: var(--texto-principal); border-color: var(--borde-sutil); cursor: pointer; }
+.sol-mchip.elegible:hover { border-color: var(--morado-brillante); }
+.sol-mchip.elegible.sel { background: var(--gradiente-marca); color: #fff; border-color: transparent; }
+.sol-estado-chip { font-size: 0.66rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: rgba(99,102,241,0.18); color: #C7D2FE; }
+
+.rec-tab-badge { background: var(--color-error); color: #fff; font-size: 0.68rem; font-weight: 800; border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center; }
+
+/* Gestión de solicitud */
+.sol-gestion { margin-top: var(--esp-4); padding: var(--esp-4); border-radius: var(--radio-lg); background: var(--fondo-app); border: 1px solid var(--borde-activo); display: flex; flex-direction: column; gap: var(--esp-3); }
+.sg-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-3); }
+.sg-cab b { color: var(--texto-principal); font-size: 1rem; }
+.sg-sub { display: block; font-size: 0.8rem; color: var(--texto-secundario); margin-top: 2px; }
+.sg-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-desactivado); }
+.sg-tent { display: flex; flex-direction: column; gap: 8px; }
+.sg-mesas, .sg-libres { display: flex; flex-wrap: wrap; gap: 6px; }
+.sg-ok { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radio-md); background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); }
+.sg-ok p { font-size: 0.85rem; color: #86EFAC; }
+.sg-prop { display: flex; flex-direction: column; gap: 10px; }
+.sg-aviso { font-size: 0.85rem; color: #FCA5A5; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); padding: 10px 12px; border-radius: var(--radio-md); }
+
+.reserva-directa { margin-top: var(--esp-4); border: 1px dashed var(--borde-sutil); border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4); }
+.reserva-directa summary { cursor: pointer; font-size: 0.86rem; font-weight: 700; color: var(--texto-secundario); }
+.reserva-directa summary:hover { color: var(--texto-principal); }
+.reserva-directa .gest-grid { margin-top: var(--esp-4); }
 
 .gest-grid { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: var(--esp-4); align-items: start; }
 @media (max-width: 720px) { .gest-grid { grid-template-columns: 1fr; } }

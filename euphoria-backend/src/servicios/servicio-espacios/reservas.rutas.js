@@ -756,6 +756,7 @@ router.get('/mis-solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
       cantidad_personas: s.cantidad_personas,
       motivo: s.motivo,
       mesas_tentativas: s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : [],
+      mesas_propuestas: s.mesas_propuestas ? JSON.parse(s.mesas_propuestas) : [],
       estado: s.estado,
       fecha_solicitud: s.fecha_solicitud,
     })))
@@ -765,27 +766,52 @@ router.get('/mis-solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
   }
 })
 
-// GET /api/reservas/solicitudes-grupo — recepción ve las solicitudes pendientes.
+// Marca cada mesa tentativa con su disponibilidad actual (libre/ocupada).
+async function conDisponibilidad(mesas) {
+  if (!mesas.length) return { mesas: [], todas_libres: true }
+  const ids = mesas.map(m => Number(m.id_mesa)).filter(Boolean)
+  const filas = await prisma.mesa_espacio.findMany({
+    where: { id_mesa: { in: ids } },
+    select: { id_mesa: true, numero_nombre: true, estado_ocupacion: true },
+  })
+  const mapa = new Map(filas.map(f => [f.id_mesa, f]))
+  const out = mesas.map(m => {
+    const f = mapa.get(Number(m.id_mesa))
+    return { id_mesa: Number(m.id_mesa), nombre: m.nombre || (f ? `Mesa ${f.numero_nombre}` : 'Mesa'), libre: f ? f.estado_ocupacion === 'libre' : false }
+  })
+  return { mesas: out, todas_libres: out.every(m => m.libre) }
+}
+
+// GET /api/reservas/solicitudes-grupo — recepción ve las solicitudes activas.
 router.get('/solicitudes-grupo', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
   try {
     const lista = await prisma.solicitud_grupo.findMany({
-      where: { estado: 'pendiente' },
+      where: { estado: { in: ['pendiente', 'propuesta'] } },
       orderBy: { fecha_solicitud: 'asc' },
       include: { usuario: { select: { nombres: true, apellidos: true, correo: true, telefono: true, ci_carnet: true } } },
     })
-    res.json(lista.map(s => ({
-      id_solicitud: s.id_solicitud,
-      id_cliente: s.id_cliente,
-      id_evento: s.id_evento,
-      cliente: `${s.usuario.nombres} ${s.usuario.apellidos || ''}`.trim(),
-      correo: s.usuario.correo,
-      telefono: s.usuario.telefono,
-      ci_carnet: s.usuario.ci_carnet,
-      cantidad_personas: s.cantidad_personas,
-      motivo: s.motivo,
-      mesas_tentativas: s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : [],
-      fecha_solicitud: s.fecha_solicitud,
-    })))
+    const salida = []
+    for (const s of lista) {
+      const tent = s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : []
+      const disp = await conDisponibilidad(tent)
+      salida.push({
+        id_solicitud: s.id_solicitud,
+        id_cliente: s.id_cliente,
+        id_evento: s.id_evento,
+        cliente: `${s.usuario.nombres} ${s.usuario.apellidos || ''}`.trim(),
+        correo: s.usuario.correo,
+        telefono: s.usuario.telefono,
+        ci_carnet: s.usuario.ci_carnet,
+        cantidad_personas: s.cantidad_personas,
+        motivo: s.motivo,
+        estado: s.estado,
+        mesas_tentativas: disp.mesas,        // con .libre
+        todas_libres: disp.todas_libres,
+        mesas_propuestas: s.mesas_propuestas ? JSON.parse(s.mesas_propuestas) : [],
+        fecha_solicitud: s.fecha_solicitud,
+      })
+    }
+    res.json(salida)
   } catch (e) {
     console.error('Error listando solicitudes de grupo:', e)
     res.status(500).json({ error: 'Error al obtener las solicitudes' })
@@ -806,6 +832,105 @@ router.patch('/solicitudes-grupo/:id/atender', soloRoles('Recepcionista', 'Admin
   } catch (e) {
     console.error('Error atendiendo solicitud:', e)
     res.status(500).json({ error: 'No se pudo actualizar la solicitud' })
+  }
+})
+
+// Crea una reserva (entrada) por cada mesa para el cliente. Pago en mostrador
+// (no cobra billetera). Atómico: si una mesa se ocupó, revierte todo.
+async function crearReservasGrupo(id_cliente, mesaIds) {
+  const creadas = await prisma.$transaction(async (tx) => {
+    const out = []
+    for (const id_mesa of mesaIds) {
+      const mesa = await tx.mesa_espacio.findUnique({ where: { id_mesa: Number(id_mesa) }, include: { zona: true } })
+      if (!mesa) throw { status: 404, error: `Una de las mesas no existe.` }
+      const tomada = await tx.mesa_espacio.updateMany({ where: { id_mesa: Number(id_mesa), estado_ocupacion: 'libre' }, data: { estado_ocupacion: 'reservada' } })
+      if (tomada.count === 0) throw { status: 409, error: `La mesa ${mesa.numero_nombre} ya no está libre. Propón otra.` }
+      const codigo = generarCodigoEntrada(id_cliente)
+      const cantidad_personas = mesa.tipo_elemento === 'mesa' ? Math.max(1, mesa.capacidad_sillas || 1) : 1
+      const precioBase = Number(mesa.precio != null ? mesa.precio : mesa.zona.precio_entrada_base)
+      const ent = await tx.entrada.create({
+        data: {
+          id_usuario: id_cliente, id_zona: mesa.id_zona, id_mesa: Number(id_mesa),
+          qr_acceso: codigo, codigo_ingreso: codigo.slice(-12).toUpperCase(),
+          cantidad_personas, monto_pagado: precioBase, estado_validacion: false, fecha_reserva: new Date(),
+        },
+      })
+      out.push({ id_entrada: ent.id_entrada, id_mesa: Number(id_mesa), id_zona: mesa.id_zona, id_evento: mesa.zona.id_evento })
+    }
+    return out
+  })
+  for (const c of creadas) if (global.io) global.io.emit('mesa_actualizada', { id_zona: c.id_zona, id_mesa: c.id_mesa, estado: 'reservada' })
+  if (creadas[0]) await actualizarLlenoEvento(creadas[0].id_evento)
+  return creadas
+}
+
+// POST /api/reservas/solicitudes-grupo/:id/confirmar — recepción confirma la solicitud
+// TAL CUAL la pidió el cliente. Solo se permite si TODAS sus mesas tentativas están
+// libres; si no, recepción debe usar /proponer.
+router.post('/solicitudes-grupo/:id/confirmar', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const s = await prisma.solicitud_grupo.findUnique({ where: { id_solicitud: Number(req.params.id) } })
+    if (!s || !['pendiente', 'propuesta'].includes(s.estado)) return res.status(404).json({ error: 'Solicitud no disponible.' })
+    const tent = s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : []
+    if (!tent.length) return res.status(400).json({ error: 'La solicitud no tiene mesas. Usa "Proponer".' })
+    const disp = await conDisponibilidad(tent)
+    if (!disp.todas_libres) {
+      const ocupadas = disp.mesas.filter(m => !m.libre).map(m => m.nombre).join(', ')
+      return res.status(409).json({ error: `No puedes confirmar tal cual: ${ocupadas} ya no está(n) libre(s). Envía una propuesta al cliente.`, requiere_propuesta: true })
+    }
+    await crearReservasGrupo(s.id_cliente, tent.map(m => m.id_mesa))
+    await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'confirmada' } })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'confirmada' })
+    res.json({ ok: true, mensaje: 'Reserva confirmada tal como la pidió el cliente.' })
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.error })
+    console.error('Error confirmando solicitud:', e)
+    res.status(500).json({ error: 'No se pudo confirmar' })
+  }
+})
+
+// POST /api/reservas/solicitudes-grupo/:id/proponer — recepción propone un set alterno.
+// Body: { mesas: [{ id_mesa, nombre }] }. NO reserva aún; el cliente debe aceptar.
+router.post('/solicitudes-grupo/:id/proponer', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const s = await prisma.solicitud_grupo.findUnique({ where: { id_solicitud: Number(req.params.id) } })
+    if (!s || !['pendiente', 'propuesta'].includes(s.estado)) return res.status(404).json({ error: 'Solicitud no disponible.' })
+    const mesas = Array.isArray(req.body.mesas) ? req.body.mesas.filter(m => m && m.id_mesa).map(m => ({ id_mesa: Number(m.id_mesa), nombre: String(m.nombre || '').slice(0, 50) })) : []
+    if (!mesas.length) return res.status(400).json({ error: 'Elige al menos una mesa para proponer.' })
+    await prisma.solicitud_grupo.update({
+      where: { id_solicitud: s.id_solicitud },
+      data: { mesas_propuestas: JSON.stringify(mesas), estado: 'propuesta' },
+    })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'propuesta' })
+    res.json({ ok: true, mensaje: 'Propuesta enviada al cliente para que la confirme.' })
+  } catch (e) {
+    console.error('Error proponiendo:', e)
+    res.status(500).json({ error: 'No se pudo enviar la propuesta' })
+  }
+})
+
+// POST /api/reservas/solicitudes-grupo/:id/responder — el CLIENTE acepta/rechaza la
+// propuesta. Body: { acepta: bool }. Al aceptar se crean las reservas propuestas.
+router.post('/solicitudes-grupo/:id/responder', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const s = await prisma.solicitud_grupo.findUnique({ where: { id_solicitud: Number(req.params.id) } })
+    if (!s || s.id_cliente !== req.usuario.id) return res.status(404).json({ error: 'Solicitud no encontrada.' })
+    if (s.estado !== 'propuesta') return res.status(409).json({ error: 'Esta solicitud no tiene una propuesta pendiente.' })
+    if (!req.body.acepta) {
+      await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'rechazada' } })
+      if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, estado: 'rechazada' })
+      return res.json({ ok: true, mensaje: 'Propuesta rechazada. El local puede contactarte con otra opción.' })
+    }
+    const prop = s.mesas_propuestas ? JSON.parse(s.mesas_propuestas) : []
+    if (!prop.length) return res.status(400).json({ error: 'La propuesta no tiene mesas.' })
+    await crearReservasGrupo(s.id_cliente, prop.map(m => m.id_mesa))
+    await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'confirmada' } })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, estado: 'confirmada' })
+    res.json({ ok: true, mensaje: 'Aceptaste la propuesta. Tus mesas quedaron reservadas.' })
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.error })
+    console.error('Error respondiendo propuesta:', e)
+    res.status(500).json({ error: 'No se pudo procesar tu respuesta' })
   }
 })
 

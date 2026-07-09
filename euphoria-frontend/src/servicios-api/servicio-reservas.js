@@ -60,4 +60,20 @@ export const servicioReservas = {
   async misSolicitudesGrupo() {
     return api.get('/reservas/mis-solicitudes-grupo')
   },
+
+  /** El cliente responde a la contrapropuesta de recepción (acepta/rechaza) */
+  async responderPropuestaGrupo(idSolicitud, acepta) {
+    return api.post(`/reservas/solicitudes-grupo/${idSolicitud}/responder`, { acepta })
+  },
+
+  // ---- Recepción: gestión de solicitudes de grupo ----
+  async solicitudesGrupo() {
+    return api.get('/reservas/solicitudes-grupo')
+  },
+  async confirmarSolicitudGrupo(idSolicitud) {
+    return api.post(`/reservas/solicitudes-grupo/${idSolicitud}/confirmar`, {})
+  },
+  async proponerSolicitudGrupo(idSolicitud, mesas) {
+    return api.post(`/reservas/solicitudes-grupo/${idSolicitud}/proponer`, { mesas })
+  },
 }

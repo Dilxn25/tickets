@@ -23,6 +23,46 @@
       </div>
     </template>
 
+    <!-- Ya hay una propuesta del local: aceptar o rechazar -->
+    <template v-else-if="miSolicitud && miSolicitud.estado === 'propuesta'">
+      <div class="sg-propuesta">
+        <div class="sgp-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"></path></svg>
+        </div>
+        <h2>El local te propone estos lugares</h2>
+        <p>No se pudieron dar exactamente los que pediste, pero sí estos. ¿Los confirmas?</p>
+        <div class="sgp-mesas">
+          <span v-for="m in miSolicitud.mesas_propuestas" :key="m.id_mesa" class="sgp-chip">{{ m.nombre }}</span>
+        </div>
+        <div class="sgp-acciones">
+          <button class="sg-btn ghost" :disabled="respondiendo" @click="responder(false)">Rechazar</button>
+          <button class="sg-btn" :disabled="respondiendo" @click="responder(true)">{{ respondiendo ? 'Procesando…' : 'Aceptar y reservar' }}</button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Solicitud enviada, esperando respuesta -->
+    <template v-else-if="miSolicitud && miSolicitud.estado === 'pendiente'">
+      <div class="sg-exito">
+        <div class="sg-exito-ic espera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+        <h2>Solicitud en revisión</h2>
+        <p>Ya enviaste tu solicitud para {{ nombreEvento }}. El local la está revisando y te confirmará pronto.</p>
+        <div class="sgp-mesas">
+          <span v-for="m in miSolicitud.mesas_tentativas" :key="m.id_mesa" class="sgp-chip tent">{{ m.nombre }}</span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Confirmada -->
+    <template v-else-if="miSolicitud && miSolicitud.estado === 'confirmada'">
+      <div class="sg-exito">
+        <div class="sg-exito-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+        <h2>¡Reserva confirmada!</h2>
+        <p>Tus lugares para {{ nombreEvento }} quedaron reservados. Revísalos en Mis reservas.</p>
+        <button class="sg-btn" @click="$router.push('/cliente/mis-reservas')">Ver mis reservas</button>
+      </div>
+    </template>
+
     <template v-else>
       <!-- Mapa -->
       <div v-for="z in zonas" :key="z.id_zona" class="sg-zona">
@@ -90,6 +130,29 @@ const motivo = ref('')
 const enviando = ref(false)
 const enviada = ref(false)
 const nombreEvento = ref('')
+const miSolicitud = ref(null)     // solicitud existente del cliente para este evento
+const respondiendo = ref(false)
+
+async function cargarMiSolicitud() {
+  try {
+    const lista = await servicioReservas.misSolicitudesGrupo()
+    // La solicitud activa más reciente (la lista viene ordenada por fecha desc)
+    miSolicitud.value = (lista || []).find(s => ['pendiente', 'propuesta', 'confirmada'].includes(s.estado)) || null
+  } catch { miSolicitud.value = null }
+}
+
+async function responder(acepta) {
+  if (!miSolicitud.value) return
+  respondiendo.value = true
+  try {
+    const r = await servicioReservas.responderPropuestaGrupo(miSolicitud.value.id_solicitud, acepta)
+    notif.exito(r.mensaje || (acepta ? 'Reserva confirmada' : 'Propuesta rechazada'))
+    await cargarMiSolicitud()
+  } catch (err) {
+    const data = err?.response?.data || err
+    notif.error(data?.error || 'No se pudo procesar tu respuesta')
+  } finally { respondiendo.value = false }
+}
 
 const TAM = { mesa: { w: 9, h: 9 }, silla: { w: 5, h: 5 }, barra: { w: 14, h: 6 } }
 
@@ -144,7 +207,10 @@ async function enviar() {
 
 onMounted(async () => {
   try {
-    const data = await servicioReservas.obtenerMapaEvento(idEvento)
+    const [data] = await Promise.all([
+      servicioReservas.obtenerMapaEvento(idEvento),
+      cargarMiSolicitud(),
+    ])
     zonas.value = data || []
     nombreEvento.value = zonas.value[0]?.evento?.nombre_evento || 'el evento'
   } catch { zonas.value = [] }
@@ -199,4 +265,18 @@ onMounted(async () => {
 .sg-exito-ic svg { width: 36px; height: 36px; }
 .sg-exito h2 { font-size: 1.3rem; font-weight: 800; color: var(--texto-principal); margin-bottom: 8px; }
 .sg-exito p { font-size: 0.9rem; color: var(--texto-secundario); line-height: 1.5; max-width: 40ch; margin: 0 auto 20px; }
+.sg-exito-ic.espera { background: rgba(245,158,11,0.16); color: #FCD34D; }
+
+/* Propuesta del local */
+.sg-propuesta { text-align: center; padding: 2.4rem 1rem; }
+.sgp-ic { width: 68px; height: 68px; border-radius: 50%; background: rgba(99,102,241,0.18); color: #C7D2FE; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.sgp-ic svg { width: 32px; height: 32px; }
+.sg-propuesta h2 { font-size: 1.25rem; font-weight: 800; color: var(--texto-principal); margin-bottom: 8px; }
+.sg-propuesta p { font-size: 0.9rem; color: var(--texto-secundario); line-height: 1.5; max-width: 42ch; margin: 0 auto 18px; }
+.sgp-mesas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 22px; }
+.sgp-chip { padding: 8px 14px; border-radius: 999px; background: var(--gradiente-marca); color: #fff; font-weight: 700; font-size: 0.84rem; }
+.sgp-chip.tent { background: rgba(168,85,247,0.14); color: #E9D5FF; border: 1px solid var(--borde-activo); }
+.sgp-acciones { display: flex; gap: 10px; max-width: 380px; margin: 0 auto; }
+.sgp-acciones .sg-btn { flex: 1; }
+.sg-btn.ghost { background: rgba(255,255,255,0.06); border: 1px solid var(--borde-sutil); color: var(--texto-secundario); }
 </style>
