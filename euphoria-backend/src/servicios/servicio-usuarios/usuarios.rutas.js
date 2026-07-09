@@ -424,11 +424,21 @@ router.get('/recurrentes', async (req, res) => {
         JOIN producto p ON p.id_producto = d.id_producto
         GROUP BY p.id_producto ORDER BY veces DESC LIMIT 1
       `)
+      // Describe el premio activo (pendiente perfil / desc:N / prod:ID)
+      const pp = f.premio_perfil
+      let premio_desc = null
+      if (pp === 'pendiente') premio_desc = 'Premio de perfil'
+      else if (pp && pp.startsWith('desc:')) premio_desc = `${pp.slice(5)}% de descuento`
+      else if (pp && pp.startsWith('prod:')) {
+        const prod = await prisma.producto.findUnique({ where: { id_producto: Number(pp.slice(5)) }, select: { nombre_producto: true } })
+        premio_desc = `Cortesía: ${prod?.nombre_producto || 'producto'}`
+      }
       salida.push({
         id_usuario: Number(f.id_usuario),
         nombre: `${f.nombres} ${f.apellidos || ''}`.trim(),
         es_vip: !!f.es_vip,
-        premio_pendiente: f.premio_perfil === 'pendiente',
+        premio_activo: !!(pp && pp !== 'usado'),
+        premio_desc,
         visitas: Number(f.visitas),
         consumo: Number(f.consumo),
         top_producto: top[0]?.nombre || null,
@@ -453,13 +463,27 @@ router.patch('/:id/vip', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'No se pudo actualizar el VIP' }) }
 })
 
-// ---- POST /api/usuarios/:id/premio — otorga un premio de fidelización al cliente ----
-// Reutiliza el canal de premio (premio_perfil='pendiente' => descuento en su próximo pago).
+// ---- POST /api/usuarios/:id/premio — otorga un premio de fidelización flexible ----
+// Body: { tipo: 'descuento'|'producto', valor_pct?, id_producto? }
+//  - descuento: guarda 'desc:N' (N% hasta 50), se aplica en el próximo pago con billetera
+//  - producto:  guarda 'prod:ID', cortesía de ese producto (vale visible)
 router.post('/:id/premio', async (req, res) => {
   try {
+    const { tipo, valor_pct, id_producto } = req.body
+    let premio
+    if (tipo === 'producto') {
+      const pid = Number(id_producto)
+      if (!pid) return res.status(400).json({ error: 'Elige un producto de cortesía.' })
+      const prod = await prisma.producto.findUnique({ where: { id_producto: pid } })
+      if (!prod) return res.status(404).json({ error: 'Producto no encontrado.' })
+      premio = `prod:${pid}`
+    } else {
+      const pct = Math.min(Math.max(parseInt(valor_pct) || 0, 1), 50)
+      premio = `desc:${pct}`
+    }
     const u = await prisma.usuario.update({
       where: { id_usuario: Number(req.params.id) },
-      data: { premio_perfil: 'pendiente' },
+      data: { premio_perfil: premio },
       select: { id_usuario: true, premio_perfil: true },
     })
     res.json({ ok: true, premio: u.premio_perfil })

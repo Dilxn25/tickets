@@ -290,15 +290,25 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       // tope en Bs) por única vez. % y tope los define el admin en el panel
       // (utilidades/premio-perfil.js). Se marca 'usado' DENTRO de la transacción
       // con un updateMany condicional para que no pueda usarse dos veces en paralelo.
+      // El premio puede ser: 'pendiente' (perfil completo, % y tope de config) o
+      // 'desc:N' (descuento de fidelización de N% que fija el admin). 'prod:ID'
+      // es una cortesía de producto y NO aplica descuento aquí.
       let premioDescuento = 0
+      let premioActual = null
       if (pagaElDueno) {
         const duenoPremio = await prisma.usuario.findUnique({
           where: { id_usuario: billetera.id_usuario },
           select: { premio_perfil: true },
         })
-        if (duenoPremio?.premio_perfil === 'pendiente') {
+        const pp = duenoPremio?.premio_perfil
+        if (pp === 'pendiente') {
           const { pct, max } = await leerConfigPremio()
           premioDescuento = Math.min(Math.round(total_calculado * (pct / 100) * 100) / 100, max)
+          premioActual = 'pendiente'
+        } else if (pp && pp.startsWith('desc:')) {
+          const pct = Math.min(Math.max(parseFloat(pp.slice(5)) || 0, 0), 50)
+          premioDescuento = Math.round(total_calculado * (pct / 100) * 100) / 100
+          premioActual = pp
         }
       }
       const total_cobrar = Math.max(0, Math.round((total_calculado - premioDescuento) * 100) / 100)
@@ -315,9 +325,9 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         // updateMany con filtro saldo_actual >= total evita el doble gasto y el saldo negativo
         // aunque lleguen dos cobros al mismo tiempo.
         saldo_nuevo = await prisma.$transaction(async (tx) => {
-          if (premioDescuento > 0) {
+          if (premioDescuento > 0 && premioActual) {
             const premio = await tx.usuario.updateMany({
-              where: { id_usuario: billetera.id_usuario, premio_perfil: 'pendiente' },
+              where: { id_usuario: billetera.id_usuario, premio_perfil: premioActual },
               data: { premio_perfil: 'usado' },
             })
             // Otro cobro simultáneo ya lo usó: se cobra el total sin descuento
