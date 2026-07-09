@@ -692,6 +692,113 @@ router.get('/pendientes', verificarToken, async (req, res) => {
   }
 })
 
+// ===== Tablero del bartender (Fase K) =====
+// Vista Kanban con las comandas activas en columnas (Pendiente/Preparando/Listo),
+// con evento, mesa, cliente, mesero, tiempo de espera y prioridad. Filtros
+// opcionales por evento, mesa o cliente para responder "¿la mesa X dónde va?".
+
+function nombrePersona(u) { return u ? `${u.nombres} ${u.apellidos || ''}`.trim() : null }
+
+// Normaliza una comanda para el tablero/historial del bartender.
+function comandaBartender(c, ahora) {
+  const zonaEv = c.entrada?.zona || c.mesa_espacio?.zona || null
+  const minutos_espera = Math.max(0, Math.floor((ahora - new Date(c.fecha_registro).getTime()) / 60000))
+  const minutos_listo = c.fecha_listo ? Math.max(0, Math.floor((ahora - new Date(c.fecha_listo).getTime()) / 60000)) : null
+  const prioridad_zona = zonaEv?.prioridad || 0
+  return {
+    id_comanda: c.id_comanda,
+    estado: c.estado_despacho,
+    estado_entrega: c.estado_entrega,
+    modo_entrega: c.modo_entrega,
+    origen: c.origen,
+    mesa: c.mesa_espacio?.numero_nombre || null,
+    id_mesa: c.id_mesa,
+    zona: zonaEv?.nombre_zona || null,
+    prioridad_zona,
+    id_evento: zonaEv?.id_evento || null,
+    evento: zonaEv?.evento?.nombre_evento || null,
+    cliente: nombrePersona(c.usuario_comanda_id_clienteTousuario) || 'Sin registro',
+    es_vip_cliente: c.usuario_comanda_id_clienteTousuario?.es_vip || false,
+    mesero: nombrePersona(c.usuario_comanda_id_meseroTousuario),
+    id_mesero: c.id_mesero,
+    fecha_registro: c.fecha_registro,
+    fecha_listo: c.fecha_listo,
+    minutos_espera,
+    minutos_listo,
+    puntaje: prioridad_zona * PESO_PRIORIDAD + minutos_espera,
+    items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad })),
+    total_items: c.detalle_comanda.reduce((a, d) => a + d.cantidad, 0),
+  }
+}
+
+const INCLUDE_BARTENDER = {
+  detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
+  usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true } },
+  usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true, es_vip: true } },
+  mesa_espacio: { include: { zona: { select: { prioridad: true, nombre_zona: true, id_evento: true, evento: { select: { nombre_evento: true } } } } } },
+  entrada: { select: { zona: { select: { prioridad: true, nombre_zona: true, id_evento: true, evento: { select: { nombre_evento: true } } } } } },
+}
+
+// GET /api/comandas/tablero?evento=&mesa=&cliente= — comandas activas para el Kanban
+router.get('/tablero', verificarToken, async (req, res) => {
+  try {
+    const comandas = await prisma.comanda.findMany({
+      where: { estado_despacho: { in: ['Pendiente', 'Preparando', 'Listo'] } },
+      include: INCLUDE_BARTENDER,
+    })
+    const ahora = Date.now()
+    let lista = comandas.map(c => comandaBartender(c, ahora))
+    // Filtros opcionales
+    if (req.query.evento) lista = lista.filter(c => c.id_evento === Number(req.query.evento))
+    if (req.query.mesa) {
+      const q = String(req.query.mesa).toLowerCase()
+      lista = lista.filter(c => (c.mesa || '').toLowerCase().includes(q))
+    }
+    if (req.query.cliente) {
+      const q = String(req.query.cliente).toLowerCase()
+      lista = lista.filter(c => (c.cliente || '').toLowerCase().includes(q))
+    }
+    // Dentro de cada estado, ordena por puntaje (prioridad + espera) desc
+    lista.sort((a, b) => b.puntaje - a.puntaje)
+    // Eventos presentes (para el filtro del front)
+    const eventos = []
+    const vistos = new Set()
+    for (const c of lista) if (c.id_evento && !vistos.has(c.id_evento)) { vistos.add(c.id_evento); eventos.push({ id_evento: c.id_evento, nombre: c.evento }) }
+    res.json({
+      columnas: {
+        Pendiente: lista.filter(c => c.estado === 'Pendiente'),
+        Preparando: lista.filter(c => c.estado === 'Preparando'),
+        Listo: lista.filter(c => c.estado === 'Listo'),
+      },
+      eventos,
+    })
+  } catch (error) {
+    console.error('Error tablero bartender:', error)
+    res.status(500).json({ error: 'Error al obtener el tablero' })
+  }
+})
+
+// GET /api/comandas/historial-bartender?evento=&mesa=&cliente= — entregas del presente al pasado
+router.get('/historial-bartender', verificarToken, async (req, res) => {
+  try {
+    const comandas = await prisma.comanda.findMany({
+      where: { estado_despacho: { in: ['Completada', 'Entregado'] } },
+      include: INCLUDE_BARTENDER,
+      orderBy: { fecha_registro: 'desc' },
+      take: 100,
+    })
+    const ahora = Date.now()
+    let lista = comandas.map(c => comandaBartender(c, ahora))
+    if (req.query.evento) lista = lista.filter(c => c.id_evento === Number(req.query.evento))
+    if (req.query.mesa) { const q = String(req.query.mesa).toLowerCase(); lista = lista.filter(c => (c.mesa || '').toLowerCase().includes(q)) }
+    if (req.query.cliente) { const q = String(req.query.cliente).toLowerCase(); lista = lista.filter(c => (c.cliente || '').toLowerCase().includes(q)) }
+    res.json(lista)
+  } catch (error) {
+    console.error('Error historial bartender:', error)
+    res.status(500).json({ error: 'Error al obtener el historial' })
+  }
+})
+
 // GET /api/comandas/mis-listos (Para el mesero)
 router.get('/mis-listos', verificarToken, async (req, res) => {
   try {
