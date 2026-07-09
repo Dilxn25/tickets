@@ -741,14 +741,15 @@ router.post('/solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
   }
 })
 
-// GET /api/reservas/mis-ingresos — eventos donde el cliente YA ingresó (para el carrito:
-// gate de pago + elegir a qué evento va el pedido si ingresó a varios).
+// GET /api/reservas/mis-ingresos — reservas activas del cliente (para el carrito).
+// Devuelve un item por evento con `ingresado` = si ya validó su entrada (define si
+// puede elegir modo de entrega). El cliente puede PEDIR con solo tener la reserva.
 router.get('/mis-ingresos', soloRoles('Cliente'), async (req, res) => {
   try {
     const entradas = await prisma.entrada.findMany({
-      where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+      where: { id_usuario: req.usuario.id, zona: { evento: { estado: { not: 'terminado' } } } },
       include: {
-        zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, estado: true } } } },
+        zona: { select: { id_evento: true, evento: { select: { nombre_evento: true } } } },
         mesa_espacio: { select: { numero_nombre: true } },
       },
       orderBy: { fecha_reserva: 'desc' },
@@ -756,19 +757,24 @@ router.get('/mis-ingresos', soloRoles('Cliente'), async (req, res) => {
     const porEvento = new Map()
     for (const e of entradas) {
       const idEv = e.zona?.id_evento
-      if (!idEv || porEvento.has(idEv)) continue
-      if (e.zona?.evento?.estado === 'terminado') continue
-      porEvento.set(idEv, {
+      if (!idEv) continue
+      const ingresadaAhora = (e.cantidad_ingresada || 0) > 0
+      const prev = porEvento.get(idEv)
+      const item = {
         id_entrada: e.id_entrada,
         id_evento: idEv,
         nombre_evento: e.zona.evento?.nombre_evento || 'Evento',
         mesa: e.mesa_espacio?.numero_nombre || null,
-      })
+        ingresado: ingresadaAhora,
+      }
+      // Prefiere la entrada YA ingresada (permite elegir entrega)
+      if (!prev) porEvento.set(idEv, item)
+      else if (ingresadaAhora && !prev.ingresado) porEvento.set(idEv, item)
     }
     res.json([...porEvento.values()])
   } catch (e) {
     console.error('Error mis-ingresos:', e)
-    res.status(500).json({ error: 'Error al obtener tus ingresos' })
+    res.status(500).json({ error: 'Error al obtener tus reservas' })
   }
 })
 

@@ -53,6 +53,14 @@
           <span v-if="p.mesa" class="ped-badge">Mesa {{ p.mesa }}</span>
           <span class="ped-total">Bs. {{ p.total.toFixed(2) }}</span>
         </div>
+        <!-- Definir entrega: pedido pagado sin modo, ya que el cliente ingresó -->
+        <div v-if="!p.modo_entrega && esActivo(p)" class="ped-entrega">
+          <span class="pe-lbl">¿Cómo lo recibes?</span>
+          <div class="pe-btns">
+            <button class="pe-btn" :disabled="definiendo === p.id_comanda" @click="definirEntrega(p, 'barra')">Recojo en barra</button>
+            <button class="pe-btn" :disabled="definiendo === p.id_comanda" @click="definirEntrega(p, 'llevar')">Que me lo lleven</button>
+          </div>
+        </div>
         <!-- Devolución -->
         <div v-if="p.puede_reembolso" class="ped-reembolso">
           <span class="pr-info">¿No vas a consumirlo? Te devolvemos <b>Bs {{ p.reembolso_estimado.toFixed(2) }}</b> a tu billetera.</span>
@@ -81,10 +89,24 @@ const tab = ref('activos')
 const eventoFiltro = ref(null)
 const comisionPct = ref(10)
 const reembolsando = ref(null)
+const definiendo = ref(null)
 const avisoRecoger = ref(null)
 let socket = null
 
 const ESTADOS_ACTIVOS = ['Pendiente', 'Preparando', 'Listo']
+function esActivo(p) { return ESTADOS_ACTIVOS.includes(p.estado) && !p.entregado }
+
+async function definirEntrega(p, modo) {
+  definiendo.value = p.id_comanda
+  try {
+    await clienteHttp.post(`/comandas/${p.id_comanda}/modo-entrega`, { modo })
+    p.modo_entrega = modo
+    notif.exito(modo === 'barra' ? 'Recogerás tu pedido en la barra' : 'Te lo llevarán a tu lugar')
+  } catch (err) {
+    const data = err?.response?.data || err
+    notif.error(data?.error || 'No se pudo definir la entrega')
+  } finally { definiendo.value = null }
+}
 
 const activos = computed(() => pedidos.value.filter(p => ESTADOS_ACTIVOS.includes(p.estado) && !p.entregado))
 const historial = computed(() => pedidos.value.filter(p => !activos.value.includes(p)))
@@ -217,6 +239,12 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-badge.metodo { background: rgba(236,72,153,0.14); color: #F9A8D4; border-color: transparent; }
 .ped-total { margin-left: auto; font-family: var(--fuente-titulo); font-weight: 800; color: var(--rosa-acento); font-variant-numeric: tabular-nums; }
 
+.ped-entrega { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); }
+.pe-lbl { font-size: 0.8rem; font-weight: 700; color: var(--texto-principal); }
+.pe-btns { display: flex; gap: 8px; margin-top: 8px; }
+.pe-btn { flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--borde-activo); background: rgba(168,85,247,0.1); color: var(--morado-hover); font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+.pe-btn:hover:not(:disabled) { background: rgba(168,85,247,0.2); color: #fff; }
+.pe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ped-reembolso { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pr-info { font-size: 0.8rem; color: var(--texto-secundario); }
 .pr-info b { color: var(--color-exito); }

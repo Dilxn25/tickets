@@ -221,18 +221,19 @@
               </span>
             </div>
 
-            <!-- Selector de evento: solo si el cliente ingresó a varios -->
-            <div v-if="estaEnEvento && necesitaElegirEvento" class="evento-sel">
+            <!-- Selector de evento: si tiene reserva en varios eventos -->
+            <div v-if="tieneReserva && necesitaElegirEvento" class="evento-sel">
               <span class="entrega-lbl">¿Para qué evento es el pedido?</span>
               <div class="evento-chips">
                 <button v-for="e in misIngresos" :key="e.id_entrada" type="button" class="ev-chip" :class="{ activo: entradaElegida === e.id_entrada }" @click="entradaElegida = e.id_entrada">
                   {{ e.nombre_evento }}<span v-if="e.mesa"> · Mesa {{ e.mesa }}</span>
+                  <span v-if="e.ingresado" class="ev-in">· dentro</span>
                 </button>
               </div>
             </div>
 
-            <!-- Entrega: solo cuando ya ingresó al evento -->
-            <div v-if="estaEnEvento" class="entrega-mini">
+            <!-- Entrega: solo cuando YA ingresó al evento -->
+            <div v-if="tieneReserva && yaIngreso" class="entrega-mini">
               <span class="entrega-lbl">¿Cómo lo quieres?</span>
               <div class="entrega-tabs">
                 <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'barra' }" @click="modoEntrega = 'barra'">Recojo en barra</button>
@@ -240,16 +241,22 @@
               </div>
             </div>
 
-            <!-- Gate: aún no está en el evento -->
-            <div v-if="!cargandoIngresos && !estaEnEvento" class="gate-evento">
+            <!-- Tiene reserva pero aún no ingresó: puede pagar, elige entrega al entrar -->
+            <div v-else-if="tieneReserva && !yaIngreso" class="aviso-ingreso">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <span>Puedes pagar ahora. Cuando ingreses al evento eliges si <b>recoges en barra</b> o <b>te lo llevan</b> a tu lugar.</span>
+            </div>
+
+            <!-- Gate: no tiene reserva en ningún evento -->
+            <div v-if="!cargandoIngresos && !tieneReserva" class="gate-evento">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <b>Primero únete al evento</b>
-              <p>Para pedir desde la app necesitas haber ingresado. Reserva tu lugar y marca tu entrada con recepción; luego podrás pedir y elegir si recoges en barra o te lo llevan.</p>
+              <b>Primero reserva tu lugar</b>
+              <p>Para pedir desde la app necesitas una reserva en un evento. Reserva tu mesa o espacio y luego podrás pedir lo que quieras.</p>
               <RouterLink to="/cliente/eventos" class="gate-btn">Ver eventos y reservar</RouterLink>
             </div>
 
             <div class="botones-mini">
-              <button v-if="estaEnEvento" class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
+              <button v-if="tieneReserva" class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
                 <span class="pago-texto">{{ textoBotonPago }}</span>
                 <span class="cta-icono">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
@@ -329,8 +336,11 @@ const errorPago = ref('')
 const misIngresos = ref([])
 const cargandoIngresos = ref(true)
 const entradaElegida = ref(null)
-const estaEnEvento = computed(() => misIngresos.value.length > 0)
+// El cliente puede PEDIR si tiene reserva; solo elige ENTREGA si ya ingresó.
+const tieneReserva = computed(() => misIngresos.value.length > 0)
 const necesitaElegirEvento = computed(() => misIngresos.value.length > 1)
+const reservaElegida = computed(() => misIngresos.value.find(e => e.id_entrada === entradaElegida.value) || null)
+const yaIngreso = computed(() => !!reservaElegida.value?.ingresado)
 async function cargarIngresos() {
   cargandoIngresos.value = true
   try {
@@ -408,7 +418,7 @@ const saldoInsuficiente = computed(() => {
 })
 
 const puedeComprar = computed(() => {
-  return !cargandoSaldo.value && !errorCargaSaldo.value && !saldoInsuficiente.value && items.value.length > 0 && estaEnEvento.value
+  return !cargandoSaldo.value && !errorCargaSaldo.value && !saldoInsuficiente.value && items.value.length > 0 && tieneReserva.value
 })
 
 const textoBotonPago = computed(() => {
@@ -1282,6 +1292,11 @@ onMounted(async () => {
 .evento-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .ev-chip { padding: 8px 12px; border-radius: 12px; border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta); color: var(--texto-secundario); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
 .ev-chip.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.14); color: var(--texto-principal); }
+.ev-in { color: var(--color-exito); font-weight: 700; }
+.aviso-ingreso { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); }
+.aviso-ingreso svg { flex-shrink: 0; color: #C7D2FE; margin-top: 1px; }
+.aviso-ingreso span { font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.45; }
+.aviso-ingreso b { color: var(--texto-principal); }
 .gate-evento { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 22px 16px; border-radius: 16px; background: rgba(168,85,247,0.06); border: 1px dashed var(--borde-activo); }
 .gate-evento svg { color: var(--morado-hover); margin-bottom: 2px; }
 .gate-evento b { color: var(--texto-principal); font-size: 1rem; }

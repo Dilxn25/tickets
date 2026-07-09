@@ -218,25 +218,25 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     // Vínculo con la reserva (y de ahí mesa + evento).
     let idEntradaVinculada = null
     if (origenComanda === 'app') {
-      // AUTOSERVICIO: el cliente solo puede pedir si YA ingresó al evento (recepción validó su QR).
-      // Si envía id_entrada (eligió a qué evento va el pedido), se valida que sea suya e ingresada.
+      // AUTOSERVICIO: el cliente puede pedir en cuanto tiene una RESERVA del evento
+      // (ingresada o no). Si envía id_entrada (eligió a qué evento va), se valida que sea suya.
       if (req.body.id_entrada) {
         const elegida = await prisma.entrada.findFirst({
-          where: { id_entrada: Number(req.body.id_entrada), id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+          where: { id_entrada: Number(req.body.id_entrada), id_usuario: req.usuario.id },
           select: { id_entrada: true },
         })
         if (elegida) idEntradaVinculada = elegida.id_entrada
       }
       if (!idEntradaVinculada) {
-        const ingresada = await prisma.entrada.findFirst({
-          where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+        const reserva = await prisma.entrada.findFirst({
+          where: { id_usuario: req.usuario.id, zona: { evento: { estado: { not: 'terminado' } } } },
           orderBy: { fecha_reserva: 'desc' },
           select: { id_entrada: true },
         })
-        if (!ingresada) {
-          return res.status(403).json({ error: 'Para pedir desde la app primero debes ingresar al evento (recepción valida tu QR).' })
+        if (!reserva) {
+          return res.status(403).json({ error: 'Primero reserva tu lugar en un evento para poder pedir desde la app.' })
         }
-        idEntradaVinculada = ingresada.id_entrada
+        idEntradaVinculada = reserva.id_entrada
       }
     } else if (id_mesa) {
       // Mesero/caja: si la mesa tiene reserva activa, se liga a ella (walk-in queda null)
@@ -247,10 +247,18 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       })
       idEntradaVinculada = reserva?.id_entrada || null
     }
-    // Modo de entrega (solo aplica al autoservicio del cliente: 'barra' recoge / 'llevar')
-    const modoEntrega = origenComanda === 'app'
-      ? (['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : 'barra')
-      : null
+    // Modo de entrega: SOLO se define si el cliente YA ingresó al evento (recepción
+    // validó su QR). Si aún no ingresó, queda null y lo elige al ingresar.
+    let modoEntrega = null
+    if (origenComanda === 'app' && idEntradaVinculada) {
+      const entVinc = await prisma.entrada.findUnique({
+        where: { id_entrada: idEntradaVinculada },
+        select: { cantidad_ingresada: true },
+      })
+      if ((entVinc?.cantidad_ingresada || 0) > 0) {
+        modoEntrega = ['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : 'barra'
+      }
+    }
 
     // SI EL METODO ES BILLETERA
     if (metodo_pago === 'Billetera') {
@@ -943,6 +951,29 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
   }
 })
 
+// POST /api/comandas/:id/modo-entrega — el cliente define cómo recibir un pedido
+// que pagó antes de ingresar. Solo si ya ingresó al evento del pedido.
+router.post('/:id/modo-entrega', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const modo = ['barra', 'llevar'].includes(req.body.modo) ? req.body.modo : null
+    if (!modo) return res.status(400).json({ error: 'Elige recoger en barra o que te lo lleven.' })
+    const c = await prisma.comanda.findUnique({ where: { id_comanda: id }, select: { id_cliente: true, id_entrada: true, estado_despacho: true } })
+    if (!c || c.id_cliente !== req.usuario.id) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (['Cancelada', 'Reembolsada', 'Completada'].includes(c.estado_despacho)) return res.status(409).json({ error: 'Este pedido ya se cerró.' })
+    // Debe haber ingresado (su entrada vinculada tiene gente dentro)
+    if (c.id_entrada) {
+      const ent = await prisma.entrada.findUnique({ where: { id_entrada: c.id_entrada }, select: { cantidad_ingresada: true } })
+      if ((ent?.cantidad_ingresada || 0) <= 0) return res.status(403).json({ error: 'Podrás elegir la entrega cuando ingreses al evento.' })
+    }
+    await prisma.comanda.update({ where: { id_comanda: id }, data: { modo_entrega: modo } })
+    res.json({ ok: true, modo })
+  } catch (e) {
+    console.error('Error modo-entrega:', e)
+    res.status(500).json({ error: 'No se pudo definir la entrega' })
+  }
+})
+
 // POST /api/comandas/:id/solicitar-reembolso — el cliente pide la devolución de un
 // pedido pagado con billetera que no consumió. Se le devuelve el total menos la
 // comisión del local, se repone el stock y la comanda queda 'Reembolsada'.
@@ -1153,7 +1184,7 @@ router.post('/:id/tomar', verificarToken, async (req, res) => {
 // ===== Auto-liberación al pool (Fase L) =====
 // Un pedido que quedó "Listo" y nadie recoge/lleva en UMBRAL_AUTOPOOL_MIN minutos
 // se manda solo al pool para que cualquier mesero lo lleve (anti-inanición).
-const UMBRAL_AUTOPOOL_MIN = 10
+const UMBRAL_AUTOPOOL_MIN = 7
 
 async function revisarAutoPool() {
   try {
