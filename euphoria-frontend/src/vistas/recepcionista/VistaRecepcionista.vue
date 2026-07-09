@@ -152,14 +152,41 @@
             <p v-if="walkMetodo === 'cortesia'" class="walk-nota">Cortesía = ingreso de invitación, sin cobro (Bs 0).</p>
           </div>
 
+          <!-- Detalle EFECTIVO: monto recibido + cambio (igual que el POS del mesero) -->
+          <div v-if="walkMetodo === 'efectivo' && montoWalk > 0" class="efe-bloque">
+            <div class="efe-display" :class="{ ok: walkSuficiente }">
+              <span class="efe-label">Monto recibido</span>
+              <div class="efe-monto">
+                <span class="efe-moneda">Bs.</span>
+                <input type="text" inputmode="decimal" v-model="walkRecibidoTexto" @input="walkEscribir" placeholder="0.00" class="efe-input" />
+              </div>
+            </div>
+            <div class="efe-chips">
+              <button v-for="b in billetes" :key="b" type="button" class="efe-chip" @click="walkSumarBillete(b)">+{{ b }}</button>
+              <button type="button" class="efe-chip exacto" @click="walkExacto">Exacto</button>
+              <button type="button" class="efe-chip limpiar" @click="walkRecibidoTexto = ''" :disabled="!walkRecibidoTexto">Limpiar</button>
+            </div>
+            <div class="efe-cambio" :class="{ falta: walkFalta, listo: walkSuficiente }">
+              <span>{{ walkFalta ? 'Falta' : 'Cambio a devolver' }}</span>
+              <b>Bs. {{ Math.abs(walkCambio).toFixed(2) }}</b>
+            </div>
+          </div>
+
+          <!-- Detalle QR: comprobante opcional (foto) -->
+          <div v-else-if="walkMetodo === 'qr' && montoWalk > 0" class="efe-bloque">
+            <p class="walk-nota">El cliente paga por QR/transferencia. Puedes adjuntar el comprobante como respaldo.</p>
+            <CapturaCamara modo="foto" texto-guia="Coloca el comprobante dentro del marco" @archivo="walkComprobante = $event" />
+            <p v-if="walkComprobante" class="walk-ok-comp">Comprobante adjuntado.</p>
+          </div>
+
           <!-- Total + registrar -->
           <div class="walk-total">
             <div class="walk-monto">
               <span>Total a cobrar</span>
               <b :class="{ cero: montoWalk === 0 }">Bs {{ montoWalk.toFixed(2) }}</b>
             </div>
-            <button class="btn-primario btn-registrar" :disabled="!puedeWalkIn || registrandoWalk" @click="registrarWalkIn">
-              {{ registrandoWalk ? 'Registrando…' : 'Registrar ingreso' }}
+            <button class="btn-primario btn-registrar" :disabled="!puedeRegistrarWalk || registrandoWalk" @click="registrarWalkIn">
+              {{ registrandoWalk ? 'Registrando…' : (walkMetodo === 'efectivo' && montoWalk > 0 ? 'Cobrar Bs ' + montoWalk.toFixed(2) : 'Registrar ingreso') }}
             </button>
           </div>
 
@@ -328,6 +355,34 @@ const walkEncontrados = ref([])
 const registrandoWalk = ref(false)
 const resultadoWalk = ref(null)
 let debounceWalk = null
+
+// Cobro en efectivo (mismo patrón que el POS del mesero)
+const billetes = [10, 20, 50, 100, 200]
+const walkRecibidoTexto = ref('')
+const walkComprobante = ref(null)
+const walkRecibidoNum = computed(() => {
+  const n = parseFloat(walkRecibidoTexto.value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+})
+const walkCambio = computed(() => walkRecibidoNum.value - montoWalk.value)
+const walkFalta = computed(() => walkCambio.value < 0)
+const walkSuficiente = computed(() => walkRecibidoNum.value > 0 && walkCambio.value >= 0)
+function walkEscribir() {
+  let v = (walkRecibidoTexto.value || '').replace(/[^0-9.]/g, '')
+  const m = v.match(/^\d*\.?\d{0,2}/)
+  walkRecibidoTexto.value = m ? m[0] : v
+}
+function walkSumarBillete(b) {
+  walkRecibidoTexto.value = String(Math.round((walkRecibidoNum.value + b) * 100) / 100)
+}
+function walkExacto() { walkRecibidoTexto.value = montoWalk.value.toFixed(2) }
+
+// Puede registrar: si es efectivo con monto, exige recibido suficiente
+const puedeRegistrarWalk = computed(() => {
+  if (!puedeWalkIn.value) return false
+  if (walkMetodo.value === 'efectivo' && montoWalk.value > 0) return walkSuficiente.value
+  return true
+})
 
 const opcionesZona = computed(() => planos.value.map(z => ({
   value: z.id_zona,
@@ -529,6 +584,7 @@ async function registrarWalkIn() {
       `${r.personas} pers · ${r.mesa ? 'Mesa ' + r.mesa + ' · ' : ''}${r.zona} · ${r.metodo_pago === 'cortesia' ? 'Cortesía' : 'Bs ' + Number(r.monto).toFixed(2)} · aforo ${r.aforo.aforo_actual}/${r.aforo.capacidad}`)
     // Reset campos
     walkMesaId.value = null; walkMesaObj.value = null; walkCantidad.value = 1; walkCliente.value = null
+    walkRecibidoTexto.value = ''; walkComprobante.value = null
     await Promise.all([cargarAforo(), cargarPlanos()])
     // Si entró a una mesa, ofrecer asignar mesero
     if (r.id_mesa && r.mesero_sugerido) {
@@ -708,6 +764,27 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .wm.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.14); color: var(--texto-principal); }
 .wm.cortesia.activo { border-color: #FBBF24; background: rgba(251,191,36,0.14); color: #FCD34D; }
 .walk-nota { font-size: 0.78rem; color: #FCD34D; }
+/* Cobro en efectivo (mismo lenguaje visual que el POS del mesero) */
+.efe-bloque { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--radio-lg); background: var(--fondo-app); border: 1px solid var(--borde-sutil); }
+.efe-display { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: var(--radio-md); background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.efe-display.ok { border-color: rgba(34,197,94,0.5); box-shadow: 0 0 16px rgba(34,197,94,0.12); }
+.efe-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-desactivado); font-weight: 700; }
+.efe-monto { display: flex; align-items: baseline; gap: 8px; }
+.efe-moneda { font-size: 1.1rem; font-weight: 700; color: var(--texto-secundario); }
+.efe-input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--texto-principal); font-family: var(--fuente-titulo); font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.efe-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.efe-chip { flex: 1; min-width: 62px; padding: 9px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta); color: var(--texto-principal); font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.efe-chip:hover:not(:disabled) { border-color: var(--morado-brillante); background: rgba(168,85,247,0.12); }
+.efe-chip.exacto { color: var(--morado-hover); }
+.efe-chip.limpiar { color: var(--texto-secundario); }
+.efe-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.efe-cambio { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: var(--radio-md); background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); }
+.efe-cambio span { font-size: 0.82rem; color: var(--texto-secundario); }
+.efe-cambio b { font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 800; color: var(--color-exito); font-variant-numeric: tabular-nums; }
+.efe-cambio.falta { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+.efe-cambio.falta b { color: var(--color-error); }
+.walk-ok-comp { font-size: 0.8rem; color: var(--color-exito); font-weight: 600; }
+
 .walk-total { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); padding-top: var(--esp-3); border-top: 1px solid var(--borde-sutil); flex-wrap: wrap; }
 .walk-monto { display: flex; flex-direction: column; gap: 2px; }
 .walk-monto span { font-size: 0.74rem; color: var(--texto-secundario); text-transform: uppercase; letter-spacing: 0.06em; }
