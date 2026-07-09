@@ -209,11 +209,11 @@
           </div>
           <span>Carrito</span>
         </div>
-        <div class="acceso-mini hover-elevar" @click="router.push('/cliente/perfil')">
+        <div class="acceso-mini hover-elevar" @click="router.push('/cliente/pedidos')">
           <div class="icono-svg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
           </div>
-          <span>Perfil</span>
+          <span>Mis pedidos</span>
         </div>
       </div>
     </section>

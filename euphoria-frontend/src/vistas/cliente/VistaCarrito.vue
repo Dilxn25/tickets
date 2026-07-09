@@ -193,20 +193,20 @@
               <span :class="saldoInsuficiente ? 'saldo-rojo' : 'saldo-verde'">{{ cargandoSaldo ? '…' : 'Bs. ' + saldo.toFixed(2) }}</span>
             </div>
 
-            <!-- Premio por perfil completo (se descuenta al pagar) -->
-            <div v-if="premioPendiente" class="premio-resumen">
+            <!-- Premio de fidelización (perfil / descuento / cortesía) -->
+            <div v-if="premioActivo" class="premio-resumen">
               <div class="premio-fila">
                 <span class="premio-etiqueta">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-                  Premio perfil completo −{{ premioPct }}%
+                  {{ premioEtiqueta }}
                 </span>
-                <span class="premio-monto">−Bs. {{ descuentoPremio.toFixed(2) }}</span>
+                <span v-if="descuentoPremio > 0" class="premio-monto">−Bs. {{ descuentoPremio.toFixed(2) }}</span>
               </div>
-              <div class="premio-fila premio-total">
+              <div v-if="descuentoPremio > 0" class="premio-fila premio-total">
                 <span>Pagarías</span>
                 <span>Bs. {{ totalConPremio.toFixed(2) }}</span>
               </div>
-              <p class="premio-nota">El descuento se aplica al pagar con tu billetera.</p>
+              <p class="premio-nota">{{ descuentoPremio > 0 ? 'El descuento se aplica al pagar con tu billetera.' : 'El local te dará esta cortesía al atenderte.' }}</p>
             </div>
 
             <div class="total-mini">
@@ -221,7 +221,18 @@
               </span>
             </div>
 
-            <div class="entrega-mini">
+            <!-- Selector de evento: solo si el cliente ingresó a varios -->
+            <div v-if="estaEnEvento && necesitaElegirEvento" class="evento-sel">
+              <span class="entrega-lbl">¿Para qué evento es el pedido?</span>
+              <div class="evento-chips">
+                <button v-for="e in misIngresos" :key="e.id_entrada" type="button" class="ev-chip" :class="{ activo: entradaElegida === e.id_entrada }" @click="entradaElegida = e.id_entrada">
+                  {{ e.nombre_evento }}<span v-if="e.mesa"> · Mesa {{ e.mesa }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Entrega: solo cuando ya ingresó al evento -->
+            <div v-if="estaEnEvento" class="entrega-mini">
               <span class="entrega-lbl">¿Cómo lo quieres?</span>
               <div class="entrega-tabs">
                 <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'barra' }" @click="modoEntrega = 'barra'">Recojo en barra</button>
@@ -229,8 +240,16 @@
               </div>
             </div>
 
+            <!-- Gate: aún no está en el evento -->
+            <div v-if="!cargandoIngresos && !estaEnEvento" class="gate-evento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <b>Primero únete al evento</b>
+              <p>Para pedir desde la app necesitas haber ingresado. Reserva tu lugar y marca tu entrada con recepción; luego podrás pedir y elegir si recoges en barra o te lo llevan.</p>
+              <RouterLink to="/cliente/eventos" class="gate-btn">Ver eventos y reservar</RouterLink>
+            </div>
+
             <div class="botones-mini">
-              <button class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
+              <button v-if="estaEnEvento" class="btn-pago-mini cta-isla" @click="irAPagar" :disabled="!puedeComprar || cargandoPago" :title="getRazonDeshabilitado" type="button">
                 <span class="pago-texto">{{ textoBotonPago }}</span>
                 <span class="cta-icono">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
@@ -267,7 +286,7 @@
           <p>Tu billetera está protegida. Ingresa tu PIN de 4 dígitos para autorizar el pago de Bs. {{ total.toFixed(2) }}.</p>
           <input
             v-model="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
-            class="input-pin-carrito" placeholder="••••" @keyup.enter="pin.length === 4 && irAPagar()" />
+            class="input-pin-carrito" placeholder="••••" @input="pin = pin.replace(/\D/g, '').slice(0, 4)" @keyup.enter="pin.length === 4 && irAPagar()" />
           <p v-if="errorPago" class="pin-error">{{ errorPago }}</p>
           <div class="modal-pin-acciones">
             <button class="btn-pin-cancelar" type="button" @click="cancelarPin">Cancelar</button>
@@ -287,6 +306,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
+import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { storeToRefs } from 'pinia'
 
@@ -304,6 +324,22 @@ const modoEntrega = ref('barra') // barra = recoge / llevar = a su mesa
 const mensajeExito = ref('')
 const errorPago = ref('')
 
+// Gate de pago: el cliente solo puede pedir si YA ingresó a un evento.
+// Si ingresó a varios, elige a cuál va el pedido.
+const misIngresos = ref([])
+const cargandoIngresos = ref(true)
+const entradaElegida = ref(null)
+const estaEnEvento = computed(() => misIngresos.value.length > 0)
+const necesitaElegirEvento = computed(() => misIngresos.value.length > 1)
+async function cargarIngresos() {
+  cargandoIngresos.value = true
+  try {
+    misIngresos.value = await servicioReservas.misIngresos()
+    if (misIngresos.value.length && !entradaElegida.value) entradaElegida.value = misIngresos.value[0].id_entrada
+  } catch { misIngresos.value = [] }
+  finally { cargandoIngresos.value = false }
+}
+
 // Premio por perfil completo: el backend descuenta un % (con tope) al pagar.
 // El % y el tope se leen de la config real (obtenerConfigPremio); si falla,
 // caemos a 10% / Bs 50 para no romper el estimado del resumen.
@@ -311,8 +347,31 @@ const premioAplicado = ref(0)
 const totalCobrado = ref(0)
 const premioPct = ref(10)
 const premioMax = ref(50)
-const premioPendiente = computed(() => tienda.usuario?.premio_perfil === 'pendiente' && items.value.length > 0)
-const descuentoPremio = computed(() => Math.min(subtotal.value * (premioPct.value / 100), premioMax.value))
+// Premio activo del cliente: 'pendiente' (perfil), 'desc:N' (descuento fidelización)
+// o 'prod:ID' (cortesía de producto, no descuenta dinero). El backend aplica lo mismo.
+const premioTipo = computed(() => {
+  const p = tienda.usuario?.premio_perfil
+  if (!p || p === 'usado') return null
+  if (p === 'pendiente') return { tipo: 'perfil' }
+  if (p.startsWith('desc:')) return { tipo: 'desc', pct: Math.min(Math.max(parseFloat(p.slice(5)) || 0, 0), 50) }
+  if (p.startsWith('prod:')) return { tipo: 'prod' }
+  return null
+})
+const premioActivo = computed(() => !!premioTipo.value && items.value.length > 0)
+const premioEtiqueta = computed(() => {
+  const pt = premioTipo.value
+  if (!pt) return ''
+  if (pt.tipo === 'perfil') return `Premio perfil completo −${premioPct.value}%`
+  if (pt.tipo === 'desc') return `Premio de fidelización −${pt.pct}%`
+  return 'Cortesía de fidelización'
+})
+const descuentoPremio = computed(() => {
+  const pt = premioTipo.value
+  if (!pt) return 0
+  if (pt.tipo === 'perfil') return Math.min(subtotal.value * (premioPct.value / 100), premioMax.value)
+  if (pt.tipo === 'desc') return Math.round(subtotal.value * (pt.pct / 100) * 100) / 100
+  return 0 // cortesía de producto: se entrega aparte, no descuenta el total
+})
 const totalConPremio = computed(() => Math.max(total.value - descuentoPremio.value, 0))
 
 // Subtotal y total se manejan en el store directamente
@@ -349,7 +408,7 @@ const saldoInsuficiente = computed(() => {
 })
 
 const puedeComprar = computed(() => {
-  return !cargandoSaldo.value && !errorCargaSaldo.value && !saldoInsuficiente.value && items.value.length > 0
+  return !cargandoSaldo.value && !errorCargaSaldo.value && !saldoInsuficiente.value && items.value.length > 0 && estaEnEvento.value
 })
 
 const textoBotonPago = computed(() => {
@@ -414,6 +473,7 @@ async function irAPagar() {
     }))
     formData.append('productos', JSON.stringify(productosParaBackend))
     formData.append('modo_entrega', modoEntrega.value)
+    if (entradaElegida.value) formData.append('id_entrada', entradaElegida.value)
 
     const resPago = await clienteHttp.post('/comandas/crear', formData)
 
@@ -486,6 +546,8 @@ onMounted(async () => {
   await cargarSaldo()
   // Config del premio (estimado del resumen): no bloquea el saldo ni el pago
   cargarConfigPremio()
+  // Entradas ingresadas (gate + selector de evento)
+  cargarIngresos()
   // Sincronizar los precios del carrito con el catálogo vigente
   // (el backend cobra el precio actual: lo mostrado debe coincidir)
   try {
@@ -1216,6 +1278,16 @@ onMounted(async () => {
 }
 
 /* Premio por perfil completo en el resumen */
+.evento-sel { margin-bottom: 12px; }
+.evento-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ev-chip { padding: 8px 12px; border-radius: 12px; border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta); color: var(--texto-secundario); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.ev-chip.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.14); color: var(--texto-principal); }
+.gate-evento { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 22px 16px; border-radius: 16px; background: rgba(168,85,247,0.06); border: 1px dashed var(--borde-activo); }
+.gate-evento svg { color: var(--morado-hover); margin-bottom: 2px; }
+.gate-evento b { color: var(--texto-principal); font-size: 1rem; }
+.gate-evento p { font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.45; max-width: 40ch; }
+.gate-btn { margin-top: 8px; padding: 11px 20px; border-radius: 12px; background: var(--gradiente-marca); color: #fff; font-weight: 700; font-size: 0.86rem; text-decoration: none; }
+
 .premio-resumen {
   margin: var(--esp-5) 0 0;
   padding: 12px 14px;

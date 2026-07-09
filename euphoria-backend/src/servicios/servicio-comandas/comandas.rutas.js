@@ -219,15 +219,25 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     let idEntradaVinculada = null
     if (origenComanda === 'app') {
       // AUTOSERVICIO: el cliente solo puede pedir si YA ingresó al evento (recepción validó su QR).
-      const ingresada = await prisma.entrada.findFirst({
-        where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
-        orderBy: { fecha_reserva: 'desc' },
-        select: { id_entrada: true },
-      })
-      if (!ingresada) {
-        return res.status(403).json({ error: 'Para pedir desde la app primero debes ingresar al evento (recepción valida tu QR).' })
+      // Si envía id_entrada (eligió a qué evento va el pedido), se valida que sea suya e ingresada.
+      if (req.body.id_entrada) {
+        const elegida = await prisma.entrada.findFirst({
+          where: { id_entrada: Number(req.body.id_entrada), id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+          select: { id_entrada: true },
+        })
+        if (elegida) idEntradaVinculada = elegida.id_entrada
       }
-      idEntradaVinculada = ingresada.id_entrada
+      if (!idEntradaVinculada) {
+        const ingresada = await prisma.entrada.findFirst({
+          where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+          orderBy: { fecha_reserva: 'desc' },
+          select: { id_entrada: true },
+        })
+        if (!ingresada) {
+          return res.status(403).json({ error: 'Para pedir desde la app primero debes ingresar al evento (recepción valida tu QR).' })
+        }
+        idEntradaVinculada = ingresada.id_entrada
+      }
     } else if (id_mesa) {
       // Mesero/caja: si la mesa tiene reserva activa, se liga a ella (walk-in queda null)
       const reserva = await prisma.entrada.findFirst({

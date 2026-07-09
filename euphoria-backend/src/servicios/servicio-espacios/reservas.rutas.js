@@ -741,6 +741,37 @@ router.post('/solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
   }
 })
 
+// GET /api/reservas/mis-ingresos — eventos donde el cliente YA ingresó (para el carrito:
+// gate de pago + elegir a qué evento va el pedido si ingresó a varios).
+router.get('/mis-ingresos', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const entradas = await prisma.entrada.findMany({
+      where: { id_usuario: req.usuario.id, cantidad_ingresada: { gt: 0 } },
+      include: {
+        zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, estado: true } } } },
+        mesa_espacio: { select: { numero_nombre: true } },
+      },
+      orderBy: { fecha_reserva: 'desc' },
+    })
+    const porEvento = new Map()
+    for (const e of entradas) {
+      const idEv = e.zona?.id_evento
+      if (!idEv || porEvento.has(idEv)) continue
+      if (e.zona?.evento?.estado === 'terminado') continue
+      porEvento.set(idEv, {
+        id_entrada: e.id_entrada,
+        id_evento: idEv,
+        nombre_evento: e.zona.evento?.nombre_evento || 'Evento',
+        mesa: e.mesa_espacio?.numero_nombre || null,
+      })
+    }
+    res.json([...porEvento.values()])
+  } catch (e) {
+    console.error('Error mis-ingresos:', e)
+    res.status(500).json({ error: 'Error al obtener tus ingresos' })
+  }
+})
+
 // GET /api/reservas/mis-solicitudes-grupo — el cliente ve el estado de sus solicitudes.
 router.get('/mis-solicitudes-grupo', soloRoles('Cliente'), async (req, res) => {
   try {

@@ -61,6 +61,11 @@ export const servicioReservas = {
     return api.get('/reservas/mis-solicitudes-grupo')
   },
 
+  /** Eventos donde el cliente ya ingresó (gate del carrito + elegir evento del pedido) */
+  async misIngresos() {
+    return api.get('/reservas/mis-ingresos')
+  },
+
   /** El cliente responde a la contrapropuesta de recepción (acepta/rechaza) */
   async responderPropuestaGrupo(idSolicitud, acepta) {
     return api.post(`/reservas/solicitudes-grupo/${idSolicitud}/responder`, { acepta })
