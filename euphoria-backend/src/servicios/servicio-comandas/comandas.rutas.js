@@ -19,6 +19,7 @@ const upload = multer({ storage })
 const Tesseract = require('tesseract.js')
 const { analizarComprobante, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
+const { notificar } = require('../../utilidades/notificaciones')
 
 // Titular de la cuenta receptora, editable en la tabla configuracion
 // (clave 'ocr_titular_destino'; admite varios nombres separados por |).
@@ -1105,6 +1106,14 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
           id_cliente: comanda.id_cliente,        // el cliente escucha su aviso
           modo_entrega: comanda.modo_entrega,    // barra = "pásalo a recoger"
         })
+        if (comanda.id_cliente) {
+          notificar(comanda.id_cliente, {
+            tipo: 'pedido',
+            titulo: 'Tu pedido está listo',
+            mensaje: comanda.modo_entrega === 'barra' ? 'Pásalo a recoger en la barra.' : 'En un momento te lo llevan a tu lugar.',
+            url: '/cliente/pedidos',
+          })
+        }
       } else if (estado === 'Pendiente') {
         global.io.emit('nueva_comanda', { id_comanda: comanda.id_comanda })
       }

@@ -53,6 +53,7 @@ const rutasRecomendaciones = require('./src/servicios/servicio-recomendaciones/r
 const rutasEspacios  = require('./src/servicios/servicio-espacios/espacios.rutas')
 const rutasReservas  = require('./src/servicios/servicio-espacios/reservas.rutas')
 const rutasAforo     = require('./src/servicios/servicio-espacios/aforo.rutas')
+const rutasNotificaciones = require('./src/servicios/servicio-notificaciones/notificaciones.rutas')
 
 // 4. Registro de rutas activas
 app.use('/api/auth',       rutasAuth)
@@ -68,6 +69,7 @@ app.use('/api/recomendaciones', rutasRecomendaciones)
 app.use('/api/espacios',   rutasEspacios)
 app.use('/api/reservas',   rutasReservas)
 app.use('/api/aforo',      rutasAforo)
+app.use('/api/notificaciones', rutasNotificaciones)
 
 // ---- 404 y Error global ----
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))

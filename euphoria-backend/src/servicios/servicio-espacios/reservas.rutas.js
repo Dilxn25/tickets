@@ -11,6 +11,7 @@ const QRCode = require('qrcode')
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { verificarPin } = require('../../utilidades/pin-billetera')
+const { notificar } = require('../../utilidades/notificaciones')
 
 router.use(verificarToken)
 
@@ -669,6 +670,7 @@ router.post('/gestionada', soloRoles('Recepcionista', 'Administrador'), async (r
       global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa, estado: 'reservada' })
     }
     await actualizarLlenoEvento(mesa.zona.id_evento)
+    await notificar(id_cliente, { tipo: 'reserva', titulo: 'El local te asignó una mesa', mensaje: `Mesa ${mesa.numero_nombre} en ${mesa.zona.nombre_zona}. Revísala en Mis reservas.`, url: '/cliente/mis-reservas' })
 
     res.status(201).json({
       mensaje: 'Reserva asignada al cliente',
@@ -918,6 +920,7 @@ router.post('/solicitudes-grupo/:id/confirmar', soloRoles('Recepcionista', 'Admi
     await crearReservasGrupo(s.id_cliente, tent.map(m => m.id_mesa))
     await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'confirmada' } })
     if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'confirmada' })
+    await notificar(s.id_cliente, { tipo: 'reserva', titulo: '¡Reserva de grupo confirmada!', mensaje: 'El local confirmó los lugares que pediste. Revísalos en Mis reservas.', url: '/cliente/mis-reservas' })
     res.json({ ok: true, mensaje: 'Reserva confirmada tal como la pidió el cliente.' })
   } catch (e) {
     if (e.status) return res.status(e.status).json({ error: e.error })
@@ -939,6 +942,7 @@ router.post('/solicitudes-grupo/:id/proponer', soloRoles('Recepcionista', 'Admin
       data: { mesas_propuestas: JSON.stringify(mesas), estado: 'propuesta' },
     })
     if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'propuesta' })
+    await notificar(s.id_cliente, { tipo: 'propuesta', titulo: 'Tienes una propuesta de reserva', mensaje: 'El local te propuso otros lugares. Ábrela para aceptarla o rechazarla.', url: `/cliente/grupo/${s.id_evento}` })
     res.json({ ok: true, mensaje: 'Propuesta enviada al cliente para que la confirme.' })
   } catch (e) {
     console.error('Error proponiendo:', e)

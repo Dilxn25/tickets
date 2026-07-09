@@ -14,6 +14,7 @@
         </div>
       </div>
       <div class="acciones-usuario">
+        <CampanaNotificaciones />
         <button class="btn-reservas-top" @click="irMisReservas" title="Mis reservas" type="button" aria-label="Mis reservas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="5" x2="13" y2="19" stroke-dasharray="2 2"></line></svg>
         </button>
@@ -96,6 +97,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
+import CampanaNotificaciones from '@/componentes/comunes/CampanaNotificaciones.vue'
 
 const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()

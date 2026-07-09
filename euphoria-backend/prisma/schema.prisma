@@ -317,9 +317,26 @@ model usuario {
   historial_precio                    historial_precio[]
   asignacion_mesa                     asignacion_mesa[]
   solicitud_grupo                     solicitud_grupo[]
+  notificacion                        notificacion[]
   rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")
+}
+
+// Centro de notificaciones por usuario (avisos: reserva confirmada, propuesta de
+// grupo, pedido listo, premio, etc.). Persistente para verlas aunque no esté conectado.
+model notificacion {
+  id_notificacion Int      @id @default(autoincrement())
+  id_usuario      Int
+  tipo            String   @db.VarChar(30) // reserva | propuesta | pedido | premio | info
+  titulo          String   @db.VarChar(120)
+  mensaje         String   @db.VarChar(255)
+  url             String?  @db.VarChar(120)
+  leida           Boolean  @default(false)
+  fecha           DateTime @default(now())
+  usuario         usuario  @relation(fields: [id_usuario], references: [id_usuario])
+
+  @@index([id_usuario])
 }
 
 // Solicitudes "no recuerdo nada" (ni contraseña ni pregunta): el cliente deja
