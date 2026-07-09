@@ -58,8 +58,12 @@
           <div v-for="pp in pedidosPool" :key="pp.id_comanda" class="card-listo-full card-pool">
             <div class="clf-header">
               <span class="clf-orden">Orden #{{ pp.id_comanda }}</span>
-              <span class="clf-destino">{{ pp.mesa ? 'Mesa ' + pp.mesa : 'Barra' }}</span>
+              <span class="clf-crono" :class="cronoClase(pp.fecha_listo)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                {{ cronoTexto(pp.fecha_listo) }}
+              </span>
             </div>
+            <div class="clf-subhead"><span class="clf-destino">{{ pp.mesa ? 'Mesa ' + pp.mesa : 'Barra' }}</span></div>
             <div class="clf-cliente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               <span>{{ pp.cliente || 'Sin registro' }}</span>
@@ -86,12 +90,14 @@
           <div v-for="ped in pedidosListos" :key="ped.id_comanda" class="card-listo-full">
             <div class="clf-header">
               <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
-              <span class="clf-destino" v-if="ped.mesa_espacio">
-                Mesa {{ ped.mesa_espacio.numero_nombre }}
+              <span class="clf-crono" :class="cronoClase(ped.fecha_listo)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                {{ cronoTexto(ped.fecha_listo) }}
               </span>
-              <span class="clf-destino vip" v-else>
-                Barra
-              </span>
+            </div>
+            <div class="clf-subhead">
+              <span class="clf-destino" v-if="ped.mesa_espacio">Mesa {{ ped.mesa_espacio.numero_nombre }}</span>
+              <span class="clf-destino vip" v-else>Barra</span>
             </div>
             
             <div class="clf-cliente">
@@ -1659,12 +1665,29 @@ async function entregarPedido(id) {
 
 // ==== REASIGNACIÓN POR TIEMPO (pool de pedidos listos) ====
 const pedidosPool = ref([])
-const ahoraTick = ref(Date.now())     // se refresca cada 20s para recalcular la espera
+const ahoraTick = ref(Date.now())     // se refresca cada 1s para el cronómetro en vivo
 let intervaloTick = null
 const UMBRAL_LISTO_MIN = 3            // min. listo sin recoger antes de sugerir liberarlo
 function minutosListo(ped) {
   if (!ped.fecha_listo) return 0
   return Math.floor((ahoraTick.value - new Date(ped.fecha_listo).getTime()) / 60000)
+}
+// Cronómetro en vivo (mm:ss) desde que el pedido quedó listo
+function segundosDesde(fecha) {
+  if (!fecha) return 0
+  return Math.max(0, Math.floor((ahoraTick.value - new Date(fecha).getTime()) / 1000))
+}
+function cronoTexto(fecha) {
+  const s = segundosDesde(fecha)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+// Color por umbral: 2 min amarillo, 6 min rojo, 10 min rojo intenso (auto-pool)
+function cronoClase(fecha) {
+  const m = Math.floor(segundosDesde(fecha) / 60)
+  if (m >= 10) return 'crono-critico'
+  if (m >= 6) return 'crono-rojo'
+  if (m >= 2) return 'crono-amarillo'
+  return ''
 }
 async function cargarPool() {
   try { pedidosPool.value = await clienteHttp.get('/comandas/pool') }
@@ -1695,8 +1718,8 @@ onMounted(() => {
   cargarPedidosListos()
   cargarMisMesas()
   cargarPool()
-  // Recalcular el tiempo "listo sin recoger" cada 20s
-  intervaloTick = setInterval(() => { ahoraTick.value = Date.now() }, 20000)
+  // Cronómetro en vivo: recalcula la espera cada segundo
+  intervaloTick = setInterval(() => { ahoraTick.value = Date.now() }, 1000)
 
   // Vigilancia del servicio de sugerencias (IA): al entrar y cada 30s
   verificarEstadoIA()
@@ -3127,6 +3150,13 @@ onUnmounted(() => {
 
 .clf-espera { display: flex; align-items: center; gap: 7px; margin: 4px 0 8px; padding: 8px 10px; border-radius: var(--radio-md); font-size: 0.78rem; font-weight: 600; color: #FBBF24; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.25); }
 .clf-espera svg { flex-shrink: 0; }
+/* Cronómetro en vivo del pedido listo (Fase L): 2min amarillo, 6min rojo, 10min crítico */
+.clf-crono { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 0.82rem; padding: 3px 10px; border-radius: 999px; color: var(--texto-secundario); background: rgba(168,85,247,0.12); border: 1px solid var(--borde-sutil); }
+.clf-crono.crono-amarillo { color: #FCD34D; background: rgba(245,158,11,0.16); border-color: rgba(245,158,11,0.4); }
+.clf-crono.crono-rojo { color: #FCA5A5; background: rgba(239,68,68,0.16); border-color: rgba(239,68,68,0.45); }
+.clf-crono.crono-critico { color: #fff; background: rgba(239,68,68,0.85); border-color: #ef4444; animation: cronoPulso 1s ease-in-out infinite; }
+@keyframes cronoPulso { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
+.clf-subhead { margin-bottom: 8px; }
 .btn-liberar { width: 100%; padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.9rem; background: rgba(251,191,36,0.14); color: #FCD34D; border: 1px solid rgba(251,191,36,0.4); transition: background var(--trans-normal); }
 .btn-liberar:hover { background: rgba(251,191,36,0.24); }
 /* Pool de pedidos libres */

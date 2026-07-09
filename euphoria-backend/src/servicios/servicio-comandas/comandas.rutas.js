@@ -1115,4 +1115,35 @@ router.post('/:id/tomar', verificarToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'No se pudo tomar el pedido' }) }
 })
 
+// ===== Auto-liberación al pool (Fase L) =====
+// Un pedido que quedó "Listo" y nadie recoge/lleva en UMBRAL_AUTOPOOL_MIN minutos
+// se manda solo al pool para que cualquier mesero lo lleve (anti-inanición).
+const UMBRAL_AUTOPOOL_MIN = 10
+
+async function revisarAutoPool() {
+  try {
+    const limite = new Date(Date.now() - UMBRAL_AUTOPOOL_MIN * 60 * 1000)
+    const candidatas = await prisma.comanda.findMany({
+      where: {
+        estado_despacho: 'Listo',
+        fecha_listo: { not: null, lte: limite },
+        estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado'] },
+      },
+      select: { id_comanda: true },
+    })
+    for (const c of candidatas) {
+      const r = await prisma.comanda.updateMany({
+        where: { id_comanda: c.id_comanda, estado_entrega: { notIn: ['en_pool', 'reembolsado', 'entregado'] } },
+        data: { estado_entrega: 'en_pool' },
+      })
+      if (r.count > 0 && global.io) global.io.emit('pedido_pool', { id_comanda: c.id_comanda, auto: true })
+    }
+  } catch (e) { console.error('Error en auto-pool:', e.message) }
+}
+
+// Corre cada minuto (no en entorno de test para no dejar timers colgados)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(revisarAutoPool, 60 * 1000)
+}
+
 module.exports = router
