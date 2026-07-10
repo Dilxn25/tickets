@@ -391,76 +391,21 @@
         </div>
 
         <form @submit.prevent="recargarCliente" class="formulario-cajero">
-          <div class="grupo-input buscador-cliente-wrap">
+          <div class="grupo-input">
             <label>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              CI o teléfono del cliente
+              Cliente
             </label>
-            <input
-              v-model="busquedaCliente"
-              type="text"
-              placeholder="Escribe el número..."
-              @input="buscarCliente"
-              autocomplete="off"
-            />
-            <div v-if="resultadosBusqueda.length > 0" class="dropdown-resultados">
-              <div v-for="u in resultadosBusqueda" :key="u.id_usuario" class="resultado-item" @click="seleccionarCliente(u)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <div class="resultado-info">
-                  <span class="resultado-nombre">{{ u.nombres }} {{ u.apellidos }}</span>
-                  <span class="resultado-sub">{{ u.telefono || u.ci_carnet }} &middot; Bs. {{ u.billetera?.saldo_actual ?? '0' }}</span>
-                </div>
-              </div>
-            </div>
+            <!-- Búsqueda de cliente estandarizada -->
+            <BuscadorCliente v-model="clienteSeleccionado" placeholder="CI, teléfono, correo o nombre" />
+            <p v-if="clienteSeleccionado" class="cajero-saldo-cli">Saldo actual: <b>Bs. {{ clienteSeleccionado.billetera?.saldo_actual ?? '0' }}</b></p>
           </div>
 
-          <!-- Escáner QR para identificar cliente en Recargar -->
-          <div v-if="!camaraRecargaActiva" style="margin-bottom:0.5rem;">
-            <button type="button" class="btn-accion-secundario" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:0.65rem;" @click="iniciarCamaraRecarga">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR de billetera
-            </button>
-          </div>
-          <div v-show="camaraRecargaActiva" style="margin-bottom:1rem;">
-            <div class="qr-scanner-wrapper">
-              <div id="reader-recarga"></div>
-              <div class="qr-overlay">
-                <div class="qr-overlay-top"></div>
-                <div class="qr-overlay-middle">
-                  <div class="qr-overlay-side"></div>
-                  <div class="qr-viewfinder" :class="{ 'qr-detected': qrRecargaDetectado }">
-                    <span class="corner tl"></span><span class="corner tr"></span>
-                    <span class="corner bl"></span><span class="corner br"></span>
-                    <div class="scan-line" v-if="!qrRecargaDetectado"></div>
-                  </div>
-                  <div class="qr-overlay-side"></div>
-                </div>
-                <div class="qr-overlay-bottom">
-                  <p class="qr-hint" v-if="!qrRecargaDetectado">Apunta al QR de billetera del cliente</p>
-                  <p class="qr-hint qr-hint-ok" v-else>&#x2713; Cliente identificado</p>
-                </div>
-              </div>
-            </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);box-shadow:none;" @click="detenerCamaraRecarga">Detener Cámara</button>
-          </div>
-
-          <div v-if="clienteSeleccionado" class="cliente-chip">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
-            </svg>
-            <div class="chip-info">
-              <span class="chip-nombre">{{ clienteSeleccionado.nombres }}</span>
-              <span class="chip-sub">Saldo: Bs. {{ clienteSeleccionado.billetera?.saldo_actual ?? '0' }}</span>
-            </div>
-            <button class="chip-cerrar" type="button" @click="clienteSeleccionado = null; busquedaCliente = ''">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+          <!-- Escáner de billetera estandarizado (mismo componente del mesero: pantalla completa) -->
+          <div style="margin-bottom:0.75rem;">
+            <CapturaCamara modo="qr" texto-guia="Coloca el QR de billetera del cliente dentro del marco" @codigo="onQrRecarga" />
           </div>
 
           <div class="grupo-input">
@@ -668,26 +613,10 @@
         </div>
 
         <form @submit.prevent="consultarBilletera" class="formulario-cajero">
-          <div class="grupo-input buscador-cliente-wrap">
-            <label>CI o teléfono del cliente</label>
-            <input
-              v-model="busquedaConsulta"
-              type="text" 
-              placeholder="Ej: 72285280" 
-              @input="buscarClienteConsulta"
-              autocomplete="off"
-            />
-            <div v-if="resultadosConsulta.length > 0" class="dropdown-resultados">
-              <div v-for="u in resultadosConsulta" :key="u.id_usuario" class="resultado-item" @click="seleccionarClienteConsulta(u)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="stroke: var(--morado-brillante)" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <div class="resultado-info">
-                  <span class="resultado-nombre">{{ u.nombres }} {{ u.apellidos }}</span>
-                  <span class="resultado-sub">{{ u.telefono || u.ci_carnet }}</span>
-                </div>
-              </div>
-            </div>
+          <div class="grupo-input">
+            <label>Cliente</label>
+            <!-- Búsqueda estandarizada -->
+            <BuscadorCliente v-model="clienteConsultaSeleccionado" placeholder="CI, teléfono, correo o nombre" />
           </div>
 
           <!-- Separador con opción de escanear QR -->
@@ -697,55 +626,9 @@
             <div style="flex:1; height:1px; background:var(--borde-sutil);"></div>
           </div>
 
-          <!-- Botón escanear QR de billetera -->
-          <div v-if="!camaraCajeroActiva" style="margin-bottom: 0.5rem;">
-            <button type="button" class="btn-accion-secundario" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:0.7rem;" @click="iniciarCamaraCajero">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR de billetera
-            </button>
-          </div>
-
-          <!-- Vista en vivo del escáner -->
-          <div v-show="camaraCajeroActiva" style="margin-bottom: 1rem;">
-            <div class="qr-scanner-wrapper">
-              <div id="reader-cajero"></div>
-              <div class="qr-overlay">
-                <div class="qr-overlay-top"></div>
-                <div class="qr-overlay-middle">
-                  <div class="qr-overlay-side"></div>
-                  <div class="qr-viewfinder" :class="{ 'qr-detected': qrCajeroDetectado }">
-                    <span class="corner tl"></span>
-                    <span class="corner tr"></span>
-                    <span class="corner bl"></span>
-                    <span class="corner br"></span>
-                    <div class="scan-line" v-if="!qrCajeroDetectado"></div>
-                  </div>
-                  <div class="qr-overlay-side"></div>
-                </div>
-                <div class="qr-overlay-bottom">
-                  <p class="qr-hint" v-if="!qrCajeroDetectado">Apunta al QR de billetera del cliente</p>
-                  <p class="qr-hint qr-hint-ok" v-else><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"></polyline></svg> Código detectado</p>
-                </div>
-              </div>
-            </div>
-            <button type="button" class="btn-accion-principal" style="width:100%; margin-top:10px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--color-error); box-shadow:none;" @click="detenerCamaraCajero">
-              Detener Cámara
-            </button>
-          </div>
-
-          <div v-if="clienteConsultaSeleccionado" class="cliente-chip" style="margin-bottom: 1rem;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
-            </svg>
-            <div class="chip-info">
-              <span class="chip-nombre">{{ clienteConsultaSeleccionado.nombres }}</span>
-              <span class="chip-sub">CI/Tel: {{ clienteConsultaSeleccionado.ci_carnet || clienteConsultaSeleccionado.telefono }}</span>
-            </div>
-            <button class="chip-cerrar" type="button" @click="clienteConsultaSeleccionado = null; busquedaConsulta = ''">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+          <!-- Escáner estandarizado (mismo componente del mesero, pantalla completa) -->
+          <div style="margin-bottom: 0.75rem;">
+            <CapturaCamara modo="qr" texto-guia="Coloca el QR de billetera del cliente dentro del marco" @codigo="onQrConsulta" />
           </div>
 
           <button type="submit" class="btn-accion-principal brillo-hover" :disabled="cargandoConsulta || !clienteConsultaSeleccionado">
@@ -1008,6 +891,8 @@ const notif = useNotificaciones()
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
 import { io } from 'socket.io-client'
+import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
+import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
 
 const tabActiva = ref('recargar')
 const modalExito = ref(null)
@@ -1158,6 +1043,18 @@ function seleccionarCliente(u) {
   clienteSeleccionado.value = u
   busquedaCliente.value = `${u.nombres} - ${u.telefono || u.ci_carnet}`
   resultadosBusqueda.value = []
+}
+
+// Escáner de Recargar: identifica al cliente a partir de CUALQUIER QR suyo
+// (token de pago JWT o identificador). El backend lo resuelve.
+async function onQrRecarga(texto) {
+  errorRecargar.value = ''
+  try {
+    const cli = await clienteHttp.post('/cajero/resolver-qr', { texto })
+    clienteSeleccionado.value = cli
+  } catch (e) {
+    errorRecargar.value = e?.error || 'No se pudo identificar el QR.'
+  }
 }
 
 // Archivo comprobante cajero
@@ -1483,6 +1380,16 @@ function seleccionarClienteConsulta(u) {
   resultadosConsulta.value = []
 }
 
+// Escáner de Consultar: resuelve cualquier QR del cliente y lo selecciona.
+async function onQrConsulta(texto) {
+  errorConsulta.value = ''
+  try {
+    clienteConsultaSeleccionado.value = await clienteHttp.post('/cajero/resolver-qr', { texto })
+  } catch (e) {
+    errorConsulta.value = e?.error || 'No se pudo identificar el QR.'
+  }
+}
+
 async function consultarBilletera() {
   if (!clienteConsultaSeleccionado.value) return
   cargandoConsulta.value = true
@@ -1491,7 +1398,7 @@ async function consultarBilletera() {
   qrConsultaBase64.value = null
   
   try {
-    const ident = clienteConsultaSeleccionado.value.telefono || clienteConsultaSeleccionado.value.ci_carnet || clienteConsultaSeleccionado.value.correo
+    const ident = clienteConsultaSeleccionado.value.correo || clienteConsultaSeleccionado.value.ci_carnet || clienteConsultaSeleccionado.value.telefono
     const res = await clienteHttp.get(`/cajero/consultar-billetera/${ident}`)
     resultadoConsulta.value = res
     qrConsultaBase64.value = await QRCode.toDataURL(res.token_qr || res.qr_publico, {
@@ -3227,6 +3134,9 @@ onMounted(() => {
     transform: none;
   }
 }
+.cajero-saldo-cli { margin: 8px 0 0; font-size: 0.85rem; color: var(--texto-secundario); }
+.cajero-saldo-cli b { color: var(--color-exito); }
+
 /* Retiros del cajero */
 .tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--color-error, #ef4444); color: #fff; font-size: 0.68rem; font-weight: 800; }
 .retiros-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }

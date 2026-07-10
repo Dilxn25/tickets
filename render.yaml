@@ -1,0 +1,66 @@
+# ============================================================
+# EUPHORIA — Blueprint de Render (2 servicios desde 1 solo repo)
+#   tickets-node : backend Node + sirve el frontend compilado
+#   tickets-ia   : microservicio de IA (Python / FastAPI)
+# En Render: New -> Blueprint -> conecta este repo. Render lee este archivo
+# y crea los 2 servicios. Las variables con "sync: false" las pegas tú.
+# ============================================================
+services:
+  # ---------- Backend Node (+ frontend) ----------
+  - type: web
+    name: tickets-node
+    runtime: node
+    rootDir: euphoria-backend
+    plan: free
+    buildCommand: >-
+      npm install &&
+      npx prisma generate &&
+      cd ../euphoria-frontend && npm install && npm run build &&
+      rm -rf ../euphoria-backend/dist-frontend &&
+      cp -r dist ../euphoria-backend/dist-frontend &&
+      cd ../euphoria-backend &&
+      npx prisma migrate deploy
+    startCommand: node index.js
+    envVars:
+      - key: ENTORNO
+        value: produccion
+      - key: URL_BASE_DATOS      # Aiven (mysql://usuario:pass@host:puerto/db_euphoria?sslaccept=accept_invalid_certs)
+        sync: false
+      - key: JWT_SECRETO
+        generateValue: true
+      - key: JWT_SECRETO_REFRESH
+        generateValue: true
+      - key: JWT_SECRETO_QR
+        generateValue: true
+      - key: JWT_EXPIRACION
+        value: 15m
+      - key: JWT_EXPIRACION_REFRESH
+        value: 7d
+      - key: URL_SERVICIO_IA     # URL pública del servicio tickets-ia (ej. https://tickets-ia.onrender.com)
+        sync: false
+      - key: ORIGEN_FRONTEND     # URL de este mismo servicio (ej. https://tickets-node.onrender.com)
+        sync: false
+      - key: CLOUDINARY_NOMBRE_NUBE
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CORREO_REMITENTE
+        sync: false
+      - key: CORREO_CLAVE_APP
+        sync: false
+
+  # ---------- Microservicio de IA (Python) ----------
+  - type: web
+    name: tickets-ia
+    runtime: python
+    rootDir: euphoria-ia
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL_IA     # Aiven en formato SQLAlchemy: mysql+pymysql://usuario:pass@host:puerto/db_euphoria
+        sync: false
+      - key: IA_DB_SSL
+        value: "1"

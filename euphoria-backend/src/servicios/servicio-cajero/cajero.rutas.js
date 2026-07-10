@@ -21,10 +21,12 @@ router.get('/buscar-cliente', async (req, res) => {
       where: {
         rol: { nombre_rol: 'Cliente' }, // Solo se buscan clientes (antes el filtro era un no-op)
         OR: [
-          { telefono: { startsWith: q } },
-          { ci_carnet: { startsWith: q } },
+          // 'contains' porque el teléfono se guarda con prefijo +591 (ej. buscar 72285280 encuentra +59172285280)
+          { telefono: { contains: q } },
+          { ci_carnet: { contains: q } },
           { nombres: { contains: q } },
-          { apellidos: { contains: q } }
+          { apellidos: { contains: q } },
+          { correo: { contains: q } }
         ]
       },
       select: {
@@ -292,6 +294,41 @@ router.post('/recargar', async (req, res) => {
   }
 })
 
+
+// POST /api/cajero/resolver-qr — identifica al cliente a partir de CUALQUIER QR
+// suyo: el token de pago (JWT con qr_publico) o un identificador directo.
+router.post('/resolver-qr', async (req, res) => {
+  try {
+    let ident = String(req.body.texto || '').trim()
+    if (!ident) return res.status(400).json({ error: 'El QR está vacío.' })
+    // Si es un token JWT (a.b.c), sacamos el qr_publico de su interior.
+    if (ident.split('.').length === 3) {
+      let payload = null
+      try { payload = jwt.verify(ident, process.env.JWT_SECRETO_QR) }
+      catch { try { payload = jwt.decode(ident) } catch { /* no era JWT */ } }
+      if (payload && payload.qr_publico) ident = payload.qr_publico
+    }
+    const billetera = await prisma.billetera.findFirst({
+      where: { OR: [
+        { qr_publico: ident },
+        { usuario: { correo: ident } },
+        { usuario: { telefono: ident } },
+        { usuario: { ci_carnet: ident } },
+      ] },
+      include: { usuario: true },
+    })
+    if (!billetera) return res.status(404).json({ error: 'No encontramos una billetera con ese QR.' })
+    const u = billetera.usuario
+    res.json({
+      id_usuario: u.id_usuario, nombres: u.nombres, apellidos: u.apellidos,
+      telefono: u.telefono, ci_carnet: u.ci_carnet, correo: u.correo,
+      billetera: { saldo_actual: Number(billetera.saldo_actual) },
+    })
+  } catch (error) {
+    console.error('Error resolviendo QR:', error)
+    res.status(500).json({ error: 'No se pudo leer el QR.' })
+  }
+})
 
 // ================= RETIROS DE BILLETERA (efectivo) =================
 

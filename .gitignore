@@ -65,3 +65,10 @@ Thumbs.db
 # ---- Capturas de verificacion y muestras (temporales / datos personales) ----
 generados/capturas-*/
 generados/muestras-ocr/
+
+# Dump para restaurar en Aiven (datos reales, no subir a git)
+generados/*aiven*.sql
+generados/iniciador-*.sql
+
+# Copia del frontend que genera el build en Render (no versionar)
+euphoria-backend/dist-frontend/

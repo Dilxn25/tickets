@@ -50,9 +50,21 @@ def recomendar(p: Peticion):
 import json as _json
 from sqlalchemy import create_engine, text as _text
 
+import os as _os
+import ssl as _ssl
 with open("config.json", encoding="utf-8") as _f:
     _CFG = _json.load(_f)
-_ENG = create_engine(_CFG["database_url"], pool_pre_ping=True)
+# En produccion (Render + Aiven) la URL de la BD llega por variable de entorno;
+# en local se usa la de config.json.
+_DB_URL = _os.environ.get("DATABASE_URL_IA") or _CFG["database_url"]
+# Aiven exige TLS: si IA_DB_SSL esta activo, conectamos por SSL.
+_connect_args = {}
+if _os.environ.get("IA_DB_SSL", "").lower() in ("1", "true", "yes"):
+    _ctx = _ssl.create_default_context()
+    _ctx.check_hostname = False
+    _ctx.verify_mode = _ssl.CERT_NONE
+    _connect_args = {"ssl": _ctx}
+_ENG = create_engine(_DB_URL, pool_pre_ping=True, connect_args=_connect_args)
 
 
 def _precio_atractivo(p: float) -> float:

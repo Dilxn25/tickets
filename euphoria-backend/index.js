@@ -9,8 +9,11 @@ const helmet  = require('helmet')
 const http    = require('http')
 const { Server } = require('socket.io')
 
+const path   = require('path')
+const fs     = require('fs')
 const app    = express()
-const PUERTO = process.env.PUERTO || 3000
+// Render (y otros hosts) inyectan el puerto en process.env.PORT.
+const PUERTO = process.env.PORT || process.env.PUERTO || 3000
 
 // ---- Seguridad y CORS ----
 // En produccion se restringe a los origenes de ORIGEN_FRONTEND (lista separada por comas).
@@ -25,7 +28,9 @@ const opcionesCors = {
   credentials: true,
 }
 
-app.use(helmet())
+// CSP desactivado: servimos el frontend (SPA) desde este mismo servicio y una
+// CSP estricta bloquearía sus assets/estilos inline.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }))
 app.use(cors(opcionesCors))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
@@ -71,7 +76,25 @@ app.use('/api/reservas',   rutasReservas)
 app.use('/api/aforo',      rutasAforo)
 app.use('/api/notificaciones', rutasNotificaciones)
 
-// ---- 404 y Error global ----
+// ---- Servir el FRONTEND compilado (un solo servicio en producción) ----
+// Si existe euphoria-frontend/dist, se sirve como estático y cualquier ruta
+// que NO sea /api devuelve index.html (para que funcione el router de Vue).
+// El build copia el frontend a ./dist-frontend; en local se usa la carpeta hermana.
+const distLocal = path.join(__dirname, 'dist-frontend')
+const distHermana = path.join(__dirname, '..', 'euphoria-frontend', 'dist')
+const distFrontend = fs.existsSync(distLocal) ? distLocal : distHermana
+if (fs.existsSync(distFrontend)) {
+  app.use(express.static(distFrontend))
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+      return res.sendFile(path.join(distFrontend, 'index.html'))
+    }
+    next()
+  })
+  console.log('Frontend compilado servido desde /euphoria-frontend/dist')
+}
+
+// ---- 404 y Error global (solo aplica a /api que no exista) ----
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 app.use((err, req, res, next) => {
   // Se registra el detalle completo en el servidor, pero NO se filtra al cliente.
