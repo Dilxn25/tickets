@@ -265,6 +265,10 @@ async function cargarAforo() {
 let yaCargado = false
 onActivated(async () => {
   socket = io()
+  // Tiempo real: una reserva/cancelación o cambio del evento recarga el aforo completo.
+  socket.on('recurso_actualizado', (d) => {
+    if (d && (d.tipo === 'reservas' || d.tipo === 'eventos')) cargarAforo()
+  })
   socket.on('aforo_actualizado', (resumen) => {
     if (resumen.id_evento !== idEventoSel.value) return
     const i = zonas.value.findIndex(z => z.id_zona === resumen.id_zona)

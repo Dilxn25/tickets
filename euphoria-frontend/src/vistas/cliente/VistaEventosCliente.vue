@@ -56,6 +56,7 @@
         class="tarjeta-evento hover-elevar anim-subir"
       >
         <div class="portada-contenedor">
+          <img v-if="evento.url_portada" :src="evento.url_portada" class="portada-bg" aria-hidden="true" alt="" loading="lazy" />
           <img
             v-if="evento.url_portada"
             :src="evento.url_portada"
@@ -107,12 +108,24 @@
               </button>
               <button v-if="(evento.zona || []).length" class="btn-reservar cta-isla" :disabled="evento.estado === 'lleno'"
                       :class="{ agotado: evento.estado === 'lleno' }" @click="reservarMesa(evento)">
-                {{ evento.estado === 'lleno' ? 'Agotado' : 'Reservar mesa' }}
+                {{ evento.estado === 'lleno' ? 'Agotado' : 'Reservar mesa o espacio' }}
                 <span v-if="evento.estado !== 'lleno'" class="cta-icono">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="flecha"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                 </span>
               </button>
             </div>
+
+            <!-- Recuadro de grupo grande: a la vista, debajo de reservar -->
+            <button v-if="(evento.zona || []).length && evento.estado !== 'lleno'" class="evento-grupo" @click="solicitarGrupo(evento)">
+              <span class="eg-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </span>
+              <span class="eg-txt">
+                <b>¿Vienen en grupo grande?</b>
+                <i>Máximo 2 mesas por cuenta. Para más espacios, envía tu solicitud y el local (recepción) la confirma.</i>
+              </span>
+              <svg class="eg-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
           </div>
         </div>
       </article>
@@ -124,6 +137,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
+import { useTiempoReal } from '@/composables/useTiempoReal'
 
 const router = useRouter()
 const eventos = ref([])
@@ -155,6 +169,8 @@ async function cargarEventos() {
 onMounted(() => {
   cargarEventos()
 })
+// Tiempo real: si el local publica/edita eventos o cambia el aforo, la cartelera se actualiza sola.
+useTiempoReal(['eventos', 'reservas'], () => cargarEventos())
 
 // Formato de Fechas
 function obtenerDia(fecha) {
@@ -176,6 +192,9 @@ function verDetalles(evento) {
 }
 function reservarMesa(evento) {
   router.push({ path: `/cliente/reservar/${evento.id_evento}`, query: { nombre: evento.nombre_evento } })
+}
+function solicitarGrupo(evento) {
+  router.push(`/cliente/grupo/${evento.id_evento}`)
 }
 </script>
 
@@ -313,14 +332,22 @@ function reservarMesa(evento) {
   overflow: hidden;
 }
 
+.portada-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  filter: blur(26px) brightness(0.4) saturate(1.2);
+  transform: scale(1.15);
+  pointer-events: none;
+}
 .portada-img {
+  position: relative;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top; /* Mostrar la parte superior del poster (usualmente el titulo) */
+  object-fit: contain; /* poster completo, sin recortar */
+  object-position: center;
   transition: transform var(--trans-lenta);
 }
-.tarjeta-evento:hover .portada-img { transform: scale(1.05); }
+.tarjeta-evento:hover .portada-img { transform: scale(1.04); }
 
 .portada-placeholder {
   width: 100%;
@@ -450,6 +477,16 @@ function reservarMesa(evento) {
 }
 .precio-desde b { color: #4ADE80; font-size: 0.98rem; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .icono-ticket { width: 15px; height: 15px; color: #4ADE80; flex-shrink: 0; }
+
+.evento-grupo { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: var(--esp-3); padding: 12px 14px; border-radius: var(--radio-lg); border: 1px dashed var(--borde-activo); background: rgba(168,85,247,0.06); cursor: pointer; text-align: left; transition: background var(--trans-normal), border-color var(--trans-normal); }
+.evento-grupo:hover { background: rgba(168,85,247,0.12); border-color: var(--morado-brillante); }
+.eg-ic { flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #EC4899, #A855F7); }
+.eg-ic svg { width: 20px; height: 20px; }
+.eg-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eg-txt b { color: var(--texto-principal); font-size: 0.9rem; }
+.eg-txt i { color: var(--texto-secundario); font-size: 0.78rem; font-style: normal; line-height: 1.4; }
+.eg-flecha { width: 18px; height: 18px; flex-shrink: 0; color: var(--texto-desactivado); }
+.evento-grupo:hover .eg-flecha { color: var(--morado-hover); }
 
 .botones-evento { display: flex; gap: var(--esp-3); flex-wrap: wrap; align-items: center; }
 .btn-reservar.agotado { opacity: 0.55; cursor: not-allowed; filter: grayscale(0.5); }

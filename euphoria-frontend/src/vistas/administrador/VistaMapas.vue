@@ -60,8 +60,8 @@
     <!-- EDITOR: barra (forma + aforo) -->
     <section v-if="modo === 'editor'" class="barra-mapa superficie">
       <div class="campo-selector">
-        <label>Nombre</label>
-        <div class="plano-nombre-chip">{{ planoActual.nombre || 'Plano nuevo (sin guardar)' }}</div>
+        <label>Nombre del plano</label>
+        <input v-model="planoActual.nombre" class="plano-nombre-input" placeholder="Ej. Piso 1 / Local principal" />
       </div>
       <div class="campo-selector">
         <label>Forma del plano</label>
@@ -72,7 +72,21 @@
           <span class="aforo-titulo">Aforo del plano</span>
           <span class="aforo-valor">{{ totalSillas }} <span class="aforo-sep">personas</span></span>
         </div>
-        <span class="aforo-pie">Suma de la capacidad de mesas y sillas. Los precios se definen al asignar el plano a un evento.</span>
+        <div v-if="desgloseAforo.length" class="aforo-desglose">
+          <div v-for="f in desgloseAforo" :key="f.clave || 'general'" class="aforo-zona">
+            <span class="aforo-zona-nombre">
+              <span class="zona-punto" :style="{ background: f.color || 'transparent', borderColor: f.color || 'var(--borde-sutil)' }"></span>
+              {{ f.nombre }}
+            </span>
+            <span class="aforo-zona-detalle">
+              <span class="aforo-parte" v-if="f.parados">{{ f.parados }} parados</span>
+              <span class="aforo-parte" v-if="f.enMesas">{{ f.enMesas }} en mesas</span>
+              <span class="aforo-parte" v-if="f.enSillas">{{ f.enSillas }} en sillas</span>
+              <b class="aforo-zona-total">= {{ f.total }}</b>
+            </span>
+          </div>
+        </div>
+        <span class="aforo-pie">Cada área es una zona con su propio aforo (parados + mesas/sillas asignadas). Los precios se ajustan al asignar el plano a un evento.</span>
       </div>
     </section>
 
@@ -98,7 +112,7 @@
         </button>
         <button class="btn-herramienta" @click="agregarElemento('pared')">
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="10" width="18" height="5" rx="1"></rect></svg>
-          Pared
+          Estructura
         </button>
         <button class="btn-herramienta" @click="agregarElemento('area')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>
@@ -108,20 +122,34 @@
 
       <!-- Lienzo -->
       <div class="lienzo-contenedor">
-        <div ref="lienzo" class="lienzo" :style="{ aspectRatio: String(planoProporcion) }" @pointerdown="clicVacio">
-          <div
-            v-for="(el, idx) in elementos"
-            :key="el._id"
-            class="elemento"
-            :class="['tipo-' + el.tipo_elemento, { seleccionado: idx === seleccionado }]"
-            :style="estiloElemento(el)"
-            @pointerdown.stop="iniciarArrastre($event, idx)"
-          >
-            <span class="elemento-etiqueta">{{ el.numero_nombre || tipoLabel(el.tipo_elemento) }}</span>
-            <span v-if="el.tipo_elemento === 'mesa'" class="elemento-cap">{{ el.capacidad_sillas }}p</span>
-            <div v-if="idx === seleccionado" class="manija-resize" @pointerdown.stop="iniciarResize($event, idx)" title="Estirar"></div>
+        <div class="zoom-barra">
+          <button class="zoom-btn" @click="ajustarZoom(-0.25)" :disabled="zoom <= 0.5" title="Alejar" aria-label="Alejar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="zoom-nivel" @click="resetZoom" title="Restablecer zoom">{{ Math.round(zoom * 100) }}%</button>
+          <button class="zoom-btn" @click="ajustarZoom(0.25)" :disabled="zoom >= 3" title="Acercar" aria-label="Acercar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div class="lienzo-scroll">
+          <div ref="lienzo" class="lienzo" :style="{ aspectRatio: String(planoProporcion), width: (zoom * 100) + '%' }" @pointerdown="clicVacio">
+            <div
+              v-for="(el, idx) in elementos"
+              :key="el._id"
+              class="elemento"
+              :class="['tipo-' + el.tipo_elemento, { seleccionado: idx === seleccionado }]"
+              :style="estiloElemento(el)"
+              @pointerdown.stop="iniciarArrastre($event, idx)"
+            >
+              <span class="elemento-etiqueta">{{ el.numero_nombre || tipoLabel(el.tipo_elemento) }}</span>
+              <span v-if="el.tipo_elemento === 'mesa'" class="elemento-cap">{{ el.capacidad_sillas }}p</span>
+              <div v-if="idx === seleccionado" class="manija-resize" @pointerdown.stop="iniciarResize($event, idx)" title="Estirar"></div>
+            </div>
+            <!-- Guías de alineación (aparecen al arrastrar) -->
+            <div v-if="guiaX != null" class="guia guia-v" :style="{ left: guiaX + '%' }"></div>
+            <div v-if="guiaY != null" class="guia guia-h" :style="{ top: guiaY + '%' }"></div>
+            <div v-if="elementos.length === 0" class="lienzo-vacio">Arrastra elementos desde la barra "Agregar"</div>
           </div>
-          <div v-if="elementos.length === 0" class="lienzo-vacio">Arrastra elementos desde la barra "Agregar"</div>
         </div>
       </div>
 
@@ -158,23 +186,37 @@
           </label>
 
           <label class="prop-campo" v-if="cuentaAforo(elSel.tipo_elemento)">
-            <span>Capacidad (personas)</span>
+            <span>{{ elSel.tipo_elemento === 'area' ? 'Aforo de parados / pista' : 'Capacidad (personas)' }}</span>
             <input v-model.number="elSel.capacidad_sillas" type="number" min="0" class="campo" />
+            <small v-if="elSel.tipo_elemento === 'area'" class="prop-nota">Personas paradas que caben en esta sección (0 si es solo mesas/sillas).</small>
+          </label>
+
+          <!-- Asignar una mesa o silla a un área (define a qué zona pertenece su aforo/precio) -->
+          <label class="prop-campo" v-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'">
+            <span>Pertenece al área</span>
+            <BaseSelect v-model="elSel.area_ref" :options="opcionesAreas" />
           </label>
 
           <label class="prop-campo" v-if="permitePrecio(elSel.tipo_elemento)">
             <span>Precio (Bs.)</span>
             <input v-model.number="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="Ej. 800 (Lounge), 1500 (VIP)…" />
+            <small v-if="elSel.tipo_elemento === 'area'" class="prop-nota">Precio sugerido de esta zona (podrás ajustarlo al asignar el plano a un evento).</small>
           </label>
 
-          <template v-if="elSel.tipo_elemento === 'mesa'">
+          <template v-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'">
             <label class="prop-check">
               <input type="checkbox" v-model="elSel.es_seleccionable" />
               <span>Reservable por el cliente</span>
             </label>
           </template>
 
-          <button class="btn btn-peligro btn-full" @click="eliminarSeleccionado">Eliminar elemento</button>
+          <div class="prop-acciones">
+            <button class="btn btn-secundario" @click="duplicarSeleccionado">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="margin-right:5px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Duplicar
+            </button>
+            <button class="btn btn-peligro" @click="eliminarSeleccionado">Eliminar</button>
+          </div>
         </template>
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
@@ -210,6 +252,7 @@ import { ref, computed } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
 
 const notif = useNotificaciones()
 
@@ -241,15 +284,67 @@ const formPlantilla = ref({ nombre: '', descripcion: '' })
 const lienzo = ref(null)
 let contadorLocal = 0
 
+// Zoom del lienzo (ayuda a diseñar con precisión) y guías de alineación.
+const zoom = ref(1)
+const guiaX = ref(null) // posición % de la guía vertical (centro X)
+const guiaY = ref(null) // posición % de la guía horizontal (centro Y)
+function ajustarZoom(delta) { zoom.value = Math.min(3, Math.max(0.5, Math.round((zoom.value + delta) * 10) / 10)) }
+function resetZoom() { zoom.value = 1 }
+
 const elSel = computed(() => seleccionado.value != null ? elementos.value[seleccionado.value] : null)
 const totalSillas = computed(() => elementos.value.reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0))
 
+// Opciones de área para asignar una mesa/silla a una sección.
+const opcionesAreas = computed(() => [
+  { value: '', label: 'General (sin área)' },
+  ...elementos.value
+    .filter(e => e.tipo_elemento === 'area')
+    .map(a => ({ value: a.clave, label: a.numero_nombre || 'Área' })),
+])
+
+// Color por zona derivado del precio (la más cara = dorado/VIP). Sin campo en BD.
+function precioTier(el) {
+  if (el.tipo_elemento === 'area') return (el.precio != null && el.precio !== '') ? Number(el.precio) : null
+  if (el.precio != null && el.precio !== '') return Number(el.precio)
+  if (el.area_ref) {
+    const a = elementos.value.find(e => e.tipo_elemento === 'area' && e.clave === el.area_ref)
+    if (a && a.precio != null && a.precio !== '') return Number(a.precio)
+  }
+  return null
+}
+const mapaColores = computed(() => mapaColorPorPrecio(elementos.value.map(precioTier)))
+function colorElemento(el) { return colorPorPrecio(precioTier(el), mapaColores.value) }
+
+// Desglose de aforo por área: cada área = parados (pista) + sillas de las
+// mesas/sillas que le fueron asignadas. Las mesas/sillas sin área caen en "General".
+const sumaCap = (els) => els.reduce((s, e) => s + (Number(e.capacidad_sillas) || 0), 0)
+const desgloseAforo = computed(() => {
+  const areas = elementos.value.filter(e => e.tipo_elemento === 'area')
+  const filas = areas.map(a => {
+    const asignados = elementos.value.filter(e =>
+      (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && e.area_ref === a.clave)
+    const enMesas = sumaCap(asignados.filter(e => e.tipo_elemento === 'mesa'))
+    const enSillas = sumaCap(asignados.filter(e => e.tipo_elemento === 'silla'))
+    const parados = Number(a.capacidad_sillas) || 0
+    return { clave: a.clave, nombre: a.numero_nombre || 'Área', parados, enMesas, enSillas, total: parados + enMesas + enSillas, precio: a.precio, color: colorElemento(a) }
+  })
+  const generales = elementos.value.filter(e =>
+    (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
+  if (generales.length) {
+    const enMesas = sumaCap(generales.filter(e => e.tipo_elemento === 'mesa'))
+    const enSillas = sumaCap(generales.filter(e => e.tipo_elemento === 'silla'))
+    filas.push({ clave: '', nombre: 'General (sin área)', parados: 0, enMesas, enSillas, total: enMesas + enSillas, precio: null })
+  }
+  return filas
+})
+
 function tipoLabel(t) {
-  return ({ mesa: 'Mesa', silla: 'Silla', barra: 'Barra', escenario: 'Escenario', pared: 'Pared', area: 'Área / Zona' })[t] || t
+  return ({ mesa: 'Mesa', silla: 'Silla', barra: 'Barra', escenario: 'Escenario', pared: 'Estructura', area: 'Área / Zona' })[t] || t
 }
 
 // Qué elementos suman aforo (personas). Barra, escenario y pared son decorativos.
-function cuentaAforo(t) { return t === 'mesa' || t === 'silla' }
+// El área aporta su aforo de "parados" (pista); mesas y sillas aportan sus asientos.
+function cuentaAforo(t) { return t === 'mesa' || t === 'silla' || t === 'area' }
 // Qué elementos pueden llevar precio (secciones cotizables): mesas, sillas y áreas.
 function permitePrecio(t) { return t === 'mesa' || t === 'silla' || t === 'area' }
 
@@ -261,7 +356,7 @@ async function cargarPlanos() {
 function resumenPlano(p) {
   const els = p.elementos || []
   const mesas = els.filter(e => e.tipo_elemento === 'mesa').length
-  const aforo = els.filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla')
+  const aforo = els.filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla' || e.tipo_elemento === 'area')
     .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
   return `${mesas} mesa${mesas === 1 ? '' : 's'} · aforo ${aforo}`
 }
@@ -303,6 +398,7 @@ function cambiarProporcion() {
 // Rellenamos con el tamaño por defecto del tipo para que el panel nunca muestre campos vacíos.
 function normalizar(e) {
   const t = TAM_DEFECTO[e.tipo_elemento] || { ancho: 8, alto: 10 }
+  const idLocal = ++contadorLocal
   return {
     ...e,
     ancho: e.ancho != null ? Number(e.ancho) : t.ancho,
@@ -310,7 +406,10 @@ function normalizar(e) {
     rotacion: e.rotacion != null ? Number(e.rotacion) : 0,
     capacidad_sillas: Number(e.capacidad_sillas) || 0,
     forma: e.forma || FORMA_DEFECTO[e.tipo_elemento] || null,
-    _id: ++contadorLocal,
+    // Cada área lleva una clave estable; las mesas/sillas guardan a qué área pertenecen.
+    clave: e.tipo_elemento === 'area' ? (e.clave || 'area_' + idLocal) : undefined,
+    area_ref: e.area_ref || '',
+    _id: idLocal,
   }
 }
 
@@ -365,22 +464,56 @@ function agregarElemento(tipo) {
   const fila = Math.floor(nTipo / porFila) % filas
   const x = 4 + col * pasoX
   const y = 10 + fila * pasoY
+  const idLocal = ++contadorLocal
+  // Comodidad: el nuevo elemento HEREDA la zona/precio/capacidad del último del
+  // mismo tipo (así, tras configurar una silla VIP, las siguientes salen VIP).
+  const ultimo = [...elementos.value].reverse().find(e => e.tipo_elemento === tipo)
   const nuevo = {
-    _id: ++contadorLocal,
+    _id: idLocal,
     tipo_elemento: tipo,
     numero_nombre: tipo === 'mesa'
       ? 'M' + (elementos.value.filter(e => e.tipo_elemento === 'mesa').length + 1)
-      : (tipo === 'area' ? 'Zona' : ''),
+      : (tipo === 'silla' ? 'S' + (elementos.value.filter(e => e.tipo_elemento === 'silla').length + 1)
+      : (tipo === 'area' ? 'Zona' : '')),
     posicion_x: x, posicion_y: y,
     ancho: t.ancho, alto: t.alto, rotacion: 0,
-    capacidad_sillas: CAP_DEFECTO[tipo] || 0,
-    precio: null,
-    es_seleccionable: tipo === 'mesa',
+    capacidad_sillas: (tipo === 'mesa' || tipo === 'silla') && ultimo ? ultimo.capacidad_sillas : (CAP_DEFECTO[tipo] || 0),
+    precio: ultimo ? (ultimo.precio ?? null) : null,
+    es_seleccionable: tipo === 'mesa' || tipo === 'silla',
     forma: FORMA_DEFECTO[tipo] || null,
+    clave: tipo === 'area' ? 'area_' + idLocal : undefined,
+    // Hereda el área (zona) del último del mismo tipo; las áreas no pertenecen a otra área.
+    area_ref: tipo === 'area' ? '' : (ultimo?.area_ref || ''),
   }
   clampPosicion(nuevo)
   elementos.value.push(nuevo)
   seleccionado.value = elementos.value.length - 1
+}
+
+// Duplica el elemento seleccionado con TODA su configuración (zona, precio,
+// capacidad, forma, tamaño). Comodidad para no reconfigurar cada uno.
+function duplicarSeleccionado() {
+  const el = elSel.value
+  if (!el) return
+  const idLocal = ++contadorLocal
+  const copia = {
+    ...el,
+    _id: idLocal,
+    posicion_x: (el.posicion_x || 0) + 4,
+    posicion_y: (el.posicion_y || 0) + 4,
+    numero_nombre: siguienteNombre(el.numero_nombre),
+    // un área duplicada necesita su propia clave (y no se copia a sí misma como area_ref)
+    clave: el.tipo_elemento === 'area' ? 'area_' + idLocal : el.clave,
+  }
+  clampPosicion(copia)
+  elementos.value.push(copia)
+  seleccionado.value = elementos.value.length - 1
+}
+// Si el nombre termina en número, lo incrementa (S1 → S2); si no, lo deja igual.
+function siguienteNombre(nombre) {
+  if (!nombre) return ''
+  const m = String(nombre).match(/^(.*?)(\d+)$/)
+  return m ? m[1] + (parseInt(m[2], 10) + 1) : nombre
 }
 
 // ---- Arrastre (drag) ----
@@ -395,16 +528,29 @@ function iniciarArrastre(e, idx) {
 function moverArrastre(e) {
   if (!arrastrando) return
   const { idx, rect } = arrastrando
-  const x = ((e.clientX - rect.left) / rect.width) * 100
-  const y = ((e.clientY - rect.top) / rect.height) * 100
   const el = elementos.value[idx]
-  // El puntero mueve el centro; luego clampPosicion lo mantiene dentro del plano.
-  el.posicion_x = x - (el.ancho || 6) / 2
-  el.posicion_y = y - (el.alto || 8) / 2
+  // Centro donde apunta el puntero (en % del plano).
+  let cx = ((e.clientX - rect.left) / rect.width) * 100
+  let cy = ((e.clientY - rect.top) / rect.height) * 100
+  // Guías de alineación (tipo Canva): snap al centro del plano (50) y a los
+  // centros de los demás elementos, dentro de un pequeño umbral.
+  const UMBRAL = 1.2
+  const candX = [50], candY = [50]
+  elementos.value.forEach((o, i) => {
+    if (i === idx) return
+    candX.push((o.posicion_x || 0) + (o.ancho || 6) / 2)
+    candY.push((o.posicion_y || 0) + (o.alto || 8) / 2)
+  })
+  guiaX.value = null; guiaY.value = null
+  for (const c of candX) { if (Math.abs(cx - c) <= UMBRAL) { cx = c; guiaX.value = c; break } }
+  for (const c of candY) { if (Math.abs(cy - c) <= UMBRAL) { cy = c; guiaY.value = c; break } }
+  el.posicion_x = cx - (el.ancho || 6) / 2
+  el.posicion_y = cy - (el.alto || 8) / 2
   clampPosicion(el)
 }
 function finArrastre() {
   arrastrando = null
+  guiaX.value = null; guiaY.value = null
   window.removeEventListener('pointermove', moverArrastre)
   window.removeEventListener('pointerup', finArrastre)
 }
@@ -456,6 +602,14 @@ function estiloElemento(el) {
   }
   // La forma (redondo/cuadrado) manda sobre el borde por defecto del tipo.
   if (el.forma) estilo.borderRadius = el.forma === 'redondo' ? '50%' : '8px'
+  // Color por zona (según su precio): tiñe borde + fondo para distinguir niveles.
+  const color = colorElemento(el)
+  if (color) {
+    estilo.borderColor = color
+    estilo.boxShadow = `0 0 0 1px ${color}, 0 0 12px ${color}55`
+    if (el.tipo_elemento !== 'area') estilo.background = color + '33'
+    else estilo.background = color + '1f'
+  }
   return estilo
 }
 
@@ -470,6 +624,9 @@ function elementosParaGuardar() {
     precio: (e.precio === '' || e.precio == null) ? null : Number(e.precio),
     es_seleccionable: e.es_seleccionable,
     forma: e.forma || null,
+    // Modelo de zonas: clave estable del área y a qué área pertenece cada mesa/silla.
+    ...(e.tipo_elemento === 'area' ? { clave: e.clave } : {}),
+    ...(e.area_ref ? { area_ref: e.area_ref } : {}),
   }))
 }
 
@@ -479,6 +636,7 @@ async function guardarPlano() {
   guardando.value = true
   try {
     await clienteHttp.put(`/espacios/plantillas/${planoSelId.value}`, {
+      nombre: (planoActual.value.nombre || '').trim() || undefined,
       proporcion: planoProporcion.value,
       elementos: elementosParaGuardar(),
     })
@@ -613,6 +771,8 @@ cargarPlanos()
 .plano-card-acciones { display: flex; gap: 6px; padding: 10px 14px 14px; flex-wrap: wrap; }
 .plano-card-acciones .btn { flex: 1; min-width: 0; }
 .plano-nombre-chip { padding: 9px 13px; border-radius: var(--radio-md); background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plano-nombre-input { padding: 9px 13px; border-radius: var(--radio-md); background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); font-weight: 600; font-size: 0.9rem; min-width: 180px; transition: border-color .15s ease; }
+.plano-nombre-input:focus { outline: none; border-color: var(--color-primario); }
 
 /* ── Encabezado premium en vidrio ── */
 .mapas-encabezado { padding: clamp(1rem, 2.4vw, 1.4rem) clamp(1.1rem, 2.6vw, 1.6rem); margin-bottom: 1.1rem; }
@@ -644,6 +804,14 @@ select.campo { cursor: pointer; }
 .aforo-relleno.excede { background: var(--color-error); box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
 .aforo-pie { font-size: 0.75rem; color: var(--texto-desactivado); }
 .aforo-pie.excede { color: var(--color-error); font-weight: 700; }
+.aforo-desglose { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px dashed var(--glass-borde); border-bottom: 1px dashed var(--glass-borde); }
+.aforo-zona { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.76rem; }
+.aforo-zona-nombre { display: inline-flex; align-items: center; gap: 6px; color: var(--texto-secundario); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zona-punto { width: 10px; height: 10px; border-radius: 50%; border: 1px solid; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+.aforo-zona-detalle { color: var(--texto-desactivado); font-variant-numeric: tabular-nums; display: inline-flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
+.aforo-parte + .aforo-parte::before { content: '+'; margin-right: 4px; color: var(--texto-desactivado); }
+.aforo-zona-total { color: var(--texto-principal); margin-left: 5px; }
+.prop-nota { display: block; margin-top: 4px; font-size: 0.72rem; line-height: 1.4; color: var(--texto-desactivado); }
 
 /* ── Estado vacío ── */
 .estado-vacio-mapa { text-align: center; color: var(--texto-secundario); padding: clamp(2.75rem, 7vw, 4.5rem) 2rem; background: var(--glass-fondo); border: 1px dashed var(--borde-activo); border-radius: var(--radio-xl); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -663,6 +831,16 @@ select.campo { cursor: pointer; }
 .btn-herramienta:active { transform: translateY(0); }
 
 .lienzo-contenedor { width: 100%; }
+.lienzo-scroll { width: 100%; overflow: auto; border-radius: 14px; max-height: 72vh; }
+.zoom-barra { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-bottom: 8px; }
+.zoom-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--borde-sutil); border-radius: 8px; background: var(--fondo-tarjeta); color: var(--texto-principal); cursor: pointer; transition: border-color .15s ease; }
+.zoom-btn:hover:not(:disabled) { border-color: var(--color-primario); }
+.zoom-btn:disabled { opacity: .4; cursor: not-allowed; }
+.zoom-nivel { min-width: 54px; height: 30px; border: 1px solid var(--borde-sutil); border-radius: 8px; background: var(--fondo-tarjeta); color: var(--texto-principal); font-weight: 700; font-size: .8rem; cursor: pointer; font-variant-numeric: tabular-nums; }
+.zoom-nivel:hover { border-color: var(--color-primario); }
+.guia { position: absolute; background: #EC4899; pointer-events: none; z-index: 20; box-shadow: 0 0 6px #EC4899; }
+.guia-v { top: 0; bottom: 0; width: 1px; transform: translateX(-0.5px); }
+.guia-h { left: 0; right: 0; height: 1px; transform: translateY(-0.5px); }
 .lienzo {
   position: relative;
   width: 100%;
@@ -753,6 +931,8 @@ select.campo { cursor: pointer; }
 .prop-fila .prop-campo { flex: 1; }
 .rango { width: 100%; accent-color: var(--rosa-acento); cursor: pointer; }
 .btn-full { width: 100%; margin-top: 2px; }
+.prop-acciones { display: flex; gap: 8px; margin-top: 4px; }
+.prop-acciones .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; border-radius: var(--radio-md); font-weight: 600; font-size: 0.85rem; cursor: pointer; border: 1px solid transparent; white-space: nowrap; transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, background 0.18s ease; }
 .btn-sm { padding: 7px 13px; font-size: 0.8rem; }

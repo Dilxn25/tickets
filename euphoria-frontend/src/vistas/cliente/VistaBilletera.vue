@@ -76,6 +76,10 @@
                 </svg>
                 Recargar saldo
               </button>
+              <button class="btn-pildora" @click="abrirModalRetiro" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"></path><path d="M5 12l7 7 7-7"></path></svg>
+                Solicitar retiro
+              </button>
             </div>
           </div>
         </div>
@@ -169,6 +173,17 @@
                   <path d="M8 22h8"></path>
                   <path d="M12 11v11"></path>
                   <path d="m19 3-7 8-7-8Z"></path>
+                </svg>
+                <!-- Devolución: flecha que regresa -->
+                <svg v-else-if="mov.tipo === 'reembolso'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 14 4 9 9 4"></polyline>
+                  <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                </svg>
+                <!-- Retiro: flecha saliendo -->
+                <svg v-else-if="mov.tipo === 'retiro'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="21" x2="12" y2="9"></line>
+                  <polyline points="6 15 12 9 18 15"></polyline>
+                  <line x1="4" y1="3" x2="20" y2="3"></line>
                 </svg>
                 <!-- Reserva: ticket -->
                 <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -650,11 +665,61 @@
     </div>
     </Teleport>
 
+    <!-- Modal: Solicitar retiro de billetera -->
+    <Teleport to="body">
+      <div v-if="modalRetiro" class="modal-overlay" @click.self="modalRetiro = false">
+        <div class="modal-recarga">
+          <div class="modal-cabecera">
+            <h2>Solicitar retiro</h2>
+            <button class="btn-cerrar" @click="modalRetiro = false" type="button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          <div class="modal-cuerpo">
+            <p class="retiro-saldo">Saldo disponible: <b>Bs. {{ formatoMoneda(saldo) }}</b></p>
+            <p class="retiro-ayuda">El cajero verá tu solicitud y coordina la entrega de tu dinero en efectivo.</p>
+
+            <label class="retiro-label">¿Cómo prefieres recibirlo?</label>
+            <div class="retiro-metodos">
+              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'persona' }" @click="retiroForm.metodo = 'persona'">Paso por el local</button>
+              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'qr' }" @click="retiroForm.metodo = 'qr'">A mi QR / cuenta</button>
+            </div>
+
+            <template v-if="retiroForm.metodo === 'qr'">
+              <label class="retiro-label">Sube la imagen de tu QR / cuenta</label>
+              <input type="file" accept="image/*" @change="alElegirQR" class="retiro-file" />
+              <img v-if="retiroQrPreview" :src="retiroQrPreview" class="retiro-qr-preview" alt="QR" />
+            </template>
+
+            <label class="retiro-label">Mensaje para el cajero (opcional)</label>
+            <textarea v-model="retiroForm.mensaje" class="retiro-textarea" rows="3" placeholder="Ej. Quisiera retirar mi dinero, ¿me lo pueden abonar a mi QR? / Pasaré por el local."></textarea>
+
+            <p v-if="retiroError" class="retiro-error">{{ retiroError }}</p>
+            <button class="btn-confirmar-recarga" :disabled="enviandoRetiro" @click="enviarSolicitudRetiro" type="button">
+              {{ enviandoRetiro ? 'Enviando...' : 'Enviar solicitud' }}
+            </button>
+
+            <div v-if="misRetiros.length" class="retiro-historial">
+              <p class="retiro-hist-tit">Tus solicitudes</p>
+              <div v-for="r in misRetiros" :key="r.id_solicitud" class="retiro-hist-item">
+                <span class="retiro-hist-estado" :class="'e-' + r.estado">{{ etiquetaRetiro(r.estado) }}</span>
+                <span class="retiro-hist-info">
+                  <template v-if="r.estado === 'pagado'">Retiraste Bs {{ r.monto_retirado }} · recibiste Bs {{ r.monto_entregado }}</template>
+                  <template v-else>Saldo al pedir: Bs {{ r.saldo_al_solicitar }}</template>
+                </span>
+                <button v-if="r.estado === 'pendiente'" class="retiro-cancelar" @click="cancelarRetiro(r)">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
@@ -692,6 +757,53 @@ const mostrarConfirmarPin = ref(false)
 const modalRecarga = ref(false)
 const montoIngresado = ref('')
 const errorMonto = ref('')
+
+// ---- Solicitud de retiro de billetera ----
+const modalRetiro = ref(false)
+const retiroForm = reactive({ metodo: 'persona', mensaje: '' })
+const retiroQrFile = ref(null)
+const retiroQrPreview = ref('')
+const enviandoRetiro = ref(false)
+const retiroError = ref('')
+const misRetiros = ref([])
+function etiquetaRetiro(e) { return ({ pendiente: 'Pendiente', pagado: 'Pagado', rechazado: 'Rechazado' })[e] || e }
+async function abrirModalRetiro() {
+  retiroForm.metodo = 'persona'; retiroForm.mensaje = ''
+  retiroQrFile.value = null; retiroQrPreview.value = ''; retiroError.value = ''
+  modalRetiro.value = true
+  cargarMisRetiros()
+}
+function alElegirQR(e) {
+  const f = e.target.files?.[0]
+  if (!f) return
+  retiroQrFile.value = f
+  retiroQrPreview.value = URL.createObjectURL(f)
+}
+async function cargarMisRetiros() {
+  try { misRetiros.value = await clienteHttp.get('/billetera/retiro/mias') } catch { misRetiros.value = [] }
+}
+async function enviarSolicitudRetiro() {
+  if (retiroForm.metodo === 'qr' && !retiroQrFile.value) { retiroError.value = 'Sube la imagen de tu QR o cuenta.'; return }
+  enviandoRetiro.value = true; retiroError.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('metodo', retiroForm.metodo)
+    if (retiroForm.mensaje) fd.append('mensaje', retiroForm.mensaje)
+    if (retiroQrFile.value) fd.append('imagen', retiroQrFile.value)
+    await clienteHttp.post('/billetera/retiro/solicitar', fd)
+    notif.exito('Solicitud enviada. El cajero te contactará.')
+    retiroForm.mensaje = ''; retiroQrFile.value = null; retiroQrPreview.value = ''
+    cargarMisRetiros()
+  } catch (e) {
+    retiroError.value = e?.error || 'No se pudo enviar la solicitud.'
+  } finally { enviandoRetiro.value = false }
+}
+async function cancelarRetiro(r) {
+  try {
+    await clienteHttp.delete(`/billetera/retiro/${r.id_solicitud}`)
+    cargarMisRetiros()
+  } catch (e) { notif.error(e?.error || 'No se pudo cancelar.') }
+}
 const archivoComprobante = ref(null)
 const procesandoOCR = ref(false)
 const comprobanteProcesado = ref(false)
@@ -3076,4 +3188,25 @@ button.mov-fila:focus-visible {
   .btn-ver-todos:hover,
   .btn-ojo-pin:hover { transform: none; }
 }
+/* Solicitar retiro */
+.retiro-saldo { font-size: 0.95rem; margin: 0 0 4px; }
+.retiro-saldo b { color: var(--color-exito, #22c55e); }
+.retiro-ayuda { font-size: 0.82rem; color: var(--texto-secundario); margin: 0 0 14px; line-height: 1.4; }
+.retiro-label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin: 10px 0 6px; }
+.retiro-metodos { display: flex; gap: 8px; }
+.retiro-metodo { flex: 1; padding: 10px; border: 1px solid var(--borde-sutil); border-radius: 10px; background: transparent; color: var(--texto-principal); font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all .15s; }
+.retiro-metodo.activo { border-color: var(--color-primario); background: color-mix(in srgb, var(--color-primario) 14%, transparent); color: var(--color-primario); }
+.retiro-file { width: 100%; font-size: 0.8rem; color: var(--texto-secundario); }
+.retiro-qr-preview { max-width: 140px; margin-top: 8px; border-radius: 10px; border: 1px solid var(--borde-sutil); }
+.retiro-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--borde-sutil); border-radius: 10px; background: var(--fondo-input, rgba(255,255,255,.04)); color: var(--texto-principal); font-size: 0.85rem; resize: vertical; font-family: inherit; }
+.retiro-error { color: var(--color-error); font-size: 0.8rem; margin: 8px 0 0; }
+.retiro-historial { margin-top: 18px; border-top: 1px solid var(--borde-sutil); padding-top: 12px; }
+.retiro-hist-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin: 0 0 8px; }
+.retiro-hist-item { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; padding: 5px 0; flex-wrap: wrap; }
+.retiro-hist-estado { padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 0.68rem; }
+.retiro-hist-estado.e-pendiente { color: #d4a017; background: rgba(234,179,8,.13); }
+.retiro-hist-estado.e-pagado { color: var(--color-exito); background: rgba(34,197,94,.13); }
+.retiro-hist-estado.e-rechazado { color: var(--color-error); background: rgba(239,68,68,.12); }
+.retiro-hist-info { color: var(--texto-secundario); flex: 1; min-width: 0; }
+.retiro-cancelar { background: none; border: none; color: var(--color-error); font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 </style>

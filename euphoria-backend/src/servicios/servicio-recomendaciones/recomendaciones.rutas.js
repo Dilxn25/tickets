@@ -7,6 +7,7 @@ const router = express.Router()
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { registrarPrecio } = require('../../utilidades/historial-precios')
+const { emitirConfigActualizada } = require('../../utilidades/config-runtime')
 
 // Caché en memoria (60s) para combos/packs: las consultas de co-ocurrencia
 // escanean todo el historial y no cambian minuto a minuto
@@ -19,6 +20,7 @@ const CONFIG_DEFECTO = {
   ia_sugerencias_activas: '1',
   premio_perfil_pct: '10',
   premio_perfil_max: '50',
+  comision_cancelacion_pct: '10',
 }
 
 async function leerConfigIA() {
@@ -33,6 +35,8 @@ async function leerConfigIA() {
     // Premio por perfil completo (módulo cliente), editable por el admin
     premio_pct: Math.min(Math.max(parseFloat(cfg.premio_perfil_pct) || 10, 0), 90),
     premio_max: Math.max(parseFloat(cfg.premio_perfil_max) || 50, 0),
+    // Comisión que retiene el local al devolver dentro de las 24 h
+    comision_cancelacion: Math.min(Math.max(parseFloat(cfg.comision_cancelacion_pct) || 10, 0), 90),
   }
 }
 
@@ -93,7 +97,18 @@ router.put('/config', verificarToken, soloRoles('Administrador'), async (req, re
         create: { clave: 'premio_perfil_max', valor: String(m), descripcion: 'Tope en Bs del descuento del premio por perfil completo' }
       })
     }
-    res.json(await leerConfigIA())
+    // La comisión de devolución se administra desde Ventas (no es IA):
+    // ver PUT /api/comandas/config-comision.
+    const cfg = await leerConfigIA()
+    // Difundir TODA la config a las interfaces abiertas para que reaccionen en vivo
+    // (sugerencias en el mesero, descuento de combos en catálogos, premio en el cliente).
+    emitirConfigActualizada({
+      sugerencias_activas: cfg.sugerencias_activas,
+      descuento_combos: cfg.descuento_combos,
+      premio_pct: cfg.premio_pct,
+      premio_max: cfg.premio_max,
+    })
+    res.json(cfg)
   } catch (error) {
     console.error('Error guardando config IA:', error)
     res.status(500).json({ error: 'Error al guardar la configuración' })

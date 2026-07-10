@@ -21,9 +21,10 @@
         <span>Volver</span>
       </button>
 
-      <!-- Héroe de altura contenida -->
+      <!-- Héroe: poster completo sobre un fondo difuminado (no recorta la imagen) -->
       <header class="hero">
         <div v-if="evento.url_portada && !imgLista" class="hero-skeleton" aria-hidden="true"></div>
+        <img v-if="evento.url_portada" :src="evento.url_portada" class="hero-bg" aria-hidden="true" alt="" />
         <img
           v-if="evento.url_portada"
           :src="evento.url_portada"
@@ -297,18 +298,26 @@ function formatearMonto(monto) {
 .btn-volver:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-volver svg { width: 17px; height: 17px; transition: transform 0.2s var(--ease-suave); }
 
-/* Héroe de altura contenida (nunca más de 40vh) */
+/* Héroe: muestra el poster COMPLETO (contain) sobre un fondo difuminado
+   de la misma imagen, así no se recorta sea vertical, cuadrado u horizontal. */
 .hero {
   position: relative;
   width: 100%;
-  height: clamp(190px, 34vw, 360px);
-  max-height: 40vh;
+  height: clamp(300px, 46vw, 460px);
+  max-height: 60vh;
   border-radius: var(--radio-xl);
   overflow: hidden;
   background: var(--gradiente-sutil);
   border: 1px solid var(--borde-sutil);
   box-shadow: var(--sombra-tarjeta);
   margin-bottom: var(--esp-5);
+}
+.hero-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  filter: blur(26px) brightness(0.45) saturate(1.2);
+  transform: scale(1.15);
+  pointer-events: none;
 }
 
 .hero-skeleton {
@@ -325,8 +334,8 @@ function formatearMonto(monto) {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center 25%;
+  object-fit: contain;
+  object-position: center;
   opacity: 0;
   transition: opacity 0.45s ease;
 }
@@ -581,6 +590,11 @@ function formatearMonto(monto) {
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-xl);
   box-shadow: 0 -6px 24px rgba(10, 6, 26, 0.5), 0 14px 34px rgba(10, 6, 26, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+/* En escritorio va al final del contenido (no sticky): el sticky se montaba
+   encima de "Sobre este evento". La píldora de navegación no la tapa aquí. */
+@media (min-width: 700px) {
+  .barra-reserva { position: static; bottom: auto; z-index: 1; }
 }
 
 .reserva-info {

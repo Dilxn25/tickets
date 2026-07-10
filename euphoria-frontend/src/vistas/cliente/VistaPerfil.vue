@@ -137,8 +137,8 @@
             <div class="grupo-campo">
               <label>Teléfono (opcional)</label>
               <div class="campo-editable" data-campo="telefono" :class="{ 'editando-activo': editando.telefono, 'con-error': !!mostrarError('telefono') }">
-                <span v-if="!editando.telefono">{{ form.telefono || 'No especificado' }}</span>
-                <input v-else v-model="form.telefono" type="tel" class="campo" placeholder="Añade tu número" pattern="[0-9]{8,15}" title="Solo números" autofocus>
+                <span v-if="!editando.telefono">{{ telefonoMostrado || 'No especificado' }}</span>
+                <BaseTelefono v-else v-model="form.telefono" placeholder="Añade tu número" />
                 <button type="button" class="btn-lapiz" :class="{ activo: editando.telefono }" @click="toggleEditar('telefono')" :title="editando.telefono ? 'Listo' : 'Editar'">
                   <svg v-if="!editando.telefono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                   <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="16" height="16"><path d="M20 6L9 17l-5-5"></path></svg>
@@ -146,6 +146,44 @@
               </div>
               <Transition name="err-inline">
                 <p v-if="mostrarError('telefono')" class="error-inline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>{{ errores.telefono }}</p>
+              </Transition>
+            </div>
+
+            <!-- Correo: editable + verificación (paso del perfil completo) -->
+            <div class="grupo-campo">
+              <label>Correo</label>
+              <div class="correo-verif">
+                <template v-if="!editandoCorreo">
+                  <span class="correo-verif-valor">{{ tienda.usuario?.correo }}</span>
+                  <span v-if="correoVerificado" class="verif-badge ok">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" width="13" height="13"><path d="M20 6L9 17l-5-5"/></svg>
+                    Verificado
+                  </span>
+                  <span v-else class="verif-badge pend">Sin verificar</span>
+                  <button type="button" class="verif-link" @click="abrirEdicionCorreo">Cambiar</button>
+                  <button v-if="!correoVerificado" type="button" class="verif-btn" @click="iniciarVerificacion()" :disabled="verifCargando">
+                    {{ verifCargando && verifPaso !== 'codigo' ? 'Enviando…' : 'Verificar' }}
+                  </button>
+                </template>
+                <template v-else>
+                  <input v-model="correoNuevo" type="email" class="campo verif-correo-input" placeholder="tunuevo@correo.com" @keyup.enter="iniciarVerificacion(correoNuevo)" />
+                  <button type="button" class="verif-btn" @click="iniciarVerificacion(correoNuevo)" :disabled="verifCargando || !correoNuevo">
+                    {{ verifCargando ? 'Enviando…' : 'Enviar código' }}
+                  </button>
+                  <button type="button" class="verif-link" @click="cancelarEdicionCorreo">Cancelar</button>
+                </template>
+              </div>
+              <Transition name="err-inline">
+                <div v-if="verifPaso === 'codigo'" class="verif-codigo">
+                  <p class="verif-hint">Te enviamos un código de 6 dígitos a <b>{{ destinoCorreo }}</b>. Ingrésalo aquí:</p>
+                  <div class="verif-codigo-fila">
+                    <input v-model="verifCodigo" @input="verifCodigo = verifCodigo.replace(/\D/g,'').slice(0,6)" @keyup.enter="confirmarVerificacion" inputmode="numeric" maxlength="6" class="campo verif-input" placeholder="000000" />
+                    <button type="button" class="btn-guardar-inline brillo-hover" @click="confirmarVerificacion" :disabled="verifCargando || verifCodigo.length !== 6">
+                      {{ verifCargando ? 'Guardando…' : 'Confirmar' }}
+                    </button>
+                  </div>
+                  <button type="button" class="verif-reenviar" @click="iniciarVerificacion(esCambioCorreo ? correoNuevo : undefined)" :disabled="verifCargando">Reenviar código</button>
+                </div>
               </Transition>
             </div>
           </div>
@@ -360,7 +398,7 @@
                 </div>
                 <div class="grupo-campo">
                   <label>Teléfono</label>
-                  <input v-model="ayudaForm.telefono" type="tel" class="campo" placeholder="Tu número de teléfono" />
+                  <BaseTelefono v-model="ayudaForm.telefono" placeholder="Tu número de teléfono" />
                   <p v-if="faltaIdentidadAyuda" class="nota-minima">Necesitamos al menos tu CI o tu teléfono.</p>
                 </div>
                 <div class="grupo-campo">
@@ -418,6 +456,15 @@ import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import clienteHttp from '@/servicios-api/cliente-http.js' // Usamos el cliente base para peticiones directas
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
+
+// Muestra el teléfono guardado con el prefijo +591 legible (para que se note que sirve para WhatsApp).
+const telefonoMostrado = computed(() => {
+  const d = String(form.value.telefono || '').replace(/\D/g, '')
+  if (!d) return ''
+  const local = d.startsWith('591') ? d.slice(3) : d
+  return '+591 ' + local
+})
 
 const PREGUNTAS_SEGURIDAD = [
   '¿Cuál es el nombre de tu primera mascota?',
@@ -504,7 +551,8 @@ const porcentajePerfil = computed(() => {
     u.ci_carnet,
     u.telefono,
     u.url_foto_perfil || u.foto,
-    u.pregunta_seguridad
+    u.pregunta_seguridad,
+    u.correo_verificado
   ]
   const llenos = items.filter(v => !!v).length
   return Math.round((llenos / items.length) * 100)
@@ -533,8 +581,69 @@ const pendientes = computed(() => {
   if (!u.telefono) lista.push({ clave: 'telefono', texto: 'Añade tu teléfono' })
   if (!(u.url_foto_perfil || u.foto)) lista.push({ clave: 'foto', texto: 'Sube una foto' })
   if (!u.pregunta_seguridad) lista.push({ clave: 'pregunta', texto: 'Configura tu pregunta de seguridad' })
+  if (!u.correo_verificado) lista.push({ clave: 'correo', texto: 'Verifica tu correo' })
   return lista
 })
+const correoVerificado = computed(() => !!tienda.usuario?.correo_verificado)
+
+// Verificación / cambio de correo por código
+const verifPaso = ref('')          // '' | 'codigo'
+const verifCodigo = ref('')
+const verifCargando = ref(false)
+const editandoCorreo = ref(false)  // el correo está en modo edición
+const correoNuevo = ref('')        // correo que se quiere establecer
+const esCambioCorreo = ref(false)  // el código actual es para un correo nuevo
+const destinoCorreo = ref('')      // a qué correo se envió el código (para el aviso)
+
+function abrirEdicionCorreo() {
+  correoNuevo.value = tienda.usuario?.correo || ''
+  editandoCorreo.value = true
+  verifPaso.value = ''
+}
+function cancelarEdicionCorreo() {
+  editandoCorreo.value = false
+  verifPaso.value = ''
+  correoNuevo.value = ''
+}
+
+// nuevo = correo a establecer; si se omite, verifica el correo actual
+async function iniciarVerificacion(nuevo) {
+  verifCargando.value = true
+  try {
+    const cambio = !!nuevo && nuevo.trim().toLowerCase() !== (tienda.usuario?.correo || '').toLowerCase()
+    const r = await clienteHttp.post('/usuarios/verificar-correo/enviar', cambio ? { nuevo_correo: nuevo.trim() } : {})
+    if (r?.ya_verificado) {
+      tienda.actualizarUsuario({ correo_verificado: true })
+      notif.exito('Tu correo ya estaba verificado.')
+      return
+    }
+    esCambioCorreo.value = !!r?.es_cambio
+    destinoCorreo.value = cambio ? nuevo.trim() : (tienda.usuario?.correo || '')
+    verifPaso.value = 'codigo'
+    verifCodigo.value = ''
+    notif.exito(`Te enviamos un código a ${destinoCorreo.value}.`)
+  } catch (e) {
+    notif.error(e?.error || 'No se pudo enviar el código.')
+  } finally { verifCargando.value = false }
+}
+async function confirmarVerificacion() {
+  if (verifCodigo.value.length !== 6) return
+  verifCargando.value = true
+  try {
+    const r = await clienteHttp.post('/usuarios/verificar-correo/confirmar', { codigo: verifCodigo.value })
+    // El backend devuelve el usuario actualizado (correo nuevo si hubo cambio).
+    const u = r?.usuario || {}
+    tienda.actualizarUsuario({ correo_verificado: true, ...(u.correo ? { correo: u.correo } : {}) })
+    verifPaso.value = ''
+    verifCodigo.value = ''
+    editandoCorreo.value = false
+    esCambioCorreo.value = false
+    notif.exito(r?.mensaje || '¡Correo verificado!')
+    celebrarPremio(r)
+  } catch (e) {
+    notif.error(e?.error || 'Código incorrecto.')
+  } finally { verifCargando.value = false }
+}
 
 const refFormDatos = ref(null)
 const refFormSeguridad = ref(null)
@@ -2062,4 +2171,101 @@ async function guardarSeguridad() {
     transition: opacity 0.15s ease;
   }
 }
+
+/* Verificación de correo */
+.correo-verif {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--borde-sutil, rgba(255,255,255,.12));
+  border-radius: 12px;
+  background: var(--fondo-tarjeta-alt, rgba(255,255,255,.03));
+}
+.correo-verif-valor {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--texto-principal);
+}
+.verif-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.verif-badge.ok {
+  color: var(--color-exito, #22c55e);
+  background: rgba(34, 197, 94, .13);
+  border: 1px solid rgba(34, 197, 94, .32);
+}
+.verif-badge.pend {
+  color: #d4a017;
+  background: rgba(234, 179, 8, .12);
+  border: 1px solid rgba(234, 179, 8, .32);
+}
+.verif-link {
+  background: none;
+  border: none;
+  color: var(--color-primario, #a855f7);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+.verif-link:hover { text-decoration: underline; }
+.verif-correo-input {
+  flex: 1;
+  min-width: 140px;
+}
+.verif-btn {
+  padding: 7px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--gradiente-marca, linear-gradient(135deg,#8b5cf6,#ec4899));
+  color: #fff;
+  font-weight: 700;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: filter .15s ease, transform .1s ease;
+}
+.verif-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.verif-btn:active:not(:disabled) { transform: scale(.96); }
+.verif-btn:disabled { opacity: .6; cursor: wait; }
+.verif-codigo {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(139, 92, 246, .08);
+  border: 1px dashed rgba(139, 92, 246, .35);
+}
+.verif-hint { margin: 0 0 10px; font-size: .8rem; color: var(--texto-secundario); line-height: 1.45; }
+.verif-codigo-fila { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.verif-input {
+  flex: 1;
+  min-width: 120px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.verif-reenviar {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: var(--color-primario, #a855f7);
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.verif-reenviar:disabled { opacity: .5; cursor: wait; }
 </style>

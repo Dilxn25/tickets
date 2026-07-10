@@ -12,6 +12,7 @@ const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { verificarPin } = require('../../utilidades/pin-billetera')
 const { notificar } = require('../../utilidades/notificaciones')
+const { emitirRecurso } = require('../../utilidades/config-runtime')
 
 router.use(verificarToken)
 
@@ -35,6 +36,9 @@ async function actualizarLlenoEvento(id_evento) {
     } else if (reservado < capacidad && evento.estado === 'lleno') {
       await prisma.evento.update({ where: { id_evento }, data: { estado: 'promocion' } })
     }
+    // Tiempo real: la disponibilidad/aforo del evento cambió (reserva o cancelación).
+    emitirRecurso('reservas', { id_evento })
+    emitirRecurso('eventos', { id: id_evento })
   } catch (e) { console.error('Error actualizando estado Lleno:', e.message) }
 }
 
@@ -212,12 +216,20 @@ router.get('/eventos/:idEvento/zonas', async (req, res) => {
         _count: { select: { entrada: true } }, // entradas vendidas (para zonas generales/de pie)
       },
     })
+    // Entradas DE PIE (sin mesa asignada) vendidas por zona, para la pista.
+    const piePorZona = await prisma.entrada.groupBy({
+      by: ['id_zona'],
+      where: { id_zona: { in: zonas.map(z => z.id_zona) }, id_mesa: null },
+      _count: { _all: true },
+    })
+    const mapaPie = Object.fromEntries(piePorZona.map(p => [p.id_zona, p._count._all]))
     // Solo exponemos lo necesario para dibujar y decidir; no filtramos elementos
     // decorativos (pared/barra/escenario) porque el cliente los necesita para ubicarse.
     // Para zonas generales (campo/de pie) agregamos cuántas entradas quedan.
     const salida = zonas.map(z => ({
       ...z,
       vendidas: z._count?.entrada || 0,
+      vendidas_pie: mapaPie[z.id_zona] || 0,
       disponibles_general: z.es_general ? Math.max(0, z.capacidad_maxima - (z._count?.entrada || 0)) : null,
     }))
     res.json(salida)
@@ -484,6 +496,85 @@ router.post('/campo', async (req, res) => {
     })
   } catch (error) {
     console.error('Error comprando entrada de pie:', error)
+    res.status(500).json({ error: 'Error al procesar la entrada de pie' })
+  }
+})
+
+// POST /api/reservas/pie — comprar una entrada DE PIE en una zona mixta, tocando
+// el "área/pista" del mapa. Body: { id_mesa (elemento área), pin? }.
+router.post('/pie', async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const id_mesa = Number(req.body.id_mesa)
+    const { pin } = req.body
+    if (!id_mesa) return res.status(400).json({ error: 'Falta el área.' })
+
+    const area = await prisma.mesa_espacio.findUnique({ where: { id_mesa }, include: { zona: { include: { evento: true } } } })
+    if (!area || area.tipo_elemento !== 'area') return res.status(400).json({ error: 'Esa parte no vende entradas de pie.' })
+    const zona = area.zona
+    if (zona?.evento?.estado === 'terminado') return res.status(400).json({ error: 'El evento ya finalizó.' })
+
+    const limite = await validarLimiteEspacios(id_usuario, zona.id_evento)
+    if (limite) return res.status(limite.status).json(limite.body)
+
+    // El aforo de la zona incluye los parados; contamos todas las entradas contra él.
+    const vendidas = await prisma.entrada.count({ where: { id_zona: zona.id_zona } })
+    if (vendidas >= zona.capacidad_maxima) return res.status(409).json({ error: 'Aforo completo en esta zona.' })
+
+    const precio = Number(area.precio != null ? area.precio : zona.precio_entrada_base)
+    if (!(precio >= 0)) return res.status(400).json({ error: 'Esta zona no tiene un precio válido.' })
+
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
+    if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+    if (billetera.pin_transaccional) {
+      if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
+      const pinValido = await verificarPin(pin, billetera.pin_transaccional)
+      if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
+    }
+    if (Number(billetera.saldo_actual) < precio) return res.status(400).json({ error: 'Saldo insuficiente para esta entrada.' })
+
+    const codigo = generarCodigoEntrada(id_usuario)
+    let entradaCreada
+    try {
+      entradaCreada = await prisma.$transaction(async (tx) => {
+        if (precio > 0) {
+          const desc = await tx.billetera.updateMany({
+            where: { id_billetera: billetera.id_billetera, saldo_actual: { gte: precio } },
+            data: { saldo_actual: { decrement: precio }, ultima_actualizacion: new Date() },
+          })
+          if (desc.count === 0) throw new Error('SALDO_INSUFICIENTE')
+        }
+        const cupo = await tx.$executeRaw`
+          INSERT INTO entrada (id_usuario, id_zona, qr_acceso, codigo_ingreso, cantidad_personas, cantidad_ingresada, monto_pagado, estado_validacion, fecha_reserva)
+          SELECT ${id_usuario}, ${zona.id_zona}, ${codigo}, ${codigo.slice(-12).toUpperCase()}, 1, 0, ${precio}, false, NOW()
+          FROM DUAL WHERE (SELECT COUNT(*) FROM entrada WHERE id_zona = ${zona.id_zona}) < ${zona.capacidad_maxima}`
+        if (cupo === 0) throw new Error('CAMPO_AGOTADO')
+        const creada = await tx.entrada.findFirst({ where: { qr_acceso: codigo } })
+        if (precio > 0) {
+          await tx.transaccion.create({ data: { id_billetera: billetera.id_billetera, id_responsable: id_usuario, tipo_operacion: 'Reserva', monto: precio, fecha_hora: new Date() } })
+        }
+        return creada
+      })
+    } catch (e) {
+      if (e.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'Saldo insuficiente para esta entrada.' })
+      if (e.message === 'CAMPO_AGOTADO') return res.status(409).json({ error: 'Aforo completo en esta zona.' })
+      throw e
+    }
+
+    const imagenQR = await generarImagenQREntrada(entradaCreada)
+    const combos = await obtenerCombosSugeridos(3)
+    await actualizarLlenoEvento(zona.id_evento)
+    // Aviso en vivo: bajó la disponibilidad de pie de esta zona.
+    if (global.io) global.io.emit('pie_comprado', { id_evento: zona.id_evento, id_zona: zona.id_zona })
+    res.status(201).json({
+      mensaje: 'Entrada de pie confirmada',
+      entrada: { id_entrada: entradaCreada.id_entrada, codigo_ingreso: entradaCreada.codigo_ingreso, cantidad_personas: 1, monto_pagado: precio, mesa: null, zona: zona.nombre_zona },
+      qr: imagenQR,
+      saldo_restante: Number(billetera.saldo_actual) - precio,
+      combos_sugeridos: combos,
+    })
+  } catch (error) {
+    console.error('Error comprando entrada de pie (área):', error)
     res.status(500).json({ error: 'Error al procesar la entrada de pie' })
   }
 })
@@ -972,6 +1063,71 @@ router.post('/solicitudes-grupo/:id/responder', soloRoles('Cliente'), async (req
     if (e.status) return res.status(e.status).json({ error: e.error })
     console.error('Error respondiendo propuesta:', e)
     res.status(500).json({ error: 'No se pudo procesar tu respuesta' })
+  }
+})
+
+// ============================================
+// Cancelación de reservas con devolución (regla de 24 h)
+// ============================================
+async function comisionCancelacion() {
+  try {
+    const f = await prisma.configuracion.findUnique({ where: { clave: 'comision_cancelacion_pct' } })
+    const v = parseFloat(f?.valor)
+    if (Number.isFinite(v) && v >= 0 && v <= 90) return v
+  } catch { /* respaldo */ }
+  return 10
+}
+// >24 h antes del evento: sin comisión; dentro de 24 h o ya empezado: con comisión.
+function comisionSegunFecha24(fechaEvento, comisionPct) {
+  if (!fechaEvento) return comisionPct
+  return (new Date(fechaEvento).getTime() - Date.now()) > 24 * 3600 * 1000 ? 0 : comisionPct
+}
+
+// POST /api/reservas/:id/cancelar — el cliente cancela su reserva; se le devuelve a
+// la billetera según la regla de 24 h. Solo si no la usó (no ingresó).
+router.post('/:id/cancelar', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const ent = await prisma.entrada.findUnique({
+      where: { id_entrada: id },
+      include: { zona: { include: { evento: true } } },
+    })
+    if (!ent || ent.id_usuario !== req.usuario.id) return res.status(404).json({ error: 'Reserva no encontrada' })
+    if ((ent.cantidad_ingresada || 0) > 0) return res.status(409).json({ error: 'Ya usaste esta entrada (ingresaste): no se puede cancelar.' })
+    const evento = ent.zona?.evento
+    if (evento?.estado === 'terminado') return res.status(409).json({ error: 'El evento ya terminó.' })
+
+    const total = Number(ent.monto_pagado || 0)
+    const pct = comisionSegunFecha24(evento?.fecha_hora_inicio, await comisionCancelacion())
+    const reembolso = Math.round(total * (1 - pct / 100) * 100) / 100
+
+    await prisma.$transaction(async (tx) => {
+      // Desvincular pedidos de esta reserva (evita romper el FK al borrarla)
+      await tx.comanda.updateMany({ where: { id_entrada: id }, data: { id_entrada: null } })
+      // Liberar la mesa
+      if (ent.id_mesa) await tx.mesa_espacio.updateMany({ where: { id_mesa: ent.id_mesa }, data: { estado_ocupacion: 'libre' } })
+      // Devolver a la billetera (si se pagó y corresponde)
+      if (reembolso > 0 && total > 0) {
+        const bill = await tx.billetera.findUnique({ where: { id_usuario: ent.id_usuario } })
+        if (bill) {
+          await tx.billetera.update({ where: { id_billetera: bill.id_billetera }, data: { saldo_actual: { increment: reembolso }, ultima_actualizacion: new Date() } })
+          await tx.transaccion.create({ data: { id_billetera: bill.id_billetera, id_responsable: req.usuario.id, tipo_operacion: 'reembolso', monto: reembolso, fecha_hora: new Date() } })
+        }
+      }
+      await tx.registro_aforo.deleteMany({ where: { id_entrada: id } })
+      await tx.entrada.delete({ where: { id_entrada: id } })
+    })
+
+    if (global.io) {
+      global.io.emit('billetera_actualizada', { id_usuario: ent.id_usuario })
+      if (ent.id_mesa) global.io.emit('mesa_actualizada', { id_zona: ent.id_zona, id_mesa: ent.id_mesa, estado: 'libre' })
+    }
+    await actualizarLlenoEvento(ent.zona?.id_evento)
+    await notificar(ent.id_usuario, { tipo: 'reserva', titulo: 'Reserva cancelada', mensaje: reembolso > 0 ? `Se te devolvieron Bs ${reembolso} a tu billetera.` : 'Reserva cancelada.', url: '/cliente/billetera' })
+    res.json({ ok: true, total, comision_pct: pct, sin_comision: pct === 0, reembolsado: reembolso })
+  } catch (e) {
+    console.error('Error cancelando reserva:', e)
+    res.status(500).json({ error: 'No se pudo cancelar la reserva' })
   }
 })
 

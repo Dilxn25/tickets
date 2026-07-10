@@ -7,7 +7,8 @@ const multer = require('multer')
 const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const cloudinary = require('cloudinary').v2
 const prisma = require('../../config/base-de-datos')
-const { verificarToken } = require('../../middlewares/autenticacion')
+const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { emitirConfigActualizada, emitirRecurso } = require('../../utilidades/config-runtime')
 
 // Configuración de Multer para comprobantes
 const storage = new CloudinaryStorage({
@@ -256,8 +257,10 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         where: { id_entrada: idEntradaVinculada },
         select: { cantidad_ingresada: true },
       })
+      // Solo se asigna si el cliente eligió explícitamente (barra/llevar);
+      // si no eligió, queda null y lo define después (en Mis pedidos).
       if ((entVinc?.cantidad_ingresada || 0) > 0) {
-        modoEntrega = ['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : 'barra'
+        modoEntrega = ['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : null
       }
     }
 
@@ -429,6 +432,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         global.io.emit('billetera_actualizada', { id_usuario: billetera.id_usuario })
         global.io.emit('nueva_comanda', { id_comanda: idComandaBilletera })
       }
+      emitirRecurso('ventas', { id: idComandaBilletera })
 
       return res.status(201).json({
         mensaje: 'Cobro de billetera exitoso',
@@ -479,6 +483,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     if (global.io) {
       global.io.emit('nueva_comanda', { id_comanda: nuevaComanda.id_comanda })
     }
+    emitirRecurso('ventas', { id: nuevaComanda.id_comanda })
     res.status(201).json({ mensaje: 'Orden creada exitosamente', id_comanda: nuevaComanda.id_comanda })
 
   } catch (error) {
@@ -890,9 +895,17 @@ async function obtenerComisionReembolso() {
   } catch { /* respaldo abajo */ }
   return COMISION_REEMBOLSO_DEFECTO
 }
-// Reembolso = total menos la comisión, redondeado hacia abajo a Bs entero.
+// Reembolso = total menos la comisión, a 2 decimales (la comisión efectiva
+// coincide EXACTAMENTE con el % configurado, sin distorsión por redondeo).
 function calcularReembolso(total, comisionPct) {
-  return Math.floor(total * (1 - comisionPct / 100))
+  return Math.round(total * (1 - comisionPct / 100) * 100) / 100
+}
+// Regla de 24 h: si faltan MÁS de 24 h para el evento, se devuelve el TOTAL sin
+// comisión; dentro de las 24 h previas (o ya empezado/pasado) se cobra comisión.
+function comisionSegunFecha(fechaEvento, comisionPct) {
+  if (!fechaEvento) return comisionPct
+  const faltanMs = new Date(fechaEvento).getTime() - Date.now()
+  return faltanMs > 24 * 3600 * 1000 ? 0 : comisionPct
 }
 
 // GET /api/comandas/config-reembolso — el cliente ve la comisión vigente.
@@ -900,6 +913,25 @@ router.get('/config-reembolso', verificarToken, async (req, res) => {
   try {
     res.json({ comision_pct: await obtenerComisionReembolso() })
   } catch { res.status(500).json({ error: 'Error' }) }
+})
+
+// PUT /api/comandas/config-comision — el admin ajusta la comisión de devolución.
+// (Se administra desde Ventas, no desde el Panel IA: no es una decisión de IA.)
+router.put('/config-comision', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const v = parseFloat(req.body.comision_pct)
+    if (!Number.isFinite(v) || v < 0 || v > 90) {
+      return res.status(400).json({ error: 'La comisión debe ser un número entre 0 y 90.' })
+    }
+    const valor = String(Math.round(v * 100) / 100)
+    await prisma.configuracion.upsert({
+      where: { clave: 'comision_cancelacion_pct' },
+      update: { valor },
+      create: { clave: 'comision_cancelacion_pct', valor, descripcion: 'Comisión (%) que retiene el local al devolver un pedido/reserva no consumido' },
+    })
+    emitirConfigActualizada({ comision_cancelacion_pct: valor })
+    res.json({ comision_pct: v })
+  } catch { res.status(500).json({ error: 'No se pudo guardar la comisión.' }) }
 })
 
 // GET /api/comandas/mis-pedidos (pedidos del cliente; ?evento=id filtra por evento)
@@ -912,19 +944,21 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
       take: 80,
       include: {
         detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
-        mesa_espacio: { select: { numero_nombre: true, zona: { select: { id_evento: true, evento: { select: { nombre_evento: true } } } } } },
-        entrada: { select: { zona: { select: { id_evento: true, evento: { select: { nombre_evento: true } } } } } },
+        mesa_espacio: { select: { numero_nombre: true, zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } } } } },
+        entrada: { select: { zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } } } } },
       },
     })
-    const comisionPct = await obtenerComisionReembolso()
+    const comisionBase = await obtenerComisionReembolso()
     let lista = comandas.map(c => {
       const zonaEv = c.entrada?.zona || c.mesa_espacio?.zona || null
+      const fechaEvento = zonaEv?.evento?.fecha_hora_inicio || null
       const total = c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
       const estado = c.estado_despacho
       const entregado = c.estado_entrega === 'entregado' || estado === 'Completada'
       const cerrado = ['Cancelada', 'Reembolsada'].includes(estado)
       // Reembolsable: pagado con billetera, no consumido, no cancelado/reembolsado.
       const puede_reembolso = c.metodo_pago === 'Billetera' && !entregado && !cerrado && total > 0
+      const comisionPct = comisionSegunFecha(fechaEvento, comisionBase)
       return {
         id_comanda: c.id_comanda,
         fecha: c.fecha_registro,
@@ -940,6 +974,8 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
         total,
         entregado,
         puede_reembolso,
+        comision_pct: comisionPct,
+        sin_comision: comisionPct === 0,
         reembolso_estimado: puede_reembolso ? calcularReembolso(total, comisionPct) : 0,
         items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad, subtotal: Number(d.subtotal) })),
       }
@@ -981,7 +1017,14 @@ router.post('/:id/modo-entrega', verificarToken, async (req, res) => {
 router.post('/:id/solicitar-reembolso', verificarToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id)
-    const c = await prisma.comanda.findUnique({ where: { id_comanda: id }, include: { detalle_comanda: true } })
+    const c = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      include: {
+        detalle_comanda: true,
+        entrada: { select: { zona: { select: { evento: { select: { fecha_hora_inicio: true } } } } } },
+        mesa_espacio: { select: { zona: { select: { evento: { select: { fecha_hora_inicio: true } } } } } },
+      },
+    })
     if (!c) return res.status(404).json({ error: 'Pedido no encontrado' })
     if (c.id_cliente !== req.usuario.id) return res.status(403).json({ error: 'Este pedido no es tuyo' })
     if (['Cancelada', 'Reembolsada'].includes(c.estado_despacho)) return res.status(409).json({ error: 'Este pedido ya fue devuelto o cancelado.' })
@@ -989,7 +1032,9 @@ router.post('/:id/solicitar-reembolso', verificarToken, async (req, res) => {
     if (c.metodo_pago !== 'Billetera') return res.status(400).json({ error: 'Solo se devuelven a la billetera los pedidos pagados con billetera.' })
 
     const total = c.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
-    const comisionPct = await obtenerComisionReembolso()
+    // Regla de 24 h: más de 24 h antes del evento no cobra comisión.
+    const fechaEvento = c.entrada?.zona?.evento?.fecha_hora_inicio || c.mesa_espacio?.zona?.evento?.fecha_hora_inicio || null
+    const comisionPct = comisionSegunFecha(fechaEvento, await obtenerComisionReembolso())
     const reembolso = calcularReembolso(total, comisionPct)
 
     await prisma.$transaction(async (tx) => {
@@ -1119,6 +1164,7 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
       }
     }
 
+    emitirRecurso('ventas', { id: comanda.id_comanda })
     res.json({ mensaje: 'Estado actualizado', comanda })
   } catch (error) {
     console.error('Error actualizando estado de comanda:', error)

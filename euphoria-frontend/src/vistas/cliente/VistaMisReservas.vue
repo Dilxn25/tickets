@@ -76,7 +76,8 @@
         <div v-if="visibles.length" class="lista escalonar">
           <article
             v-for="r in visibles" :key="r.id_entrada"
-            class="ticket anim-subir" :class="`estado-${estadoTicket(r).clave}`">
+            class="ticket anim-subir" :class="[`estado-${estadoTicket(r).clave}`, { 'ticket-zona': colorReserva(r) }]"
+            :style="colorReserva(r) ? { '--zona-color': colorReserva(r) } : {}">
             <span class="ticket-borde" aria-hidden="true"></span>
 
             <div class="ticket-cuerpo">
@@ -94,7 +95,7 @@
               <dl class="ticket-datos">
                 <div class="dato">
                   <dt>{{ r.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }}</dt>
-                  <dd>{{ r.mesa || '—' }}<em v-if="r.zona"> · {{ r.zona }}</em></dd>
+                  <dd>{{ r.mesa || '—' }}<em v-if="r.zona"> · <span v-if="colorReserva(r)" class="zona-punto-r" :style="{ background: colorReserva(r) }"></span>{{ r.zona }}</em></dd>
                 </div>
                 <div class="dato">
                   <dt>Personas</dt>
@@ -149,6 +150,9 @@
                   <img :src="r.qr" alt="Código QR de acceso" />
                 </button>
                 <span class="qr-pie">Toca para ampliar</span>
+                <button v-if="!r.cantidad_ingresada" class="btn-cancelar-reserva" @click="cancelarReserva(r)" :disabled="cancelando === r.id_entrada">
+                  {{ cancelando === r.id_entrada ? 'Cancelando…' : 'Cancelar reserva' }}
+                </button>
               </template>
               <div v-else class="sello" :class="estadoTicket(r).clave">
                 <svg v-if="r.completo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>
@@ -183,15 +187,41 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import { useTiempoReal } from '@/composables/useTiempoReal'
+import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
 
+const notif = useNotificaciones()
 const router = useRouter()
 const reservas = ref([])
+// Color por zona (según lo pagado): la reserva más cara = dorado (VIP).
+const mapaColores = computed(() => mapaColorPorPrecio(reservas.value.map(r => r.monto_pagado)))
+function colorReserva(r) { return colorPorPrecio(r.monto_pagado, mapaColores.value) }
 const cargando = ref(true)
 const error = ref(false)
 const qrAmpliado = ref(null)
 const busqueda = ref('')
 const tabActiva = ref('vigentes')
 const historialAbierto = ref(null)
+const cancelando = ref(null)
+
+async function cancelarReserva(r) {
+  const ok = await notif.confirmar({
+    titulo: 'Cancelar reserva',
+    mensaje: 'Se te devolverá a tu billetera: el TOTAL si faltan más de 24 h para el evento, o con la comisión del local si es dentro de las 24 h. ¿Confirmas?',
+    textoConfirmar: 'Sí, cancelar',
+  })
+  if (!ok) return
+  cancelando.value = r.id_entrada
+  try {
+    const res = await servicioReservas.cancelarReserva(r.id_entrada)
+    notif.exito(Number(res.reembolsado) > 0 ? `Reserva cancelada. Bs ${Number(res.reembolsado).toFixed(2)} a tu billetera${res.sin_comision ? ' (sin comisión)' : ''}` : 'Reserva cancelada')
+    await cargar()
+  } catch (err) {
+    const data = err?.response?.data || err
+    notif.error(data?.error || 'No se pudo cancelar la reserva')
+  } finally { cancelando.value = null }
+}
 
 const tabs = [
   { clave: 'vigentes', label: 'Vigentes' },
@@ -288,6 +318,8 @@ async function cargar() {
 }
 
 onMounted(cargar)
+// Tiempo real: cambios en reservas/eventos actualizan la lista sola.
+useTiempoReal(['reservas', 'eventos'], () => cargar())
 </script>
 
 <style scoped>
@@ -403,6 +435,16 @@ onMounted(cargar)
   transition: border-color 0.25s ease, opacity 0.25s ease;
 }
 .ticket:hover { border-color: var(--borde-activo); }
+/* Acento de zona (color por nivel): franja lateral izquierda + halo sutil */
+.ticket-zona {
+  border-left: 4px solid var(--zona-color);
+  box-shadow: 0 14px 34px rgba(10, 6, 26, 0.4), inset 14px 0 24px -18px var(--zona-color);
+}
+.zona-punto-r {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--zona-color); margin: 0 4px -1px 0;
+  box-shadow: 0 0 6px currentColor;
+}
 .ticket-borde { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--gradiente-marca); opacity: 0.9; }
 /* Estados apagados */
 .ticket.estado-usada, .ticket.estado-finalizada { opacity: 0.72; }
@@ -504,6 +546,9 @@ onMounted(cargar)
 .qr-marco:focus-visible { outline: 2px solid var(--morado-hover); outline-offset: 3px; }
 .qr-marco img { display: block; width: 112px; height: 112px; border-radius: var(--radio-sm); }
 .qr-pie { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texto-desactivado); text-align: center; }
+.btn-cancelar-reserva { margin-top: 8px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); color: #FCA5A5; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+.btn-cancelar-reserva:hover:not(:disabled) { background: rgba(239,68,68,0.2); color: #fff; }
+.btn-cancelar-reserva:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Sello para entradas usadas / vencidas (en vez del QR) */
 .sello {

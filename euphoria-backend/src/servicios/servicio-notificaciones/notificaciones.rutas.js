@@ -40,4 +40,20 @@ router.patch('/:id/leida', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Error' }) }
 })
 
+// DELETE /api/notificaciones/leidas — borra todas las notificaciones YA leídas
+router.delete('/leidas', async (req, res) => {
+  try {
+    const r = await prisma.notificacion.deleteMany({ where: { id_usuario: req.usuario.id, leida: true } })
+    res.json({ ok: true, borradas: r.count })
+  } catch (e) { res.status(500).json({ error: 'Error' }) }
+})
+
+// DELETE /api/notificaciones/:id — borra una notificación del usuario
+router.delete('/:id', async (req, res) => {
+  try {
+    await prisma.notificacion.deleteMany({ where: { id_notificacion: Number(req.params.id), id_usuario: req.usuario.id } })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: 'Error' }) }
+})
+
 module.exports = router

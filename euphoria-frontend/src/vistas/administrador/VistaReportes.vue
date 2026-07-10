@@ -1109,6 +1109,36 @@
         </button>
       </div>
 
+      <!-- Flujo de dinero del negocio -->
+      <h4 class="flujo-titulo">Flujo de dinero</h4>
+      <div class="flujo-grid escalonar">
+        <div class="flujo-card f-entro">
+          <span class="flujo-label">Entró (recargas)</span>
+          <span class="flujo-valor">Bs {{ (flujo.entro || 0).toFixed(2) }}</span>
+          <span class="flujo-sub">{{ flujo.conteos?.recargas || 0 }} recargas</span>
+        </div>
+        <div class="flujo-card f-consumo">
+          <span class="flujo-label">Consumido (ventas + reservas)</span>
+          <span class="flujo-valor">Bs {{ (flujo.consumido || 0).toFixed(2) }}</span>
+          <span class="flujo-sub">{{ flujo.conteos?.consumos || 0 }} operaciones</span>
+        </div>
+        <div class="flujo-card f-devuelto">
+          <span class="flujo-label">Devuelto (a billeteras)</span>
+          <span class="flujo-valor">Bs {{ (flujo.devuelto || 0).toFixed(2) }}</span>
+          <span class="flujo-sub">{{ flujo.conteos?.devoluciones || 0 }} devoluciones</span>
+        </div>
+        <div class="flujo-card f-retiro">
+          <span class="flujo-label">Retirado de billeteras</span>
+          <span class="flujo-valor">Bs {{ (flujo.retirado || 0).toFixed(2) }}</span>
+          <span class="flujo-sub">entregado en efectivo: Bs {{ (flujo.entregado_efectivo || 0).toFixed(2) }}</span>
+        </div>
+        <div class="flujo-card f-retenido">
+          <span class="flujo-label">Retenido por normas</span>
+          <span class="flujo-valor">Bs {{ (flujo.retenido || 0).toFixed(2) }}</span>
+          <span class="flujo-sub">diferencia en retiros</span>
+        </div>
+      </div>
+
       <!-- KPIs de Billetera (mismas tarjetas que el diseño de la imagen) -->
       <div class="grid-kpi-billetera escalonar">
         <div class="kbi-card kbi-morado">
@@ -1346,6 +1376,7 @@ const stats = ref({
 
 // Billetera
 const reporteBilletera = ref({})
+const flujo = ref({})
 const mostrarHistorialRecargas = ref(false)
 
 const pctRecargaPropia = computed(() => {
@@ -2153,6 +2184,12 @@ async function cargarReporteBilletera() {
     const query = params.toString() ? `?${params.toString()}` : ''
     const res = await clienteHttp.get(`/billetera/admin/reporte-completo${query}`)
     reporteBilletera.value = res
+    // Flujo de dinero (respeta el mismo filtro de fechas)
+    const paramsFlujo = new URLSearchParams()
+    if (filtroDesde.value) paramsFlujo.append('desde', filtroDesde.value)
+    if (filtroHasta.value) paramsFlujo.append('hasta', filtroHasta.value)
+    const qf = paramsFlujo.toString() ? `?${paramsFlujo.toString()}` : ''
+    flujo.value = await clienteHttp.get(`/billetera/admin/flujo-dinero${qf}`)
   } catch (e) {
     console.warn('Error cargando reporte billetera:', e)
   }
@@ -3731,6 +3768,18 @@ function formatearFecha(isoStr) {
 }
 
 /* GRID DE KPIs */
+.flujo-titulo { font-size: 1rem; font-weight: 800; margin: 4px 0 12px; color: var(--texto-principal); }
+.flujo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.flujo-card { border: 1px solid var(--borde-sutil); border-radius: 14px; padding: 14px 16px; background: var(--fondo-tarjeta); border-left: 4px solid var(--borde-sutil); }
+.flujo-card.f-entro { border-left-color: #22c55e; }
+.flujo-card.f-consumo { border-left-color: #a855f7; }
+.flujo-card.f-devuelto { border-left-color: #3b82f6; }
+.flujo-card.f-retiro { border-left-color: #f59e0b; }
+.flujo-card.f-retenido { border-left-color: #ec4899; }
+.flujo-label { display: block; font-size: 0.78rem; color: var(--texto-secundario); font-weight: 700; }
+.flujo-valor { display: block; font-size: 1.4rem; font-weight: 800; color: var(--texto-principal); margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.flujo-sub { display: block; font-size: 0.72rem; color: var(--texto-desactivado); }
+
 .grid-kpi-billetera {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -6,6 +6,9 @@ const express = require('express')
 const router = express.Router()
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { emitirRecurso } = require('../../utilidades/config-runtime')
+const { notificar } = require('../../utilidades/notificaciones')
+const { purgarZona } = require('../../utilidades/purgar-espacios')
 
 router.use(verificarToken)
 
@@ -96,19 +99,24 @@ router.put('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
   }
 })
 
-// DELETE /api/espacios/zonas/:id — eliminar zona y sus elementos (Admin)
+// DELETE /api/espacios/zonas/:id — eliminar un plano del evento (Admin).
+// Devuelve a cada cliente lo que pagó y limpia reservas/pedidos para no quedar bloqueado.
 router.delete('/zonas/:id', soloRoles('Administrador'), async (req, res) => {
   try {
     const id_zona = Number(req.params.id)
-    await prisma.$transaction(async (tx) => {
-      await tx.mesa_espacio.deleteMany({ where: { id_zona } })
-      await tx.zona.delete({ where: { id_zona } })
-    })
-    res.json({ mensaje: 'Zona eliminada' })
-  } catch (error) {
-    if (error.code === 'P2003') {
-      return res.status(400).json({ error: 'No se puede eliminar: la zona tiene reservas o consumos asociados' })
+    const zonaBorrar = await prisma.zona.findUnique({ where: { id_zona }, select: { id_evento: true } })
+    if (!zonaBorrar) return res.status(404).json({ error: 'Zona no encontrada' })
+    const reembolsos = await prisma.$transaction((tx) => purgarZona(tx, id_zona, req.usuario.id))
+    // Avisar a cada cliente reembolsado (fuera de la transacción).
+    for (const r of reembolsos) {
+      if (global.io) global.io.emit('billetera_actualizada', { id_usuario: r.id_usuario })
+      await notificar(r.id_usuario, { tipo: 'reserva', titulo: 'Reserva cancelada por el local', mensaje: `Se te devolvieron Bs ${r.monto} a tu billetera.`, url: '/cliente/billetera' })
     }
+    emitirRecurso('eventos', { id: zonaBorrar.id_evento })
+    emitirRecurso('reservas', { id_evento: zonaBorrar.id_evento })
+    const totalDev = reembolsos.reduce((s, r) => s + r.monto, 0)
+    res.json({ mensaje: 'Plano eliminado del evento', reembolsos: reembolsos.length, total_devuelto: totalDev })
+  } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Zona no encontrada' })
     console.error('Error eliminando zona:', error)
     res.status(500).json({ error: 'Error al eliminar la zona' })
@@ -143,6 +151,24 @@ router.put('/zonas/:id/mapa', soloRoles('Administrador'), async (req, res) => {
 
     const idsEnviados = elementos.filter(e => e.id_mesa).map(e => Number(e.id_mesa))
 
+    // Aforo = asientos (mesa/silla) + parados de las áreas (pista): siempre
+    // consistente con lo dibujado, sin capacidades escritas a mano.
+    const capacidad = elementos
+      .filter(e => ['mesa', 'silla', 'area'].includes(e.tipo_elemento))
+      .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
+    // Precio heredado del área para las mesas/sillas asignadas a ella.
+    const precioArea = {}
+    for (const el of elementos) {
+      if (el.tipo_elemento === 'area' && el.clave && el.precio != null && el.precio !== '') {
+        precioArea[el.clave] = Number(el.precio)
+      }
+    }
+    const precioElemento = (el) => {
+      if (el.precio != null && el.precio !== '') return Number(el.precio)
+      if (el.area_ref && precioArea[el.area_ref] != null) return precioArea[el.area_ref]
+      return null
+    }
+
     await prisma.$transaction(async (tx) => {
       // Borrar los elementos que el usuario quitó del mapa (los que ya no vienen)
       await tx.mesa_espacio.deleteMany({
@@ -158,7 +184,7 @@ router.put('/zonas/:id/mapa', soloRoles('Administrador'), async (req, res) => {
           alto: el.alto != null ? Number(el.alto) : null,
           rotacion: el.rotacion != null ? Number(el.rotacion) : null,
           capacidad_sillas: Number(el.capacidad_sillas) || 0,
-          precio: el.precio != null && el.precio !== '' ? Number(el.precio) : null,
+          precio: precioElemento(el),
           tipo_elemento: String(el.tipo_elemento || 'mesa').substring(0, 20),
           es_seleccionable: el.es_seleccionable !== false,
           forma: el.forma ? String(el.forma).substring(0, 20) : null,
@@ -171,6 +197,8 @@ router.put('/zonas/:id/mapa', soloRoles('Administrador'), async (req, res) => {
           })
         }
       }
+      // Mantener el aforo de la zona sincronizado con el mapa.
+      await tx.zona.update({ where: { id_zona }, data: { capacidad_maxima: capacidad } })
     })
 
     const zona = await prisma.zona.findUnique({
@@ -438,9 +466,25 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
 
     const { proporcion, elementos } = parseLayout(plantilla.layout_json)
 
+    // Aforo = asientos de mesas/sillas + "parados" de las áreas (pista). Así el
+    // aforo refleja EXACTAMENTE lo dibujado y no queda inconsistente con el mapa.
     const capacidad = elementos
-      .filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla')
+      .filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla' || e.tipo_elemento === 'area')
       .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
+
+    // Precio por área: cada mesa/silla asignada a un área hereda su precio
+    // (Lounge 800, VIP 1500…) salvo que el elemento tenga precio propio.
+    const precioArea = {}
+    for (const el of elementos) {
+      if (el.tipo_elemento === 'area' && el.clave && el.precio != null && el.precio !== '') {
+        precioArea[el.clave] = Number(el.precio)
+      }
+    }
+    const precioElemento = (el) => {
+      if (el.precio != null && el.precio !== '') return Number(el.precio)
+      if (el.area_ref && precioArea[el.area_ref] != null) return precioArea[el.area_ref]
+      return null // sin precio propio ni de área → usa el precio base de la zona
+    }
 
     await prisma.$transaction(async (tx) => {
       const zona = await tx.zona.create({
@@ -467,8 +511,8 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
             alto: el.alto != null ? Number(el.alto) : null,
             rotacion: el.rotacion != null ? Number(el.rotacion) : null,
             capacidad_sillas: Number(el.capacidad_sillas) || 0,
-            // Precio por elemento/área definido en el plano (Lounge 800, VIP 1500…).
-            precio: (el.precio != null && el.precio !== '') ? Number(el.precio) : null,
+            // Precio efectivo: propio, o heredado del área a la que pertenece.
+            precio: precioElemento(el),
             tipo_elemento: String(el.tipo_elemento || 'mesa').substring(0, 20),
             es_seleccionable: el.es_seleccionable !== false,
             forma: el.forma ? String(el.forma).substring(0, 20) : null,
@@ -476,6 +520,7 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
         })
       }
     })
+    emitirRecurso('eventos', { id: id_evento })
     res.json({ mensaje: 'Plano agregado al evento' })
   } catch (error) {
     console.error('Error agregando plano al evento:', error)

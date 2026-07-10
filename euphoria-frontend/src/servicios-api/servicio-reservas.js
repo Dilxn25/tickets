@@ -34,9 +34,19 @@ export const servicioReservas = {
     return api.post('/reservas/campo', { id_zona, pin })
   },
 
+  /** Entrada de pie tocando un área/pista del mapa (zona mixta) */
+  async comprarPie(id_mesa, pin) {
+    return api.post('/reservas/pie', { id_mesa, pin })
+  },
+
   /** Reservas del cliente con su QR */
   async misReservas() {
     return api.get('/reservas/mias')
+  },
+
+  /** Cancelar una reserva (devuelve a billetera según la regla de 24 h) */
+  async cancelarReserva(idEntrada) {
+    return api.post(`/reservas/${idEntrada}/cancelar`, {})
   },
 
   // ---- Recepción: reservas gestionadas para grupos grandes ----

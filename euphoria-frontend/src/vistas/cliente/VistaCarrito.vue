@@ -234,7 +234,7 @@
 
             <!-- Entrega: solo cuando YA ingresó al evento -->
             <div v-if="tieneReserva && yaIngreso" class="entrega-mini">
-              <span class="entrega-lbl">¿Cómo lo quieres?</span>
+              <span class="entrega-lbl">¿Cómo lo quieres? <em class="entrega-opt">(opcional, también lo eliges luego)</em></span>
               <div class="entrega-tabs">
                 <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'barra' }" @click="modoEntrega = 'barra'">Recojo en barra</button>
                 <button type="button" class="ent-tab" :class="{ activo: modoEntrega === 'llevar' }" @click="modoEntrega = 'llevar'">Que me lo lleven</button>
@@ -309,6 +309,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { io } from 'socket.io-client'
 import { RouterLink, useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
@@ -327,7 +328,7 @@ const qrPublico = ref('')
 const cargandoSaldo = ref(true)
 const errorCargaSaldo = ref('')
 const cargandoPago = ref(false)
-const modoEntrega = ref('barra') // barra = recoge / llevar = a su mesa
+const modoEntrega = ref('') // sin preselección: el cliente elige barra/llevar (o lo define luego en Mis pedidos)
 const mensajeExito = ref('')
 const errorPago = ref('')
 
@@ -552,6 +553,15 @@ async function cargarConfigPremio() {
   }
 }
 
+async function sincronizarPrecios() {
+  try {
+    const prods = await clienteHttp.get('/productos')
+    const cambio = tiendaCarrito.actualizarPrecios(Array.isArray(prods) ? prods : (prods.productos || []))
+    if (cambio) errorPago.value = 'Algunos precios del catálogo cambiaron: tu carrito ya está actualizado.'
+  } catch { /* si falla, el backend igual cobra el precio vigente */ }
+}
+
+let socketCarrito = null
 onMounted(async () => {
   await cargarSaldo()
   // Config del premio (estimado del resumen): no bloquea el saldo ni el pago
@@ -560,12 +570,17 @@ onMounted(async () => {
   cargarIngresos()
   // Sincronizar los precios del carrito con el catálogo vigente
   // (el backend cobra el precio actual: lo mostrado debe coincidir)
-  try {
-    const prods = await clienteHttp.get('/productos')
-    const cambio = tiendaCarrito.actualizarPrecios(Array.isArray(prods) ? prods : (prods.productos || []))
-    if (cambio) errorPago.value = 'Algunos precios del catálogo cambiaron: tu carrito ya está actualizado.'
-  } catch { /* si falla, el backend igual cobra el precio vigente */ }
+  await sincronizarPrecios()
+  // Tiempo real: cambios de premio/descuento o del catálogo se reflejan en el resumen.
+  socketCarrito = io({ path: '/socket.io' })
+  socketCarrito.on('config_actualizada', (data) => {
+    if (data && ('premio_pct' in data || 'premio_max' in data || 'descuento_combos' in data)) {
+      cargarConfigPremio(); sincronizarPrecios()
+    }
+  })
+  socketCarrito.on('catalogo_actualizado', () => sincronizarPrecios())
 })
+onBeforeUnmount(() => { if (socketCarrito) socketCarrito.disconnect() })
 </script>
 
 <style scoped>
@@ -579,9 +594,13 @@ onMounted(async () => {
 
 .contenedor-carrito {
   position: relative;
-  /* Fondo único de la app: sin orbes ni texturas que se recorten en bordes. */
-  min-height: calc(100dvh - 180px);
+  /* Fondo único de la app: sin orbes ni texturas que se recorten en bordes.
+     El min-height solo aplica en escritorio (layout a dos columnas); en móvil/
+     tablet se ajusta al contenido para no dejar un hueco negro grande. */
   padding-bottom: 120px;
+}
+@media (min-width: 900px) {
+  .contenedor-carrito { min-height: calc(100dvh - 180px); }
 }
 
 /* Contenido centrado */
@@ -1605,8 +1624,9 @@ onMounted(async () => {
 @media (max-width: 480px) {
   .contenedor-carrito {
     padding: 1rem 0.75rem 110px;
-    min-height: calc(100dvh - 150px);
+    min-height: auto; /* se ajusta al contenido (evita el hueco negro grande) */
   }
+  .carrito-interior { min-height: auto; }
 
   .item-carrito {
     padding: 0.85rem 0.9rem;

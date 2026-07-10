@@ -29,6 +29,7 @@ env/
 
 # ---- Backups de base de datos (datos sensibles, NO subir) ----
 generados/backups/
+generados/backups-bd/
 
 # ---- Credenciales de prueba (contrasenas, NO subir) ----
 generados/CREDENCIALES*.txt

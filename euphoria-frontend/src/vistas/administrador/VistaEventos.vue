@@ -100,8 +100,13 @@
 
           <div class="acciones">
             <button class="btn btn-sm btn-secundario" @click="abrirModal(evento)">Editar</button>
-            <button class="btn btn-sm btn-secundario" @click="abrirPlanosEvento(evento)">Planos</button>
+            <button class="btn btn-sm btn-secundario" @click="abrirPlanosEvento(evento)">
+              Planos<span v-if="evento.cantidadZonas" class="chip-conteo">{{ evento.cantidadZonas }}</span>
+            </button>
             <button class="btn btn-sm btn-primario" @click="iniciarCambioEstado(evento)">Estado</button>
+            <button class="btn btn-sm btn-peligro" @click="eliminarEvento(evento)" :disabled="eliminandoEvento === evento.id_evento">
+              {{ eliminandoEvento === evento.id_evento ? '…' : 'Eliminar' }}
+            </button>
           </div>
         </div>
       </article>
@@ -295,6 +300,7 @@ import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import { useTiempoReal } from '@/composables/useTiempoReal'
 
 const notif = useNotificaciones()
 
@@ -371,6 +377,8 @@ async function abrirPlanosEvento(evento) {
   eventoPlanos.value = evento
   formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0; formAgregar.prioridad = 0
   modalPlanos.value = true
+  // Recargar la biblioteca para incluir planos creados recientemente (evita el caché de KeepAlive).
+  cargarPlanosDisponibles()
   await cargarPlanosDelEvento()
 }
 async function cargarPlanosDelEvento() {
@@ -400,16 +408,16 @@ async function quitarPlanoDeEvento(p) {
   const ok = await notif.confirmar({
     variante: 'peligro',
     titulo: `Quitar "${p.nombre}"`,
-    mensaje: 'Se quitará este plano del evento (con su mapa). No afecta al plano en la biblioteca.',
-    textoConfirmar: 'Sí, quitar',
+    mensaje: 'Se quitará este plano del evento (con su mapa). A los clientes con reserva en este plano se les DEVOLVERÁ lo que pagaron a su billetera. No afecta al plano en la biblioteca.',
+    textoConfirmar: 'Sí, quitar y devolver',
   })
   if (!ok) return
   try {
-    await clienteHttp.delete(`/espacios/zonas/${p.id_zona}`)
+    const r = await clienteHttp.delete(`/espacios/zonas/${p.id_zona}`)
     await cargarPlanosDelEvento()
     cargarEventos()
-    notif.exito('Plano quitado del evento')
-  } catch (e) { notif.error(e.error || 'No se pudo quitar (¿tiene reservas?)') }
+    notif.exito(r?.reembolsos ? `Plano quitado. Se devolvieron Bs ${r.total_devuelto} a ${r.reembolsos} cliente(s).` : 'Plano quitado del evento')
+  } catch (e) { notif.error(e.error || 'No se pudo quitar el plano.') }
 }
 
 const modalEstado = ref(false)
@@ -434,10 +442,33 @@ async function cargarEventos() {
   }
 }
 
+const eliminandoEvento = ref(null)
+async function eliminarEvento(evento) {
+  const ok = await notif.confirmar({
+    variante: 'peligro',
+    titulo: `Eliminar "${evento.nombre_evento}"`,
+    mensaje: 'Se eliminará el evento con sus planos. A los clientes con reserva se les DEVOLVERÁ a su billetera lo que pagaron, y sus pedidos quedarán sin evento. Esta acción no se puede deshacer.',
+    textoConfirmar: 'Sí, eliminar y devolver',
+  })
+  if (!ok) return
+  eliminandoEvento.value = evento.id_evento
+  try {
+    const r = await clienteHttp.delete(`/eventos/${evento.id_evento}`)
+    notif.exito(r?.reembolsos ? `Evento eliminado. Se devolvieron Bs ${r.total_devuelto} a ${r.reembolsos} cliente(s).` : 'Evento eliminado.')
+    cargarEventos()
+  } catch (e) {
+    notif.error(e?.error || 'No se pudo eliminar el evento.')
+  } finally {
+    eliminandoEvento.value = null
+  }
+}
+
 onMounted(() => {
   cargarEventos()
   cargarPlanosDisponibles()
 })
+// Tiempo real: eventos y sus planos/aforo se refrescan solos.
+useTiempoReal('eventos', () => cargarEventos())
 
 // Filtros
 const eventosFiltrados = computed(() => {
@@ -839,6 +870,20 @@ async function confirmarCambioEstado() {
 
 /* Modal Planos del evento */
 .pl-ayuda { font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.5; margin-bottom: 1rem; }
+.chip-conteo {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: var(--color-primario, #a855f7);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
 .pl-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.1rem; }
 .pl-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: var(--radio-md); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); }
 .pl-item-info { display: flex; flex-direction: column; min-width: 0; }
@@ -906,10 +951,20 @@ async function confirmarCambioEstado() {
 
 .acciones {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid var(--borde-sutil);
+}
+.acciones .btn {
+  flex: 1 1 auto;
+  min-width: 84px;
+  justify-content: center;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .acciones .btn { flex: 1 1 calc(50% - 4px); }
 }
 .acciones .btn { flex: 1; justify-content: center; }
 

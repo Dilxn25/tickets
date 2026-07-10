@@ -15,6 +15,9 @@
       </div>
       <div class="acciones-usuario">
         <CampanaNotificaciones />
+        <button class="btn-reservas-top" @click="irMisPedidos" title="Mis pedidos" type="button" aria-label="Mis pedidos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        </button>
         <button class="btn-reservas-top" @click="irMisReservas" title="Mis reservas" type="button" aria-label="Mis reservas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="5" x2="13" y2="19" stroke-dasharray="2 2"></line></svg>
         </button>
@@ -98,10 +101,21 @@ import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import CampanaNotificaciones from '@/componentes/comunes/CampanaNotificaciones.vue'
+import { useTiempoReal } from '@/composables/useTiempoReal'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()
 const router = useRouter()
+
+// Tiempo real: si el local (admin) cambia MIS datos, se reflejan sin recargar.
+useTiempoReal('usuarios', async (tipo, data) => {
+  if (data?.id && tienda.usuario?.id && Number(data.id) !== Number(tienda.usuario.id)) return
+  try {
+    const fresco = await clienteHttp.get('/usuarios/perfil')
+    if (fresco) tienda.actualizarUsuario(fresco.usuario || fresco)
+  } catch { /* si falla, se mantiene lo actual */ }
+})
 
 const iniciales = computed(() => {
   const n = tienda.usuario?.nombres || ''
@@ -118,6 +132,9 @@ function irPerfil() {
 
 function irMisReservas() {
   router.push('/cliente/mis-reservas')
+}
+function irMisPedidos() {
+  router.push('/cliente/pedidos')
 }
 
 function cerrarSesion() {

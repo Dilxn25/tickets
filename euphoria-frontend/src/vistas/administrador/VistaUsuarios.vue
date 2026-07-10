@@ -114,7 +114,7 @@
             </div>
             <div class="form-fila">
               <div class="grupo-campo"><label class="etiqueta">CI/Carnet</label><input v-model="form.ci_carnet" class="campo" /></div>
-              <div class="grupo-campo"><label class="etiqueta">Teléfono</label><input v-model="form.telefono" class="campo" /></div>
+              <div class="grupo-campo"><label class="etiqueta">Teléfono</label><BaseTelefono v-model="form.telefono" /></div>
             </div>
             <div class="form-fila">
               <div class="grupo-campo"><label class="etiqueta">Correo *</label><input v-model="form.correo" type="email" class="campo" required /></div>
@@ -215,6 +215,8 @@ import { servicioRoles }    from '@/servicios-api/servicio-roles.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
+import { useTiempoReal } from '@/composables/useTiempoReal'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
@@ -286,8 +288,10 @@ const listaPaginada = computed(() => {
 watch([busqueda, filtroRol, filtroEstado], () => { pagina.value = 1 })
 
 onMounted(() => { cargarUsuarios() })
+// Tiempo real: si un usuario cambia sus datos (o los cambia otro admin), refrescar.
+useTiempoReal('usuarios', () => cargarUsuarios())
 
-const iniciales = u => `${u.nombres[0]}${u.apellidos[0]}`.toUpperCase()
+const iniciales = u => `${(u.nombres || '?').charAt(0)}${(u.apellidos || '').charAt(0)}`.toUpperCase()
 
 function abrirModal(u = null) {
   usuarioEditando.value = u

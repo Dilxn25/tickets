@@ -11,6 +11,9 @@ const router = express.Router()
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { subirImagenEvento } = require('../../config/cloudinary')
+const { emitirRecurso } = require('../../utilidades/config-runtime')
+const { notificar } = require('../../utilidades/notificaciones')
+const { purgarEvento } = require('../../utilidades/purgar-espacios')
 
 // Modelo de la Fase 3: tipos y estados (identificadores internos).
 const TIPOS_EVENTO = ['estandar', 'especial', 'externo']
@@ -194,6 +197,7 @@ router.post('/', subirImagenEvento.single('imagen'), async (req, res) => {
       }
     })
 
+    emitirRecurso('eventos', { id: nuevoEvento.id_evento })
     res.status(201).json({ mensaje: 'Evento creado en Planificación', evento: nuevoEvento })
   } catch (error) {
     console.error('Error al crear evento:', error)
@@ -240,6 +244,7 @@ router.put('/:id', subirImagenEvento.single('imagen'), async (req, res) => {
       data: datosAct
     })
 
+    emitirRecurso('eventos', { id: actualizado.id_evento })
     res.json({ mensaje: 'Evento actualizado', evento: actualizado })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Evento no encontrado' })
@@ -278,9 +283,33 @@ router.patch('/:id/estado', async (req, res) => {
       data: { estado }
     })
 
+    emitirRecurso('eventos', { id: actualizado.id_evento })
     res.json({ mensaje: 'Estado del evento actualizado', evento: actualizado })
   } catch (error) {
     res.status(500).json({ error: 'Error al cambiar estado del evento' })
+  }
+})
+
+// DELETE /api/eventos/:id — borrar un evento (Admin). Devuelve a cada cliente lo
+// que pagó por sus reservas, limpia entradas/pedidos y borra el evento.
+router.delete('/:id', async (req, res) => {
+  try {
+    const id_evento = Number(req.params.id)
+    const evento = await prisma.evento.findUnique({ where: { id_evento } })
+    if (!evento) return res.status(404).json({ error: 'Evento no encontrado' })
+
+    const reembolsos = await prisma.$transaction((tx) => purgarEvento(tx, id_evento, req.usuario.id))
+    for (const r of reembolsos) {
+      if (global.io) global.io.emit('billetera_actualizada', { id_usuario: r.id_usuario })
+      await notificar(r.id_usuario, { tipo: 'reserva', titulo: 'Evento cancelado por el local', mensaje: `Se te devolvieron Bs ${r.monto} a tu billetera.`, url: '/cliente/billetera' })
+    }
+    emitirRecurso('eventos', { id: id_evento })
+    const totalDev = reembolsos.reduce((s, r) => s + r.monto, 0)
+    res.json({ mensaje: 'Evento eliminado', reembolsos: reembolsos.length, total_devuelto: totalDev })
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Evento no encontrado' })
+    console.error('Error eliminando evento:', error)
+    res.status(500).json({ error: 'Error al eliminar el evento' })
   }
 })
 

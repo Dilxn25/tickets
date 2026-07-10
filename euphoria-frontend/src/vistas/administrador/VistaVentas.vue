@@ -21,6 +21,41 @@
 
     <!-- Si no hay venta seleccionada, mostrar tabla -->
     <template v-if="!ventaSeleccionada">
+      <!-- Comisión de devolución (antes estaba en el Panel IA; no es una decisión de IA) -->
+      <div class="comision-panel superficie">
+        <div class="comision-info">
+          <span class="comision-medallon" aria-hidden="true">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </span>
+          <div>
+            <h3 class="comision-titulo">Comisión de devolución</h3>
+            <p class="comision-sub">Lo que retiene el local cuando el cliente cancela <strong>dentro de las 24 h</strong> del evento. Con más de 24 h de anticipación se devuelve el total sin comisión.</p>
+          </div>
+        </div>
+        <div class="comision-control">
+          <div class="comision-stepper">
+            <button type="button" class="comision-btn" :disabled="formComision <= 0" @click="ajustarComision(-1)" aria-label="Bajar">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <div class="comision-valor">
+              <span class="comision-num">{{ formComision }}</span>
+              <span class="comision-pct">%</span>
+            </div>
+            <button type="button" class="comision-btn" :disabled="formComision >= 90" @click="ajustarComision(1)" aria-label="Subir">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          <div class="comision-presets">
+            <button v-for="p in [5, 10, 15, 20]" :key="p" type="button" class="comision-preset" :class="{ activo: formComision === p }" @click="formComision = p">{{ p }}%</button>
+          </div>
+          <button class="btn btn-primario btn-sm comision-guardar" :disabled="guardandoComision || !comisionCambio" @click="guardarComision">
+            {{ guardandoComision ? 'Guardando...' : 'Guardar' }}
+          </button>
+        </div>
+      </div>
+
       <div class="filtros-panel superficie">
         <div class="filtros-barra">
           <label class="filtro-campo campo-busqueda-campo">
@@ -288,6 +323,7 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
+import { useTiempoReal } from '@/composables/useTiempoReal'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
@@ -322,6 +358,40 @@ async function cargarFiltros() {
     cajerosDisponibles.value = f.cajeros || []
   } catch { /* silencioso */ }
 }
+
+// Comisión de devolución (se administra aquí, ya no en el Panel IA)
+const comisionActual = ref(10)
+const formComision = ref(10)
+const guardandoComision = ref(false)
+const comisionCambio = computed(() => Number(formComision.value) !== comisionActual.value)
+async function cargarComision() {
+  try {
+    const r = await clienteHttp.get('/comandas/config-reembolso')
+    comisionActual.value = Number(r.comision_pct)
+    formComision.value = comisionActual.value
+  } catch { /* silencioso */ }
+}
+function ajustarComision(delta) {
+  const v = Math.min(90, Math.max(0, Number(formComision.value || 0) + delta))
+  formComision.value = v
+}
+async function guardarComision() {
+  const c = Number(formComision.value)
+  if (isNaN(c) || c < 0 || c > 90) {
+    notif.advertencia('La comisión debe ser un número entre 0 y 90.'); return
+  }
+  guardandoComision.value = true
+  try {
+    const r = await clienteHttp.put('/comandas/config-comision', { comision_pct: c })
+    comisionActual.value = Number(r.comision_pct)
+    formComision.value = comisionActual.value
+    notif.exito('Comisión de devolución actualizada.')
+  } catch (e) {
+    notif.error(e?.error || 'No se pudo guardar la comisión.')
+  } finally {
+    guardandoComision.value = false
+  }
+}
 const actualizando = ref(false)
 const cambiandoEstado = ref(false)
 
@@ -340,6 +410,7 @@ onActivated(() => {
     yaCargado = true
     cargarVentas()
     cargarFiltros()
+    cargarComision()
   } else {
     actualizarVentas()
   }
@@ -423,6 +494,8 @@ async function actualizarVentas() {
   if (cargando.value) return
   await cargarVentas(true)
 }
+// Tiempo real: nueva venta o cambio de estado refresca la lista al instante.
+useTiempoReal('ventas', () => actualizarVentas())
 
 const ventasFiltradas = computed(() => {
   // estado y fecha se filtran en el servidor; aquí solo la búsqueda por texto de la página actual
@@ -624,6 +697,110 @@ async function cancelarVenta() {
 }
 
 /* Panel de filtros de vidrio */
+.comision-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  flex-wrap: wrap;
+  padding: var(--esp-4);
+  margin-bottom: var(--esp-4);
+}
+.comision-info {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-3);
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+.comision-medallon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primario) 14%, transparent);
+  color: var(--color-primario);
+}
+.comision-titulo {
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+.comision-sub {
+  font-size: 0.82rem;
+  color: var(--texto-secundario);
+  margin: 0;
+  line-height: 1.4;
+  max-width: 52ch;
+}
+.comision-control {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.comision-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--fondo);
+}
+.comision-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-primario) 12%, transparent);
+  color: var(--color-primario);
+  cursor: pointer;
+  transition: background .15s ease, transform .1s ease;
+}
+.comision-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primario) 22%, transparent); }
+.comision-btn:active:not(:disabled) { transform: scale(.92); }
+.comision-btn:disabled { opacity: .35; cursor: not-allowed; }
+.comision-valor {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  min-width: 58px;
+  padding: 0 6px;
+}
+.comision-num {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.comision-pct { font-size: 0.9rem; font-weight: 700; color: var(--texto-secundario); }
+.comision-presets { display: inline-flex; gap: 4px; }
+.comision-preset {
+  padding: 6px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--texto-secundario);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.comision-preset:hover { border-color: var(--color-primario); color: var(--texto-principal); }
+.comision-preset.activo {
+  background: color-mix(in srgb, var(--color-primario) 16%, transparent);
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
 .filtros-panel {
   display: flex;
   align-items: center;

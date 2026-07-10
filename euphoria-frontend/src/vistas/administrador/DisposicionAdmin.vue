@@ -141,23 +141,37 @@
                   <ul v-if="solicitudesRec.length" class="notif-lista">
                     <li v-for="s in solicitudesRec" :key="s.id_solicitud" class="notif-item notif-solicitud">
                       <div class="sol-datos">
-                        <span class="notif-item-nombre">{{ s.correo }}</span>
-                        <span class="sol-contacto">{{ s.nombre_contacto || 'Sin nombre' }}</span>
-                        <div class="sol-senales">
-                          <template v-if="s.cuenta">
-                            <span class="sol-senal" :class="senalCi(s).clase">CI {{ senalCi(s).simbolo }}</span>
-                            <span class="sol-senal" :class="senalTel(s).clase">Tel. {{ senalTel(s).simbolo }}</span>
-                          </template>
-                          <span v-else class="sol-senal mal">No existe cuenta con ese correo</span>
+                        <div class="sol-cab">
+                          <span class="notif-item-nombre">{{ s.correo }}</span>
+                          <span class="sol-veredicto" :class="veredicto(s).clase">{{ veredicto(s).texto }}</span>
                         </div>
-                        <p v-if="s.mensaje" class="sol-mensaje">{{ s.mensaje }}</p>
+                        <span class="sol-contacto">{{ s.nombre_contacto || 'Sin nombre' }}</span>
+
+                        <!-- Análisis de identidad: lo que dejó el cliente vs lo registrado -->
+                        <div v-if="s.cuenta" class="sol-analisis">
+                          <div class="sol-fila">
+                            <span class="sol-etq">CI que dejó</span>
+                            <span class="sol-val">{{ s.ci_contacto || '—' }}</span>
+                            <span class="sol-chip" :class="senalCi(s).clase">{{ textoSenal(senalCi(s), s.cuenta.tiene_ci_registrado) }}</span>
+                          </div>
+                          <div class="sol-fila">
+                            <span class="sol-etq">Teléfono que dejó</span>
+                            <span class="sol-val">{{ s.telefono || '—' }}</span>
+                            <span class="sol-chip" :class="senalTel(s).clase">{{ textoSenal(senalTel(s), s.cuenta.tiene_telefono_registrado) }}</span>
+                          </div>
+                        </div>
+                        <div v-else class="sol-analisis">
+                          <span class="sol-chip mal">No existe ninguna cuenta con ese correo</span>
+                        </div>
+
+                        <p v-if="s.mensaje" class="sol-mensaje">“{{ s.mensaje }}”</p>
                       </div>
                       <div class="sol-acciones">
                         <button v-if="s.cuenta" type="button" class="sol-btn sol-btn-reset" :disabled="atendiendoId === s.id_solicitud" @click="resolverSolicitud(s)">
                           {{ atendiendoId === s.id_solicitud ? '…' : 'Restablecer' }}
                         </button>
                         <button type="button" class="sol-btn" :disabled="atendiendoId === s.id_solicitud" @click="atenderSolicitud(s)">
-                          Atendida
+                          {{ s.cuenta ? 'Rechazar' : 'Atendida' }}
                         </button>
                       </div>
                     </li>
@@ -171,14 +185,18 @@
                       <button type="button" class="sol-x" @click="resueltaInfo = null" title="Cerrar">✕</button>
                     </div>
                     <div class="sol-clave">{{ resueltaInfo.password }}</div>
-                    <p class="sol-resuelta-nota">Avísale su nueva clave (no tiene acceso a la app todavía):</p>
+                    <p v-if="resueltaInfo.correoEnviado" class="sol-enviado">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="14" height="14"><path d="M20 6L9 17l-5-5"/></svg>
+                      Ya le enviamos la clave a {{ resueltaInfo.correo }}
+                    </p>
+                    <p class="sol-resuelta-nota">{{ resueltaInfo.correoEnviado ? 'También puedes avisarle por otro medio:' : 'Avísale su nueva clave (no tiene acceso a la app todavía):' }}</p>
                     <div class="sol-avisos">
                       <a v-if="linkWhatsapp(resueltaInfo)" :href="linkWhatsapp(resueltaInfo)" target="_blank" rel="noopener" class="sol-aviso wa">WhatsApp</a>
                       <a :href="linkCorreo(resueltaInfo)" class="sol-aviso mail">Correo</a>
                     </div>
                   </div>
 
-                  <p v-if="solicitudesRec.length" class="sol-pie">Valida su identidad con las señales de CI/teléfono (o pídele el CI físico). Luego «Restablecer» pone su clave temporal en 123456 y te da los botones para avisarle.</p>
+                  <p v-if="solicitudesRec.length" class="sol-pie">El veredicto compara lo que dejó el cliente con lo registrado. Si coincide, «Restablecer» pone su clave temporal en 123456 y te da los botones para avisarle. Si no coincide, pídele el CI físico o «Rechazar».</p>
                 </div>
 
                 <div class="notif-sec">
@@ -308,11 +326,28 @@ function senalDato(tieneDato, tieneRegistrado, coincide) {
 }
 function senalCi(s)  { return senalDato(!!s.ci_contacto, !!s.cuenta?.tiene_ci_registrado, !!s.cuenta?.ci_coincide) }
 function senalTel(s) { return senalDato(!!s.telefono, !!s.cuenta?.tiene_telefono_registrado, !!s.cuenta?.telefono_coincide) }
+// Texto de la señal según el símbolo y si hay dato registrado con qué comparar
+function textoSenal(sen, tieneRegistrado) {
+  if (sen.simbolo === '✓') return 'coincide'
+  if (sen.simbolo === '✗') return 'no coincide'
+  return tieneRegistrado ? 'no lo dejó' : 'nada registrado'
+}
+// Veredicto global que orienta la decisión del dueño (restablecer vs rechazar)
+function veredicto(s) {
+  if (!s.cuenta) return { clase: 'mal', texto: 'Cuenta inexistente' }
+  const ci = senalCi(s).simbolo, tel = senalTel(s).simbolo
+  const coincide = ci === '✓' || tel === '✓'
+  const falla = ci === '✗' || tel === '✗'
+  if (falla && !coincide) return { clase: 'mal', texto: 'No coincide' }
+  if (falla && coincide) return { clase: 'medio', texto: 'Coincidencia parcial' }
+  if (coincide && !falla) return { clase: 'ok', texto: ci === '✓' && tel === '✓' ? 'Identidad verificada' : 'Coincide' }
+  return { clase: 'medio', texto: 'Sin datos para verificar' }
+}
 async function atenderSolicitud(s) {
   atendiendoId.value = s.id_solicitud
   try {
-    await clienteHttp.patch(`/usuarios/solicitudes-recuperacion/${s.id_solicitud}/atender`)
-    notif.exito('Solicitud marcada como atendida.')
+    const r = await clienteHttp.patch(`/usuarios/solicitudes-recuperacion/${s.id_solicitud}/atender`)
+    notif.exito(r?.correo_enviado ? 'Solicitud cerrada. Se avisó al cliente por correo.' : 'Solicitud marcada como atendida.')
     await cargarSolicitudesRec()
   } catch (err) {
     notif.error(err?.error || 'No se pudo marcar la solicitud. Intenta de nuevo.')
@@ -333,8 +368,11 @@ async function resolverSolicitud(s) {
       correo: res.contacto?.correo || s.correo,
       telefono: res.contacto?.telefono || null,
       password: res.password_temporal,
+      correoEnviado: !!res.correo_enviado,
     }
-    notif.exito('Contraseña restablecida. Avísale al cliente su clave temporal.')
+    notif.exito(res.correo_enviado
+      ? 'Contraseña restablecida y enviada al correo del cliente.'
+      : 'Contraseña restablecida. Avísale al cliente su clave temporal.')
     await cargarSolicitudesRec()
   } catch (err) {
     notif.error(err?.error || 'No se pudo restablecer la contraseña.')
@@ -933,6 +971,32 @@ function cerrar() {
 .sol-senal.ok     { color: var(--color-exito); background: rgba(34, 197, 94, .12); border: 1px solid rgba(34, 197, 94, .3); }
 .sol-senal.mal    { color: var(--color-error); background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
 .sol-senal.neutro { color: var(--texto-desactivado); background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); }
+
+/* Análisis de identidad (control para restablecer/rechazar) */
+.sol-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sol-veredicto {
+  padding: 2px 8px; border-radius: var(--radio-full);
+  font-size: .64rem; font-weight: 800; letter-spacing: .02em; white-space: nowrap;
+}
+.sol-veredicto.ok   { color: var(--color-exito); background: rgba(34, 197, 94, .14); border: 1px solid rgba(34, 197, 94, .32); }
+.sol-veredicto.medio{ color: #b7791f; background: rgba(234, 179, 8, .14); border: 1px solid rgba(234, 179, 8, .34); }
+.sol-veredicto.mal  { color: var(--color-error); background: rgba(239, 68, 68, .12); border: 1px solid rgba(239, 68, 68, .32); }
+.sol-analisis {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 5px; padding: 7px 9px;
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
+}
+.sol-fila { display: flex; align-items: center; gap: 8px; font-size: .72rem; }
+.sol-etq { color: var(--texto-secundario); flex: 0 0 92px; }
+.sol-val { font-weight: 700; color: var(--texto-principal); font-variant-numeric: tabular-nums; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sol-chip {
+  padding: 1px 7px; border-radius: var(--radio-full);
+  font-size: .64rem; font-weight: 800; letter-spacing: .02em; white-space: nowrap;
+}
+.sol-chip.ok     { color: var(--color-exito); background: rgba(34, 197, 94, .12); border: 1px solid rgba(34, 197, 94, .3); }
+.sol-chip.mal    { color: var(--color-error); background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
+.sol-chip.neutro { color: var(--texto-desactivado); background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); }
 .sol-mensaje {
   margin: 2px 0 0; font-size: .72rem; line-height: 1.35;
   color: var(--texto-desactivado); white-space: normal; word-break: break-word;
@@ -975,6 +1039,13 @@ function cerrar() {
   text-align: center;
 }
 .sol-resuelta-nota { margin: 0 0 8px; font-size: .68rem; color: var(--texto-desactivado); }
+.sol-enviado {
+  display: flex; align-items: center; gap: 5px;
+  margin: 8px 0 6px; padding: 5px 8px;
+  border-radius: var(--radio-md);
+  background: rgba(34, 197, 94, .12); border: 1px solid rgba(34, 197, 94, .3);
+  color: var(--color-exito); font-size: .7rem; font-weight: 700;
+}
 .sol-avisos { display: flex; gap: 8px; }
 .sol-aviso {
   flex: 1; text-align: center; text-decoration: none;

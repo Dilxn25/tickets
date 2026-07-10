@@ -104,6 +104,17 @@
             <path d="M12 11v11"></path>
             <path d="m19 3-7 8-7-8Z"></path>
           </svg>
+          <!-- Devolución: flecha que regresa -->
+          <svg v-else-if="mov.tipo === 'reembolso'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 14 4 9 9 4"></polyline>
+            <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+          </svg>
+          <!-- Retiro: flecha saliendo -->
+          <svg v-else-if="mov.tipo === 'retiro'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="21" x2="12" y2="9"></line>
+            <polyline points="6 15 12 9 18 15"></polyline>
+            <line x1="4" y1="3" x2="20" y2="3"></line>
+          </svg>
           <!-- Reserva: ticket -->
           <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path>
@@ -251,7 +262,9 @@ const FILTROS = [
   { valor: 'todos', etiqueta: 'Todos' },
   { valor: 'recarga', etiqueta: 'Recargas' },
   { valor: 'consumo', etiqueta: 'Pedidos' },
-  { valor: 'reserva', etiqueta: 'Reservas' }
+  { valor: 'reserva', etiqueta: 'Reservas' },
+  { valor: 'reembolso', etiqueta: 'Devoluciones' },
+  { valor: 'retiro', etiqueta: 'Retiros' }
 ]
 const filtroActivo = ref('todos')
 

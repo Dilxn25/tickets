@@ -11,6 +11,8 @@ const QRCode = require('qrcode')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { cifrarPin, descifrarPin, verificarPin } = require('../../utilidades/pin-billetera')
+const { subirFotoPerfil } = require('../../config/cloudinary')
+const { notificar } = require('../../utilidades/notificaciones')
 
 // ============ GET /api/billetera/saldo ============
 // Obtener saldo actual del cliente
@@ -238,10 +240,10 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         take: 100,
       }),
       prisma.transaccion.findMany({
-        where: { id_billetera: billetera.id_billetera, tipo_operacion: { in: ['Consumo', 'Reserva'] } },
+        where: { id_billetera: billetera.id_billetera, tipo_operacion: { in: ['Consumo', 'Reserva', 'reembolso', 'retiro', 'Retiro'] } },
         include: {
           usuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
-          comanda: { select: { id_comanda: true, metodo_pago: true, _count: { select: { detalle_comanda: true } } } },
+          comanda: { select: { id_comanda: true, metodo_pago: true, detalle_comanda: { select: { subtotal: true } }, _count: { select: { detalle_comanda: true } } } },
         },
         orderBy: { fecha_hora: 'desc' },
         take: 100,
@@ -275,6 +277,37 @@ router.get('/movimientos', verificarToken, async (req, res) => {
     }
 
     for (const t of transacciones) {
+      const tipoOp = (t.tipo_operacion || '').toLowerCase()
+
+      // DEVOLUCIONES (entra dinero) — con el detalle de si hubo comisión
+      if (tipoOp === 'reembolso') {
+        let detalle = 'Devolución a tu billetera'
+        const devuelto = Number(t.monto)
+        if (t.comanda?.detalle_comanda?.length) {
+          const totalOriginal = t.comanda.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
+          if (totalOriginal > devuelto + 0.5) {
+            const pct = Math.round((1 - devuelto / totalOriginal) * 100)
+            detalle = `Retuvimos ${pct}% de comisión sobre Bs ${totalOriginal.toFixed(2)}`
+          } else {
+            detalle = 'Devolución completa · sin comisión'
+          }
+        }
+        movimientos.push({
+          id: `T-${t.id_transaccion}`, tipo: 'reembolso', titulo: 'Devolución',
+          detalle, monto: parseFloat(t.monto), fecha: t.fecha_hora, estado: 'completada',
+        })
+        continue
+      }
+
+      // RETIROS / vaciado (sale dinero, lo hace el cajero)
+      if (tipoOp === 'retiro') {
+        movimientos.push({
+          id: `T-${t.id_transaccion}`, tipo: 'retiro', titulo: 'Retiro de saldo',
+          detalle: 'Retiraste tu dinero en caja', monto: -parseFloat(t.monto), fecha: t.fecha_hora, estado: 'completada',
+        })
+        continue
+      }
+
       const esConsumo = t.tipo_operacion === 'Consumo'
       const responsable = t.usuario ? `${t.usuario.nombres} ${t.usuario.apellidos}`.trim() : null
       const esAutoservicio = t.usuario?.rol?.nombre_rol === 'Cliente'
@@ -498,6 +531,59 @@ router.post('/pin/revelar', verificarToken, async (req, res) => {
 
 // ============ GET /api/billetera/admin/reporte-completo ============
 // Reporte completo de billetera para el Admin
+// GET /api/billetera/admin/flujo-dinero — resumen del dinero: entró, consumido,
+// devuelto, retirado y retenido por normas. Filtro opcional ?desde=&hasta=.
+router.get('/admin/flujo-dinero', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const rango = {}
+    if (req.query.desde) rango.gte = new Date(req.query.desde + 'T00:00:00')
+    if (req.query.hasta) rango.lte = new Date(req.query.hasta + 'T23:59:59')
+    const whereFecha = (req.query.desde || req.query.hasta) ? { fecha_hora: rango } : {}
+
+    const porTipo = await prisma.transaccion.groupBy({
+      by: ['tipo_operacion'],
+      where: whereFecha,
+      _sum: { monto: true },
+      _count: { _all: true },
+    })
+    const suma = (pred) => porTipo.filter(t => pred(t.tipo_operacion)).reduce((a, t) => a + Number(t._sum.monto || 0), 0)
+    const cuenta = (pred) => porTipo.filter(t => pred(t.tipo_operacion)).reduce((a, t) => a + t._count._all, 0)
+
+    const esRecarga = t => t.toLowerCase().startsWith('recarga')
+    const entro = suma(esRecarga)
+    const consumido = suma(t => t === 'Consumo' || t === 'Reserva')
+    const devuelto = suma(t => t === 'reembolso')
+    const retirado = suma(t => t === 'retiro')
+
+    // Retenido por normas (diferencia entre lo debitado y lo entregado en retiros).
+    const whereRetiro = (req.query.desde || req.query.hasta)
+      ? { estado: 'pagado', fecha_pago: rango }
+      : { estado: 'pagado' }
+    const retAgg = await prisma.solicitud_retiro.aggregate({ where: whereRetiro, _sum: { diferencia: true, monto_entregado: true } })
+    const retenido = Number(retAgg._sum.diferencia || 0)
+    const entregado_efectivo = Number(retAgg._sum.monto_entregado || 0)
+
+    res.json({
+      entro: Math.round(entro * 100) / 100,
+      consumido: Math.round(consumido * 100) / 100,
+      devuelto: Math.round(devuelto * 100) / 100,
+      retirado: Math.round(retirado * 100) / 100,
+      entregado_efectivo: Math.round(entregado_efectivo * 100) / 100,
+      retenido: Math.round(retenido * 100) / 100,
+      saldo_neto: Math.round((entro - retirado) * 100) / 100,
+      conteos: {
+        recargas: cuenta(esRecarga),
+        consumos: cuenta(t => t === 'Consumo' || t === 'Reserva'),
+        devoluciones: cuenta(t => t === 'reembolso'),
+        retiros: cuenta(t => t === 'retiro'),
+      },
+    })
+  } catch (error) {
+    console.error('Error en flujo de dinero:', error)
+    res.status(500).json({ error: 'Error al generar el flujo de dinero' })
+  }
+})
+
 router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   try {
     // ---- Filtro opcional por rango de fechas (aplica a los FLUJOS: recargas y ventas) ----
@@ -675,6 +761,80 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
   } catch (error) {
     console.error('Error en reporte de billetera:', error)
     res.status(500).json({ error: 'Error al generar reporte de billetera' })
+  }
+})
+
+// ============ RETIRO DE BILLETERA (el cliente solicita, el cajero paga) ============
+
+// POST /api/billetera/retiro/solicitar — multipart opcional { imagen (QR) }, body { mensaje, metodo }
+router.post('/retiro/solicitar', verificarToken, subirFotoPerfil.single('imagen'), async (req, res) => {
+  try {
+    const id_cliente = req.usuario.id
+    const metodo = req.body.metodo === 'qr' ? 'qr' : 'persona'
+    const mensaje = req.body.mensaje ? String(req.body.mensaje).slice(0, 400) : null
+
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario: id_cliente } })
+    if (!billetera) return res.status(400).json({ error: 'No tienes billetera.' })
+    if (Number(billetera.saldo_actual) <= 0) return res.status(400).json({ error: 'No tienes saldo para retirar.' })
+
+    // Una solicitud pendiente a la vez.
+    const pendiente = await prisma.solicitud_retiro.findFirst({ where: { id_cliente, estado: 'pendiente' } })
+    if (pendiente) return res.status(409).json({ error: 'Ya tienes una solicitud de retiro pendiente.' })
+
+    const solicitud = await prisma.solicitud_retiro.create({
+      data: {
+        id_cliente,
+        metodo,
+        mensaje,
+        qr_imagen: req.file ? req.file.path : null,
+        estado: 'pendiente',
+        saldo_al_solicitar: billetera.saldo_actual,
+      },
+    })
+    if (global.io) global.io.emit('retiro_solicitado', { id_solicitud: solicitud.id_solicitud })
+    res.status(201).json({ mensaje: 'Solicitud de retiro enviada. El cajero te contactará.', id_solicitud: solicitud.id_solicitud })
+  } catch (error) {
+    console.error('Error solicitando retiro:', error)
+    res.status(500).json({ error: 'No se pudo registrar la solicitud.' })
+  }
+})
+
+// GET /api/billetera/retiro/mias — solicitudes de retiro del cliente.
+router.get('/retiro/mias', verificarToken, async (req, res) => {
+  try {
+    const solicitudes = await prisma.solicitud_retiro.findMany({
+      where: { id_cliente: req.usuario.id },
+      orderBy: { fecha: 'desc' },
+      take: 20,
+    })
+    res.json(solicitudes.map(s => ({
+      id_solicitud: s.id_solicitud,
+      metodo: s.metodo,
+      mensaje: s.mensaje,
+      estado: s.estado,
+      saldo_al_solicitar: Number(s.saldo_al_solicitar),
+      monto_retirado: s.monto_retirado != null ? Number(s.monto_retirado) : null,
+      monto_entregado: s.monto_entregado != null ? Number(s.monto_entregado) : null,
+      diferencia: s.diferencia != null ? Number(s.diferencia) : null,
+      fecha: s.fecha,
+      fecha_pago: s.fecha_pago,
+    })))
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener tus solicitudes' })
+  }
+})
+
+// DELETE /api/billetera/retiro/:id — el cliente cancela su solicitud pendiente.
+router.delete('/retiro/:id', verificarToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })
+    if (!sol || sol.id_cliente !== req.usuario.id) return res.status(404).json({ error: 'Solicitud no encontrada' })
+    if (sol.estado !== 'pendiente') return res.status(409).json({ error: 'Ya fue procesada, no se puede cancelar.' })
+    await prisma.solicitud_retiro.delete({ where: { id_solicitud: id } })
+    res.json({ mensaje: 'Solicitud cancelada' })
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo cancelar' })
   }
 })
 

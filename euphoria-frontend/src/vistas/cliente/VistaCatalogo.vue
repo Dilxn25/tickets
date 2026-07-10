@@ -256,7 +256,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { io } from 'socket.io-client'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
@@ -304,6 +305,7 @@ async function cargarDatos() {
   }
 }
 
+let socket = null
 onMounted(() => {
   cargarDatos()
   // Si el cliente ya reservó un evento (clave que guarda el flujo de reserva),
@@ -314,7 +316,13 @@ onMounted(() => {
       if (ev?.id) tiendaCarrito.setEventoActivo(String(ev.id))
     } catch { /* sin evento previo */ }
   }
+  // Tiempo real: si el local cambia productos/precios/promos o el descuento de combos,
+  // el catálogo del cliente se refresca solo.
+  socket = io({ path: '/socket.io' })
+  socket.on('catalogo_actualizado', () => cargarDatos())
+  socket.on('config_actualizada', (data) => { if (data && 'descuento_combos' in data) cargarDatos() })
 })
+onUnmounted(() => { if (socket) socket.disconnect() })
 
 // Productos destacados (promos y combos) para el carrusel horizontal.
 const destacados = computed(() =>

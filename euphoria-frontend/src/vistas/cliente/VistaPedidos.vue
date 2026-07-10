@@ -63,7 +63,11 @@
         </div>
         <!-- Devolución -->
         <div v-if="p.puede_reembolso" class="ped-reembolso">
-          <span class="pr-info">¿No vas a consumirlo? Te devolvemos <b>Bs {{ p.reembolso_estimado.toFixed(2) }}</b> a tu billetera.</span>
+          <span class="pr-info">
+            ¿No vas a consumirlo? Te devolvemos <b>Bs {{ p.reembolso_estimado.toFixed(2) }}</b> a tu billetera.
+            <em v-if="p.sin_comision" class="pr-full">Sin comisión (faltan +24 h).</em>
+            <em v-else class="pr-com">Dentro de 24 h: comisión {{ p.comision_pct }}%.</em>
+          </span>
           <button class="pr-btn" :disabled="reembolsando === p.id_comanda" @click="pedirDevolucion(p)">
             {{ reembolsando === p.id_comanda ? 'Procesando…' : 'Pedir devolución' }}
           </button>
@@ -157,9 +161,12 @@ async function cargar() {
 }
 
 async function pedirDevolucion(p) {
+  const mensaje = p.sin_comision
+    ? `Faltan más de 24 h para el evento: te devolvemos el TOTAL de Bs ${p.total.toFixed(2)} a tu billetera. ¿Confirmas?`
+    : `Estás dentro de las 24 h previas: te devolvemos Bs ${p.reembolso_estimado.toFixed(2)} (el local retiene ${p.comision_pct}% de Bs ${p.total.toFixed(2)}). ¿Confirmas?`
   const ok = await notif.confirmar({
     titulo: 'Pedir devolución',
-    mensaje: `Te devolveremos Bs ${p.reembolso_estimado.toFixed(2)} a tu billetera (el local retiene ${comisionPct.value}% de comisión sobre Bs ${p.total.toFixed(2)}). ¿Confirmas?`,
+    mensaje,
     textoConfirmar: 'Sí, devolver',
   })
   if (!ok) return
@@ -248,6 +255,9 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-reembolso { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pr-info { font-size: 0.8rem; color: var(--texto-secundario); }
 .pr-info b { color: var(--color-exito); }
+.pr-full, .pr-com { display: block; font-style: normal; font-size: 0.72rem; margin-top: 2px; }
+.pr-full { color: #86EFAC; }
+.pr-com { color: #FCD34D; }
 .pr-btn { flex-shrink: 0; padding: 8px 14px; border-radius: var(--radio-full); border: 1px solid var(--borde-activo); background: rgba(168,85,247,0.1); color: var(--morado-hover); font-weight: 700; font-size: 0.8rem; cursor: pointer; }
 .pr-btn:hover:not(:disabled) { background: rgba(168,85,247,0.2); color: #fff; }
 .pr-btn:disabled { opacity: 0.5; cursor: not-allowed; }

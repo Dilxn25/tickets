@@ -754,7 +754,7 @@
             </div>
             <div class="input-grupo">
               <label>Celular <span class="opcional">(opcional)</span></label>
-              <input v-model="formNuevoCliente.telefono" type="text" class="campo-nuevo-cliente" placeholder="Ej: 70000000" />
+              <BaseTelefono v-model="formNuevoCliente.telefono" placeholder="Ej: 70000000" />
             </div>
             <div class="input-grupo">
               <label>Tipo de cliente</label>
@@ -900,6 +900,7 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 const notif = useNotificaciones()
@@ -1127,17 +1128,7 @@ onMounted(async () => {
   }
   
   try {
-    const data = await servicioProductos.listar({ limit: 100 })
-    productos.value = data.productos || data
-
-    const catsMap = new Map()
-    productos.value.forEach(p => {
-      if (p.id_categoria && p.nombre_categoria) {
-        catsMap.set(p.id_categoria, p.nombre_categoria)
-      }
-    })
-    categorias.value = Array.from(catsMap, ([id_categoria, nombre_categoria]) => ({ id_categoria, nombre_categoria }))
-
+    await recargarCatalogo()
     // Cargar mesas disponibles
     try {
       const resMesas = await clienteHttp.get('/mesas')
@@ -1146,13 +1137,24 @@ onMounted(async () => {
     } catch (e) {
       console.warn('No se pudieron cargar las mesas:', e)
     }
-    
   } catch (err) {
     console.error('Error al cargar productos:', err)
   } finally {
     cargandoProductos.value = false
   }
 })
+
+// Carga/recarga el catálogo (productos + categorías). Se reutiliza para el
+// refresco en vivo cuando el admin cambia productos/precios/promos.
+async function recargarCatalogo() {
+  const data = await servicioProductos.listar({ limit: 100 })
+  productos.value = data.productos || data
+  const catsMap = new Map()
+  productos.value.forEach(p => {
+    if (p.id_categoria && p.nombre_categoria) catsMap.set(p.id_categoria, p.nombre_categoria)
+  })
+  categorias.value = Array.from(catsMap, ([id_categoria, nombre_categoria]) => ({ id_categoria, nombre_categoria }))
+}
 
 // ---- Catálogo: combos destacados vs. productos sueltos ----
 function coincideBusqueda(p) {
@@ -1798,6 +1800,20 @@ onMounted(() => {
     if (data?.id_usuario === tienda.usuario?.id) return
     agregarToast(`${data?.reportadoPor || 'Un compañero'} avisó: el servicio de sugerencias está caído`)
   })
+  // El admin cambió la configuración: aplicar en vivo, sin recargar.
+  socket.on('config_actualizada', (data) => {
+    if (data && 'sugerencias_activas' in data) {
+      if (data.sugerencias_activas) {
+        cargarSugerencias() // se reactivan: recalcular con la orden actual
+      } else {
+        sugerencias.value = [] // se apagaron: quitarlas al instante
+      }
+    }
+    // El descuento de combos cambió: los precios de combo en el catálogo se actualizan.
+    if (data && 'descuento_combos' in data) recargarCatalogo()
+  })
+  // El catálogo cambió (producto/precio/stock/promo): refrescar la lista en vivo.
+  socket.on('catalogo_actualizado', () => { recargarCatalogo() })
   // Recepción me asignó una mesa
   socket.on('mesa_asignada', (data) => {
     if (data?.id_mesero !== tienda.usuario?.id) return

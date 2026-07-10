@@ -5,6 +5,7 @@ const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
+const { notificar } = require('../../utilidades/notificaciones')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
@@ -291,6 +292,138 @@ router.post('/recargar', async (req, res) => {
   }
 })
 
+
+// ================= RETIROS DE BILLETERA (efectivo) =================
+
+// GET /api/cajero/retiros?estado=pendiente — solicitudes de retiro de clientes.
+router.get('/retiros', async (req, res) => {
+  try {
+    const estado = req.query.estado || 'pendiente'
+    const solicitudes = await prisma.solicitud_retiro.findMany({
+      where: estado === 'todas' ? {} : { estado },
+      orderBy: { fecha: 'desc' },
+      take: 100,
+      include: { cliente: { select: { id_usuario: true, nombres: true, apellidos: true, telefono: true, correo: true, billetera: { select: { saldo_actual: true } } } } },
+    })
+    res.json(solicitudes.map(s => ({
+      id_solicitud: s.id_solicitud,
+      id_cliente: s.id_cliente,
+      cliente: `${s.cliente.nombres} ${s.cliente.apellidos || ''}`.trim(),
+      telefono: s.cliente.telefono,
+      correo: s.cliente.correo,
+      saldo_actual: Number(s.cliente.billetera?.saldo_actual || 0),
+      saldo_al_solicitar: Number(s.saldo_al_solicitar),
+      mensaje: s.mensaje,
+      metodo: s.metodo,
+      qr_imagen: s.qr_imagen,
+      estado: s.estado,
+      monto_retirado: s.monto_retirado != null ? Number(s.monto_retirado) : null,
+      monto_entregado: s.monto_entregado != null ? Number(s.monto_entregado) : null,
+      diferencia: s.diferencia != null ? Number(s.diferencia) : null,
+      fecha: s.fecha,
+      fecha_pago: s.fecha_pago,
+    })))
+  } catch (error) {
+    console.error('Error listando retiros:', error)
+    res.status(500).json({ error: 'Error al listar retiros' })
+  }
+})
+
+// Procesa un retiro: descuenta de la billetera y registra cuánto se entregó en
+// efectivo (puede diferir por redondeo/normas → se guarda la diferencia).
+async function procesarRetiro({ id_cliente, monto_retirado, monto_entregado, id_cajero }) {
+  const retirado = Math.round(Number(monto_retirado) * 100) / 100
+  const entregado = Math.round(Number(monto_entregado) * 100) / 100
+  if (!(retirado > 0)) return { error: 'El monto a retirar debe ser mayor a 0.', status: 400 }
+  if (!(entregado >= 0)) return { error: 'El monto entregado no es válido.', status: 400 }
+
+  const billetera = await prisma.billetera.findUnique({ where: { id_usuario: id_cliente } })
+  if (!billetera) return { error: 'El cliente no tiene billetera.', status: 404 }
+  if (Number(billetera.saldo_actual) < retirado) return { error: 'El cliente no tiene saldo suficiente para ese retiro.', status: 400 }
+
+  const ahora = new Date()
+  await prisma.$transaction(async (tx) => {
+    const desc = await tx.billetera.updateMany({
+      where: { id_billetera: billetera.id_billetera, saldo_actual: { gte: retirado } },
+      data: { saldo_actual: { decrement: retirado }, ultima_actualizacion: ahora },
+    })
+    if (desc.count === 0) throw new Error('SALDO_INSUFICIENTE')
+    await tx.transaccion.create({
+      data: { id_billetera: billetera.id_billetera, id_responsable: id_cajero, tipo_operacion: 'retiro', monto: retirado, fecha_hora: ahora },
+    })
+  })
+  if (global.io) global.io.emit('billetera_actualizada', { id_usuario: id_cliente })
+  return { diferencia: Math.round((retirado - entregado) * 100) / 100, retirado, entregado, ahora }
+}
+
+// POST /api/cajero/retiros/:id/pagar  Body: { monto_retirado, monto_entregado }
+router.post('/retiros/:id/pagar', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' })
+    if (sol.estado !== 'pendiente') return res.status(409).json({ error: 'Esta solicitud ya fue procesada.' })
+
+    const r = await procesarRetiro({
+      id_cliente: sol.id_cliente,
+      monto_retirado: req.body.monto_retirado,
+      monto_entregado: req.body.monto_entregado,
+      id_cajero: req.usuario.id,
+    })
+    if (r.error) return res.status(r.status).json({ error: r.error })
+
+    await prisma.solicitud_retiro.update({
+      where: { id_solicitud: id },
+      data: { estado: 'pagado', monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
+    })
+    await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`, url: '/cliente/billetera' })
+    res.json({ mensaje: 'Retiro pagado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia })
+  } catch (error) {
+    if (error.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'El saldo cambió; el cliente ya no tiene ese monto.' })
+    console.error('Error pagando retiro:', error)
+    res.status(500).json({ error: 'Error al procesar el retiro' })
+  }
+})
+
+// POST /api/cajero/retiros/:id/rechazar
+router.post('/retiros/:id/rechazar', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' })
+    if (sol.estado !== 'pendiente') return res.status(409).json({ error: 'Esta solicitud ya fue procesada.' })
+    await prisma.solicitud_retiro.update({ where: { id_solicitud: id }, data: { estado: 'rechazado', id_cajero: req.usuario.id, fecha_pago: new Date() } })
+    await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Solicitud de retiro rechazada', mensaje: 'El local no pudo procesar tu retiro. Acércate a caja para más detalles.', url: '/cliente/billetera' })
+    res.json({ mensaje: 'Solicitud rechazada' })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al rechazar la solicitud' })
+  }
+})
+
+// POST /api/cajero/retiro-directo — retiro sin solicitud previa (cliente presente).
+// Body: { id_cliente, monto_retirado, monto_entregado }
+router.post('/retiro-directo', async (req, res) => {
+  try {
+    const id_cliente = Number(req.body.id_cliente)
+    if (!id_cliente) return res.status(400).json({ error: 'Falta el cliente.' })
+    const cliente = await prisma.usuario.findUnique({ where: { id_usuario: id_cliente } })
+    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado.' })
+
+    const r = await procesarRetiro({ id_cliente, monto_retirado: req.body.monto_retirado, monto_entregado: req.body.monto_entregado, id_cajero: req.usuario.id })
+    if (r.error) return res.status(r.status).json({ error: r.error })
+
+    // Deja registro (como solicitud ya pagada) para el historial y el reporte.
+    await prisma.solicitud_retiro.create({
+      data: { id_cliente, metodo: 'persona', estado: 'pagado', saldo_al_solicitar: r.retirado, monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
+    })
+    await notificar(id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`, url: '/cliente/billetera' })
+    res.json({ mensaje: 'Retiro realizado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia })
+  } catch (error) {
+    if (error.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'El saldo cambió.' })
+    console.error('Error en retiro directo:', error)
+    res.status(500).json({ error: 'Error al procesar el retiro' })
+  }
+})
 
 // POST /api/cajero/abrir-billetera - Crear billetera para usuario nuevo
 router.post('/abrir-billetera', async (req, res) => {

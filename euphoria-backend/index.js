@@ -88,7 +88,38 @@ global.io = io
 
 io.on('connection', socket => {
   console.log(`WebSocket conectado: ${socket.id}`)
-  socket.on('disconnect', () => console.log(`WebSocket desconectado: ${socket.id}`))
+
+  // ---- Presencia en el mapa de reservas (quién está viendo qué lugar) ----
+  // El cliente entra a la "sala" del evento para recibir/emitir presencia en vivo.
+  socket.on('entrar_mapa', ({ id_evento } = {}) => {
+    if (id_evento == null) return
+    socket.data.sala = `mapa_${id_evento}`
+    socket.join(socket.data.sala)
+  })
+  // Está MIRANDO una mesa (aún no reserva): se avisa a los demás de la sala.
+  socket.on('viendo_mesa', ({ id_zona, id_mesa, nombre } = {}) => {
+    if (!socket.data.sala || id_mesa == null) return
+    // Si estaba viendo otra, liberarla primero.
+    if (socket.data.viendo && socket.data.viendo.id_mesa !== id_mesa) {
+      socket.to(socket.data.sala).emit('dejar_mesa', { ...socket.data.viendo, socketId: socket.id })
+    }
+    socket.data.viendo = { id_zona, id_mesa }
+    socket.to(socket.data.sala).emit('viendo_mesa', { id_zona, id_mesa, nombre: nombre || 'Alguien', socketId: socket.id })
+  })
+  // Dejó de mirar (cerró el panel o cambió de lugar).
+  socket.on('dejar_mesa', ({ id_zona, id_mesa } = {}) => {
+    if (!socket.data.sala) return
+    socket.data.viendo = null
+    socket.to(socket.data.sala).emit('dejar_mesa', { id_zona, id_mesa, socketId: socket.id })
+  })
+
+  socket.on('disconnect', () => {
+    // Al desconectarse, liberar el lugar que estaba viendo.
+    if (socket.data.sala && socket.data.viendo) {
+      socket.to(socket.data.sala).emit('dejar_mesa', { ...socket.data.viendo, socketId: socket.id })
+    }
+    console.log(`WebSocket desconectado: ${socket.id}`)
+  })
 })
 
 servidorHttp.listen(PUERTO, () => {

@@ -15,6 +15,7 @@ const prisma   = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { subirImagenProducto, eliminarImagen } = require('../../config/cloudinary')
 const { registrarPrecio, registrarCambios } = require('../../utilidades/historial-precios')
+const { emitirCatalogoActualizado } = require('../../utilidades/config-runtime')
 
 router.use(verificarToken)
 
@@ -234,6 +235,7 @@ router.post('/', soloRoles('Administrador'), subirImagenProducto.single('imagen'
     // Historial de precios: precio inicial del producto (y su promo si nació con una)
     await registrarCambios({ anterior: null, nuevo, idUsuario: req.usuario.id })
 
+    emitirCatalogoActualizado('producto-creado')
     res.status(201).json({ mensaje: 'Producto creado correctamente', producto: nuevo })
   } catch (error) {
     console.error('Error al crear producto:', error)
@@ -308,6 +310,7 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
     // Historial de precios: registra base y/o promo solo si cambiaron
     await registrarCambios({ anterior: actual, nuevo: actualizado, idUsuario: req.usuario.id })
 
+    emitirCatalogoActualizado('producto-editado')
     res.json({ mensaje: 'Producto actualizado', producto: actualizado })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Producto no encontrado' })
@@ -344,6 +347,7 @@ router.patch('/:id/promo', soloRoles('Administrador'), async (req, res) => {
       origen:     activando ? 'promo_activada' : 'promo_desactivada',
     })
 
+    emitirCatalogoActualizado('promo')
     res.json({ mensaje: `Promoción ${actualizado.estado_promocion ? 'activada' : 'desactivada'}`, producto: actualizado })
   } catch { res.status(500).json({ error: 'Error al cambiar promoción' }) }
 })
@@ -484,6 +488,7 @@ router.delete('/:id', soloRoles('Administrador'), async (req, res) => {
       prisma.prediccion_ia.deleteMany({ where: { id_producto: id } }),
       prisma.producto.delete({ where: { id_producto: id } }),
     ])
+    emitirCatalogoActualizado('producto-eliminado')
     res.json({ mensaje: 'Producto eliminado correctamente' })
   } catch (error) {
     console.error('Error al eliminar producto:', error)

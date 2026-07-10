@@ -15,6 +15,21 @@ const prisma  = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { subirFotoPerfil, eliminarImagen } = require('../../config/cloudinary')
 const { normalizarRespuesta } = require('../../utilidades/texto')
+const { enviarCorreo, plantilla } = require('../../utilidades/correo')
+const { emitirRecurso } = require('../../utilidades/config-runtime')
+const crypto = require('crypto')
+
+// Genera un código numérico de 6 dígitos para verificaciones por correo.
+function generarCodigo() { return String(crypto.randomInt(100000, 1000000)) }
+// Cuerpo de correo con el código destacado (se reutiliza en verificación y recuperación).
+function cuerpoCodigo(intro, codigo, cierre) {
+  return `
+    <p style="margin:0 0 14px;line-height:1.65;color:#d9d2ef;">${intro}</p>
+    <div style="margin:18px 0;text-align:center;">
+      <span style="display:inline-block;background:#241844;border:1px dashed #a855f7;border-radius:14px;padding:16px 30px;font-size:30px;font-weight:800;letter-spacing:10px;color:#fff;">${codigo}</span>
+    </div>
+    <p style="margin:14px 0 0;line-height:1.65;color:#a99fce;font-size:13px;">${cierre}</p>`
+}
 
 // ---- Esquemas de Validación (Zod) ----
 const esquemaNombreApellido = z.string()
@@ -59,6 +74,7 @@ function usuarioParaFront(u) {
     url_foto_perfil: u.url_foto_perfil,
     rol: u.rol?.nombre_rol,
     premio_perfil: u.premio_perfil ?? null,
+    correo_verificado: !!u.correo_verificado,
   }
 }
 
@@ -66,7 +82,7 @@ function usuarioParaFront(u) {
 // UNA VEZ un 10% de descuento (tope Bs 30) para su siguiente pedido con
 // billetera. El descuento real lo aplica el backend de comandas al cobrar.
 function perfilEstaCompleto(u) {
-  return !!(u.nombres && u.apellidos && u.ci_carnet && u.telefono && u.url_foto_perfil && u.pregunta_seguridad)
+  return !!(u.nombres && u.apellidos && u.ci_carnet && u.telefono && u.url_foto_perfil && u.pregunta_seguridad && u.correo_verificado)
 }
 
 // Devuelve true si acaba de otorgarse (para que el front celebre una sola vez)
@@ -99,13 +115,16 @@ router.get('/solicitudes-recuperacion', verificarToken, soloRoles('Administrador
         select: { id_usuario: true, nombres: true, apellidos: true, ci_carnet: true, telefono: true },
       })
       const limpiar = v => String(v || '').replace(/\D/g, '')
+      // Normaliza teléfonos: ignora el prefijo país 591 para comparar (así "+59170000000"
+      // y "70000000" se consideran el mismo número).
+      const telNorm = v => { const d = limpiar(v); return d.startsWith('591') ? d.slice(3) : d }
       return {
         ...s,
         cuenta: cuenta ? {
           id_usuario: cuenta.id_usuario,
           nombre: `${cuenta.nombres} ${cuenta.apellidos}`.trim(),
           ci_coincide: !!(cuenta.ci_carnet && s.ci_contacto && limpiar(cuenta.ci_carnet) === limpiar(s.ci_contacto)),
-          telefono_coincide: !!(cuenta.telefono && s.telefono && limpiar(cuenta.telefono) === limpiar(s.telefono)),
+          telefono_coincide: !!(cuenta.telefono && s.telefono && telNorm(cuenta.telefono) === telNorm(s.telefono)),
           tiene_ci_registrado: !!cuenta.ci_carnet,
           tiene_telefono_registrado: !!cuenta.telefono,
         } : null,
@@ -122,11 +141,32 @@ router.get('/solicitudes-recuperacion', verificarToken, soloRoles('Administrador
 router.patch('/solicitudes-recuperacion/:id/atender', verificarToken, soloRoles('Administrador'), async (req, res) => {
   try {
     const id = Number(req.params.id)
+    const solicitud = await prisma.solicitud_recuperacion.findUnique({ where: { id_solicitud: id } })
     await prisma.solicitud_recuperacion.update({
       where: { id_solicitud: id },
       data: { estado: 'atendida', fecha_atencion: new Date() },
     })
-    res.json({ mensaje: 'Solicitud marcada como atendida' })
+
+    // Informar al cliente que su solicitud se revisó pero no se pudo verificar
+    // en línea (así no queda esperando sin respuesta).
+    let correoEnviado = false
+    if (solicitud?.correo) {
+      const r = await enviarCorreo({
+        para: solicitud.correo,
+        asunto: 'Sobre tu solicitud de recuperación — Euphoria',
+        html: plantilla({
+          saludo: 'Hola,',
+          titulo: 'Revisamos tu solicitud',
+          cuerpo: `
+            <p style="margin:0 0 14px;line-height:1.65;color:#d9d2ef;">Recibimos tu pedido para recuperar el acceso a tu cuenta, pero por seguridad no pudimos verificar tu identidad con los datos enviados.</p>
+            <p style="margin:0 0 14px;line-height:1.65;color:#d9d2ef;">Acércate al local con tu documento de identidad (CI) y con gusto te ayudamos a restablecer tu acceso en el momento.</p>
+            <p style="margin:0;line-height:1.65;color:#a99fce;font-size:13px;">Gracias por tu comprensión.</p>`,
+        }),
+        texto: 'Revisamos tu solicitud de recuperación en Euphoria pero no pudimos verificar tu identidad en línea. Acércate al local con tu CI y te ayudamos a restablecer el acceso.',
+      })
+      correoEnviado = r.enviado
+    }
+    res.json({ mensaje: correoEnviado ? 'Solicitud cerrada y avisada al correo del cliente.' : 'Solicitud marcada como atendida', correo_enviado: correoEnviado })
   } catch (error) {
     res.status(500).json({ error: 'Error al atender la solicitud' })
   }
@@ -157,11 +197,32 @@ router.patch('/solicitudes-recuperacion/:id/resolver', verificarToken, soloRoles
       data: { estado: 'atendida', fecha_atencion: new Date() },
     })
 
+    // Avisar al cliente por correo AUTOMÁTICAMENTE con su clave temporal.
+    const nombreCliente = `${cuenta.nombres} ${cuenta.apellidos}`.trim()
+    const correoRes = await enviarCorreo({
+      para: cuenta.correo,
+      asunto: 'Tu contraseña de Euphoria fue restablecida',
+      html: plantilla({
+        saludo: `Hola ${cuenta.nombres || ''},`,
+        titulo: 'Ya puedes volver a entrar',
+        cuerpo: `
+          <p style="margin:0 0 14px;line-height:1.65;color:#d9d2ef;">Restablecimos la contraseña de tu cuenta. Ingresa con esta clave temporal y cámbiala desde tu perfil:</p>
+          <div style="margin:18px 0;text-align:center;">
+            <span style="display:inline-block;background:#241844;border:1px dashed #a855f7;border-radius:14px;padding:16px 34px;font-size:28px;font-weight:800;letter-spacing:6px;color:#fff;">${passwordTemporal}</span>
+          </div>
+          <p style="margin:14px 0 0;line-height:1.65;color:#a99fce;font-size:13px;">Por tu seguridad, cámbiala apenas ingreses. Si tú no pediste esto, contáctanos.</p>`,
+      }),
+      texto: `Hola ${cuenta.nombres || ''}. Tu contraseña de Euphoria fue restablecida. Clave temporal: ${passwordTemporal}. Cámbiala desde tu perfil al ingresar.`,
+    })
+
     res.json({
-      mensaje: 'Contraseña restablecida. Avisa al cliente su nueva clave temporal.',
+      mensaje: correoRes.enviado
+        ? 'Contraseña restablecida y avisada al correo del cliente.'
+        : 'Contraseña restablecida. Avisa al cliente su nueva clave temporal.',
       password_temporal: passwordTemporal,
+      correo_enviado: correoRes.enviado,
       contacto: {
-        nombre: `${cuenta.nombres} ${cuenta.apellidos}`.trim(),
+        nombre: nombreCliente,
         correo: cuenta.correo,
         // el teléfono de la solicitud o el registrado en la cuenta
         telefono: solicitud.telefono || cuenta.telefono || null,
@@ -213,6 +274,7 @@ router.put('/perfil', verificarToken, subirFotoPerfil.single('imagen'), async (r
     })
 
     const premioOtorgado = await otorgarPremioSiCorresponde(actualizado)
+    emitirRecurso('usuarios', { id: actualizado.id_usuario })
     res.json({ mensaje: 'Perfil actualizado', usuario: usuarioParaFront(actualizado), premio_otorgado: premioOtorgado })
   } catch (error) {
     res.status(500).json({ error: 'Error al actualizar perfil' })
@@ -268,10 +330,125 @@ router.put('/perfil/seguridad', verificarToken, async (req, res) => {
     })
 
     const premioOtorgado = await otorgarPremioSiCorresponde(actualizado)
+    emitirRecurso('usuarios', { id: actualizado.id_usuario })
     res.json({ mensaje: 'Pregunta de seguridad actualizada', usuario: usuarioParaFront(actualizado), premio_otorgado: premioOtorgado })
   } catch (error) {
     console.error(error)
     res.status(500).json({ error: 'Error al guardar la pregunta de seguridad' })
+  }
+})
+
+// ===== Verificación de correo (paso del perfil completo) =====
+
+// POST /api/usuarios/verificar-correo/enviar — manda un código de 6 dígitos.
+// Body opcional: { nuevo_correo } → si viene y es distinto, el código se manda a ESE
+// correo (cambio de correo); se valida que no exista ya en otra cuenta. El correo
+// solo se establece al confirmar el código.
+router.post('/verificar-correo/enviar', verificarToken, async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const u = await prisma.usuario.findUnique({ where: { id_usuario } })
+    if (!u) return res.status(404).json({ error: 'Usuario no encontrado' })
+
+    // ¿Cambio de correo? (viene un correo distinto al actual)
+    const nuevoCorreo = String(req.body.nuevo_correo || '').trim().toLowerCase()
+    let esCambio = false
+    let destino = u.correo
+    if (nuevoCorreo && nuevoCorreo !== u.correo.toLowerCase()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoCorreo)) {
+        return res.status(400).json({ error: 'Escribe un correo válido.' })
+      }
+      // Unicidad: que no lo use otra cuenta.
+      const ocupado = await prisma.usuario.findUnique({ where: { correo: nuevoCorreo } })
+      if (ocupado && ocupado.id_usuario !== id_usuario) {
+        return res.status(409).json({ error: 'Ese correo ya está registrado en otra cuenta.' })
+      }
+      esCambio = true
+      destino = nuevoCorreo
+    } else if (u.correo_verificado) {
+      // Mismo correo y ya verificado: nada que hacer.
+      return res.json({ ya_verificado: true, mensaje: 'Tu correo ya está verificado.' })
+    }
+
+    // Anti-spam: no reenviar si ya se mandó uno hace menos de 60 s.
+    const reciente = await prisma.codigo_verificacion.findFirst({
+      where: { id_usuario, proposito: 'correo', usado: false, fecha: { gt: new Date(Date.now() - 60 * 1000) } },
+    })
+    if (reciente) return res.status(429).json({ error: 'Espera un momento antes de pedir otro código.' })
+
+    const codigo = generarCodigo()
+    // Invalidar códigos previos de correo y crear el nuevo (vence en 15 min).
+    await prisma.codigo_verificacion.updateMany({ where: { id_usuario, proposito: 'correo', usado: false }, data: { usado: true } })
+    await prisma.codigo_verificacion.create({
+      data: { id_usuario, codigo, proposito: 'correo', dato: esCambio ? destino : null, expira: new Date(Date.now() + 15 * 60 * 1000) },
+    })
+
+    const r = await enviarCorreo({
+      para: destino, // el código va al correo que se quiere verificar/establecer
+      asunto: 'Tu código de verificación — Euphoria',
+      html: plantilla({
+        saludo: `Hola ${u.nombres || ''},`,
+        titulo: esCambio ? 'Confirma tu nuevo correo' : 'Verifica tu correo',
+        cuerpo: cuerpoCodigo(
+          esCambio ? 'Usa este código para establecer este correo en tu cuenta:' : 'Usa este código para confirmar que este correo es tuyo:',
+          codigo,
+          'El código vence en 15 minutos. Si tú no lo pediste, ignora este mensaje.'),
+      }),
+      texto: `Tu código de verificación de Euphoria es ${codigo}. Vence en 15 minutos.`,
+    })
+    if (!r.enviado) return res.status(500).json({ error: 'No se pudo enviar el correo. Revisa que la dirección sea válida.' })
+    res.json({ mensaje: `Te enviamos un código a ${destino}.`, es_cambio: esCambio })
+  } catch (error) {
+    console.error('Error enviando código de verificación:', error)
+    res.status(500).json({ error: 'Error al enviar el código' })
+  }
+})
+
+// POST /api/usuarios/verificar-correo/confirmar — valida el código e marca verificado.
+router.post('/verificar-correo/confirmar', verificarToken, async (req, res) => {
+  try {
+    const id_usuario = req.usuario.id
+    const codigo = String(req.body.codigo || '').trim()
+    if (!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'Ingresa el código de 6 dígitos.' })
+
+    const reg = await prisma.codigo_verificacion.findFirst({
+      where: { id_usuario, proposito: 'correo', usado: false },
+      orderBy: { fecha: 'desc' },
+    })
+    if (!reg) return res.status(400).json({ error: 'No hay un código pendiente. Pide uno nuevo.' })
+    if (reg.expira < new Date()) return res.status(400).json({ error: 'El código venció. Pide uno nuevo.' })
+    if (reg.intentos >= 5) return res.status(429).json({ error: 'Demasiados intentos. Pide un código nuevo.' })
+    if (reg.codigo !== codigo) {
+      await prisma.codigo_verificacion.update({ where: { id_codigo: reg.id_codigo }, data: { intentos: { increment: 1 } } })
+      return res.status(400).json({ error: 'Código incorrecto.' })
+    }
+
+    // Datos a actualizar: siempre queda verificado; si es cambio de correo, se ESTABLECE ahora.
+    const datosUpdate = { correo_verificado: true }
+    if (reg.dato) {
+      // Re-chequear unicidad por si alguien tomó el correo entre pedir y confirmar.
+      const ocupado = await prisma.usuario.findUnique({ where: { correo: reg.dato } })
+      if (ocupado && ocupado.id_usuario !== id_usuario) {
+        return res.status(409).json({ error: 'Ese correo se registró en otra cuenta mientras tanto. Usa otro.' })
+      }
+      datosUpdate.correo = reg.dato
+    }
+
+    await prisma.codigo_verificacion.update({ where: { id_codigo: reg.id_codigo }, data: { usado: true } })
+    let actualizado
+    try {
+      actualizado = await prisma.usuario.update({ where: { id_usuario }, data: datosUpdate, include: { rol: true } })
+    } catch (e) {
+      if (e.code === 'P2002') return res.status(409).json({ error: 'Ese correo ya está registrado en otra cuenta.' })
+      throw e
+    }
+    // Verificar el correo puede COMPLETAR el perfil → otorgar el premio si corresponde.
+    const premioOtorgado = await otorgarPremioSiCorresponde(actualizado)
+    emitirRecurso('usuarios', { id: id_usuario })
+    res.json({ mensaje: reg.dato ? '¡Correo actualizado y verificado!' : '¡Correo verificado!', correo_verificado: true, usuario: usuarioParaFront(actualizado), premio_otorgado: premioOtorgado })
+  } catch (error) {
+    console.error('Error verificando correo:', error)
+    res.status(500).json({ error: 'Error al verificar el código' })
   }
 })
 
@@ -532,6 +709,7 @@ router.post('/', async (req, res) => {
     })
 
     const { password_hash: _, ...datos } = nuevo
+    emitirRecurso('usuarios', { id: datos.id_usuario })
     res.status(201).json({ mensaje: 'Usuario creado correctamente', usuario: { ...datos, rol: datos.rol.nombre_rol } })
   } catch (error) {
     console.error('Error al crear usuario:', error)
@@ -564,6 +742,7 @@ router.put('/:id', async (req, res) => {
     })
 
     const { password_hash, ...datos } = actualizado
+    emitirRecurso('usuarios', { id: datos.id_usuario })
     res.json({ mensaje: 'Usuario actualizado', usuario: { ...datos, rol: datos.rol.nombre_rol } })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Usuario no encontrado' })
@@ -592,6 +771,7 @@ router.patch('/:id/estado', async (req, res) => {
       data:  { estado_cuenta },
     })
 
+    emitirRecurso('usuarios', { id: Number(req.params.id) })
     res.json({ mensaje: `Usuario ${estado_cuenta} correctamente` })
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ error: 'Usuario no encontrado' })

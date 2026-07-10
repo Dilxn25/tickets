@@ -68,8 +68,8 @@
         <div class="leyenda">
           <span class="lg"><i class="pt libre"></i> Libre</span>
           <span class="lg"><i class="pt ocupada"></i> Reservada</span>
+          <span class="lg"><i class="pt en-vista"></i> Alguien la ve</span>
           <span class="lg"><i class="pt sel"></i> Tu elección</span>
-          <span class="lg"><i class="pt deco"></i> Fijo</span>
         </div>
 
         <!-- Mapa -->
@@ -80,18 +80,28 @@
               class="elemento" :class="claseElemento(el)"
               :style="estiloElemento(el)"
               @click="seleccionar(el)">
-              <span class="etq">{{ el.numero_nombre }}</span>
+              <span class="etq">{{ etiquetaElemento(el) }}</span>
               <span
-                v-if="el.tipo_elemento === 'mesa' && esReservable(el) && el.estado_ocupacion === 'libre'"
+                v-if="esReservable(el) && el.estado_ocupacion === 'libre'"
                 class="precio-tag" aria-hidden="true">
                 {{ formatoBsCorto(precioMesa(el)) }}
+              </span>
+              <span v-if="esReservable(el) && el.estado_ocupacion === 'libre' && estaEnVista(el.id_mesa)" class="ojo-vista" title="Alguien está viendo este lugar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="11" height="11"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
               </span>
             </div>
           </div>
         </div>
 
+        <div v-if="leyendaZonas.length" class="leyenda-zonas">
+          <span v-for="lz in leyendaZonas" :key="lz.precio" class="leyenda-item">
+            <span class="leyenda-punto" :style="{ background: lz.color }"></span>
+            <b>Bs {{ lz.precio }}</b>
+          </span>
+        </div>
+
         <p class="ayuda-mapa">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ayuda-icono"><path d="M9 11.5a3 3 0 1 0 6 0v-6a3 3 0 1 0-6 0z"></path><path d="M5 10.5a7 7 0 0 0 14 0"></path><line x1="12" y1="17.5" x2="12" y2="21"></line></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ayuda-icono"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"></path><path d="M11 12V4a1.5 1.5 0 0 1 3 0v8"></path><path d="M14 6.5a1.5 1.5 0 0 1 3 0V16a5 5 0 0 1-5 5h-1.5a5 5 0 0 1-4.2-2.3L4 15s.8-1.4 2.4-.9L8 15"></path></svg>
           Toca una mesa o silla libre para reservarla.
         </p>
       </template>
@@ -108,25 +118,40 @@
 
           <div class="hoja-cab">
             <div class="hoja-tit">
-              <h3>{{ mesaSel.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ mesaSel.numero_nombre }}</h3>
+              <h3 v-if="esPieSel">Entrada de pie</h3>
+              <h3 v-else>{{ mesaSel.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ mesaSel.numero_nombre }}</h3>
               <p class="hoja-zona">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
-                {{ nombreZonaSel }} · {{ mesaSel.tipo_elemento === 'silla' ? '1 persona' : (mesaSel.capacidad_sillas || 1) + ' personas' }}
+                {{ nombreZonaSel }} · {{ esPieSel ? 'sin asiento, de pie' : (mesaSel.tipo_elemento === 'silla' ? '1 persona' : (mesaSel.capacidad_sillas || 1) + ' personas') }}
               </p>
             </div>
             <div class="precio">{{ formatoBs(precioMesa(mesaSel)) }}</div>
           </div>
 
           <p class="hoja-nota">
-            {{ mesaSel.tipo_elemento === 'silla'
-              ? 'Reservas un asiento para ti.'
-              : 'Compras la mesa entera. Tu QR sirve para ' + (mesaSel.capacidad_sillas || 1) + ' ingresos: puedes entrar por tandas (ej. 3 ahora y el resto después).' }}
+            {{ esPieSel
+              ? 'Compras UNA entrada de pie (sin asiento asignado) en esta zona.'
+              : (mesaSel.tipo_elemento === 'silla'
+                ? 'Reservas un asiento para ti.'
+                : 'Compras la mesa entera. Tu QR sirve para ' + (mesaSel.capacidad_sillas || 1) + ' ingresos: puedes entrar por tandas (ej. 3 ahora y el resto después).') }}
           </p>
 
+          <!-- Disponibilidad de la pista, en vivo (baja al comprar y temporalmente al ser vista) -->
+          <p v-if="esPieSel" class="hoja-disp" :class="{ agotado: pistaDisponibles(mesaSel) <= 0 }">
+            {{ pistaDisponibles(mesaSel) > 0
+              ? 'Quedan ' + pistaDisponibles(mesaSel) + ' de ' + (mesaSel.capacidad_sillas || 0) + ' lugares'
+              : 'Sin lugares disponibles ahora mismo' }}
+            <em v-if="viewersDe(mesaSel.id_mesa) > 0" class="hoja-disp-nota"> · {{ viewersDe(mesaSel.id_mesa) }} mirándola ahora</em>
+          </p>
+
+          <p v-if="!esPieSel && mesaSel && estaEnVista(mesaSel.id_mesa)" class="hoja-vista">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            Otra persona también está mirando este lugar. ¡Reserva rápido!
+          </p>
           <p v-if="msgError" class="hoja-error">{{ msgError }}</p>
 
-          <button class="btn-primario grande brillo-hover" :disabled="reservando" @click="reservar">
-            {{ reservando ? 'Reservando...' : `Reservar por ${formatoBs(precioMesa(mesaSel))}` }}
+          <button class="btn-primario grande brillo-hover" :disabled="reservando || (esPieSel && pistaDisponibles(mesaSel) <= 0)" @click="esPieSel ? comprarPieEntrada() : reservar()">
+            {{ reservando ? 'Procesando...' : (esPieSel ? `Comprar de pie por ${formatoBs(precioMesa(mesaSel))}` : `Reservar por ${formatoBs(precioMesa(mesaSel))}`) }}
           </button>
         </div>
       </Transition>
@@ -156,7 +181,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
           <h3>¡Reserva confirmada!</h3>
-          <p class="exito-sub">{{ reservaOk.entrada.mesa ? 'Mesa ' + reservaOk.entrada.mesa + ' · ' : '' }}{{ reservaOk.entrada.zona }}</p>
+          <p class="exito-sub">{{ reservaOk.entrada.mesa ? (tipoReservado === 'silla' ? 'Silla ' : 'Mesa ') + reservaOk.entrada.mesa + ' · ' : '' }}{{ reservaOk.entrada.zona }}</p>
 
           <img :src="reservaOk.qr" alt="QR de acceso" class="qr-img" />
           <p class="codigo">Código: <b>{{ reservaOk.entrada.codigo_ingreso }}</b></p>
@@ -209,17 +234,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
+import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 
 const route = useRoute()
 const router = useRouter()
 const tiendaCarrito = useTiendaCarrito()
+const tienda = useTiendaAutenticacion()
 const idEvento = Number(route.params.idEvento)
 const productosCompletos = ref([])
 
@@ -238,10 +266,38 @@ const reservando = ref(false)
 const msgError = ref('')
 const pidiendoPin = ref(false)
 const pin = ref('')
-const accionPin = ref('mesa') // 'mesa' | 'campo' — qué confirma el PIN
+const accionPin = ref('mesa') // 'mesa' | 'campo' | 'pie' — qué confirma el PIN
 const reservaOk = ref(null)
 
+// Presencia en vivo: quiénes están VIENDO cada lugar ahora → { id_mesa: { socketId: nombre } }.
+const viendoOtros = ref({})
+let miMesaVista = null
+// Cuántas OTRAS personas están viendo un lugar (no cuenta mi propia vista).
+function viewersDe(id_mesa) { return Object.keys(viendoOtros.value[id_mesa] || {}).length }
+function estaEnVista(id_mesa) { return viewersDe(id_mesa) > 0 }
+
 let socket = null
+
+// Avisa a los demás qué lugar estoy mirando (o que lo dejé).
+function emitirPresencia(el) {
+  if (!socket) return
+  if (miMesaVista && (!el || miMesaVista !== el.id_mesa)) {
+    socket.emit('dejar_mesa', { id_zona: idZonaSel.value, id_mesa: miMesaVista })
+    miMesaVista = null
+  }
+  if (el && ['mesa', 'silla', 'area'].includes(el.tipo_elemento)) {
+    miMesaVista = el.id_mesa
+    socket.emit('viendo_mesa', { id_evento: idEvento, id_zona: el.id_zona || idZonaSel.value, id_mesa: el.id_mesa, nombre: tienda.usuario?.nombres || 'Alguien' })
+  }
+}
+watch(mesaSel, (nuevo) => emitirPresencia(nuevo))
+
+// Disponibilidad de la pista: total de parados − vendidas − los que la ven ahora (temporal).
+function pistaDisponibles(area) {
+  const total = Number(area?.capacidad_sillas) || 0
+  const vendidas = Number(zonaSel.value?.vendidas_pie) || 0
+  return Math.max(0, total - vendidas - viewersDe(area?.id_mesa))
+}
 
 // Tamaños por defecto (en %) cuando el elemento no trae ancho/alto
 const TAM_DEFECTO = {
@@ -262,12 +318,21 @@ function esReservable(el) {
   return (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && el.es_seleccionable
 }
 
+// Etiqueta a mostrar: el nombre propio, o el tipo (Barra/Escenario/Zona) para que
+// el cliente se ubique aunque el elemento no tenga nombre. La pared es decorativa.
+function etiquetaElemento(el) {
+  if (el.numero_nombre) return el.numero_nombre
+  return ({ barra: 'Barra', escenario: 'Escenario', area: 'Zona', pared: '' })[el.tipo_elemento] || ''
+}
+
 function claseElemento(el) {
   const c = [`tipo-${el.tipo_elemento || 'mesa'}`]
   if (esReservable(el)) {
     c.push(el.estado_ocupacion === 'libre' ? 'libre' : 'ocupada')
     // Resalta en el mapa la mesa que el cliente tiene elegida en el panel
     if (mesaSel.value && mesaSel.value.id_mesa === el.id_mesa) c.push('sel')
+    // Alguien más lo está viendo ahora mismo (presencia en vivo)
+    if (el.estado_ocupacion === 'libre' && estaEnVista(el.id_mesa)) c.push('en-vista')
   } else {
     c.push('deco')
   }
@@ -286,6 +351,19 @@ function estiloElemento(el) {
     transform: `rotate(${el.rotacion || 0}deg)`,
   }
   if (el.forma) estilo.borderRadius = el.forma === 'redondo' ? '50%' : '8px'
+  // Color por zona (según precio): el área se tiñe entera; las mesas/sillas llevan
+  // un aro del color de su zona SIN tapar el estado libre/ocupada.
+  const color = colorElemento(el)
+  if (color) {
+    if (el.tipo_elemento === 'area') {
+      estilo.borderColor = color
+      estilo.background = color + '22'
+      estilo.boxShadow = `inset 0 0 24px ${color}2e`
+    } else if (esReservable(el)) {
+      estilo.outline = `2px solid ${color}`
+      estilo.outlineOffset = '1px'
+    }
+  }
   return estilo
 }
 
@@ -293,6 +371,35 @@ function precioMesa(el) {
   if (el.precio != null) return Number(el.precio)
   return Number(zonaSel.value?.precio_entrada_base || 0)
 }
+
+// Color por zona (mismo criterio de precio en todo el evento, para que sea consistente).
+const mapaColores = computed(() => {
+  const precios = []
+  for (const z of zonas.value) {
+    for (const m of (z.mesa_espacio || [])) {
+      precios.push(m.precio != null ? Number(m.precio) : Number(z.precio_entrada_base || 0))
+    }
+  }
+  return mapaColorPorPrecio(precios)
+})
+function colorElemento(el) {
+  const precio = el.precio != null ? Number(el.precio) : Number(zonaSel.value?.precio_entrada_base || 0)
+  return colorPorPrecio(precio, mapaColores.value)
+}
+// Leyenda: SOLO color + precio (sin nombres), un ítem por precio distinto.
+const leyendaZonas = computed(() => {
+  const precios = new Set()
+  for (const z of zonas.value) {
+    for (const m of (z.mesa_espacio || [])) {
+      const precio = m.precio != null ? Number(m.precio) : Number(z.precio_entrada_base || 0)
+      if (precio > 0) precios.add(precio)
+    }
+  }
+  return [...precios]
+    .map(precio => ({ precio, color: colorPorPrecio(precio, mapaColores.value) }))
+    .filter(x => x.color)
+    .sort((a, b) => b.precio - a.precio)
+})
 
 function formatoBs(n) {
   return `Bs ${Number(n || 0).toFixed(2)}`
@@ -304,7 +411,17 @@ function formatoBsCorto(n) {
   return `Bs ${Number.isInteger(v) ? v : v.toFixed(2)}`
 }
 
+const esPieSel = computed(() => mesaSel.value?.tipo_elemento === 'area')
 function seleccionar(el) {
+  // Área/pista con precio: se compra entrada de pie.
+  if (el.tipo_elemento === 'area') {
+    const precio = el.precio != null ? Number(el.precio) : Number(zonaSel.value?.precio_entrada_base || 0)
+    if (!(precio > 0)) return // área sin precio: decorativa
+    mesaSel.value = el
+    personas.value = 1
+    msgError.value = ''
+    return
+  }
   if (!esReservable(el)) return
   if (el.estado_ocupacion !== 'libre') {
     msgError.value = ''
@@ -313,6 +430,35 @@ function seleccionar(el) {
   mesaSel.value = el
   personas.value = 1
   msgError.value = ''
+}
+
+// Comprar entrada de pie tocando el área/pista del mapa.
+async function comprarPieEntrada() {
+  if (!mesaSel.value) return
+  reservando.value = true
+  msgError.value = ''
+  try {
+    const r = await servicioReservas.comprarPie(mesaSel.value.id_mesa, pidiendoPin.value ? pin.value : undefined)
+    reservaOk.value = r
+    tipoReservado.value = 'campo'
+    tiendaCarrito.setEventoActivo(String(idEvento))
+    localStorage.setItem('euphoria_evento_actual', JSON.stringify({ id: idEvento, nombre: nombreEvento.value || '' }))
+    pidiendoPin.value = false
+    pin.value = ''
+    mesaSel.value = null
+    cargar()
+  } catch (err) {
+    const data = err?.response?.data || err
+    if (data?.requiere_pin) {
+      pidiendoPin.value = true
+      accionPin.value = 'pie'
+      msgError.value = data?.error === 'PIN incorrecto' ? 'PIN incorrecto, intenta de nuevo' : ''
+    } else {
+      msgError.value = data?.error || 'No se pudo comprar la entrada de pie'
+    }
+  } finally {
+    reservando.value = false
+  }
 }
 
 async function reservar() {
@@ -389,6 +535,7 @@ async function comprarCampoEntrada() {
 // El modal de PIN confirma la acción pendiente (reserva de mesa/silla o entrada de pie)
 function confirmarPin() {
   if (accionPin.value === 'campo') comprarCampoEntrada()
+  else if (accionPin.value === 'pie') comprarPieEntrada()
   else reservar()
 }
 
@@ -480,16 +627,44 @@ onMounted(() => {
   clienteHttp.get('/recomendaciones/packs').then(r => { packs.value = (r.packs || []).slice(0, 3) }).catch(() => {})
   // Tiempo real: si otra persona reserva una mesa, se refleja en el mapa
   socket = io()
+  socket.emit('entrar_mapa', { id_evento: idEvento })
   socket.on('mesa_actualizada', (datos) => {
     for (const z of zonas.value) {
       const m = z.mesa_espacio?.find(e => e.id_mesa === datos.id_mesa)
       if (m) m.estado_ocupacion = datos.estado
     }
+    // Si alguien reservó, deja de estar "en vista".
+    if (datos.id_mesa != null) {
+      const copia = { ...viendoOtros.value }; delete copia[datos.id_mesa]; viendoOtros.value = copia
+    }
+  })
+  // Presencia: alguien está VIENDO un lugar (aún no reserva). Contamos por socket.
+  socket.on('viendo_mesa', ({ id_mesa, nombre, socketId }) => {
+    if (id_mesa == null || !socketId) return
+    const prev = viendoOtros.value[id_mesa] || {}
+    viendoOtros.value = { ...viendoOtros.value, [id_mesa]: { ...prev, [socketId]: nombre || 'Alguien' } }
+  })
+  socket.on('dejar_mesa', ({ id_mesa, socketId }) => {
+    const prev = viendoOtros.value[id_mesa]
+    if (!prev || !socketId) return
+    const copia = { ...prev }; delete copia[socketId]
+    const nuevo = { ...viendoOtros.value }
+    if (Object.keys(copia).length) nuevo[id_mesa] = copia
+    else delete nuevo[id_mesa]
+    viendoOtros.value = nuevo
+  })
+  // Alguien compró una entrada de pie: baja la disponibilidad de esa zona en vivo.
+  socket.on('pie_comprado', ({ id_zona }) => {
+    const z = zonas.value.find(x => x.id_zona === id_zona)
+    if (z) z.vendidas_pie = (Number(z.vendidas_pie) || 0) + 1
   })
 })
 
 onUnmounted(() => {
-  if (socket) socket.disconnect()
+  if (socket) {
+    if (miMesaVista) socket.emit('dejar_mesa', { id_zona: idZonaSel.value, id_mesa: miMesaVista })
+    socket.disconnect()
+  }
 })
 </script>
 
@@ -646,6 +821,24 @@ onUnmounted(() => {
 }
 .elemento.sel .precio-tag { color: #FBCFE8; }
 
+/* Alguien más está viendo este lugar ahora (presencia en vivo) */
+.elemento.en-vista {
+  border-color: #F5B301 !important;
+  box-shadow: 0 0 0 2px rgba(245,179,1,0.5), 0 0 14px rgba(245,179,1,0.55);
+  animation: pulso-vista 1.3s ease-in-out infinite;
+}
+@keyframes pulso-vista {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(245,179,1,0.5), 0 0 8px rgba(245,179,1,0.4); }
+  50% { box-shadow: 0 0 0 3px rgba(245,179,1,0.7), 0 0 18px rgba(245,179,1,0.7); }
+}
+.ojo-vista {
+  position: absolute; top: 2px; right: 2px;
+  display: inline-flex; color: #F5B301;
+  filter: drop-shadow(0 0 3px rgba(245,179,1,0.8));
+  pointer-events: none;
+}
+.pt.en-vista { background: #F5B301; box-shadow: 0 0 10px rgba(245,179,1,0.6); }
+
 /* Decorativos */
 .elemento.deco { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.14); color: var(--texto-secundario); }
 .elemento.tipo-barra { background: rgba(155,89,182,0.22); border: 1px solid rgba(155,89,182,0.4); border-radius: 8px; }
@@ -672,6 +865,21 @@ onUnmounted(() => {
   text-align: center; font-size: 0.8rem; color: var(--texto-secundario); margin-top: 0.9rem;
 }
 .ayuda-icono { width: 15px; height: 15px; flex-shrink: 0; color: var(--morado-hover); }
+
+/* Leyenda de zonas por color */
+.leyenda-zonas {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px;
+  margin-top: 0.9rem;
+}
+.leyenda-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.76rem; color: var(--texto-secundario);
+}
+.leyenda-item b { color: var(--texto-principal); font-weight: 700; }
+.leyenda-punto {
+  width: 11px; height: 11px; border-radius: 50%;
+  box-shadow: 0 0 7px currentColor; flex-shrink: 0;
+}
 
 /* Zona general / de pie (campo) */
 .campo-card {
@@ -743,6 +951,17 @@ onUnmounted(() => {
 
 .hoja-nota { font-size: 0.8rem; color: var(--texto-secundario); line-height: 1.5; text-wrap: pretty; background: rgba(168,85,247,0.1); border: 1px solid var(--glass-borde); border-radius: var(--radio-lg); padding: 10px 13px; margin-bottom: 0.9rem; }
 .hoja-error { color: var(--color-error); font-size: 0.82rem; margin-bottom: 0.6rem; text-align: center; }
+.hoja-vista {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: #F5B301; font-size: 0.8rem; font-weight: 600;
+  margin-bottom: 0.6rem; text-align: center;
+}
+.hoja-disp {
+  text-align: center; font-size: 0.85rem; font-weight: 700;
+  color: var(--color-exito); margin-bottom: 0.6rem;
+}
+.hoja-disp.agotado { color: var(--color-error); }
+.hoja-disp-nota { font-weight: 500; font-style: normal; color: #F5B301; }
 
 /* Botones */
 .btn-primario {

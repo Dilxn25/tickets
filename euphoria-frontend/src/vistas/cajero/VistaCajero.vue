@@ -76,6 +76,10 @@
         </svg>
         Consultar
       </button>
+      <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'retiros' }]" @click="tabActiva = 'retiros'; cargarRetiros()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"></path><path d="M5 12l7 7 7-7"></path></svg>
+        Retiros<span v-if="retirosPendientes.length" class="tab-badge">{{ retirosPendientes.length }}</span>
+      </button>
       <button :class="['tab-btn brillo-hover', { activo: tabActiva === 'historial' }]" @click="tabActiva = 'historial'">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -801,6 +805,53 @@
       </div>
     </div>
 
+    <!-- Panel de Retiros de billetera -->
+    <div v-if="tabActiva === 'retiros'" class="panel-contenido anim-fade">
+      <div class="tarjeta-modulo modulo-ancho">
+        <div class="retiros-cab">
+          <h2 class="card-titulo">Retiros de billetera</h2>
+          <div class="retiros-filtros">
+            <button :class="['retiro-filtro', { activo: filtroRetiro === 'pendiente' }]" @click="filtroRetiro = 'pendiente'; cargarRetiros()">Pendientes</button>
+            <button :class="['retiro-filtro', { activo: filtroRetiro === 'pagado' }]" @click="filtroRetiro = 'pagado'; cargarRetiros()">Pagados</button>
+          </div>
+        </div>
+
+        <p v-if="!retiros.length" class="retiros-vacio">No hay solicitudes {{ filtroRetiro === 'pendiente' ? 'pendientes' : 'pagadas' }}.</p>
+
+        <div v-for="r in retiros" :key="r.id_solicitud" class="retiro-card">
+          <div class="retiro-card-cab">
+            <div>
+              <strong>{{ r.cliente }}</strong>
+              <span class="retiro-tel">{{ r.telefono ? '+591 ' + String(r.telefono).replace(/\D/g,'').slice(-8) : r.correo }}</span>
+            </div>
+            <span class="retiro-saldo-chip">Saldo: Bs {{ r.saldo_actual.toFixed(2) }}</span>
+          </div>
+          <p class="retiro-metodo-txt">{{ r.metodo === 'qr' ? 'Prefiere a su QR / cuenta' : 'Pasará por el local' }}</p>
+          <p v-if="r.mensaje" class="retiro-msg">“{{ r.mensaje }}”</p>
+          <a v-if="r.qr_imagen" :href="r.qr_imagen" target="_blank" class="retiro-ver-qr">Ver QR del cliente</a>
+
+          <template v-if="r.estado === 'pendiente'">
+            <div class="retiro-montos">
+              <label>Retirar de billetera
+                <input type="number" min="0" :max="r.saldo_actual" step="0.01" v-model.number="r._retirar" class="retiro-input" />
+              </label>
+              <label>Entregar en efectivo
+                <input type="number" min="0" step="0.01" v-model.number="r._entregar" class="retiro-input" />
+              </label>
+            </div>
+            <p class="retiro-dif">Diferencia (queda para el local): <b>Bs {{ ((Number(r._retirar)||0) - (Number(r._entregar)||0)).toFixed(2) }}</b></p>
+            <div class="retiro-acciones">
+              <button class="btn-pagar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="pagarRetiro(r)">
+                {{ procesandoRetiro === r.id_solicitud ? '…' : 'Registrar retiro' }}
+              </button>
+              <button class="btn-rechazar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="rechazarRetiro(r)">Rechazar</button>
+            </div>
+          </template>
+          <p v-else class="retiro-pagado">Retiró Bs {{ r.monto_retirado }} · recibió Bs {{ r.monto_entregado }} · diferencia Bs {{ r.diferencia }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Panel de Historial de Transacciones -->
     <div v-if="tabActiva === 'historial'" class="panel-contenido anim-fade">
       <div class="tarjeta-modulo modulo-ancho">
@@ -961,6 +1012,47 @@ import { io } from 'socket.io-client'
 const tabActiva = ref('recargar')
 const modalExito = ref(null)
 const qrAmpliado = ref(false)
+
+// ---- Retiros de billetera ----
+const retiros = ref([])
+const retirosPendientes = ref([])
+const filtroRetiro = ref('pendiente')
+const procesandoRetiro = ref(null)
+async function cargarRetiros() {
+  try {
+    const data = await clienteHttp.get(`/cajero/retiros?estado=${filtroRetiro.value}`)
+    // Pre-cargar montos por defecto: retirar todo el saldo, entregar todo (el cajero ajusta).
+    retiros.value = (data || []).map(r => ({ ...r, _retirar: r.saldo_actual, _entregar: r.saldo_actual }))
+    if (filtroRetiro.value === 'pendiente') retirosPendientes.value = retiros.value
+  } catch { retiros.value = [] }
+}
+async function cargarPendientesBadge() {
+  try { retirosPendientes.value = await clienteHttp.get('/cajero/retiros?estado=pendiente') } catch { /* nada */ }
+}
+async function pagarRetiro(r) {
+  const retirar = Number(r._retirar), entregar = Number(r._entregar)
+  if (!(retirar > 0)) { notif.advertencia('El monto a retirar debe ser mayor a 0.'); return }
+  if (retirar > r.saldo_actual) { notif.advertencia('No puede retirar más que el saldo del cliente.'); return }
+  if (entregar < 0 || entregar > retirar) { notif.advertencia('Lo entregado no puede ser mayor a lo retirado.'); return }
+  procesandoRetiro.value = r.id_solicitud
+  try {
+    const res = await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/pagar`, { monto_retirado: retirar, monto_entregado: entregar })
+    notif.exito(`Retiro registrado. Diferencia para el local: Bs ${res.diferencia}.`)
+    cargarRetiros()
+  } catch (e) { notif.error(e?.error || 'No se pudo procesar el retiro.') }
+  finally { procesandoRetiro.value = null }
+}
+async function rechazarRetiro(r) {
+  const ok = await notif.confirmar({ variante: 'peligro', titulo: 'Rechazar solicitud', mensaje: `¿Rechazar el retiro de ${r.cliente}?`, textoConfirmar: 'Sí, rechazar' })
+  if (!ok) return
+  procesandoRetiro.value = r.id_solicitud
+  try {
+    await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/rechazar`)
+    notif.exito('Solicitud rechazada.')
+    cargarRetiros()
+  } catch (e) { notif.error(e?.error || 'No se pudo rechazar.') }
+  finally { procesandoRetiro.value = null }
+}
 
 function esQrClienteValido(texto) {
   if (!texto) return false;
@@ -1583,13 +1675,19 @@ let socket = null
 
 onMounted(() => {
   cargarHistorial()
-  
+  cargarPendientesBadge()
+
   // Websockets para actualización en tiempo real
   const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
   socket = io(urlBackend)
-  
+
   socket.on('recarga_registrada', () => {
     cargarHistorial()
+  })
+  // Un cliente pidió un retiro: refrescar la lista/badge en vivo.
+  socket.on('retiro_solicitado', () => {
+    cargarPendientesBadge()
+    if (tabActiva.value === 'retiros') cargarRetiros()
   })
 })
 </script>
@@ -3129,4 +3227,29 @@ onMounted(() => {
     transform: none;
   }
 }
+/* Retiros del cajero */
+.tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--color-error, #ef4444); color: #fff; font-size: 0.68rem; font-weight: 800; }
+.retiros-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.retiros-filtros { display: flex; gap: 6px; }
+.retiro-filtro { padding: 6px 12px; border: 1px solid var(--borde-sutil); border-radius: 9px; background: transparent; color: var(--texto-secundario); font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+.retiro-filtro.activo { border-color: var(--color-primario); color: var(--color-primario); background: color-mix(in srgb, var(--color-primario) 12%, transparent); }
+.retiros-vacio { color: var(--texto-secundario); text-align: center; padding: 20px; }
+.retiro-card { border: 1px solid var(--borde-sutil); border-radius: 14px; padding: 14px; margin-bottom: 12px; background: var(--fondo-tarjeta-alt, rgba(255,255,255,.02)); }
+.retiro-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.retiro-card-cab strong { display: block; color: var(--texto-principal); }
+.retiro-tel { font-size: 0.78rem; color: var(--texto-secundario); }
+.retiro-saldo-chip { font-size: 0.8rem; font-weight: 800; color: var(--color-exito); background: rgba(34,197,94,.12); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.retiro-metodo-txt { font-size: 0.82rem; color: var(--texto-secundario); margin: 8px 0 0; }
+.retiro-msg { font-size: 0.82rem; color: var(--texto-principal); margin: 6px 0 0; font-style: italic; }
+.retiro-ver-qr { display: inline-block; margin-top: 6px; font-size: 0.8rem; color: var(--color-primario); font-weight: 700; }
+.retiro-montos { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.retiro-montos label { flex: 1; min-width: 130px; font-size: 0.76rem; color: var(--texto-secundario); font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
+.retiro-input { padding: 9px 11px; border: 1px solid var(--borde-sutil); border-radius: 9px; background: var(--fondo-input, rgba(255,255,255,.04)); color: var(--texto-principal); font-size: 1rem; font-weight: 700; }
+.retiro-dif { font-size: 0.85rem; margin: 10px 0 0; color: var(--texto-secundario); }
+.retiro-dif b { color: #d4a017; }
+.retiro-acciones { display: flex; gap: 8px; margin-top: 12px; }
+.btn-pagar-retiro { flex: 1; padding: 10px; border: none; border-radius: 10px; background: var(--gradiente-marca, linear-gradient(135deg,#8b5cf6,#ec4899)); color: #fff; font-weight: 800; cursor: pointer; }
+.btn-pagar-retiro:disabled { opacity: .6; cursor: wait; }
+.btn-rechazar-retiro { padding: 10px 14px; border: 1px solid rgba(239,68,68,.4); border-radius: 10px; background: rgba(239,68,68,.08); color: var(--color-error); font-weight: 700; cursor: pointer; }
+.retiro-pagado { font-size: 0.82rem; color: var(--color-exito); margin: 10px 0 0; font-weight: 600; }
 </style>

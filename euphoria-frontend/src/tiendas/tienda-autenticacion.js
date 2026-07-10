@@ -40,6 +40,13 @@ export const useTiendaAutenticacion = defineStore('autenticacion', () => {
     }
   }
 
+  // Fusiona datos frescos del propio usuario (p. ej. tras un cambio en vivo) y persiste.
+  function actualizarUsuario(datos) {
+    if (!datos) return
+    usuario.value = { ...(usuario.value || {}), ...datos }
+    localStorage.setItem('euphoria_usuario', JSON.stringify(usuario.value))
+  }
+
   function actualizarToken(nuevoToken, nuevoRefresh) {
     token.value = nuevoToken
     localStorage.setItem('euphoria_token', nuevoToken)
@@ -58,5 +65,5 @@ export const useTiendaAutenticacion = defineStore('autenticacion', () => {
     localStorage.removeItem('euphoria_refresh')
   }
 
-  return { usuario, token, refresh, estaAutenticado, rolValido, rolRuta, iniciarSesion, actualizarToken, cerrarSesion }
+  return { usuario, token, refresh, estaAutenticado, rolValido, rolRuta, iniciarSesion, actualizarUsuario, actualizarToken, cerrarSesion }
 })

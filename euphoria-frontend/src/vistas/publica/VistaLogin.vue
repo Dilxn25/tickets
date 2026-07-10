@@ -153,8 +153,21 @@
             <h3 id="titulo-recuperar">{{ pasoRecuperacion === 'ayuda' || pasoRecuperacion === 'ayuda-ok' ? 'Pedir ayuda al local' : 'Recuperar contraseña' }}</h3>
 
             <!-- Paso 1: Correo -->
-            <form v-if="pasoRecuperacion === 1" @submit.prevent="buscarPregunta">
-              <p class="desc">Escribe el correo de tu cuenta.</p>
+            <form v-if="pasoRecuperacion === 1" @submit.prevent="enviarCodigoRec">
+              <p class="desc">Te enviaremos un código a tu correo para crear una nueva contraseña.</p>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Correo electrónico</label>
+                <input v-model="correoRecuperacion" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
+              </div>
+              <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || !correoRecuperacion">
+                <span v-if="cargandoRec" class="spinner"></span>
+                <span v-else>Enviar código</span>
+              </button>
+            </form>
+
+            <!-- Paso secundario: recuperar por pregunta de seguridad -->
+            <form v-else-if="pasoRecuperacion === 'pregunta-email'" @submit.prevent="buscarPregunta">
+              <p class="desc">Escribe el correo de tu cuenta y responde tu pregunta de seguridad.</p>
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Correo electrónico</label>
                 <input v-model="correoRecuperacion" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
@@ -163,6 +176,7 @@
                 <span v-if="cargandoRec" class="spinner"></span>
                 <span v-else>Continuar</span>
               </button>
+              <button type="button" class="btn-volver" @click="pasoRecuperacion = 1; errorRecuperacion = ''">Volver</button>
             </form>
 
             <!-- Paso 2: Pregunta + nueva contraseña -->
@@ -193,6 +207,28 @@
               </button>
             </form>
 
+            <!-- Paso: ingresar código + nueva contraseña -->
+            <form v-else-if="pasoRecuperacion === 'codigo'" @submit.prevent="confirmarCodigoRec">
+              <p class="desc">Ingresa el código de 6 dígitos que te enviamos a <b>{{ correoRecuperacion }}</b> y tu nueva contraseña.</p>
+              <p v-if="correoNoVerificadoRec" class="aviso-verif">Tu correo aún no estaba verificado: al confirmar este código también quedará verificado.</p>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Código</label>
+                <input v-model="codigoRec" @input="codigoRec = codigoRec.replace(/\D/g,'').slice(0,6)" inputmode="numeric" maxlength="6" class="campo w-full campo-codigo" placeholder="000000" required />
+              </div>
+              <div class="grupo-campo mb-3">
+                <label class="etiqueta">Nueva contraseña</label>
+                <div class="campo-icono">
+                  <input v-model="nuevaPasswordRec" :type="verPassRec ? 'text' : 'password'" class="campo w-full" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+                  <button type="button" class="ojo" @click="verPassRec = !verPassRec">{{ verPassRec ? 'Ocultar' : 'Ver' }}</button>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || codigoRec.length !== 6 || nuevaPasswordRec.length < 6">
+                <span v-if="cargandoRec" class="spinner"></span>
+                <span v-else>Cambiar contraseña</span>
+              </button>
+              <button type="button" class="btn-volver" @click="enviarCodigoRec">Reenviar código</button>
+            </form>
+
             <!-- Paso: pedir ayuda al local (no recuerda contraseña ni pregunta) -->
             <form v-else-if="pasoRecuperacion === 'ayuda'" @submit.prevent="enviarAyudaLocal">
               <p class="desc">Déjanos tus datos y el local te ayudará a recuperar tu cuenta.</p>
@@ -211,7 +247,7 @@
               </div>
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Teléfono</label>
-                <input v-model="ayudaForm.telefono" type="tel" class="campo w-full" placeholder="Tu número de teléfono" />
+                <BaseTelefono v-model="ayudaForm.telefono" placeholder="Tu número de teléfono" />
                 <p v-if="faltaIdentidadAyuda" class="nota-minima">Necesitamos al menos tu CI o tu teléfono.</p>
               </div>
               <div class="grupo-campo mb-3">
@@ -242,8 +278,11 @@
 
             <div v-if="errorRecuperacion" class="alerta-error mt-3" role="alert" aria-live="assertive">{{ errorRecuperacion }}</div>
 
-            <p v-if="pasoRecuperacion === 1 || pasoRecuperacion === 2" class="rec-ayuda">
-              ¿No recuerdas tu pregunta?
+            <p v-if="pasoRecuperacion === 1" class="rec-ayuda">
+              <button type="button" class="link-contacto btn-como-link" @click="pasoRecuperacion = 'pregunta-email'; errorRecuperacion = ''">Prefiero usar mi pregunta de seguridad</button>
+            </p>
+            <p v-if="pasoRecuperacion === 1 || pasoRecuperacion === 'pregunta-email' || pasoRecuperacion === 2" class="rec-ayuda">
+              ¿No puedes con ninguna?
               <button type="button" class="link-contacto btn-como-link" @click="abrirAyudaLocal">Pedir ayuda al local</button>
             </p>
           </div>
@@ -259,6 +298,7 @@ import { useRouter, isNavigationFailure, NavigationFailureType } from 'vue-route
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { servicioAuth } from '@/servicios-api/servicio-autenticacion.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
+import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
 
 const PREGUNTAS_SEGURIDAD = [
   '¿Cuál es el nombre de tu primera mascota?',
@@ -295,6 +335,8 @@ const correoRecuperacion = ref('')
 const preguntaRecuperacion = ref('')
 const respuestaRecuperacion = ref('')
 const nuevaPasswordRec = ref('')
+const codigoRec = ref('')
+const correoNoVerificadoRec = ref(false)
 const verPassRec = ref(false)
 const cargandoRec = ref(false)
 const errorRecuperacion = ref('')
@@ -451,6 +493,7 @@ async function enviarAyudaLocal() {
 
 function cerrarRecuperacion() {
   modalRecuperar.value = false
+  codigoRec.value = ''
   if (temporizadorCierre) {
     clearTimeout(temporizadorCierre)
     temporizadorCierre = null
@@ -501,6 +544,41 @@ async function restablecerPassword() {
     temporizadorCierre = setTimeout(volverAlLogin, 3000)
   } catch (err) {
     errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No se pudo cambiar la contraseña. Intenta de nuevo.')
+  } finally {
+    cargandoRec.value = false
+  }
+}
+
+// Recuperación por CÓDIGO al correo (solo si el correo está verificado)
+async function enviarCodigoRec() {
+  if (!correoRecuperacion.value) return
+  cargandoRec.value = true
+  errorRecuperacion.value = ''
+  try {
+    const res = await clienteHttp.post('/auth/recuperar/codigo/enviar', { correo: correoRecuperacion.value })
+    correoNoVerificadoRec.value = res?.verificado === false
+    pasoRecuperacion.value = 'codigo'
+  } catch (err) {
+    errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No se pudo enviar el código.')
+  } finally {
+    cargandoRec.value = false
+  }
+}
+async function confirmarCodigoRec() {
+  if (codigoRec.value.length !== 6 || nuevaPasswordRec.value.length < 6) return
+  cargandoRec.value = true
+  errorRecuperacion.value = ''
+  try {
+    const res = await clienteHttp.post('/auth/recuperar/codigo/confirmar', {
+      correo: correoRecuperacion.value,
+      codigo: codigoRec.value,
+      nueva_password: nuevaPasswordRec.value,
+    })
+    exitoRecuperacion.value = res.mensaje || 'Contraseña actualizada.'
+    pasoRecuperacion.value = 3
+    temporizadorCierre = setTimeout(volverAlLogin, 3000)
+  } catch (err) {
+    errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No se pudo cambiar la contraseña.')
   } finally {
     cargandoRec.value = false
   }
@@ -965,6 +1043,23 @@ onBeforeUnmount(() => {
   color: var(--texto-principal); letter-spacing: -0.02em;
 }
 .desc { font-size: 0.85rem; color: var(--texto-secundario); margin-bottom: 1.5rem; line-height: 1.5; text-wrap: pretty; }
+.aviso-verif {
+  font-size: 0.8rem;
+  color: var(--color-exito, #22c55e);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: var(--radio-md, 10px);
+  padding: 9px 12px;
+  margin: -0.5rem 0 1.2rem;
+  line-height: 1.45;
+}
+.campo-codigo {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 10px;
+  font-variant-numeric: tabular-nums;
+}
 .pregunta-box {
   background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.32);
   padding: 12px 14px; border-radius: var(--radio-md); color: var(--morado-hover); font-weight: 600;

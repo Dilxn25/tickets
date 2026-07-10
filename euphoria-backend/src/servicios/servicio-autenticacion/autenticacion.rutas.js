@@ -13,6 +13,8 @@ const jwt = require('jsonwebtoken')
 const { z } = require('zod')
 const prisma = require('../../config/base-de-datos')
 const { normalizarRespuesta } = require('../../utilidades/texto')
+const { enviarCorreo, plantilla } = require('../../utilidades/correo')
+const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
 
 // ---- Límites de solicitudes (anti fuerza bruta) ----
@@ -120,6 +122,7 @@ router.post('/login', limiteLogin, async (req, res) => {
         rol: usuario.rol.nombre_rol,
         url_foto_perfil: usuario.url_foto_perfil,
         premio_perfil: usuario.premio_perfil ?? null,
+        correo_verificado: !!usuario.correo_verificado,
       },
     })
   } catch (error) {
@@ -290,6 +293,92 @@ router.post('/recuperar/solicitud', limiteRecuperacion, async (req, res) => {
   } catch (error) {
     console.error('Error registrando solicitud de recuperación:', error)
     res.status(500).json({ error: 'No se pudo registrar la solicitud. Intenta de nuevo.' })
+  }
+})
+
+// ===== Recuperación por CÓDIGO al correo (solo si el correo está verificado) =====
+
+// POST /api/auth/recuperar/codigo/enviar — Body: { correo }
+router.post('/recuperar/codigo/enviar', limiteRecuperacion, async (req, res) => {
+  try {
+    const correo = String(req.body.correo || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      return res.status(400).json({ error: 'Escribe el correo de tu cuenta.' })
+    }
+    const u = await prisma.usuario.findUnique({ where: { correo } })
+    if (!u) {
+      return res.status(400).json({ error: 'No encontramos una cuenta con ese correo.' })
+    }
+    // El código se envía SIEMPRE al dueño del correo. Si la cuenta aún no tenía el
+    // correo verificado, al confirmar el código también lo verificamos (recibirlo
+    // demuestra que el correo es suyo). Avisamos con `verificado` para la UI.
+    // Anti-spam: uno cada 60 s.
+    const reciente = await prisma.codigo_verificacion.findFirst({
+      where: { id_usuario: u.id_usuario, proposito: 'recuperacion', usado: false, fecha: { gt: new Date(Date.now() - 60 * 1000) } },
+    })
+    if (reciente) return res.status(429).json({ error: 'Ya te enviamos un código. Espera un momento.' })
+
+    const codigo = String(crypto.randomInt(100000, 1000000))
+    await prisma.codigo_verificacion.updateMany({ where: { id_usuario: u.id_usuario, proposito: 'recuperacion', usado: false }, data: { usado: true } })
+    await prisma.codigo_verificacion.create({
+      data: { id_usuario: u.id_usuario, codigo, proposito: 'recuperacion', expira: new Date(Date.now() + 15 * 60 * 1000) },
+    })
+    await enviarCorreo({
+      para: u.correo,
+      asunto: 'Código para recuperar tu contraseña — Euphoria',
+      html: plantilla({
+        saludo: `Hola ${u.nombres || ''},`,
+        titulo: 'Recupera tu contraseña',
+        cuerpo: `
+          <p style="margin:0 0 14px;line-height:1.65;color:#d9d2ef;">Usa este código para crear una nueva contraseña:</p>
+          <div style="margin:18px 0;text-align:center;">
+            <span style="display:inline-block;background:#241844;border:1px dashed #a855f7;border-radius:14px;padding:16px 30px;font-size:30px;font-weight:800;letter-spacing:10px;color:#fff;">${codigo}</span>
+          </div>
+          <p style="margin:14px 0 0;line-height:1.65;color:#a99fce;font-size:13px;">El código vence en 15 minutos. Si tú no lo pediste, ignora este mensaje y tu contraseña seguirá igual.</p>`,
+      }),
+      texto: `Tu código para recuperar la contraseña de Euphoria es ${codigo}. Vence en 15 minutos.`,
+    })
+    res.json({ mensaje: 'Te enviamos un código a tu correo.', verificado: !!u.correo_verificado })
+  } catch (error) {
+    console.error('Error enviando código de recuperación:', error)
+    res.status(500).json({ error: 'No se pudo enviar el código. Intenta más tarde.' })
+  }
+})
+
+// POST /api/auth/recuperar/codigo/confirmar — Body: { correo, codigo, nueva_password }
+router.post('/recuperar/codigo/confirmar', limiteRecuperacion, async (req, res) => {
+  try {
+    const correo = String(req.body.correo || '').trim().toLowerCase()
+    const codigo = String(req.body.codigo || '').trim()
+    const nueva = String(req.body.nueva_password || '')
+    if (!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'Ingresa el código de 6 dígitos.' })
+    if (nueva.length < 6) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' })
+
+    const u = await prisma.usuario.findUnique({ where: { correo } })
+    if (!u) return res.status(400).json({ error: 'Datos incorrectos.' })
+
+    const reg = await prisma.codigo_verificacion.findFirst({
+      where: { id_usuario: u.id_usuario, proposito: 'recuperacion', usado: false },
+      orderBy: { fecha: 'desc' },
+    })
+    if (!reg) return res.status(400).json({ error: 'No hay un código pendiente. Pide uno nuevo.' })
+    if (reg.expira < new Date()) return res.status(400).json({ error: 'El código venció. Pide uno nuevo.' })
+    if (reg.intentos >= 5) return res.status(429).json({ error: 'Demasiados intentos. Pide un código nuevo.' })
+    if (reg.codigo !== codigo) {
+      await prisma.codigo_verificacion.update({ where: { id_codigo: reg.id_codigo }, data: { intentos: { increment: 1 } } })
+      return res.status(400).json({ error: 'Código incorrecto.' })
+    }
+
+    // Cambiar la contraseña y, de paso, dejar el correo VERIFICADO (recibir el
+    // código prueba que el correo es suyo).
+    await prisma.$transaction([
+      prisma.codigo_verificacion.update({ where: { id_codigo: reg.id_codigo }, data: { usado: true } }),
+      prisma.usuario.update({ where: { id_usuario: u.id_usuario }, data: { password_hash: bcrypt.hashSync(nueva, 12), correo_verificado: true } }),
+    ])
+    res.json({ mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión.' })
+  } catch (error) {
+    console.error('Error confirmando código de recuperación:', error)
+    res.status(500).json({ error: 'No se pudo actualizar la contraseña.' })
   }
 })
 

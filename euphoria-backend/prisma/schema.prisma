@@ -306,7 +306,9 @@ model usuario {
   estado_cuenta                       String              @db.VarChar(20)
   premio_perfil                       String?             @db.VarChar(20)
   es_vip                              Boolean             @default(false)
+  correo_verificado                   Boolean             @default(false)
   billetera                           billetera?
+  codigo_verificacion                 codigo_verificacion[]
   recarga_billetera                   recarga_billetera[]
   comanda_comanda_id_clienteTousuario comanda[]           @relation("comanda_id_clienteTousuario")
   comanda_comanda_id_meseroTousuario  comanda[]           @relation("comanda_id_meseroTousuario")
@@ -318,9 +320,47 @@ model usuario {
   asignacion_mesa                     asignacion_mesa[]
   solicitud_grupo                     solicitud_grupo[]
   notificacion                        notificacion[]
+  retiros_cliente                     solicitud_retiro[]  @relation("retiro_cliente")
+  retiros_cajero                      solicitud_retiro[]  @relation("retiro_cajero")
   rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")
+}
+
+model solicitud_retiro {
+  id_solicitud       Int       @id @default(autoincrement())
+  id_cliente         Int
+  mensaje            String?   @db.VarChar(400)
+  metodo             String    @db.VarChar(20) // 'qr' | 'persona'
+  qr_imagen          String?   @db.VarChar(255)
+  estado             String    @default("pendiente") @db.VarChar(20) // pendiente | pagado | rechazado
+  saldo_al_solicitar Decimal   @db.Decimal(10, 2)
+  monto_retirado     Decimal?  @db.Decimal(10, 2)
+  monto_entregado    Decimal?  @db.Decimal(10, 2)
+  diferencia         Decimal?  @db.Decimal(10, 2)
+  id_cajero          Int?
+  fecha              DateTime  @default(now())
+  fecha_pago         DateTime?
+  cliente            usuario   @relation("retiro_cliente", fields: [id_cliente], references: [id_usuario], onDelete: Cascade, map: "RETIRO_id_cliente_fkey")
+  cajero             usuario?  @relation("retiro_cajero", fields: [id_cajero], references: [id_usuario], map: "RETIRO_id_cajero_fkey")
+
+  @@index([id_cliente], map: "RETIRO_id_cliente_fkey")
+  @@index([id_cajero], map: "RETIRO_id_cajero_fkey")
+}
+
+model codigo_verificacion {
+  id_codigo  Int      @id @default(autoincrement())
+  id_usuario Int
+  codigo     String   @db.VarChar(6)
+  proposito  String   @db.VarChar(20) // 'correo' | 'recuperacion'
+  dato       String?  @db.VarChar(120) // correo nuevo pendiente (al cambiar de correo)
+  expira     DateTime
+  usado      Boolean  @default(false)
+  intentos   Int      @default(0)
+  fecha      DateTime @default(now())
+  usuario    usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade, map: "CODIGO_VERIF_id_usuario_fkey")
+
+  @@index([id_usuario], map: "CODIGO_VERIF_id_usuario_fkey")
 }
 
 // Centro de notificaciones por usuario (avisos: reserva confirmada, propuesta de
