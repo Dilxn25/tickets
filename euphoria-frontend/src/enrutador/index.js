@@ -1,46 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useTiendaAutenticacion } from '../tiendas/tienda-autenticacion.js'
 
-// ---- Vistas Públicas ----
+// Login se carga de forma inmediata (es lo primero que ve el usuario).
 import VistaLogin from '../vistas/publica/VistaLogin.vue'
 
-// ---- Layouts ----
-import DisposicionAdmin from '../vistas/administrador/DisposicionAdmin.vue'
-import DisposicionSimple from '../vistas/DisposicionSimple.vue'
-
-// ---- Admin: módulos activos ----
-import VistaUsuarios from '../vistas/administrador/VistaUsuarios.vue'
-import VistaProductos from '../vistas/administrador/VistaProductos.vue'
-import VistaEventos from '../vistas/administrador/VistaEventos.vue'
-import VistaReportes from '../vistas/administrador/VistaReportes.vue'
-import VistaVentas from '../vistas/administrador/VistaVentas.vue'
-import VistaMapas from '../vistas/administrador/VistaMapas.vue'
-import VistaAforoAdmin from '../vistas/administrador/VistaAforoAdmin.vue'
-import VistaIA from '../vistas/administrador/VistaIA.vue'
-import VistaFidelizacion from '../vistas/administrador/VistaFidelizacion.vue'
-
-// ---- En Construcción (otros roles y módulos) ----
-import VistaEnConstruccion from '../vistas/VistaEnConstruccion.vue'
-import VistaCajero from '../vistas/cajero/VistaCajero.vue'
-
-import DisposicionCliente from '../vistas/cliente/DisposicionCliente.vue'
-import VistaInicioCliente from '../vistas/cliente/VistaInicioCliente.vue'
-import VistaCatalogo from '../vistas/cliente/VistaCatalogo.vue'
-import VistaEventosCliente from '../vistas/cliente/VistaEventosCliente.vue'
-import VistaDetalleEventoCliente from '../vistas/cliente/VistaDetalleEventoCliente.vue'
-import VistaPerfil from '../vistas/cliente/VistaPerfil.vue'
-import VistaBilletera from '../vistas/cliente/VistaBilletera.vue'
-import VistaMovimientos from '../vistas/cliente/VistaMovimientos.vue'
-import VistaPedidos from '../vistas/cliente/VistaPedidos.vue'
-import VistaCarrito from '../vistas/cliente/VistaCarrito.vue'
-import VistaReservaMapa from '../vistas/cliente/VistaReservaMapa.vue'
-import VistaSolicitudGrupo from '../vistas/cliente/VistaSolicitudGrupo.vue'
-import VistaMisReservas from '../vistas/cliente/VistaMisReservas.vue'
-
-import VistaMesero from '../vistas/mesero/VistaMesero.vue'
-import VistaRecepcionista from '../vistas/recepcionista/VistaRecepcionista.vue'
-
-import VistaBartender from '../vistas/bartender/VistaBartender.vue'
+// El resto de las vistas se cargan bajo demanda (lazy-load): cada una se
+// descarga solo cuando el usuario entra a ella. Así el arranque no baja las
+// 30 vistas juntas y cada rol solo trae lo suyo.
+const Disposicion = {
+  Admin:    () => import('../vistas/administrador/DisposicionAdmin.vue'),
+  Simple:   () => import('../vistas/DisposicionSimple.vue'),
+  Cliente:  () => import('../vistas/cliente/DisposicionCliente.vue'),
+}
 
 const rutas = [
   // Raíz → redirige según rol
@@ -52,68 +23,68 @@ const rutas = [
   // Administrador (layout completo con sidebar)
   {
     path: '/administrador',
-    component: DisposicionAdmin,
+    component: Disposicion.Admin,
     meta: { requiereAuth: true, rolPermitido: 'administrador' },
     children: [
       // El admin entra directo a su dashboard (Reportes)
       { path: '', redirect: '/administrador/reportes' },
-      { path: 'usuarios', name: 'AdminUsuarios', component: VistaUsuarios },
-      { path: 'productos', name: 'AdminProductos', component: VistaProductos },
-      { path: 'eventos', name: 'AdminEventos', component: VistaEventos },
-      { path: 'ventas', name: 'AdminVentas', component: VistaVentas },
-      { path: 'zonas', name: 'AdminZonas', component: VistaMapas },
-      { path: 'aforo', name: 'AdminAforo', component: VistaAforoAdmin },
-      { path: 'ia', name: 'AdminIA', component: VistaIA },
-      { path: 'fidelizacion', name: 'AdminFidelizacion', component: VistaFidelizacion },
-      { path: 'reportes', name: 'AdminReportes', component: VistaReportes },
+      { path: 'usuarios', name: 'AdminUsuarios', component: () => import('../vistas/administrador/VistaUsuarios.vue') },
+      { path: 'productos', name: 'AdminProductos', component: () => import('../vistas/administrador/VistaProductos.vue') },
+      { path: 'eventos', name: 'AdminEventos', component: () => import('../vistas/administrador/VistaEventos.vue') },
+      { path: 'ventas', name: 'AdminVentas', component: () => import('../vistas/administrador/VistaVentas.vue') },
+      { path: 'zonas', name: 'AdminZonas', component: () => import('../vistas/administrador/VistaMapas.vue') },
+      { path: 'aforo', name: 'AdminAforo', component: () => import('../vistas/administrador/VistaAforoAdmin.vue') },
+      { path: 'ia', name: 'AdminIA', component: () => import('../vistas/administrador/VistaIA.vue') },
+      { path: 'fidelizacion', name: 'AdminFidelizacion', component: () => import('../vistas/administrador/VistaFidelizacion.vue') },
+      { path: 'reportes', name: 'AdminReportes', component: () => import('../vistas/administrador/VistaReportes.vue') },
     ],
   },
 
   // Otros roles (layout con navbar)
   {
     path: '/cajero',
-    component: DisposicionSimple,
+    component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'cajero' },
-    children: [{ path: '', name: 'Cajero', component: VistaCajero }],
+    children: [{ path: '', name: 'Cajero', component: () => import('../vistas/cajero/VistaCajero.vue') }],
   },
   {
     path: '/mesero',
     name: 'Mesero',
-    component: VistaMesero,
+    component: () => import('../vistas/mesero/VistaMesero.vue'),
     meta: { requiereAuth: true, rolPermitido: 'mesero' }
   },
   {
     path: '/recepcionista',
-    component: DisposicionSimple,
+    component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'recepcionista' },
-    children: [{ path: '', name: 'Recepcionista', component: VistaRecepcionista }],
+    children: [{ path: '', name: 'Recepcionista', component: () => import('../vistas/recepcionista/VistaRecepcionista.vue') }],
   },
   {
     path: '/bartender',
-    component: DisposicionSimple,
+    component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'bartender' },
-    children: [{ path: '', name: 'Bartender', component: VistaBartender }],
+    children: [{ path: '', name: 'Bartender', component: () => import('../vistas/bartender/VistaBartender.vue') }],
   },
 
   // Cliente (Mobile-First UI)
   {
     path: '/cliente',
-    component: DisposicionCliente,
+    component: Disposicion.Cliente,
     meta: { requiereAuth: true, rolPermitido: 'cliente' },
     children: [
       { path: '', redirect: '/cliente/inicio' },
-      { path: 'inicio', name: 'ClienteInicio', component: VistaInicioCliente },
-      { path: 'catalogo', name: 'ClienteCatalogo', component: VistaCatalogo },
-      { path: 'billetera', name: 'ClienteBilletera', component: VistaBilletera },
-      { path: 'movimientos', name: 'ClienteMovimientos', component: VistaMovimientos },
-      { path: 'pedidos', name: 'ClientePedidos', component: VistaPedidos },
-      { path: 'eventos', name: 'ClienteEventos', component: VistaEventosCliente },
-      { path: 'eventos/:id', name: 'ClienteDetalleEvento', component: VistaDetalleEventoCliente },
-      { path: 'reservar/:idEvento', name: 'ClienteReservar', component: VistaReservaMapa },
-      { path: 'grupo/:idEvento', name: 'ClienteGrupo', component: VistaSolicitudGrupo },
-      { path: 'mis-reservas', name: 'ClienteMisReservas', component: VistaMisReservas },
-      { path: 'carrito', name: 'ClienteCarrito', component: VistaCarrito },
-      { path: 'perfil', name: 'ClientePerfil', component: VistaPerfil }
+      { path: 'inicio', name: 'ClienteInicio', component: () => import('../vistas/cliente/VistaInicioCliente.vue') },
+      { path: 'catalogo', name: 'ClienteCatalogo', component: () => import('../vistas/cliente/VistaCatalogo.vue') },
+      { path: 'billetera', name: 'ClienteBilletera', component: () => import('../vistas/cliente/VistaBilletera.vue') },
+      { path: 'movimientos', name: 'ClienteMovimientos', component: () => import('../vistas/cliente/VistaMovimientos.vue') },
+      { path: 'pedidos', name: 'ClientePedidos', component: () => import('../vistas/cliente/VistaPedidos.vue') },
+      { path: 'eventos', name: 'ClienteEventos', component: () => import('../vistas/cliente/VistaEventosCliente.vue') },
+      { path: 'eventos/:id', name: 'ClienteDetalleEvento', component: () => import('../vistas/cliente/VistaDetalleEventoCliente.vue') },
+      { path: 'reservar/:idEvento', name: 'ClienteReservar', component: () => import('../vistas/cliente/VistaReservaMapa.vue') },
+      { path: 'grupo/:idEvento', name: 'ClienteGrupo', component: () => import('../vistas/cliente/VistaSolicitudGrupo.vue') },
+      { path: 'mis-reservas', name: 'ClienteMisReservas', component: () => import('../vistas/cliente/VistaMisReservas.vue') },
+      { path: 'carrito', name: 'ClienteCarrito', component: () => import('../vistas/cliente/VistaCarrito.vue') },
+      { path: 'perfil', name: 'ClientePerfil', component: () => import('../vistas/cliente/VistaPerfil.vue') }
     ],
   },
 
