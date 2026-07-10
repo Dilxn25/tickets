@@ -427,47 +427,45 @@ const qrActivo = computed(() => {
 let observadorReveal = null
 
 async function cargarDatosInicio() {
-  // Cargar eventos activos
-  try {
-    const dataE = await servicioEventos.listarDisponibles()
-    eventos.value = dataE
-  } catch (error) {
-    console.error('Error cargando eventos:', error)
-  } finally {
-    cargandoEventos.value = false
-  }
+  // Las 4 cargas son INDEPENDIENTES entre sí, así que se lanzan en PARALELO.
+  // Antes iban en serie (una tras otra) y sumaban ~1 s de espera; en paralelo
+  // tardan lo que la más lenta (~250 ms). Cada una conserva su propio manejo
+  // de error y su bandera de "cargando".
 
-  // Cargar productos para recomendacion
-  try {
-    const dataP = await servicioProductos.listar()
-    productosCompletos.value = dataP
-    // Solo productos CON imagen para el marquee (los combos no traen url_imagen)
-    productos.value = dataP.filter(p => p.url_imagen).slice(0, 8)
-  } catch (error) {
-    console.error('Error cargando productos:', error)
-  } finally {
-    cargandoProductos.value = false
-  }
+  // Eventos activos
+  const cargaEventos = servicioEventos.listarDisponibles()
+    .then(dataE => { eventos.value = dataE })
+    .catch(error => { console.error('Error cargando eventos:', error) })
+    .finally(() => { cargandoEventos.value = false })
 
-  // Cargar saldo de billetera
-  try {
-    const dataSaldo = await servicioBilletera.obtenerSaldo()
-    saldoBilletera.value = dataSaldo.saldo_actual || 0
-    sinBilletera.value = !!dataSaldo.sin_billetera
-  } catch (error) {
-    console.error('Error cargando saldo:', error)
-    saldoBilletera.value = 0
-  } finally {
-    cargandoBilletera.value = false
-  }
+  // Productos (para el marquee y las recomendaciones)
+  const cargaProductos = servicioProductos.listar()
+    .then(dataP => {
+      productosCompletos.value = dataP
+      // Solo productos CON imagen para el marquee (los combos no traen url_imagen)
+      productos.value = dataP.filter(p => p.url_imagen).slice(0, 8)
+    })
+    .catch(error => { console.error('Error cargando productos:', error) })
+    .finally(() => { cargandoProductos.value = false })
 
-  // Cargar combos / promociones (motor de recomendación)
-  try {
-    const res = await clienteHttp.get('/recomendaciones/combos')
-    combos.value = (res.combos || []).slice(0, 4)
-  } catch (e) {
-    combos.value = []
-  }
+  // Saldo de billetera
+  const cargaSaldo = servicioBilletera.obtenerSaldo()
+    .then(dataSaldo => {
+      saldoBilletera.value = dataSaldo.saldo_actual || 0
+      sinBilletera.value = !!dataSaldo.sin_billetera
+    })
+    .catch(error => {
+      console.error('Error cargando saldo:', error)
+      saldoBilletera.value = 0
+    })
+    .finally(() => { cargandoBilletera.value = false })
+
+  // Combos / promociones (motor de recomendación)
+  const cargaCombos = clienteHttp.get('/recomendaciones/combos')
+    .then(res => { combos.value = (res.combos || []).slice(0, 4) })
+    .catch(() => { combos.value = [] })
+
+  await Promise.allSettled([cargaEventos, cargaProductos, cargaSaldo, cargaCombos])
 }
 
 // Genera y muestra el QR de pago elegido a pantalla completa, sin salir del inicio.

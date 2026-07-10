@@ -319,8 +319,10 @@ onMounted(() => {
   // Tiempo real: si el local cambia productos/precios/promos o el descuento de combos,
   // el catálogo del cliente se refresca solo.
   socket = io({ path: '/socket.io' })
-  socket.on('catalogo_actualizado', () => cargarDatos())
-  socket.on('config_actualizada', (data) => { if (data && 'descuento_combos' in data) cargarDatos() })
+  // Invalidar el caché antes de recargar: el aviso significa que los datos
+  // cambiaron, así que hay que pedirlos frescos y no devolver los del caché.
+  socket.on('catalogo_actualizado', () => { servicioProductos.invalidarCatalogo(); cargarDatos() })
+  socket.on('config_actualizada', (data) => { if (data && 'descuento_combos' in data) { servicioProductos.invalidarCatalogo(); cargarDatos() } })
 })
 onUnmounted(() => { if (socket) socket.disconnect() })
 
