@@ -137,7 +137,10 @@
             <div class="grupo-campo">
               <label>Teléfono (opcional)</label>
               <div class="campo-editable" data-campo="telefono" :class="{ 'editando-activo': editando.telefono, 'con-error': !!mostrarError('telefono') }">
-                <span v-if="!editando.telefono">{{ telefonoMostrado || 'No especificado' }}</span>
+                <span v-if="!editando.telefono" class="tel-lectura">
+                  <svg v-if="form.telefono" class="tel-lectura-bandera" viewBox="0 0 9 6" width="18" height="12" aria-hidden="true"><rect width="9" height="2" y="0" fill="#D52B1E"/><rect width="9" height="2" y="2" fill="#F9E300"/><rect width="9" height="2" y="4" fill="#007934"/></svg>
+                  <span class="tel-lectura-num">{{ telefonoMostrado || 'No especificado' }}</span>
+                </span>
                 <BaseTelefono v-else v-model="form.telefono" placeholder="Añade tu número" />
                 <button type="button" class="btn-lapiz" :class="{ activo: editando.telefono }" @click="toggleEditar('telefono')" :title="editando.telefono ? 'Listo' : 'Editar'">
                   <svg v-if="!editando.telefono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -442,6 +445,29 @@
                 <button type="button" class="btn-guardar brillo-hover" @click="cerrarRecuperar">Listo</button>
               </div>
             </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Barra flotante de guardado: SIEMPRE accesible en celular en cuanto hay
+         cambios (foto o datos), sin tener que buscar el botón al pie del formulario. -->
+    <Teleport to="body">
+      <Transition name="barra-guardar">
+        <div v-if="hayCambios" class="barra-guardar-movil" role="region" aria-label="Cambios sin guardar">
+          <div class="barra-guardar-inner">
+            <span class="barra-guardar-nota">
+              <span class="barra-punto" aria-hidden="true"></span>
+              Cambios sin guardar
+            </span>
+            <div class="barra-guardar-acciones">
+              <button type="button" class="btn-cancelar barra-cancelar" @click="cancelarEdicion" :disabled="cargandoDatos">Cancelar</button>
+              <button type="button" class="btn-guardar-inline brillo-hover" @click="guardarDatos" :disabled="cargandoDatos || !datosValidos" :title="!datosValidos ? 'Revisa los campos marcados' : 'Guardar cambios'">
+                <span v-if="cargandoDatos" class="spin" aria-hidden="true"></span>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="17" height="17" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                <span>{{ cargandoDatos ? 'Guardando…' : 'Guardar cambios' }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -1537,6 +1563,26 @@ async function guardarSeguridad() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Teléfono en modo lectura: bandera de Bolivia + número con prefijo, igual que admin/BaseTelefono */
+.tel-lectura {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.tel-lectura-bandera {
+  flex-shrink: 0;
+  display: inline-flex;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.tel-lectura-num {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .campo-editable .campo {
   flex: 1;
   background: transparent;
@@ -2268,4 +2314,111 @@ async function guardarSeguridad() {
   padding: 2px 0;
 }
 .verif-reenviar:disabled { opacity: .5; cursor: wait; }
+
+/* ============================================================
+   Barra flotante de guardado (celular): siempre a la vista cuando
+   hay cambios, por encima de la píldora de navegación inferior.
+   En escritorio se ocultan (bastan los botones al pie del formulario).
+   ============================================================ */
+.barra-guardar-movil {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Encima de la píldora de navegación (bottom 14px + alto 66px) */
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  z-index: 55;
+  display: none;
+  padding: 0 14px;
+  pointer-events: none;
+}
+.barra-guardar-inner {
+  pointer-events: auto;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px 9px 16px;
+  border-radius: var(--radio-full, 999px);
+  background: var(--fondo-tarjeta, rgba(20, 12, 32, 0.92));
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--borde-activo, rgba(168, 85, 247, 0.4));
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 40px rgba(168, 85, 247, 0.18);
+}
+.barra-guardar-nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--texto-secundario);
+  white-space: nowrap;
+}
+.barra-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--morado-brillante, #a855f7);
+  box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.55);
+  animation: barraLatido 1.9s ease-out infinite;
+}
+@keyframes barraLatido {
+  0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(168, 85, 247, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+}
+.barra-guardar-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.barra-guardar-acciones .btn-cancelar {
+  flex: 0 0 auto;
+  padding: 10px 15px;
+  font-size: 0.85rem;
+}
+.barra-guardar-acciones .btn-guardar-inline {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+}
+
+/* Transición: sube desde el borde inferior */
+.barra-guardar-enter-active,
+.barra-guardar-leave-active {
+  transition: opacity 0.28s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.barra-guardar-enter-from,
+.barra-guardar-leave-to {
+  opacity: 0;
+  transform: translateY(140%);
+}
+
+/* Solo en celular/tablet: en escritorio los botones inline bastan */
+@media (max-width: 1023px) {
+  .barra-guardar-movil { display: block; }
+}
+
+/* Teléfonos estrechos: ocultamos la nota y los botones ocupan todo el ancho */
+@media (max-width: 430px) {
+  .barra-guardar-nota { display: none; }
+  .barra-guardar-acciones { flex: 1; }
+  .barra-guardar-acciones .btn-cancelar { flex: 1; padding: 12px 10px; }
+  .barra-guardar-acciones .btn-guardar-inline { flex: 2; padding: 12px 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barra-punto { animation: none; }
+  .barra-guardar-enter-active,
+  .barra-guardar-leave-active {
+    transition: opacity 0.18s ease;
+  }
+  .barra-guardar-enter-from,
+  .barra-guardar-leave-to {
+    transform: none;
+  }
+}
 </style>

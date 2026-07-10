@@ -254,6 +254,7 @@
           </div>
           <div class="combo-cuerpo">
             <div class="combo-nombre">{{ combo.nombre }}</div>
+            <div v-if="composicionCombo(combo)" class="combo-composicion" :title="composicionCombo(combo)">{{ composicionCombo(combo) }}</div>
             <div class="combo-precios">
               <span class="combo-normal">Bs {{ combo.precio_normal.toFixed(2) }}</span>
               <span class="combo-flecha" aria-hidden="true">
@@ -489,6 +490,21 @@ async function mostrarQRRapido(tipo) {
     generandoQR.value = false
     qrSolicitado.value = null
   }
+}
+
+// Quita el sufijo "(x1)"/"(x6)" del nombre para que se lea limpio en la composición
+function nombreLimpio(nombre) {
+  return String(nombre || '').replace(/\s*\(x\d+\)\s*$/i, '').trim()
+}
+
+// Composición del combo con sus cantidades, para que el precio tenga sentido.
+// Ej.: "10× Cerveza · 2× Papas" (cada producto sugerido cuenta como 1 si no trae cantidad).
+function composicionCombo(combo) {
+  const items = combo.productos || []
+  if (!items.length) return ''
+  return items
+    .map(p => `${Number(p.cantidad) || 1}× ${nombreLimpio(p.nombre || p.nombre_producto)}`)
+    .join(' · ')
 }
 
 // Hasta 3 imágenes de los productos protagonistas del combo
@@ -968,6 +984,19 @@ onUnmounted(() => {
   color: var(--texto-principal);
   line-height: 1.3;
   min-height: 2.4em;
+}
+/* Composición del combo: cantidades claras (10× Cerveza · 2× Papas) */
+.combo-composicion {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  margin-top: -4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
 }
 .combo-precios { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .combo-normal { color: var(--texto-desactivado); text-decoration: line-through; font-size: 0.8rem; font-variant-numeric: tabular-nums; }

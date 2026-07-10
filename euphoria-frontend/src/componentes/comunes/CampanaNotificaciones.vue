@@ -79,7 +79,12 @@ function alternar(e) {
   abierto.value = !abierto.value
   if (abierto.value) {
     const rect = e.currentTarget.getBoundingClientRect()
-    panelPos.value = { top: (rect.bottom + 8) + 'px', right: Math.max(12, window.innerWidth - rect.right) + 'px' }
+    // En celular el panel se muestra como hoja inferior (CSS); no se ancla al botón.
+    if (window.innerWidth <= 560) {
+      panelPos.value = {}
+    } else {
+      panelPos.value = { top: (rect.bottom + 8) + 'px', right: Math.max(12, window.innerWidth - rect.right) + 'px' }
+    }
     tab.value = 'nuevas'
     cargar()
   }
@@ -149,7 +154,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .cn-accion.borrar { color: #FCA5A5; }
 .cn-vacia { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 2.5rem 1rem; color: var(--texto-desactivado); font-size: 0.85rem; }
 .cn-vacia svg { opacity: 0.5; }
-.cn-lista { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.cn-lista { list-style: none; margin: 0; padding: 6px; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 4px; }
 .cn-item { display: flex; align-items: flex-start; gap: 11px; padding: 11px 12px; border-radius: 12px; position: relative; transition: background 0.15s ease; }
 .cn-item:hover { background: rgba(168,85,247,0.08); }
 .cn-item.nolei { background: rgba(168,85,247,0.06); }
@@ -165,4 +170,51 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .cn-txt i { color: var(--texto-desactivado); font-size: 0.68rem; font-style: normal; margin-top: 2px; }
 .cn-borrar { flex-shrink: 0; width: 24px; height: 24px; border-radius: 6px; border: none; background: none; color: var(--texto-desactivado); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .cn-borrar:hover { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+
+/* ── Celular: hoja inferior a todo el ancho ────────────────────────────── */
+@media (max-width: 560px) {
+  .cn-overlay {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  .cn-panel {
+    position: relative;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    bottom: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 82vh;
+    border-radius: 22px 22px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.55);
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: cnHoja 0.28s cubic-bezier(.22,1,.36,1);
+  }
+  /* Asa superior para reforzar el gesto de hoja */
+  .cn-panel::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 2px auto 8px;
+    border-radius: 999px;
+    background: var(--borde-activo, rgba(255,255,255,0.25));
+  }
+  .cn-head { padding: 4px 16px 10px; }
+  .cn-tabs { padding: 10px 14px; flex-wrap: wrap; }
+  .cn-item { padding: 12px 12px; }
+  .cn-ic { width: 36px; height: 36px; }
+}
+@keyframes cnHoja { from { transform: translateY(100%); } to { transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cn-panel { animation: none; }
+}
 </style>

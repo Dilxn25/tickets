@@ -32,9 +32,22 @@
           :class="{ lista: imgLista }"
           alt="Poster del evento"
           @load="imgLista = true"
+          @click="abrirVisor"
         />
         <div v-else class="hero-placeholder">EUPHORIA</div>
         <div class="hero-velo" aria-hidden="true"></div>
+
+        <!-- Pista visual: la imagen se puede ampliar (abre el visor/lightbox) -->
+        <button
+          v-if="evento.url_portada"
+          type="button"
+          class="hero-zoom"
+          aria-label="Ampliar imagen a pantalla completa"
+          @click.stop="abrirVisor"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+          <span>Ampliar</span>
+        </button>
 
         <div v-if="evento.estado" class="badge-estado" :class="{ agotado: evento.estado === 'lleno' }">
           <span v-if="evento.estado !== 'lleno'" class="punto-vivo"></span>
@@ -111,11 +124,60 @@
         </button>
       </div>
     </div>
+
+    <!-- Visor / Lightbox: imagen a pantalla completa, sin bordes difuminados,
+         con zoom (pinch + botones), desplazamiento al ampliar y cierre claro. -->
+    <Teleport to="body">
+      <transition name="visor-anim">
+        <div
+          v-if="visorAbierto && evento && evento.url_portada"
+          class="visor"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagen del evento a pantalla completa"
+        >
+          <button type="button" class="visor-cerrar" aria-label="Cerrar visor" @click="cerrarVisor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+          </button>
+
+          <div
+            class="visor-lienzo"
+            @click.self="cerrarVisor"
+            @pointerdown="alPuntearAbajo"
+            @pointermove="alPuntearMover"
+            @pointerup="alPuntearArriba"
+            @pointercancel="alPuntearArriba"
+            @wheel.prevent="alRodar"
+            @dblclick="alDobleClic"
+          >
+            <img
+              ref="visorImg"
+              :src="evento.url_portada"
+              class="visor-img"
+              :class="{ ampliada: escala > 1, animando: sinArrastre }"
+              :style="{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${escala})` }"
+              alt="Poster del evento a pantalla completa"
+              draggable="false"
+            />
+          </div>
+
+          <div class="visor-controles" role="group" aria-label="Controles de zoom">
+            <button type="button" aria-label="Alejar" :disabled="escala <= ESCALA_MIN" @click="zoomVisor(-0.5)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="6" y1="12" x2="18" y2="12"></line></svg>
+            </button>
+            <span class="visor-nivel">{{ Math.round(escala * 100) }}%</span>
+            <button type="button" aria-label="Acercar" :disabled="escala >= ESCALA_MAX" @click="zoomVisor(0.5)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="6" x2="12" y2="18"></line><line x1="6" y1="12" x2="18" y2="12"></line></svg>
+            </button>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
 
@@ -155,6 +217,136 @@ const precioDesde = computed(() => {
     if (z.es_general && Number(z.precio_entrada_base) < min) min = Number(z.precio_entrada_base)
   }
   return min === Infinity ? 0 : min
+})
+
+// ===== Visor / Lightbox de la portada =====
+// Abre la imagen a pantalla completa (sin bordes difuminados) con zoom y arrastre.
+const ESCALA_MIN = 1
+const ESCALA_MAX = 4
+const visorAbierto = ref(false)
+const escala = ref(1)
+const offset = ref({ x: 0, y: 0 })
+const sinArrastre = ref(true) // true = transición suave; false = seguir el dedo sin lag
+const visorImg = ref(null)
+
+// Punteros activos para gestionar arrastre (1 dedo) y pinch-zoom (2 dedos)
+const punteros = new Map()
+let pinchInicial = 0
+let escalaInicial = 1
+let arrastreActivo = false
+let arrastreInicio = { x: 0, y: 0 }
+let offsetInicio = { x: 0, y: 0 }
+
+function fijar(valor, min, max) { return Math.min(max, Math.max(min, valor)) }
+
+function abrirVisor() {
+  if (!evento.value?.url_portada) return
+  reiniciarTransformacion()
+  visorAbierto.value = true
+}
+function cerrarVisor() {
+  visorAbierto.value = false
+}
+function reiniciarTransformacion() {
+  sinArrastre.value = true
+  escala.value = 1
+  offset.value = { x: 0, y: 0 }
+}
+
+// Límite de desplazamiento para que la imagen no se escape de la pantalla
+function limitarOffset() {
+  const el = visorImg.value
+  if (!el) return
+  const maxX = (el.offsetWidth * (escala.value - 1)) / 2
+  const maxY = (el.offsetHeight * (escala.value - 1)) / 2
+  offset.value = {
+    x: fijar(offset.value.x, -maxX, maxX),
+    y: fijar(offset.value.y, -maxY, maxY),
+  }
+}
+function aplicarEscala(nueva) {
+  escala.value = fijar(nueva, ESCALA_MIN, ESCALA_MAX)
+  if (escala.value <= ESCALA_MIN) offset.value = { x: 0, y: 0 }
+  else limitarOffset()
+}
+function zoomVisor(delta) {
+  sinArrastre.value = true
+  aplicarEscala(escala.value + delta)
+}
+function alDobleClic() {
+  sinArrastre.value = true
+  if (escala.value > ESCALA_MIN) reiniciarTransformacion()
+  else aplicarEscala(2.5)
+}
+function alRodar(e) {
+  sinArrastre.value = true
+  aplicarEscala(escala.value + (e.deltaY < 0 ? 0.35 : -0.35))
+}
+
+function alPuntearAbajo(e) {
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {}
+  if (punteros.size === 2) {
+    const [a, b] = [...punteros.values()]
+    pinchInicial = Math.hypot(a.x - b.x, a.y - b.y)
+    escalaInicial = escala.value
+    arrastreActivo = false
+  } else {
+    arrastreActivo = escala.value > ESCALA_MIN
+    arrastreInicio = { x: e.clientX, y: e.clientY }
+    offsetInicio = { ...offset.value }
+  }
+  sinArrastre.value = false
+}
+function alPuntearMover(e) {
+  if (!punteros.has(e.pointerId)) return
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (punteros.size === 2 && pinchInicial > 0) {
+    const [a, b] = [...punteros.values()]
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    aplicarEscala(escalaInicial * (dist / pinchInicial))
+  } else if (arrastreActivo && punteros.size === 1) {
+    offset.value = {
+      x: offsetInicio.x + (e.clientX - arrastreInicio.x),
+      y: offsetInicio.y + (e.clientY - arrastreInicio.y),
+    }
+    limitarOffset()
+  }
+}
+function alPuntearArriba(e) {
+  punteros.delete(e.pointerId)
+  if (punteros.size < 2) pinchInicial = 0
+  if (punteros.size === 1) {
+    // Al soltar un dedo del pinch, continúa el arrastre con el que queda
+    const restante = [...punteros.values()][0]
+    arrastreActivo = escala.value > ESCALA_MIN
+    arrastreInicio = { x: restante.x, y: restante.y }
+    offsetInicio = { ...offset.value }
+  } else if (punteros.size === 0) {
+    arrastreActivo = false
+    sinArrastre.value = true
+  }
+}
+
+function alTeclaVisor(e) {
+  if (e.key === 'Escape') cerrarVisor()
+  else if (e.key === '+' || e.key === '=') zoomVisor(0.4)
+  else if (e.key === '-' || e.key === '_') zoomVisor(-0.4)
+}
+
+// Bloquea el scroll de fondo y escucha teclado sólo mientras el visor está abierto
+watch(visorAbierto, (abierto) => {
+  if (typeof document === 'undefined') return
+  document.body.style.overflow = abierto ? 'hidden' : ''
+  if (abierto) window.addEventListener('keydown', alTeclaVisor)
+  else {
+    window.removeEventListener('keydown', alTeclaVisor)
+    punteros.clear()
+  }
+})
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') document.body.style.overflow = ''
+  window.removeEventListener('keydown', alTeclaVisor)
 })
 
 // La reserva REAL (mapa interactivo + pago con billetera + QR) vive en /cliente/reservar
@@ -340,6 +532,39 @@ function formatearMonto(monto) {
   transition: opacity 0.45s ease;
 }
 .hero-img.lista { opacity: 1; }
+.hero-img { cursor: zoom-in; }
+
+/* Pista "Ampliar": chip sutil en el héroe que invita a abrir el visor */
+.hero-zoom {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px 7px 10px;
+  background: rgba(10, 6, 26, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-full);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: zoom-in;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transition: transform 0.25s var(--ease-suave), background 0.25s ease, border-color 0.25s ease;
+}
+.hero-zoom svg { width: 15px; height: 15px; }
+.hero-zoom:hover {
+  transform: translateY(-1px);
+  background: rgba(20, 12, 46, 0.92);
+  border-color: var(--borde-activo);
+}
+.hero-zoom:active { transform: scale(0.95); }
+.hero-zoom:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 
 .hero-placeholder {
   position: absolute;
@@ -692,6 +917,132 @@ function formatearMonto(monto) {
   .barra-reserva { bottom: 106px; }
 }
 
+/* ===== Visor / Lightbox de la portada =====
+   Teleport a <body>: cubre TODA la pantalla por encima del navbar del cliente.
+   Muestra la imagen limpia (sin bordes difuminados) con zoom y desplazamiento. */
+.visor {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(6, 3, 16, 0.94);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.visor-lienzo {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.visor-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  cursor: zoom-in;
+  will-change: transform;
+  transform-origin: center center;
+}
+.visor-img.animando { transition: transform 0.28s var(--ease-suave); }
+.visor-img.ampliada { cursor: grab; }
+.visor-img.ampliada:active { cursor: grabbing; }
+
+/* Cerrar: X clara, siempre arriba a la derecha */
+.visor-cerrar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: calc(env(safe-area-inset-right) + 14px);
+  z-index: 2;
+  width: 46px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radio-full);
+  background: rgba(20, 12, 46, 0.82);
+  border: 1px solid var(--borde-sutil);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  transition: transform 0.25s var(--ease-suave), background 0.25s ease, border-color 0.25s ease;
+}
+.visor-cerrar svg { width: 22px; height: 22px; }
+.visor-cerrar:hover { background: rgba(236, 72, 153, 0.28); border-color: var(--borde-activo); transform: rotate(90deg); }
+.visor-cerrar:active { transform: scale(0.92); }
+.visor-cerrar:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+
+/* Controles de zoom: píldora flotante centrada abajo */
+.visor-controles {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(20, 12, 46, 0.82);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-full);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.visor-controles button {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radio-full);
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s var(--ease-suave);
+}
+.visor-controles button svg { width: 20px; height: 20px; }
+.visor-controles button:hover:not(:disabled) { background: rgba(168, 85, 247, 0.28); }
+.visor-controles button:active:not(:disabled) { transform: scale(0.9); }
+.visor-controles button:disabled { opacity: 0.35; cursor: not-allowed; }
+.visor-controles button:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
+.visor-nivel {
+  min-width: 52px;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Animación de entrada/salida del visor */
+.visor-anim-enter-active,
+.visor-anim-leave-active { transition: opacity 0.28s ease; }
+.visor-anim-enter-from,
+.visor-anim-leave-to { opacity: 0; }
+.visor-anim-enter-active .visor-img { transition: transform 0.32s var(--ease-suave); }
+.visor-anim-enter-from .visor-img { transform: scale(0.9); }
+
+@media (max-width: 480px) {
+  .visor-cerrar { width: 42px; height: 42px; }
+  .visor-controles button { width: 40px; height: 40px; }
+}
+
 /* Respeta la preferencia de menos movimiento */
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 1.5s; }
@@ -702,7 +1053,13 @@ function formatearMonto(monto) {
   .opcion-tarjeta,
   .btn-reservar-final,
   .reservar-icono,
+  .hero-zoom,
+  .visor-cerrar,
   .hero-img { transition-duration: 0.01ms; }
   .btn-reservar-final:hover:not(.btn-desactivado) { transform: none; }
+  .visor-cerrar:hover { transform: none; }
+  .visor-img.animando { transition-duration: 0.01ms; }
+  .visor-anim-enter-active .visor-img { transition-duration: 0.01ms; }
+  .visor-anim-enter-from .visor-img { transform: none; }
 }
 </style>

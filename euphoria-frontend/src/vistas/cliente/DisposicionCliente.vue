@@ -22,8 +22,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="5" x2="13" y2="19" stroke-dasharray="2 2"></line></svg>
         </button>
         <span class="divisor-acciones" aria-hidden="true"></span>
-        <div class="user-avatar" @click="irPerfil" title="Mi perfil">
-          <img v-if="urlFoto" :src="urlFoto" class="avatar-img" alt="Perfil" />
+        <div class="user-avatar" :class="{ 'avatar-cargando': mostrarSkeletonAvatar }" @click="irPerfil" title="Mi perfil">
+          <span v-if="mostrarSkeletonAvatar" class="avatar-skeleton" aria-hidden="true"></span>
+          <img v-else-if="urlFoto" :src="urlFoto" class="avatar-img" alt="Perfil" />
           <span v-else>{{ iniciales }}</span>
         </div>
         <button class="btn-salir-top" @click="cerrarSesion" title="Cerrar sesión" type="button" aria-label="Cerrar sesión">
@@ -96,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
@@ -108,13 +109,30 @@ const tienda = useTiendaAutenticacion()
 const tiendaCarrito = useTiendaCarrito()
 const router = useRouter()
 
-// Tiempo real: si el local (admin) cambia MIS datos, se reflejan sin recargar.
-useTiempoReal('usuarios', async (tipo, data) => {
-  if (data?.id && tienda.usuario?.id && Number(data.id) !== Number(tienda.usuario.id)) return
+// Estado de carga del perfil: arranca en true si el store todavía no tiene una
+// identidad utilizable (localStorage vacío o sin nombres). Evita mostrar un
+// avatar "vacío" que parece un error mientras llega /usuarios/perfil.
+const cargandoPerfil = ref(!tienda.usuario?.nombres)
+
+// Trae los datos frescos del propio usuario (perfil, foto, saldo) y los fusiona
+// en el store. Se usa tanto al montar como cuando el socket avisa de un cambio.
+async function refrescarPerfil() {
   try {
     const fresco = await clienteHttp.get('/usuarios/perfil')
     if (fresco) tienda.actualizarUsuario(fresco.usuario || fresco)
-  } catch { /* si falla, se mantiene lo actual */ }
+  } catch { /* si falla, se mantiene lo actual (lo cacheado) */ }
+  finally { cargandoPerfil.value = false }
+}
+
+// Causa del "aparece de golpe": antes SÓLO se refrescaba al recibir un evento de
+// socket. Ahora, al montar el layout, pedimos el perfil de inmediato para que la
+// foto/saldo/datos estén al día desde el primer instante.
+onMounted(refrescarPerfil)
+
+// Tiempo real: si el local (admin) cambia MIS datos, se reflejan sin recargar.
+useTiempoReal('usuarios', (tipo, data) => {
+  if (data?.id && tienda.usuario?.id && Number(data.id) !== Number(tienda.usuario.id)) return
+  refrescarPerfil()
 })
 
 const iniciales = computed(() => {
@@ -123,6 +141,11 @@ const iniciales = computed(() => {
 })
 
 const urlFoto = computed(() => tienda.usuario?.url_foto_perfil || tienda.usuario?.foto || null)
+
+// Sólo mostramos el esqueleto cuando de verdad no hay nada que enseñar todavía
+// (ni foto ni iniciales) y seguimos esperando la respuesta. Si ya hay iniciales
+// cacheadas, se ven al instante y la foto entra sola cuando llega.
+const mostrarSkeletonAvatar = computed(() => cargandoPerfil.value && !urlFoto.value && !iniciales.value)
 
 const modalLogout = ref(false)
 
@@ -346,6 +369,34 @@ function confirmarCerrarSesion() {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+}
+
+/* Avatar en carga: capa neutra de vidrio (no el gradiente de marca) para que se
+   lea como "cargando" y no como un avatar real vacío. */
+.user-avatar.avatar-cargando {
+  background: rgba(46, 26, 102, 0.35);
+  box-shadow: 0 0 0 1px var(--borde-sutil) inset;
+  cursor: default;
+}
+.avatar-skeleton {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(
+    100deg,
+    rgba(168, 85, 247, 0.10) 30%,
+    rgba(192, 132, 252, 0.28) 50%,
+    rgba(168, 85, 247, 0.10) 70%
+  );
+  background-size: 220% 100%;
+  animation: avatar-brillo 1.15s ease-in-out infinite;
+}
+@keyframes avatar-brillo {
+  from { background-position: 180% 0; }
+  to   { background-position: -80% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-skeleton { animation: none; }
 }
 
 /* Contenido Scroll */

@@ -125,19 +125,37 @@ async function abrirCamara() {
 }
 
 async function iniciarVideo() {
-  try {
-    streamCamara = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
-      audio: false,
-    })
-    if (videoCamara.value) videoCamara.value.srcObject = streamCamara
-    else cerrarCamara()
-  } catch (error) {
-    console.error('Error abriendo la cámara:', error)
-    cerrarCamara()
-    notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
-    abrirArchivo()
+  // Pedimos la mayor resolución razonable para que el OCR pueda leer el monto.
+  // La cámara trasera ('environment') y valores 'ideal' altos evitan que el
+  // navegador entregue el stream por defecto (a menudo 640x480, muy bajo).
+  const restriccionesHD = {
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 2560 },
+      height: { ideal: 1440 },
+    },
+    audio: false,
   }
+  try {
+    streamCamara = await navigator.mediaDevices.getUserMedia(restriccionesHD)
+  } catch (error) {
+    // Algún dispositivo puede no soportar esa resolución: reintentamos con lo básico.
+    console.warn('Cámara HD no disponible, usando resolución por defecto:', error)
+    try {
+      streamCamara = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+    } catch (error2) {
+      console.error('Error abriendo la cámara:', error2)
+      cerrarCamara()
+      notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
+      abrirArchivo()
+      return
+    }
+  }
+  if (videoCamara.value) videoCamara.value.srcObject = streamCamara
+  else cerrarCamara()
 }
 
 function iniciarEscaneoQr() {

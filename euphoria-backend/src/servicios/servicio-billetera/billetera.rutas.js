@@ -448,11 +448,12 @@ router.get('/qrs-pago', verificarToken, async (req, res) => {
 
 // ============ POST /api/billetera/pin ============
 // Actualizar el PIN transaccional del usuario.
-// Si ya existe un PIN, se exige el actual (evita que alguien con el teléfono
-// desbloqueado cambie el PIN y anule la protección del QR privado).
+// Si ya existe un PIN, se verifica la identidad del dueño con su CONTRASEÑA de
+// cuenta (así puede cambiarlo aunque haya OLVIDADO el PIN anterior). Se mantiene
+// compatibilidad con "pin_actual" si algún cliente antiguo lo sigue enviando.
 router.post('/pin', verificarToken, async (req, res) => {
   try {
-    const { nuevo_pin, pin_actual } = req.body
+    const { nuevo_pin, pin_actual, password } = req.body
 
     if (!nuevo_pin || String(nuevo_pin).length !== 4 || !/^\d{4}$/.test(String(nuevo_pin))) {
       return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos' })
@@ -463,10 +464,19 @@ router.post('/pin', verificarToken, async (req, res) => {
       return res.status(400).json({ error: 'Aún no tienes billetera: se crea con tu primera recarga. Después puedes configurar tu PIN.' })
     }
 
+    // Si aún no hay PIN, se fija sin verificación extra (es la primera vez).
+    // Si ya existe, se exige contraseña de cuenta (preferido) o PIN actual (legado).
     if (billetera.pin_transaccional) {
-      if (!pin_actual) return res.status(400).json({ error: 'Ingresa tu PIN actual para cambiarlo.', requiere_pin_actual: true })
-      const actualValido = await verificarPin(pin_actual, billetera.pin_transaccional)
-      if (!actualValido) return res.status(400).json({ error: 'El PIN actual es incorrecto.', requiere_pin_actual: true })
+      if (password) {
+        const usuario = await prisma.usuario.findUnique({ where: { id_usuario: req.usuario.id } })
+        const passwordValido = usuario && await bcrypt.compare(String(password), usuario.password_hash)
+        if (!passwordValido) return res.status(400).json({ error: 'Contraseña incorrecta.' })
+      } else if (pin_actual) {
+        const actualValido = await verificarPin(pin_actual, billetera.pin_transaccional)
+        if (!actualValido) return res.status(400).json({ error: 'El PIN actual es incorrecto.', requiere_pin_actual: true })
+      } else {
+        return res.status(400).json({ error: 'Confirma tu contraseña para cambiar el PIN.', requiere_password: true })
+      }
     }
 
     // Se guarda cifrado (reversible con la clave del servidor) para que el

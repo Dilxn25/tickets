@@ -213,7 +213,14 @@ function iconoDialogo(variante) {
 .dlg-fade-enter-from .dlg, .dlg-fade-leave-to .dlg { transform: translateY(12px) scale(.97); opacity: 0; }
 
 @media (max-width: 560px) {
-  .notif-pila { top: auto; bottom: 14px; right: 12px; left: 12px; width: auto; }
+  .notif-pila {
+    top: auto;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    right: 12px; left: 12px; width: auto;
+  }
+  .notif-toast { padding: 12px 13px; }
+  .notif-titulo { font-size: .85rem; }
+  .notif-msg { font-size: .82rem; }
   .notif-enter-from, .notif-leave-to { transform: translateY(140%); }
 }
 @media (prefers-reduced-motion: reduce) {

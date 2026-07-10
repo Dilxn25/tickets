@@ -242,20 +242,19 @@
         </div>
         <div class="modal-body">
           <div v-if="tienePin" class="campo-pin">
-            <label>PIN actual</label>
+            <label>Contraseña de tu cuenta</label>
+            <p class="campo-pin-ayuda">Confirma tu contraseña para cambiar el PIN. No necesitas recordar el PIN anterior.</p>
             <div class="input-pin-wrapper">
               <input
-                v-model="pinActual"
-                :type="mostrarPinActual ? 'text' : 'password'"
-                placeholder="0000"
-                maxlength="4"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                @keypress="soloNumeros"
-                class="input-pin"
+                v-model="passwordCambio"
+                :type="mostrarPasswordCambio ? 'text' : 'password'"
+                placeholder="Tu contraseña"
+                autocomplete="current-password"
+                aria-label="Contraseña de tu cuenta"
+                class="input-pin input-password"
               />
-              <button class="btn-ojo-input" @click="mostrarPinActual = !mostrarPinActual" type="button" title="Mostrar/ocultar PIN">
-                <svg v-if="mostrarPinActual" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <button class="btn-ojo-input" @click="mostrarPasswordCambio = !mostrarPasswordCambio" type="button" title="Mostrar/ocultar contraseña">
+                <svg v-if="mostrarPasswordCambio" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
               </button>
             </div>
@@ -668,35 +667,67 @@
     <!-- Modal: Solicitar retiro de billetera -->
     <Teleport to="body">
       <div v-if="modalRetiro" class="modal-overlay" @click.self="modalRetiro = false">
-        <div class="modal-recarga">
-          <div class="modal-cabecera">
-            <h2>Solicitar retiro</h2>
+        <div class="modal-recarga modal-retiro">
+          <div class="modal-header">
+            <h2>Retirar mi saldo</h2>
             <button class="btn-cerrar" @click="modalRetiro = false" type="button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
-          <div class="modal-cuerpo">
-            <p class="retiro-saldo">Saldo disponible: <b>Bs. {{ formatoMoneda(saldo) }}</b></p>
+          <div class="modal-body">
+            <!-- Tarjeta del saldo disponible -->
+            <div class="retiro-tarjeta">
+              <div class="retiro-tarjeta-brillo" aria-hidden="true"></div>
+              <span class="retiro-tarjeta-label">Saldo disponible para retirar</span>
+              <p class="retiro-tarjeta-monto"><span class="retiro-tarjeta-moneda">Bs.</span>{{ formatoMoneda(saldo) }}</p>
+              <span class="retiro-tarjeta-nota">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Se solicita el retiro del total de tu saldo.
+              </span>
+            </div>
+
             <p class="retiro-ayuda">El cajero verá tu solicitud y coordina la entrega de tu dinero en efectivo.</p>
 
             <label class="retiro-label">¿Cómo prefieres recibirlo?</label>
             <div class="retiro-metodos">
-              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'persona' }" @click="retiroForm.metodo = 'persona'">Paso por el local</button>
-              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'qr' }" @click="retiroForm.metodo = 'qr'">A mi QR / cuenta</button>
+              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'persona' }" @click="retiroForm.metodo = 'persona'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg>
+                Paso por el local
+              </button>
+              <button type="button" class="retiro-metodo" :class="{ activo: retiroForm.metodo === 'qr' }" @click="retiroForm.metodo = 'qr'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3"></path><path d="M21 14v7h-7"></path></svg>
+                A mi QR / cuenta
+              </button>
             </div>
 
             <template v-if="retiroForm.metodo === 'qr'">
               <label class="retiro-label">Sube la imagen de tu QR / cuenta</label>
-              <input type="file" accept="image/*" @change="alElegirQR" class="retiro-file" />
-              <img v-if="retiroQrPreview" :src="retiroQrPreview" class="retiro-qr-preview" alt="QR" />
+              <label class="retiro-subida">
+                <input type="file" accept="image/*" @change="alElegirQR" class="input-file-hidden" />
+                <template v-if="!retiroQrPreview">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  <span>Elegir imagen</span>
+                </template>
+                <template v-else>
+                  <img :src="retiroQrPreview" class="retiro-qr-preview" alt="Vista previa de tu QR" />
+                  <span class="retiro-subida-cambiar">Toca para cambiar</span>
+                </template>
+              </label>
             </template>
 
             <label class="retiro-label">Mensaje para el cajero (opcional)</label>
             <textarea v-model="retiroForm.mensaje" class="retiro-textarea" rows="3" placeholder="Ej. Quisiera retirar mi dinero, ¿me lo pueden abonar a mi QR? / Pasaré por el local."></textarea>
 
-            <p v-if="retiroError" class="retiro-error">{{ retiroError }}</p>
-            <button class="btn-confirmar-recarga" :disabled="enviandoRetiro" @click="enviarSolicitudRetiro" type="button">
-              {{ enviandoRetiro ? 'Enviando...' : 'Enviar solicitud' }}
+            <p v-if="retiroError" class="retiro-error">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              {{ retiroError }}
+            </p>
+
+            <p v-if="saldo <= 0" class="retiro-sin-saldo">No tienes saldo disponible para retirar.</p>
+
+            <button class="btn-retirar-todo" :disabled="enviandoRetiro || saldo <= 0" @click="enviarSolicitudRetiro" type="button">
+              <svg v-if="!enviandoRetiro" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+              {{ enviandoRetiro ? 'Enviando…' : `Retirar todo (Bs. ${formatoMoneda(saldo)})` }}
             </button>
 
             <div v-if="misRetiros.length" class="retiro-historial">
@@ -744,12 +775,14 @@ const mensajeExito = ref('')
 let socketBilletera = null
 
 // Modal cambiar PIN
+// Ya NO se pide el PIN actual (ilógico si el usuario lo olvidó): se confirma la
+// identidad del dueño con la CONTRASEÑA de su cuenta.
 const modalCambiarPin = ref(false)
-const pinActual = ref('')
+const passwordCambio = ref('')
 const nuevoPin = ref('')
 const confirmarPin = ref('')
 const errorPin = ref('')
-const mostrarPinActual = ref(false)
+const mostrarPasswordCambio = ref(false)
 const mostrarNuevoPin = ref(false)
 const mostrarConfirmarPin = ref(false)
 
@@ -1014,9 +1047,9 @@ const identificadorQRAmpliado = computed(() => {
 // Abrir Modal Recarga
 function abrirModalRecarga() {
   modalRecarga.value = !modalRecarga.value
-  if (!modalRecarga.value) {
-    limpiarFormularioRecarga()
-  }
+  // Se limpia SIEMPRE (al abrir y al cerrar) para que nunca queden datos del
+  // comprobante subido en un intento anterior.
+  limpiarFormularioRecarga()
 }
 
 function limpiarFormularioRecarga() {
@@ -1026,6 +1059,9 @@ function limpiarFormularioRecarga() {
   comprobanteProcesado.value = false
   ocrExitoso.value = false
   errorOCR.value = ''
+  procesandoOCR.value = false
+  urlComprobanteGenerado.value = ''
+  if (inputFile.value) inputFile.value.value = ''
 }
 
 // Montos rápidos de recarga
@@ -1081,17 +1117,21 @@ function intentarConfigurarPin() {
 function abrirModalCambiarPin() {
   modalCambiarPin.value = !modalCambiarPin.value
   if (!modalCambiarPin.value) {
-    pinActual.value = ''
+    passwordCambio.value = ''
     nuevoPin.value = ''
     confirmarPin.value = ''
     errorPin.value = ''
+    mostrarPasswordCambio.value = false
+    mostrarNuevoPin.value = false
+    mostrarConfirmarPin.value = false
   }
 }
 
 // Validar y guardar PIN
 const puedoGuardarPin = computed(() => {
   if (!nuevoPin.value || !confirmarPin.value) return false
-  if (tienePin.value && pinActual.value.length !== 4) return false
+  // Si ya hay PIN, se exige la CONTRASEÑA de la cuenta (no el PIN anterior).
+  if (tienePin.value && !passwordCambio.value) return false
   if (nuevoPin.value.length !== 4 || confirmarPin.value.length !== 4) return false
   if (!/^\d+$/.test(nuevoPin.value)) return false
   if (nuevoPin.value !== confirmarPin.value) {
@@ -1106,7 +1146,12 @@ async function guardarPin() {
   if (!puedoGuardarPin.value) return
 
   try {
-    await servicioBilletera.actualizarPin(nuevoPin.value, tienePin.value ? pinActual.value : undefined)
+    // Se llama directo al endpoint para poder enviar "password" (verificación por
+    // contraseña de cuenta) en lugar del PIN actual.
+    await clienteHttp.post('/billetera/pin', {
+      nuevo_pin: nuevoPin.value,
+      ...(tienePin.value ? { password: passwordCambio.value } : {})
+    })
     // No persistimos el PIN en claro; solo marcamos que ya existe uno configurado.
     tienePin.value = true
     abrirModalCambiarPin()
@@ -1116,9 +1161,7 @@ async function guardarPin() {
     mensajeExito.value = 'Tu PIN transaccional ha sido actualizado con éxito.'
     modalExito.value = true
   } catch (error) {
-    // requiere_pin_actual: el backend exige el PIN vigente para poder cambiarlo.
-    if (error?.requiere_pin_actual && !tienePin.value) tienePin.value = true
-    errorPin.value = error.error || 'Error al guardar el PIN en el servidor'
+    errorPin.value = error?.error || 'Error al guardar el PIN en el servidor'
     console.error(error)
   }
 }
@@ -1367,6 +1410,10 @@ function formatoFecha(fecha) {
 }
 
 onMounted(async () => {
+  // Arrancar siempre con el formulario de recarga en limpio: si la página se
+  // recargó o se reabrió el flujo, no debe quedar rastro del comprobante previo.
+  limpiarFormularioRecarga()
+
   await cargarSaldo()
   await cargarMovimientos()
 
@@ -2226,6 +2273,16 @@ button.mov-fila:focus-visible {
   justify-content: center;
   z-index: 1000;
   padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  /* Si el modal es más alto que la pantalla (o se abre el teclado del celular),
+     el overlay hace scroll en vez de recortar o superponer el contenido. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* En pantallas muy bajas (celular apaisado o teclado abierto), alinear arriba
+   para que el modal se pueda recorrer completo sin quedar cortado. */
+@media (max-height: 720px) {
+  .modal-overlay { align-items: flex-start; }
 }
 
 .modal-cambiar-pin,
@@ -2354,6 +2411,13 @@ button.mov-fila:focus-visible {
   color: var(--texto-secundario);
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.campo-pin-ayuda {
+  margin: -0.15rem 0 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--texto-desactivado);
 }
 
 .input-pin-wrapper {
@@ -3188,25 +3252,265 @@ button.mov-fila:focus-visible {
   .btn-ver-todos:hover,
   .btn-ojo-pin:hover { transform: none; }
 }
-/* Solicitar retiro */
-.retiro-saldo { font-size: 0.95rem; margin: 0 0 4px; }
-.retiro-saldo b { color: var(--color-exito, #22c55e); }
-.retiro-ayuda { font-size: 0.82rem; color: var(--texto-secundario); margin: 0 0 14px; line-height: 1.4; }
-.retiro-label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin: 10px 0 6px; }
-.retiro-metodos { display: flex; gap: 8px; }
-.retiro-metodo { flex: 1; padding: 10px; border: 1px solid var(--borde-sutil); border-radius: 10px; background: transparent; color: var(--texto-principal); font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all .15s; }
-.retiro-metodo.activo { border-color: var(--color-primario); background: color-mix(in srgb, var(--color-primario) 14%, transparent); color: var(--color-primario); }
-.retiro-file { width: 100%; font-size: 0.8rem; color: var(--texto-secundario); }
-.retiro-qr-preview { max-width: 140px; margin-top: 8px; border-radius: 10px; border: 1px solid var(--borde-sutil); }
-.retiro-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--borde-sutil); border-radius: 10px; background: var(--fondo-input, rgba(255,255,255,.04)); color: var(--texto-principal); font-size: 0.85rem; resize: vertical; font-family: inherit; }
-.retiro-error { color: var(--color-error); font-size: 0.8rem; margin: 8px 0 0; }
-.retiro-historial { margin-top: 18px; border-top: 1px solid var(--borde-sutil); padding-top: 12px; }
-.retiro-hist-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin: 0 0 8px; }
-.retiro-hist-item { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; padding: 5px 0; flex-wrap: wrap; }
-.retiro-hist-estado { padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 0.68rem; }
+/* ============ SOLICITAR RETIRO (rediseño premium) ============ */
+.modal-retiro { max-width: 460px; }
+
+/* Tarjeta destacada del saldo disponible */
+.retiro-tarjeta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.35rem 1.4rem;
+  border-radius: var(--radio-lg);
+  margin-bottom: 1.25rem;
+  background:
+    radial-gradient(120% 130% at 100% 0%, rgba(34, 197, 94, 0.28), transparent 55%),
+    linear-gradient(150deg, #1f1350 0%, #2e1a6b 55%, #123b2c 100%);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 14px 32px -18px rgba(34, 197, 94, 0.6);
+}
+
+.retiro-tarjeta-brillo {
+  position: absolute;
+  top: -60%;
+  right: -20%;
+  width: 55%;
+  height: 220%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
+  transform: rotate(8deg);
+  filter: blur(3px);
+}
+
+.retiro-tarjeta > *:not(.retiro-tarjeta-brillo) { position: relative; z-index: 1; }
+
+.retiro-tarjeta-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.retiro-tarjeta-monto {
+  margin: 0.1rem 0;
+  font-family: var(--fuente-titulo);
+  font-size: clamp(2rem, 8vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+}
+
+.retiro-tarjeta-moneda {
+  font-size: 0.42em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  margin-right: 0.35rem;
+  vertical-align: 0.45em;
+}
+
+.retiro-tarjeta-nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+.retiro-tarjeta-nota svg { flex-shrink: 0; opacity: 0.85; }
+
+.retiro-ayuda {
+  font-size: 0.84rem;
+  color: var(--texto-secundario);
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.retiro-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texto-secundario);
+  margin: 1rem 0 0.55rem;
+}
+
+.retiro-metodos { display: flex; gap: 0.6rem; }
+
+.retiro-metodo {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.75rem 0.6rem;
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-md);
+  background: var(--fondo-principal);
+  color: var(--texto-principal);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.retiro-metodo svg { flex-shrink: 0; opacity: 0.85; }
+.retiro-metodo:hover { border-color: var(--morado-brillante); }
+.retiro-metodo:active { transform: scale(0.98); }
+.retiro-metodo.activo {
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--morado-hover);
+}
+.retiro-metodo:focus-visible { outline: 2px solid var(--borde-activo); outline-offset: 2px; }
+
+/* Subida de QR con la misma estética que el comprobante */
+.retiro-subida {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 1.1rem 0.75rem;
+  border: 2px dashed var(--borde-color);
+  border-radius: var(--radio-md);
+  background: var(--fondo-principal);
+  color: var(--texto-secundario);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.25s ease, background 0.25s ease, color 0.25s ease;
+}
+.retiro-subida:hover {
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.08);
+  color: var(--texto-principal);
+}
+.retiro-qr-preview {
+  max-width: 150px;
+  width: 100%;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil);
+}
+.retiro-subida-cambiar { font-size: 0.76rem; color: var(--texto-desactivado); }
+
+.retiro-textarea {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--borde-color);
+  border-radius: var(--radio-md);
+  background: var(--fondo-principal);
+  color: var(--texto-principal);
+  font-size: 0.9rem;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.retiro-textarea:focus {
+  outline: none;
+  border-color: var(--morado-brillante);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.retiro-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-error);
+  font-size: 0.82rem;
+  margin: 0.75rem 0 0;
+}
+.retiro-error svg { flex-shrink: 0; }
+
+.retiro-sin-saldo {
+  margin: 0.85rem 0 0;
+  font-size: 0.82rem;
+  color: var(--texto-secundario);
+  text-align: center;
+}
+
+/* Botón principal: retirar todo el saldo */
+.btn-retirar-todo {
+  width: 100%;
+  margin-top: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1rem;
+  border: none;
+  border-radius: var(--radio-md);
+  background: linear-gradient(135deg, var(--morado-brillante), var(--azul-profundo));
+  color: #fff;
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-suave), box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.btn-retirar-todo svg { flex-shrink: 0; }
+.btn-retirar-todo:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px -10px rgba(168, 85, 247, 0.6);
+}
+.btn-retirar-todo:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn-retirar-todo:focus-visible { outline: 2px solid var(--borde-activo); outline-offset: 2px; }
+.btn-retirar-todo:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.retiro-historial {
+  margin-top: 1.35rem;
+  border-top: 1px solid var(--borde-sutil);
+  padding-top: 1rem;
+}
+.retiro-hist-tit {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texto-secundario);
+  margin: 0 0 0.6rem;
+}
+.retiro-hist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  padding: 0.4rem 0;
+  flex-wrap: wrap;
+}
+.retiro-hist-estado {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
 .retiro-hist-estado.e-pendiente { color: #d4a017; background: rgba(234,179,8,.13); }
 .retiro-hist-estado.e-pagado { color: var(--color-exito); background: rgba(34,197,94,.13); }
 .retiro-hist-estado.e-rechazado { color: var(--color-error); background: rgba(239,68,68,.12); }
 .retiro-hist-info { color: var(--texto-secundario); flex: 1; min-width: 0; }
-.retiro-cancelar { background: none; border: none; color: var(--color-error); font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+.retiro-cancelar {
+  background: none;
+  border: none;
+  color: var(--color-error);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+}
+.retiro-cancelar:hover { text-decoration: underline; }
+
+/* Celular: los métodos de retiro se apilan si no caben cómodamente */
+@media (max-width: 380px) {
+  .retiro-metodos { flex-direction: column; }
+}
 </style>

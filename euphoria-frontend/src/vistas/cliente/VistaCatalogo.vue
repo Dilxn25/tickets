@@ -67,6 +67,7 @@
           </div>
           <div class="destacado-info">
             <h3 class="destacado-nom">{{ p.nombre_producto }}</h3>
+            <p v-if="p.es_combo && resumenCombo(p)" class="destacado-composicion" :title="resumenCombo(p)">{{ resumenCombo(p) }}</p>
             <div class="precios">
               <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
               <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
@@ -132,7 +133,8 @@
 
           <div class="info-box">
             <h3 class="nombre">{{ p.nombre_producto }}</h3>
-            <p class="categoria">{{ p.nombre_categoria }}</p>
+            <p v-if="p.es_combo && resumenCombo(p)" class="combo-composicion" :title="resumenCombo(p)">{{ resumenCombo(p) }}</p>
+            <p v-else class="categoria">{{ p.nombre_categoria }}</p>
 
             <div class="precio-fila">
               <div class="precios">
@@ -339,6 +341,22 @@ const productosFiltrados = computed(() => {
     return matchBusqueda && matchCat && p.stock_actual > 0 // Ocultamos los sin stock
   })
 })
+
+// Quita el sufijo "(x1)"/"(x6)" del nombre para que se lea limpio en la composición
+function nombreLimpio(nombre) {
+  return String(nombre || '').replace(/\s*\(x\d+\)\s*$/i, '').trim()
+}
+
+// Composición resumida de un combo/pack con sus cantidades, al estilo del mesero.
+// Ej.: "10× Cerveza · 2× Papas". Vacío si el producto no es combo o no trae composición.
+function resumenCombo(p) {
+  if (!p?.es_combo) return ''
+  const comps = p.combos_como_padre || []
+  if (!comps.length) return ''
+  return comps
+    .map(c => `${Number(c.cantidad) || 1}× ${nombreLimpio(c.nombre_producto)}`)
+    .join(' · ')
+}
 
 // Porcentaje de descuento para la insignia de promo (0 si no aplica)
 function descuentoPct(p) {
@@ -710,6 +728,11 @@ async function agregarAlCarrito(producto) {
 .destacado-img .badge { position: absolute; top: 10px; left: 10px; z-index: 2; }
 .destacado-info { padding: 12px 14px 15px; }
 .destacado-nom { font-size: 0.92rem; font-weight: 700; line-height: 1.25; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.destacado-composicion {
+  font-size: 0.72rem; line-height: 1.3; color: var(--texto-secundario); font-weight: 600;
+  margin: -3px 0 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Cabecera de la carta */
 .carta-cab {
@@ -839,6 +862,19 @@ async function agregarAlCarrito(producto) {
 .categoria {
   font-size: 0.68rem; color: var(--morado-hover); margin-bottom: 14px;
   font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+/* Composición del combo/pack: cantidades claras (10× Cerveza · 2× Papas) */
+.combo-composicion {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--texto-secundario);
+  font-weight: 600;
+  margin-bottom: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
 }
 .precio-fila {
   margin-top: auto;
