@@ -33,8 +33,39 @@ function obtenerTransporte() {
   return transporte
 }
 
+// ---- Envío por API HTTP de Brevo (funciona en Render, que bloquea SMTP saliente) ----
+// Se usa cuando existe BREVO_API_KEY. No necesita dominio propio: basta verificar
+// el remitente (CORREO_REMITENTE) en Brevo. Envía a cualquier destinatario.
+async function enviarPorBrevo({ para, asunto, html, texto }) {
+  const apiKey = (process.env.BREVO_API_KEY || '').trim()
+  const remitente = (process.env.CORREO_REMITENTE || '').trim()
+  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { name: 'Euphoria', email: remitente },
+      to: [{ email: para }],
+      subject: asunto,
+      htmlContent: html || undefined,
+      textContent: texto || undefined,
+    }),
+  })
+  if (resp.ok) return { enviado: true }
+  const detalle = await resp.text().catch(() => '')
+  throw new Error(`Brevo ${resp.status}: ${detalle.slice(0, 200)}`)
+}
+
 // Envía un correo. Nunca lanza: devuelve { enviado, error?, motivo? }.
+// Prioridad: Brevo (HTTP, sirve en Render) si hay API key; si no, Gmail SMTP (local).
 async function enviarCorreo({ para, asunto, html, texto }) {
+  if ((process.env.BREVO_API_KEY || '').trim()) {
+    try {
+      return await enviarPorBrevo({ para, asunto, html, texto })
+    } catch (error) {
+      console.error('[correo] Error enviando por Brevo a', para, '-', error.message)
+      return { enviado: false, error: error.message }
+    }
+  }
   const t = obtenerTransporte()
   if (!t) return { enviado: false, motivo: 'sin_config' }
   try {
