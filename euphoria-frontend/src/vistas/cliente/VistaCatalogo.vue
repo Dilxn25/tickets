@@ -32,6 +32,15 @@
           Todo
         </button>
         <button
+          v-if="hayCombos"
+          class="cat-btn cat-combos"
+          :class="{ activo: filtroCategoria === 'combos' }"
+          @click="filtroCategoria = 'combos'"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+          Combos
+        </button>
+        <button
           v-for="c in categorias"
           :key="c.id_categoria"
           class="cat-btn"
@@ -77,13 +86,9 @@
       </div>
     </section>
 
-    <!-- Lista de Productos -->
+    <!-- Carta: Combos y Productos separados, como en el mesero -->
     <div class="productos-contenedor">
-      <div v-if="!cargando" class="carta-cab">
-        <h2 class="carta-titulo">{{ busqueda ? 'Resultados' : 'Toda la carta' }}</h2>
-        <span class="carta-conteo">{{ productosFiltrados.length }} opciones</span>
-      </div>
-
+      <!-- Cargando -->
       <div v-if="cargando" class="grid-productos skeleton-grid" aria-hidden="true">
         <div v-for="n in 6" :key="'sk-' + n" class="skeleton-card">
           <div class="sk-img"></div>
@@ -98,6 +103,7 @@
         </div>
       </div>
 
+      <!-- Error -->
       <div v-else-if="errorCarga" class="vacio-estado aparecer-subir">
         <div class="vacio-icono-halo">
           <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -107,7 +113,8 @@
         <button class="btn-entendido" style="margin-top:10px" @click="cargarDatos">Reintentar</button>
       </div>
 
-      <div v-else-if="productosFiltrados.length === 0" class="vacio-estado aparecer-subir">
+      <!-- Sin resultados -->
+      <div v-else-if="totalMostrado === 0" class="vacio-estado aparecer-subir">
         <div class="vacio-icono-halo">
           <svg class="vacio-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         </div>
@@ -115,54 +122,120 @@
         <p class="vacio-sub">Prueba con otro nombre o cambia de categoría.</p>
       </div>
 
-      <TransitionGroup v-else tag="div" name="prod" class="grid-productos">
-        <article v-for="p in productosFiltrados" :key="p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
-          <!-- Insignias -->
-          <div class="insignias">
-            <span v-if="p.estado_promocion" class="badge promo">{{ descuentoPct(p) ? '−' + descuentoPct(p) + '%' : 'Promo' }}</span>
-            <span v-if="p.es_combo" class="badge combo">Combo</span>
+      <template v-else>
+        <!-- ===== SECCIÓN COMBOS (con el desglose de ingredientes, como el mesero) ===== -->
+        <section v-if="combosFiltrados.length" class="seccion-carta">
+          <div class="carta-cab">
+            <h2 class="carta-titulo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+              {{ busqueda ? 'Combos' : 'Combos para tu mesa' }}
+            </h2>
+            <span class="carta-conteo">{{ combosFiltrados.length }}</span>
           </div>
-
-          <div class="imagen-box" :class="{ 'fondo-combo': p.es_combo && !p.url_imagen }">
-            <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
-            <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
-            <div v-else class="placeholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            </div>
-          </div>
-
-          <div class="info-box">
-            <h3 class="nombre">{{ p.nombre_producto }}</h3>
-            <p v-if="p.es_combo && resumenCombo(p)" class="combo-composicion" :title="resumenCombo(p)">{{ resumenCombo(p) }}</p>
-            <p v-else class="categoria">{{ p.nombre_categoria }}</p>
-
-            <div class="precio-fila">
-              <div class="precios">
-                <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
-                <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+          <TransitionGroup tag="div" name="prod" class="grid-productos">
+            <article v-for="p in combosFiltrados" :key="'combo-' + p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
+              <div class="insignias">
+                <span v-if="p.estado_promocion" class="badge promo">{{ descuentoPct(p) ? '−' + descuentoPct(p) + '%' : 'Promo' }}</span>
+                <span class="badge combo">Combo</span>
               </div>
 
-              <!-- Si el producto ya está en el pedido: stepper. Si no: botón + -->
-              <Transition name="accion" mode="out-in">
-                <div v-if="cantidadEnCarrito(p.id_producto) > 0" key="stepper" class="stepper" @click.stop>
-                  <button class="btn-step" :aria-label="cantidadEnCarrito(p.id_producto) === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click.stop="quitarUno(p.id_producto)">
-                    <svg v-if="cantidadEnCarrito(p.id_producto) === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  </button>
-                  <span :key="cantidadEnCarrito(p.id_producto)" class="stepper-cant">{{ cantidadEnCarrito(p.id_producto) }}</span>
-                  <button class="btn-step mas" aria-label="Agregar uno" @click.stop="aumentarDesdeCarta(p)">
-                    <svg v-if="idAgregado === p.id_producto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  </button>
+              <div class="imagen-box" :class="{ 'fondo-combo': !p.url_imagen }">
+                <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
+                <ComboImagen v-else-if="p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
+                <div v-else class="placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                 </div>
-                <button v-else key="agregar" class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </button>
-              </Transition>
-            </div>
+              </div>
+
+              <div class="info-box">
+                <h3 class="nombre">{{ nombreLimpio(p.nombre_producto) }}</h3>
+                <!-- Cada ingrediente como mini-ficha: imagen + cantidad + nombre -->
+                <div v-if="ingredientesCombo(p).length" class="combo-ingredientes">
+                  <span v-for="(ing, i) in ingredientesCombo(p)" :key="i" class="ing-chip">
+                    <img v-if="ing.url_imagen" :src="ing.url_imagen" class="ing-img" alt="" />
+                    <span v-else class="ing-img ing-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg></span>
+                    <span class="ing-txt"><b>{{ ing.cantidad }}</b> {{ ing.nombre }}</span>
+                  </span>
+                </div>
+
+                <div class="precio-fila">
+                  <div class="precios">
+                    <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
+                    <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+                  </div>
+                  <Transition name="accion" mode="out-in">
+                    <div v-if="cantidadEnCarrito(p.id_producto) > 0" key="stepper" class="stepper" @click.stop>
+                      <button class="btn-step" :aria-label="cantidadEnCarrito(p.id_producto) === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click.stop="quitarUno(p.id_producto)">
+                        <svg v-if="cantidadEnCarrito(p.id_producto) === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <span :key="cantidadEnCarrito(p.id_producto)" class="stepper-cant">{{ cantidadEnCarrito(p.id_producto) }}</span>
+                      <button class="btn-step mas" aria-label="Agregar uno" @click.stop="aumentarDesdeCarta(p)">
+                        <svg v-if="idAgregado === p.id_producto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                    </div>
+                    <button v-else key="agregar" class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                  </Transition>
+                </div>
+              </div>
+            </article>
+          </TransitionGroup>
+        </section>
+
+        <!-- ===== SECCIÓN PRODUCTOS ===== -->
+        <section v-if="productosSueltos.length" class="seccion-carta">
+          <div class="carta-cab">
+            <h2 class="carta-titulo">{{ busqueda ? 'Productos' : 'Toda la carta' }}</h2>
+            <span class="carta-conteo">{{ productosSueltos.length }} opciones</span>
           </div>
-        </article>
-      </TransitionGroup>
+          <TransitionGroup tag="div" name="prod" class="grid-productos">
+            <article v-for="p in productosSueltos" :key="p.id_producto" class="tarjeta-producto" @click="abrirDetalle(p)">
+              <div class="insignias">
+                <span v-if="p.estado_promocion" class="badge promo">{{ descuentoPct(p) ? '−' + descuentoPct(p) + '%' : 'Promo' }}</span>
+              </div>
+
+              <div class="imagen-box">
+                <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" />
+                <div v-else class="placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="info-box">
+                <h3 class="nombre">{{ p.nombre_producto }}</h3>
+                <p class="categoria">{{ p.nombre_categoria }}</p>
+
+                <div class="precio-fila">
+                  <div class="precios">
+                    <span v-if="p.estado_promocion" class="precio-tachado">Bs.{{ p.precio_base }}</span>
+                    <span class="precio-final">Bs.{{ p.estado_promocion ? p.precio_promocion : p.precio_base }}</span>
+                  </div>
+
+                  <Transition name="accion" mode="out-in">
+                    <div v-if="cantidadEnCarrito(p.id_producto) > 0" key="stepper" class="stepper" @click.stop>
+                      <button class="btn-step" :aria-label="cantidadEnCarrito(p.id_producto) === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click.stop="quitarUno(p.id_producto)">
+                        <svg v-if="cantidadEnCarrito(p.id_producto) === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <span :key="cantidadEnCarrito(p.id_producto)" class="stepper-cant">{{ cantidadEnCarrito(p.id_producto) }}</span>
+                      <button class="btn-step mas" aria-label="Agregar uno" @click.stop="aumentarDesdeCarta(p)">
+                        <svg v-if="idAgregado === p.id_producto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                    </div>
+                    <button v-else key="agregar" class="btn-agregar hover-crecer" :aria-label="'Agregar ' + p.nombre_producto" @click.stop="agregarAlCarrito(p)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                  </Transition>
+                </div>
+              </div>
+            </article>
+          </TransitionGroup>
+        </section>
+      </template>
     </div>
     <!-- Modal de Alerta -->
     <Teleport to="body">
@@ -333,14 +406,42 @@ const destacados = computed(() =>
   productos.value.filter(p => (p.estado_promocion || p.es_combo) && p.stock_actual > 0).slice(0, 10)
 )
 
-const productosFiltrados = computed(() => {
-  return productos.value.filter(p => {
-    const matchBusqueda = p.nombre_producto.toLowerCase().includes(busqueda.value.toLowerCase()) ||
-                          (p.descripcion && p.descripcion.toLowerCase().includes(busqueda.value.toLowerCase()))
-    const matchCat = filtroCategoria.value === '' || p.id_categoria === filtroCategoria.value
-    return matchBusqueda && matchCat && p.stock_actual > 0 // Ocultamos los sin stock
-  })
+// ¿Hay combos disponibles? (para mostrar su pestaña y su sección)
+const hayCombos = computed(() => productos.value.some(p => p.es_combo && p.stock_actual > 0))
+
+function coincideBusqueda(p) {
+  const q = busqueda.value.toLowerCase()
+  if (!q) return true
+  return p.nombre_producto.toLowerCase().includes(q) ||
+         (p.descripcion && p.descripcion.toLowerCase().includes(q))
+}
+
+// Combos: se muestran con el filtro "Todo" ('') o con la pestaña "Combos".
+const combosFiltrados = computed(() => {
+  if (filtroCategoria.value !== '' && filtroCategoria.value !== 'combos') return []
+  return productos.value.filter(p => p.es_combo && p.stock_actual > 0 && coincideBusqueda(p))
 })
+
+// Productos sueltos (no combos), según la categoría y la búsqueda.
+const productosSueltos = computed(() => {
+  if (filtroCategoria.value === 'combos') return []
+  return productos.value.filter(p =>
+    !p.es_combo && p.stock_actual > 0 && coincideBusqueda(p) &&
+    (filtroCategoria.value === '' || p.id_categoria === filtroCategoria.value)
+  )
+})
+
+const totalMostrado = computed(() => combosFiltrados.value.length + productosSueltos.value.length)
+
+// Ingredientes de un combo como mini-fichas (cantidad + nombre + imagen), estilo mesero.
+function ingredientesCombo(p) {
+  if (!p?.es_combo) return []
+  return (p.combos_como_padre || []).map(c => ({
+    cantidad: Number(c.cantidad) || 1,
+    nombre: nombreLimpio(c.nombre_producto),
+    url_imagen: c.url_imagen || c.producto?.url_imagen || ''
+  }))
+}
 
 // Quita el sufijo "(x1)"/"(x6)" del nombre para que se lea limpio en la composición
 function nombreLimpio(nombre) {
@@ -876,6 +977,49 @@ async function agregarAlCarrito(producto) {
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
+
+/* Ingredientes del combo como mini-fichas (imagen + cantidad + nombre), estilo mesero */
+.combo-ingredientes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+.ing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 9px 3px 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-full);
+}
+.ing-img {
+  width: 20px; height: 20px;
+  border-radius: var(--radio-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--fondo-tarjeta);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--morado-hover);
+}
+.ing-ph svg { width: 12px; height: 12px; }
+.ing-txt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.ing-txt b { color: var(--texto-principal); font-weight: 800; }
+
+/* Secciones de la carta (Combos / Productos) */
+.seccion-carta { margin-bottom: var(--esp-7); }
+.carta-titulo svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 7px; color: var(--morado-hover); }
+.cat-combos svg { vertical-align: -2px; margin-right: 4px; }
 .precio-fila {
   margin-top: auto;
   display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
