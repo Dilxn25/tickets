@@ -945,7 +945,7 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
       include: {
         detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
         mesa_espacio: { select: { numero_nombre: true, zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } } } } },
-        entrada: { select: { zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } } } } },
+        entrada: { select: { cantidad_ingresada: true, zona: { select: { id_evento: true, evento: { select: { nombre_evento: true, fecha_hora_inicio: true } } } } } },
       },
     })
     const comisionBase = await obtenerComisionReembolso()
@@ -968,6 +968,9 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
         metodo_pago: c.metodo_pago,
         origen: c.origen,
         modo_entrega: c.modo_entrega,
+        // ¿El cliente ya ingresó al evento? (recepción validó su QR). Solo entonces
+        // tiene sentido ofrecerle elegir cómo recibir el pedido (barra/llevar).
+        ingresado: (c.entrada?.cantidad_ingresada || 0) > 0,
         mesa: c.mesa_espacio?.numero_nombre || null,
         id_evento: zonaEv?.id_evento || null,
         evento: zonaEv?.evento?.nombre_evento || null,

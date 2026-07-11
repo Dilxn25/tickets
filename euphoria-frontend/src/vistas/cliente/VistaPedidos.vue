@@ -53,14 +53,19 @@
           <span v-if="p.mesa" class="ped-badge">Mesa {{ p.mesa }}</span>
           <span class="ped-total">Bs. {{ p.total.toFixed(2) }}</span>
         </div>
-        <!-- Definir entrega: pedido pagado sin modo, ya que el cliente ingresó -->
-        <div v-if="!p.modo_entrega && esActivo(p)" class="ped-entrega">
+        <!-- Definir entrega: pedido activo, sin modo aún, Y el cliente YA ingresó al evento -->
+        <div v-if="!p.modo_entrega && esActivo(p) && p.ingresado" class="ped-entrega">
           <span class="pe-lbl">¿Cómo lo recibes?</span>
           <div class="pe-btns">
             <button class="pe-btn" :disabled="definiendo === p.id_comanda" @click="definirEntrega(p, 'barra')">Recojo en barra</button>
             <button class="pe-btn" :disabled="definiendo === p.id_comanda" @click="definirEntrega(p, 'llevar')">Que me lo lleven</button>
           </div>
         </div>
+        <!-- Aún no ingresa al evento: nota breve, no intrusiva (no se ofrece entrega todavía) -->
+        <p v-else-if="!p.modo_entrega && esActivo(p) && !p.ingresado" class="ped-nota-ingreso">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          Cuando ingreses al evento eliges cómo y cuándo recibirlo.
+        </p>
         <!-- Devolución -->
         <div v-if="p.puede_reembolso" class="ped-reembolso">
           <span class="pr-info">
@@ -247,6 +252,12 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-total { margin-left: auto; font-family: var(--fuente-titulo); font-weight: 800; color: var(--rosa-acento); font-variant-numeric: tabular-nums; }
 
 .ped-entrega { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); }
+.ped-nota-ingreso {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--borde-sutil);
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.76rem; color: var(--texto-secundario); line-height: 1.3;
+}
+.ped-nota-ingreso svg { flex-shrink: 0; color: var(--morado-hover); }
 .pe-lbl { font-size: 0.8rem; font-weight: 700; color: var(--texto-principal); }
 .pe-btns { display: flex; gap: 8px; margin-top: 8px; }
 .pe-btn { flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--borde-activo); background: rgba(168,85,247,0.1); color: var(--morado-hover); font-weight: 700; font-size: 0.82rem; cursor: pointer; }
