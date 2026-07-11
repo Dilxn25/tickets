@@ -67,6 +67,14 @@
         <div class="producto-info">
           <p class="producto-categoria">{{ p.nombre_categoria }}</p>
           <p class="producto-nombre">{{ p.nombre_producto }}</p>
+          <!-- Combo: ingredientes como mini-fichas (imagen + cantidad + nombre), igual que el mesero/cliente -->
+          <div v-if="p.es_combo && p.combos_como_padre?.length" class="combo-ingredientes">
+            <span v-for="(c, i) in p.combos_como_padre" :key="i" class="ing-chip">
+              <img v-if="c.url_imagen" :src="c.url_imagen" class="ing-img" alt="" />
+              <span v-else class="ing-img ing-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg></span>
+              <span class="ing-txt"><b>{{ c.cantidad }}</b> {{ nombreLimpioCombo(c.nombre_producto) }}</span>
+            </span>
+          </div>
           <div class="producto-pie">
             <div class="producto-precios">
               <span v-if="p.estado_promocion" class="precio-base-tachado">Bs. {{ p.precio_base }}</span>
@@ -307,6 +315,11 @@ clienteHttp.get('/recomendaciones/config')
 function precioDe(idProducto) {
   const p = productos.value.find(x => x.id_producto === idProducto)
   return p ? parseFloat(p.precio_base) || 0 : 0
+}
+
+// Quita el sufijo "(x6)" del nombre para que la mini-ficha del combo se lea limpia
+function nombreLimpioCombo(nombre) {
+  return String(nombre || '').replace(/\s*\(x\d+\)\s*$/i, '').trim()
 }
 const sumaCombo = computed(() =>
   componentesCombo.value.reduce((s, c) => s + precioDe(c.id_producto_hijo) * c.cantidad, 0)
@@ -611,6 +624,13 @@ async function eliminarCategoria(cat) {
 .combo-cant{width:74px;flex-shrink:0;text-align:center}
 .combo-lista{list-style:none;margin:.25rem 0 0;padding:0;display:flex;flex-direction:column;gap:.4rem}
 .combo-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:var(--radio-md);background:var(--fondo-tarjeta-alt);border:1px solid var(--borde-sutil)}
+/* Ingredientes del combo en la tarjeta (imagen + cantidad + nombre), igual que el mesero/cliente */
+.combo-ingredientes{display:flex;flex-wrap:wrap;gap:5px;margin:.2rem 0 .35rem}
+.ing-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 9px 3px 3px;background:rgba(255,255,255,.05);border:1px solid var(--borde-sutil);border-radius:var(--radio-full)}
+.ing-img{width:20px;height:20px;border-radius:var(--radio-full);object-fit:cover;flex-shrink:0;background:var(--fondo-tarjeta);display:inline-flex;align-items:center;justify-content:center;color:var(--morado-hover)}
+.ing-ph svg{width:12px;height:12px}
+.ing-txt{font-size:.72rem;font-weight:600;color:var(--texto-secundario);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.ing-txt b{color:var(--texto-principal);font-weight:800}
 .combo-cant-badge{font-weight:800;font-size:.82rem;color:var(--morado-hover);font-variant-numeric:tabular-nums;flex-shrink:0}
 .combo-nombre{flex:1;font-size:.86rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn-quitar-combo{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:none;color:var(--texto-desactivado);border-radius:var(--radio-sm);cursor:pointer;transition:color .15s ease,background-color .15s ease}
