@@ -2,6 +2,7 @@
 // EUPHORIA — Servicio de Billetera Digital
 // ============================================
 import api from './cliente-http.js'
+import QRCode from 'qrcode'
 
 export const servicioBilletera = {
   /**
@@ -79,9 +80,23 @@ export const servicioBilletera = {
   },
 
   /**
-   * Generar QRs de pago (Público y Privado)
+   * Generar QRs de pago (Público y Privado).
+   * El backend devuelve solo el TOKEN firmado (instantáneo); el QR se DIBUJA
+   * aquí, en el celular, con la librería 'qrcode'. Se rellena `imagen` (data URL)
+   * para que las vistas la usen igual que antes.
    */
   async generarQRsPago() {
-    return api.get('/billetera/qrs-pago')
+    const res = await api.get('/billetera/qrs-pago')
+    for (const clave of ['qr_sin_pin', 'qr_con_pin']) {
+      const q = res?.[clave]
+      if (q?.token) {
+        try {
+          q.imagen = await QRCode.toDataURL(q.token, { errorCorrectionLevel: 'H', width: 300, margin: 1 })
+        } catch (e) {
+          console.error('No se pudo dibujar el QR de pago:', e)
+        }
+      }
+    }
+    return res
   }
 }

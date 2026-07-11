@@ -427,27 +427,12 @@ router.get('/qrs-pago', verificarToken, async (req, res) => {
     const tokenSinPin = jwt.sign(datosQRSinPin, firmaSecreta, { expiresIn: '15m' })
     const tokenConPin = jwt.sign(datosQRConPin, firmaSecreta, { expiresIn: '15m' })
 
-    const imagenQRSinPin = await QRCode.toDataURL(tokenSinPin, {
-      errorCorrectionLevel: 'H',
-      type: 'image/png',
-      width: 300
-    })
-
-    const imagenQRConPin = await QRCode.toDataURL(tokenConPin, {
-      errorCorrectionLevel: 'H',
-      type: 'image/png',
-      width: 300
-    })
-
+    // El QR se DIBUJA en el celular (el front tiene la librería 'qrcode'); aquí
+    // solo firmamos el token. Antes generábamos 2 imágenes PNG por cada clic, lo
+    // que en la CPU del plan gratis tardaba ~2.5 s. Ahora la respuesta es instantánea.
     res.json({
-      qr_sin_pin: {
-        imagen: imagenQRSinPin,
-        identificador: billetera.qr_publico
-      },
-      qr_con_pin: {
-        imagen: imagenQRConPin,
-        identificador: billetera.qr_publico
-      }
+      qr_sin_pin: { token: tokenSinPin, identificador: billetera.qr_publico },
+      qr_con_pin: { token: tokenConPin, identificador: billetera.qr_publico }
     })
   } catch (error) {
     console.error('Error generando QRs de pago:', error)
