@@ -226,7 +226,9 @@
                 <span v-if="cargandoRec" class="spinner"></span>
                 <span v-else>Cambiar contraseña</span>
               </button>
-              <button type="button" class="btn-volver" @click="enviarCodigoRec">Reenviar código</button>
+              <button type="button" class="btn-volver" :disabled="cargandoRec || segundosReenvio > 0" @click="enviarCodigoRec">
+                {{ segundosReenvio > 0 ? `Reenviar código en ${segundosReenvio}s` : 'Reenviar código' }}
+              </button>
             </form>
 
             <!-- Paso: pedir ayuda al local (no recuerda contraseña ni pregunta) -->
@@ -342,6 +344,19 @@ const cargandoRec = ref(false)
 const errorRecuperacion = ref('')
 const exitoRecuperacion = ref('')
 let temporizadorCierre = null
+
+// Cooldown de reenvío del código: evita el "espera un momento" brusco mostrando
+// una cuenta regresiva clara (el backend limita a 1 código cada 60 s).
+const segundosReenvio = ref(0)
+let intervaloReenvio = null
+function iniciarCooldownReenvio(seg = 60) {
+  segundosReenvio.value = seg
+  clearInterval(intervaloReenvio)
+  intervaloReenvio = setInterval(() => {
+    segundosReenvio.value--
+    if (segundosReenvio.value <= 0) clearInterval(intervaloReenvio)
+  }, 1000)
+}
 
 const errorPassRec = computed(() => {
   const p = nuevaPasswordRec.value
@@ -494,6 +509,8 @@ async function enviarAyudaLocal() {
 function cerrarRecuperacion() {
   modalRecuperar.value = false
   codigoRec.value = ''
+  clearInterval(intervaloReenvio)
+  segundosReenvio.value = 0
   if (temporizadorCierre) {
     clearTimeout(temporizadorCierre)
     temporizadorCierre = null
@@ -558,7 +575,10 @@ async function enviarCodigoRec() {
     const res = await clienteHttp.post('/auth/recuperar/codigo/enviar', { correo: correoRecuperacion.value })
     correoNoVerificadoRec.value = res?.verificado === false
     pasoRecuperacion.value = 'codigo'
+    iniciarCooldownReenvio(60)
   } catch (err) {
+    // Si el backend responde 429 (ya enviado hace poco), respetamos el cooldown.
+    if (err?.__status === 429 && segundosReenvio.value <= 0) iniciarCooldownReenvio(60)
     errorRecuperacion.value = mensajeErrorRecuperacion(err, 'No se pudo enviar el código.')
   } finally {
     cargandoRec.value = false

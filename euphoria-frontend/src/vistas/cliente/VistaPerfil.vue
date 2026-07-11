@@ -188,7 +188,7 @@
                       {{ verifCargando ? 'Guardando…' : 'Confirmar' }}
                     </button>
                   </div>
-                  <button type="button" class="verif-reenviar" @click="iniciarVerificacion(esCambioCorreo ? correoNuevo : undefined)" :disabled="verifCargando">Reenviar código</button>
+                  <button type="button" class="verif-reenviar" @click="iniciarVerificacion(esCambioCorreo ? correoNuevo : undefined)" :disabled="verifCargando || segundosReenvioVerif > 0">{{ segundosReenvioVerif > 0 ? `Reenviar en ${segundosReenvioVerif}s` : 'Reenviar código' }}</button>
                 </div>
               </Transition>
             </div>
@@ -632,6 +632,17 @@ const correoVerificado = computed(() => !!tienda.usuario?.correo_verificado)
 const verifPaso = ref('')          // '' | 'codigo'
 const verifCodigo = ref('')
 const verifCargando = ref(false)
+// Cooldown de reenvío (cuenta regresiva clara; el backend limita 1 cada 60 s)
+const segundosReenvioVerif = ref(0)
+let intervaloReenvioVerif = null
+function iniciarCooldownVerif(seg = 60) {
+  segundosReenvioVerif.value = seg
+  clearInterval(intervaloReenvioVerif)
+  intervaloReenvioVerif = setInterval(() => {
+    segundosReenvioVerif.value--
+    if (segundosReenvioVerif.value <= 0) clearInterval(intervaloReenvioVerif)
+  }, 1000)
+}
 const editandoCorreo = ref(false)  // el correo está en modo edición
 const correoNuevo = ref('')        // correo que se quiere establecer
 const esCambioCorreo = ref(false)  // el código actual es para un correo nuevo
@@ -663,8 +674,10 @@ async function iniciarVerificacion(nuevo) {
     destinoCorreo.value = cambio ? nuevo.trim() : (tienda.usuario?.correo || '')
     verifPaso.value = 'codigo'
     verifCodigo.value = ''
+    iniciarCooldownVerif(60)
     notif.exito(`Te enviamos un código a ${destinoCorreo.value}.`)
   } catch (e) {
+    if (e?.__status === 429 && segundosReenvioVerif.value <= 0) iniciarCooldownVerif(60)
     notif.error(e?.error || 'No se pudo enviar el código.')
   } finally { verifCargando.value = false }
 }
