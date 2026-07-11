@@ -124,14 +124,17 @@
 
             <div class="grupo-campo">
               <label>CI / carnet (opcional)</label>
-              <div class="campo-editable" data-campo="ci_carnet" :class="{ 'editando-activo': editando.ci_carnet }">
+              <div class="campo-editable" data-campo="ci_carnet" :class="{ 'editando-activo': editando.ci_carnet, 'con-error': !!mostrarError('ci_carnet') }">
                 <span v-if="!editando.ci_carnet">{{ form.ci_carnet || 'No especificado' }}</span>
-                <input v-else v-model="form.ci_carnet" type="text" class="campo" placeholder="Añade tu número de carnet" autofocus>
+                <input v-else v-model="form.ci_carnet" @input="form.ci_carnet = form.ci_carnet.replace(/\D/g,'')" type="text" inputmode="numeric" class="campo" placeholder="Añade tu número de carnet" autofocus>
                 <button type="button" class="btn-lapiz" :class="{ activo: editando.ci_carnet }" @click="toggleEditar('ci_carnet')" :title="editando.ci_carnet ? 'Listo' : 'Editar'">
                   <svg v-if="!editando.ci_carnet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                   <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="16" height="16"><path d="M20 6L9 17l-5-5"></path></svg>
                 </button>
               </div>
+              <Transition name="err-inline">
+                <p v-if="mostrarError('ci_carnet')" class="error-inline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>{{ errores.ci_carnet }}</p>
+              </Transition>
             </div>
 
             <div class="grupo-campo">
@@ -516,11 +519,19 @@ const iniciales = computed(() => {
   return n.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase()
 })
 
+// El teléfono se guarda con prefijo (+591XXXXXXXX). Lo llevamos SIEMPRE a esa
+// forma canónica para que: (a) la validación no lo marque inválido por el "+591"
+// y bloquee Guardar, y (b) no cuente como "cambio" solo por reformatearse.
+function normalizarTelefono(v) {
+  const d = String(v || '').replace(/\D/g, '').replace(/^591/, '').slice(0, 8)
+  return d ? '+591' + d : ''
+}
+
 const form = ref({
   nombres: tienda.usuario?.nombres || '',
   apellidos: tienda.usuario?.apellidos || '',
   ci_carnet: tienda.usuario?.ci_carnet || '',
-  telefono: tienda.usuario?.telefono || ''
+  telefono: normalizarTelefono(tienda.usuario?.telefono)
 })
 
 const originalForm = ref({ ...form.value })
@@ -553,8 +564,13 @@ const errores = computed(() => {
   if (!apellidos) e.apellidos = 'Escribe tus apellidos para continuar.'
   else if (!SOLO_LETRAS.test(apellidos)) e.apellidos = 'Solo letras y espacios, sin números ni símbolos.'
 
-  const telefono = (form.value.telefono || '').trim()
-  if (telefono && !/^[0-9]{8,15}$/.test(telefono)) e.telefono = 'Usa entre 8 y 15 dígitos, solo números.'
+  // CI: solo números (es opcional; solo se valida si escribió algo).
+  const ci = (form.value.ci_carnet || '').trim()
+  if (ci && !/^[0-9]+$/.test(ci)) e.ci_carnet = 'El carnet debe tener solo números.'
+
+  // Teléfono: se valida la parte LOCAL (sin el +591). Debe ser 8 dígitos.
+  const telLocal = (form.value.telefono || '').replace(/\D/g, '').replace(/^591/, '')
+  if (telLocal && telLocal.length !== 8) e.telefono = 'El teléfono debe tener 8 dígitos.'
   return e
 })
 

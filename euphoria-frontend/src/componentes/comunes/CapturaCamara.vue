@@ -128,11 +128,14 @@ async function iniciarVideo() {
   // Pedimos la mayor resolución razonable para que el OCR pueda leer el monto.
   // La cámara trasera ('environment') y valores 'ideal' altos evitan que el
   // navegador entregue el stream por defecto (a menudo 640x480, muy bajo).
+  // 'focusMode: continuous' pide autoenfoque continuo: es la clave para que el
+  // comprobante NO salga borroso (la causa real del "no se ve el monto").
   const restriccionesHD = {
     video: {
       facingMode: { ideal: 'environment' },
       width: { ideal: 2560 },
       height: { ideal: 1440 },
+      advanced: [{ focusMode: 'continuous' }],
     },
     audio: false,
   }
@@ -154,8 +157,29 @@ async function iniciarVideo() {
       return
     }
   }
+  // Refuerzo del enfoque: algunos navegadores ignoran 'advanced' en getUserMedia
+  // pero sí aceptan applyConstraints sobre la pista ya activa.
+  await aplicarEnfoqueContinuo(streamCamara)
   if (videoCamara.value) videoCamara.value.srcObject = streamCamara
   else cerrarCamara()
+}
+
+// Intenta activar autoenfoque continuo (y estabilizar exposición/balance) en la
+// pista de video. Si el dispositivo no lo soporta, se ignora sin romper nada.
+async function aplicarEnfoqueContinuo(stream) {
+  try {
+    const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0]
+    if (!track || !track.getCapabilities) return
+    const cap = track.getCapabilities()
+    const avanzadas = []
+    if (cap.focusMode && cap.focusMode.includes('continuous')) avanzadas.push({ focusMode: 'continuous' })
+    if (cap.exposureMode && cap.exposureMode.includes('continuous')) avanzadas.push({ exposureMode: 'continuous' })
+    if (cap.whiteBalanceMode && cap.whiteBalanceMode.includes('continuous')) avanzadas.push({ whiteBalanceMode: 'continuous' })
+    if (avanzadas.length) await track.applyConstraints({ advanced: avanzadas })
+  } catch (e) {
+    // El enfoque manual/por defecto no es crítico; continuamos.
+    console.warn('No se pudo forzar el autoenfoque continuo:', e)
+  }
 }
 
 function iniciarEscaneoQr() {

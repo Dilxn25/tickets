@@ -727,7 +727,7 @@
 
             <button class="btn-retirar-todo" :disabled="enviandoRetiro || saldo <= 0" @click="enviarSolicitudRetiro" type="button">
               <svg v-if="!enviandoRetiro" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
-              {{ enviandoRetiro ? 'Enviando…' : `Retirar todo (Bs. ${formatoMoneda(saldo)})` }}
+              {{ enviandoRetiro ? 'Enviando solicitud…' : `Enviar solicitud de retiro · Bs. ${formatoMoneda(saldo)}` }}
             </button>
 
             <div v-if="misRetiros.length" class="retiro-historial">
@@ -2454,8 +2454,10 @@ button.mov-fila:focus-visible {
 }
 
 .btn-ojo-input {
-  position: relative;
-  right: 10px;
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--texto-secundario);
@@ -2463,7 +2465,8 @@ button.mov-fila:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 4px;
+  z-index: 2;
 }
 
 .btn-ojo-input:hover { color: var(--texto-principal); }
@@ -3405,15 +3408,17 @@ button.mov-fila:focus-visible {
 .retiro-textarea {
   width: 100%;
   padding: 0.75rem 0.85rem;
-  border: 1px solid var(--borde-color);
+  border: 1.5px solid color-mix(in srgb, var(--morado-brillante) 30%, transparent);
   border-radius: var(--radio-md);
-  background: var(--fondo-principal);
+  /* Fondo claramente distinto al morado de la página para que SE VEA que es un campo de texto. */
+  background: rgba(255, 255, 255, 0.06);
   color: var(--texto-principal);
   font-size: 0.9rem;
   resize: vertical;
   font-family: inherit;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+.retiro-textarea::placeholder { color: var(--texto-desactivado); }
 .retiro-textarea:focus {
   outline: none;
   border-color: var(--morado-brillante);
