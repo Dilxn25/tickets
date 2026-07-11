@@ -279,15 +279,19 @@ router.get('/movimientos', verificarToken, async (req, res) => {
     for (const t of transacciones) {
       const tipoOp = (t.tipo_operacion || '').toLowerCase()
 
-      // DEVOLUCIONES (entra dinero) — con el detalle de si hubo comisión
+      // DEVOLUCIONES (entra dinero) — con el desglose (original, retenido, devuelto)
       if (tipoOp === 'reembolso') {
         let detalle = 'Devolución a tu billetera'
         const devuelto = Number(t.monto)
+        let totalOriginal = devuelto
+        let comisionRetenida = 0
+        let comisionPct = 0
         if (t.comanda?.detalle_comanda?.length) {
-          const totalOriginal = t.comanda.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
+          totalOriginal = t.comanda.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
           if (totalOriginal > devuelto + 0.5) {
-            const pct = Math.round((1 - devuelto / totalOriginal) * 100)
-            detalle = `Retuvimos ${pct}% de comisión sobre Bs ${totalOriginal.toFixed(2)}`
+            comisionRetenida = Math.round((totalOriginal - devuelto) * 100) / 100
+            comisionPct = Math.round((1 - devuelto / totalOriginal) * 100)
+            detalle = `Retuvimos ${comisionPct}% de comisión sobre Bs ${totalOriginal.toFixed(2)}`
           } else {
             detalle = 'Devolución completa · sin comisión'
           }
@@ -295,6 +299,11 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         movimientos.push({
           id: `T-${t.id_transaccion}`, tipo: 'reembolso', titulo: 'Devolución',
           detalle, monto: parseFloat(t.monto), fecha: t.fecha_hora, estado: 'completada',
+          // Desglose para el "Ver detalle" de la devolución
+          total_original: Math.round(totalOriginal * 100) / 100,
+          comision_retenida: comisionRetenida,
+          comision_pct: comisionPct,
+          devuelto: Math.round(devuelto * 100) / 100,
         })
         continue
       }

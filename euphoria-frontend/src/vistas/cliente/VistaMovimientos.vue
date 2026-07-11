@@ -83,13 +83,13 @@
     <!-- Lista completa -->
     <div v-else class="lista-movimientos escalonar">
       <component
-        :is="esConsumoTocable(mov) ? 'button' : 'div'"
+        :is="esTocable(mov) ? 'button' : 'div'"
         v-for="mov in movimientosFiltrados"
         :key="`${mov.tipo}-${mov.id}`"
         class="mov-fila"
-        :class="[`mov-${mov.tipo}`, { 'mov-tocable': esConsumoTocable(mov) }]"
-        :type="esConsumoTocable(mov) ? 'button' : undefined"
-        @click="esConsumoTocable(mov) && abrirDetalleConsumo(mov)"
+        :class="[`mov-${mov.tipo}`, { 'mov-tocable': esTocable(mov) }]"
+        :type="esTocable(mov) ? 'button' : undefined"
+        @click="esTocable(mov) && abrirDetalle(mov)"
       >
         <span class="mov-icono" aria-hidden="true">
           <!-- Recarga: flecha entrando -->
@@ -133,7 +133,7 @@
         <span class="mov-lado">
           <span class="mov-monto" :class="{ 'mov-monto-positivo': Number(mov.monto) > 0 }">{{ formatoMonto(mov.monto) }}</span>
           <span v-if="mov.estado && mov.estado !== 'completada'" :class="['badge', `badge-${mov.estado}`]">{{ mov.estado }}</span>
-          <span v-if="esConsumoTocable(mov)" class="mov-ver">Ver detalle
+          <span v-if="esTocable(mov)" class="mov-ver">Ver detalle
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
@@ -221,6 +221,46 @@
           </div>
         </div>
       </div>
+
+      <!-- MODAL DETALLE DE DEVOLUCIÓN (desglose claro: original, retenido, devuelto) -->
+      <div v-if="modalReembolso && reembolsoDetalle" class="modal-overlay" @click.self="cerrarDetalleReembolso">
+        <div class="modal-detalles modal-reembolso">
+          <div class="modal-header">
+            <h2>Detalle de la devolución</h2>
+            <button class="btn-cerrar" @click="cerrarDetalleReembolso" type="button">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="reemb-desglose">
+              <div class="reemb-fila">
+                <span class="reemb-lbl">Pedido original</span>
+                <span class="reemb-val">Bs. {{ formatoMoneda(reembolsoDetalle.total_original) }}</span>
+              </div>
+              <div class="reemb-fila reemb-retenido">
+                <span class="reemb-lbl">
+                  Comisión retenida por el local
+                  <span v-if="reembolsoDetalle.comision_pct" class="reemb-pct">{{ reembolsoDetalle.comision_pct }}%</span>
+                </span>
+                <span class="reemb-val">− Bs. {{ formatoMoneda(reembolsoDetalle.comision_retenida) }}</span>
+              </div>
+              <div class="reemb-fila reemb-total">
+                <span class="reemb-lbl">Devuelto a tu billetera</span>
+                <span class="reemb-val">+ Bs. {{ formatoMoneda(reembolsoDetalle.devuelto) }}</span>
+              </div>
+            </div>
+            <p v-if="!reembolsoDetalle.comision_retenida" class="reemb-nota">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>
+              Te devolvimos el total: no hubo comisión.
+            </p>
+            <p v-else class="reemb-nota">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              La comisión aplica por devolver dentro de las 24 h previas al evento.
+            </p>
+            <p class="reemb-fecha">{{ formatoFecha(reembolsoDetalle.fecha) }}</p>
+          </div>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -275,6 +315,30 @@ const movimientosFiltrados = computed(() => {
 
 function esConsumoTocable(mov) {
   return mov.tipo === 'consumo' && !!mov.id_comanda
+}
+function esReembolsoTocable(mov) {
+  return mov.tipo === 'reembolso'
+}
+// ¿La fila abre un detalle? (consumo o devolución)
+function esTocable(mov) {
+  return esConsumoTocable(mov) || esReembolsoTocable(mov)
+}
+function abrirDetalle(mov) {
+  if (esConsumoTocable(mov)) return abrirDetalleConsumo(mov)
+  if (esReembolsoTocable(mov)) return abrirDetalleReembolso(mov)
+}
+
+// Detalle de una devolución: desglose (original, retenido, devuelto). No requiere
+// llamada al backend: los montos ya vienen en el movimiento.
+const modalReembolso = ref(false)
+const reembolsoDetalle = ref(null)
+function abrirDetalleReembolso(mov) {
+  reembolsoDetalle.value = mov
+  modalReembolso.value = true
+}
+function cerrarDetalleReembolso() {
+  modalReembolso.value = false
+  reembolsoDetalle.value = null
 }
 
 // Detalle de un consumo (productos con imagen, quién atendió, total)
@@ -719,6 +783,29 @@ button.mov-fila:focus-visible {
 }
 
 .modal-consumo { max-width: 440px; }
+.modal-reembolso { max-width: 400px; }
+.reemb-desglose { display: flex; flex-direction: column; gap: 2px; }
+.reemb-fila {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 4px;
+}
+.reemb-fila + .reemb-fila { border-top: 1px solid var(--borde-sutil); }
+.reemb-lbl { font-size: 0.9rem; color: var(--texto-secundario); display: inline-flex; align-items: center; gap: 8px; }
+.reemb-val { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--texto-principal); }
+.reemb-pct {
+  font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: var(--radio-full);
+  background: rgba(239, 68, 68, 0.15); color: #f87171;
+}
+.reemb-retenido .reemb-val { color: #f87171; }
+.reemb-total { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--borde-activo) !important; }
+.reemb-total .reemb-lbl { color: var(--texto-principal); font-weight: 700; }
+.reemb-total .reemb-val { color: var(--color-exito, #34d399); font-size: 1.15rem; }
+.reemb-nota {
+  display: flex; align-items: flex-start; gap: 7px;
+  margin-top: 14px; font-size: 0.8rem; line-height: 1.4; color: var(--texto-secundario);
+}
+.reemb-nota svg { flex-shrink: 0; margin-top: 2px; color: var(--morado-hover); }
+.reemb-fecha { margin-top: 12px; font-size: 0.76rem; color: var(--texto-desactivado); text-align: center; }
 
 @keyframes modalAparece {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }

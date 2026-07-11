@@ -396,9 +396,9 @@ function formatearMonto(monto) {
    Nada fixed: el navbar superior y la píldora inferior nunca tapan nada. */
 .vista-detalle-evento {
   min-width: 0;
-  /* Colchón inferior: la barra de reserva sticky levita ~150px sobre el final;
-     sin este espacio tapaba la última tarjeta al llegar al fondo. */
-  padding: var(--esp-4) var(--esp-4) calc(170px + env(safe-area-inset-bottom));
+  /* Colchón inferior: espacio para que la píldora de navegación (fixed abajo)
+     no tape la barra de reserva estática al llegar al final. */
+  padding: var(--esp-4) var(--esp-4) calc(104px + env(safe-area-inset-bottom));
   max-width: 1060px;
   margin: 0 auto;
 }
@@ -798,12 +798,11 @@ function formatearMonto(monto) {
 .enlace-grupo svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--morado-hover); }
 .enlace-grupo b { color: var(--texto-principal); }
 
-/* Barra de reserva: sticky dentro del contenido. Se pega por ENCIMA de la
-   píldora de navegación del cliente (fixed abajo), sin taparla ni ser tapada. */
+/* Barra de reserva: ESTÁTICA, al final del contenido. Antes era sticky y
+   "levitaba" sobre el resto tapando "Sobre este evento" al hacer scroll, lo
+   cual resultaba intrusivo. Ahora fluye naturalmente al final, sin sobreponerse. */
 .barra-reserva {
-  position: sticky;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  z-index: 20;
+  position: static;
   margin-top: var(--esp-5);
   display: flex;
   align-items: center;
@@ -814,12 +813,7 @@ function formatearMonto(monto) {
   background: var(--fondo-sidebar);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-xl);
-  box-shadow: 0 -6px 24px rgba(10, 6, 26, 0.5), 0 14px 34px rgba(10, 6, 26, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-/* En escritorio va al final del contenido (no sticky): el sticky se montaba
-   encima de "Sobre este evento". La píldora de navegación no la tapa aquí. */
-@media (min-width: 700px) {
-  .barra-reserva { position: static; bottom: auto; z-index: 1; }
+  box-shadow: 0 14px 34px rgba(10, 6, 26, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .reserva-info {
