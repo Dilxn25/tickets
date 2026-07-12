@@ -229,21 +229,54 @@ function cerrarCamara() {
   qrDetectado.value = false
 }
 
-function capturarFoto() {
+async function capturarFoto() {
   const video = videoCamara.value
   if (!video || !video.videoWidth) return
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-  canvas.toBlob((blob) => {
-    cerrarCamara()
-    if (!blob) {
-      notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
-      return
+  let blob = null
+
+  // 1) MÉTODO PREFERIDO: ImageCapture.takePhoto() — dispara una FOTO real a la
+  //    resolución nativa de la cámara (nítida, con enfoque de foto), como la
+  //    app de cámara del teléfono. Es la clave para que el comprobante NO salga
+  //    borroso: antes tomábamos un frame del video (baja calidad y enfoque de video).
+  try {
+    const track = streamCamara && streamCamara.getVideoTracks && streamCamara.getVideoTracks()[0]
+    if (track && typeof window.ImageCapture === 'function') {
+      const capturador = new ImageCapture(track)
+      // Enfoque final antes del disparo (por si el dispositivo lo soporta).
+      await aplicarEnfoqueContinuo(streamCamara)
+      await new Promise(r => setTimeout(r, 350)) // deja que el autoenfoque asiente
+      let opciones = {}
+      try {
+        const caps = await capturador.getPhotoCapabilities()
+        if (caps?.imageWidth?.max && caps?.imageHeight?.max) {
+          opciones = { imageWidth: caps.imageWidth.max, imageHeight: caps.imageHeight.max }
+        }
+      } catch { /* usamos la resolución de foto por defecto */ }
+      blob = await capturador.takePhoto(opciones)
     }
-    emit('archivo', new File([blob], props.nombreArchivo, { type: 'image/jpeg' }))
-  }, 'image/jpeg', 0.92)
+  } catch (e) {
+    console.warn('ImageCapture.takePhoto no disponible, uso captura de video:', e)
+    blob = null
+  }
+
+  // 2) RESPALDO (iOS/Safari no soportan ImageCapture): frame del video a su
+  //    resolución nativa, exportado como JPEG de alta calidad.
+  if (!blob) {
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95))
+  }
+
+  cerrarCamara()
+  if (!blob) {
+    notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
+    return
+  }
+  const tipo = blob.type || 'image/jpeg'
+  const nombre = tipo.includes('png') ? props.nombreArchivo.replace(/\.jpe?g$/i, '.png') : props.nombreArchivo
+  emit('archivo', new File([blob], nombre, { type: tipo }))
 }
 
 onUnmounted(cerrarCamara)

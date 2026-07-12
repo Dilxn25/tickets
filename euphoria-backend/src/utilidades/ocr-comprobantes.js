@@ -134,6 +134,21 @@ const PLANTILLAS = [
     // monto y la fecha ("Bs1 00 Candelaria Cañez Ajhuacho & 09 jun. 2026")
     destinatario: /bs\.?\s*[\d\s.,]+([a-záéíóúñ][a-záéíóúñ\s.]{4,50}?)\s*[^a-záéíóúñ\s]*\s*\d{1,2}\s*(?:ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)/i,
   },
+  {
+    banco: 'YASTA',
+    nombre: 'Yasta (Banco Ganadero)',
+    // Yasta/Ganadero: encabezado "Operación realizada exitosamente" y campo
+    // propio "Número de órden". El logo suele leerse mal ("Vasta").
+    deteccion: [/\byasta\b/i, /vasta/i, /operaci[oó]n\s+realizada\s+exitosamente/i, /n[uú]mero\s+de\s+[oó]rden/i],
+    // El monto es el número grande con "Bs" (no lleva etiqueta "Monto:").
+    monto: /\bbs\.?\s*([\d.,]+)/i,
+    transaccion: /n[uú]mero\s+de\s+[oó]rden\s*:?\s*(\d{8,25})/i,
+    // "26 de mayo de 2026, 09:49"
+    fechaTexto: /(\d{1,2})\s+de\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?\s+(?:de\s*)?(\d{4})/i,
+    motivo: /motivo\s*:?\s*(.{2,45}?)(?:\s{2,}|$)/i,
+    // El destinatario está en "Cuenta destino ... | NOMBRE | ..." antes de "Cuenta origen"
+    destinatario: /cuenta\s+destino\s*:?\s*(.{4,70}?)\s+cuenta\s+origen/i,
+  },
 ]
 
 // Plantilla GENÉRICA: acepta comprobantes de CUALQUIER banco con las mismas
