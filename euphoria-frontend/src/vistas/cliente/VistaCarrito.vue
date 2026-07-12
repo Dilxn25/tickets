@@ -480,7 +480,11 @@ async function irAPagar() {
     // Preparar el array de productos esperado por el backend
     const productosParaBackend = items.value.map(i => ({
       id_producto: i.id,
-      cantidad: i.cantidad
+      cantidad: i.cantidad,
+      // El precio con descuento se muestra al cliente; el flag 'combo' hace que el
+      // backend aplique (y valide) el descuento del config para el combo/pack.
+      precio_unitario: i.precio,
+      combo: !!i.combo
     }))
     formData.append('productos', JSON.stringify(productosParaBackend))
     formData.append('modo_entrega', modoEntrega.value)

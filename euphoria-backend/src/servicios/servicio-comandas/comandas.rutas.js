@@ -170,10 +170,19 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       url_comprobante = req.file.path
     }
 
+    // Descuento de combo (config, controlado por el admin). Se aplica SOLO a los
+    // ítems marcados como combo por el cliente (recomendación de la IA) y solo si
+    // hay al menos 2 ítems de combo (un paquete real). El servidor valida el
+    // precio contra el base y este %, así el cliente nunca puede descontar de más.
+    const cfgDescCombo = await prisma.configuracion.findUnique({ where: { clave: 'ia_descuento_combos' } })
+    const descComboPct = Math.min(Math.max(parseFloat(cfgDescCombo?.valor) || 10, 0), 90)
+    const nItemsCombo = productosJSON.filter(i => i.combo === true).reduce((a, i) => a + (Number(i.cantidad) || 0), 0)
+    const comboHabilitado = nItemsCombo >= 2
+
     // Calcular total verificando precios reales en BD para mayor seguridad
     let total_calculado = 0
     const detalles_crear = []
-    
+
     for (const item of productosJSON) {
       const prodBD = await prisma.producto.findUnique({ where: { id_producto: item.id_producto } })
       if (!prodBD) return res.status(400).json({ error: `Producto ID ${item.id_producto} no encontrado` })
@@ -192,9 +201,21 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       const enPromocion = prodBD.estado_promocion && prodBD.precio_promocion != null
       let precioUnitario = enPromocion ? Number(prodBD.precio_promocion) : Number(prodBD.precio_base)
 
-      // Precio dinámico: si el mesero envía un precio ajustado, se acepta SOLO dentro de un
-      // rango seguro (±) del precio base. Fuera de rango se ignora (evita manipulación).
-      if (item.precio_unitario != null) {
+      // COMBO: si el ítem viene marcado como combo (recomendación de la IA) y hay
+      // paquete real (>=2), se aplica el % de descuento del config sobre el PRECIO
+      // BASE de la BD. El precio se recalcula en el servidor (no se confía en el
+      // cliente): así el descuento es exactamente el configurado, ni más ni menos.
+      if (item.combo === true && comboHabilitado) {
+        const base = Number(prodBD.precio_base)
+        const precioCombo = Math.round(base * (1 - descComboPct / 100) * 100) / 100
+        const pu = Number(item.precio_unitario)
+        // Se acepta el precio mostrado al cliente SOLO si es un descuento de combo
+        // válido: no más barato que el % del config (evita abuso) ni más caro que
+        // el base. Si no, se recalcula al precio de combo del servidor.
+        precioUnitario = (!Number.isNaN(pu) && pu >= precioCombo - 0.02 && pu <= base) ? pu : precioCombo
+      } else if (item.precio_unitario != null) {
+        // Precio dinámico (mesero): se acepta SOLO dentro de un rango seguro del
+        // precio base. Fuera de rango se ignora (evita manipulación).
         const base = Number(prodBD.precio_base)
         const min = base * 0.85
         const max = base * 1.20

@@ -85,7 +85,10 @@ export const useTiendaCarrito = defineStore('carrito', () => {
         cantidad: 1,
         stock: stockActual,
         imagen: imagenes[0] || '',
-        imagenes
+        imagenes,
+        // Marca de combo/pack sugerido por la IA: el backend aplica el % de
+        // descuento del config a estos ítems (validado en el servidor).
+        combo: !!producto.combo
       })
     }
     guardarCarrito()

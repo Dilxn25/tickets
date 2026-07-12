@@ -559,9 +559,14 @@ function agregarCombo(c) {
   else msgError.value = 'No se pudo agregar el combo. Intenta desde el catálogo.'
 }
 
-// Agrega un PACK completo al carrito (cada producto con su cantidad del patrón)
+// Agrega un PACK completo al carrito (cada producto con su cantidad del patrón).
+// Se aplica el DESCUENTO del pack a cada producto y se marca como 'combo' para que
+// el backend valide y cobre el precio con descuento (no el de catálogo).
 function agregarPack(pk) {
   let agregado = false
+  // Factor de descuento implícito del pack (precio_pack / precio_normal).
+  const factor = (Number(pk.precio_pack) > 0 && Number(pk.precio_normal) > 0)
+    ? Number(pk.precio_pack) / Number(pk.precio_normal) : 1
   for (const it of pk.items || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === it.id_producto)
     if (prod) {
@@ -581,6 +586,14 @@ function agregarPack(pk) {
         }
       } else if (!prod.url_imagen && it.url_imagen) {
         prodConImagen = { ...prod, url_imagen: it.url_imagen }
+      }
+      // Aplica el descuento del pack a este producto y lo marca como combo.
+      const baseNum = parseFloat(prodConImagen.precio_base) || 0
+      prodConImagen = {
+        ...prodConImagen,
+        precio_base: Math.round(baseNum * factor * 100) / 100,
+        estado_promocion: false,
+        combo: true,
       }
       for (let n = 0; n < (it.cantidad || 1); n++) tiendaCarrito.agregarItem(prodConImagen)
       agregado = true
