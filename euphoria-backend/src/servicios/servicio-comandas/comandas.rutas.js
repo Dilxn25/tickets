@@ -262,12 +262,16 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       // cliente): así el descuento es exactamente el configurado, ni más ni menos.
       if (item.combo === true && comboHabilitado) {
         const base = Number(prodBD.precio_base)
-        const precioCombo = Math.round(base * (1 - descComboPct / 100) * 100) / 100
+        // Se HONRA el precio con descuento MOSTRADO al cliente (incluye el redondeo
+        // "atractivo" de la IA), siempre que sea un descuento de combo razonable:
+        // no más barato que (config% + 10%, tope 60%) ni más caro que el base. Si
+        // no, se recalcula al precio de combo del config.
+        const maxDescuento = Math.min(descComboPct + 10, 60)
+        const piso = Math.round(base * (1 - maxDescuento / 100) * 100) / 100
         const pu = Number(item.precio_unitario)
-        // Se acepta el precio mostrado al cliente SOLO si es un descuento de combo
-        // válido: no más barato que el % del config (evita abuso) ni más caro que
-        // el base. Si no, se recalcula al precio de combo del servidor.
-        precioUnitario = (!Number.isNaN(pu) && pu >= precioCombo - 0.02 && pu <= base) ? pu : precioCombo
+        precioUnitario = (!Number.isNaN(pu) && pu >= piso && pu <= base)
+          ? pu
+          : Math.round(base * (1 - descComboPct / 100) * 100) / 100
       } else if (item.precio_unitario != null) {
         // Precio dinámico (mesero): se acepta SOLO dentro de un rango seguro del
         // precio base. Fuera de rango se ignora (evita manipulación).

@@ -547,17 +547,29 @@ async function agregarCombo(combo) {
     return
   }
 
+  // No hay un combo REAL con esa composición: se agregan los productos APLICANDO
+  // el descuento del combo (marcados como 'combo' -> el backend valida y cobra el
+  // precio rebajado, no el de catálogo). Antes se cobraba el precio completo.
+  const factor = (Number(combo.precio_combo) > 0 && Number(combo.precio_normal) > 0)
+    ? Number(combo.precio_combo) / Number(combo.precio_normal) : 1
   let agregados = 0, omitidos = 0
   for (const p of combo.productos) {
     const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
     if (!prod || prod.stock_actual <= 0) { omitidos++; continue }
-    const r = tiendaCarrito.agregarItem(prod)
-    if (r && r.ok === false) omitidos++
-    else agregados++
+    const baseNum = parseFloat(prod.precio_base) || 0
+    const prodDesc = { ...prod, precio_base: Math.round(baseNum * factor * 100) / 100, estado_promocion: false, combo: true }
+    const cant = Number(p.cantidad) || 1
+    let ok = false
+    for (let n = 0; n < cant; n++) {
+      const r = tiendaCarrito.agregarItem(prodDesc)
+      if (!(r && r.ok === false)) ok = true
+    }
+    if (ok) agregados++
+    else omitidos++
   }
   if (!agregados) { notif.error('No se pudo agregar el combo: productos sin stock.'); return }
   if (omitidos) notif.advertencia('Algunos productos del combo no tenían stock y no se agregaron.')
-  else notif.info('Productos agregados a precio de catálogo (el precio rebajado aplica cuando el local activa el combo).')
+  else notif.exito('Combo agregado con su descuento.')
   router.push('/cliente/carrito')
 }
 
