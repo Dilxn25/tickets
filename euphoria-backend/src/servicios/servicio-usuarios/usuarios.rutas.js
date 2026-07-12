@@ -587,7 +587,7 @@ router.get('/recurrentes', async (req, res) => {
       JOIN comanda c ON c.id_cliente = u.id_usuario AND c.estado_despacho <> 'Cancelada'
       JOIN detalle_comanda d ON d.id_comanda = c.id_comanda
       JOIN rol r ON r.id_rol = u.id_rol AND r.nombre_rol = 'Cliente'
-      GROUP BY u.id_usuario
+      GROUP BY u.id_usuario, u.nombres, u.apellidos, u.es_vip, u.premio_perfil
       ORDER BY consumo DESC
       LIMIT 20
     `)
@@ -599,7 +599,7 @@ router.get('/recurrentes', async (req, res) => {
         FROM detalle_comanda d
         JOIN comanda c ON c.id_comanda = d.id_comanda AND c.id_cliente = ${Number(f.id_usuario)} AND c.estado_despacho <> 'Cancelada'
         JOIN producto p ON p.id_producto = d.id_producto
-        GROUP BY p.id_producto ORDER BY veces DESC LIMIT 1
+        GROUP BY p.id_producto, p.nombre_producto ORDER BY veces DESC LIMIT 1
       `)
       // Describe el premio activo (pendiente perfil / desc:N / prod:ID)
       const pp = f.premio_perfil
