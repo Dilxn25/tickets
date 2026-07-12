@@ -1321,51 +1321,15 @@ function limpiarArchivo() {
   }
 }
 
-// Preprocesa el comprobante EN EL CELULAR antes de mandarlo al OCR:
-// - Redimensiona a un tamaño óptimo (menos píxeles = OCR mucho más rápido).
-// - Escala de grises + un poco de contraste (mejor lectura, sobre todo en
-//   fotos de pantallas con brillo). Si algo falla, se usa la imagen original.
-async function preprocesarComprobante(file) {
-  try {
-    if (!file.type?.startsWith('image/')) return file
-    const bitmap = await createImageBitmap(file)
-    const maxLado = 1600
-    const escala = Math.min(1, maxLado / Math.max(bitmap.width, bitmap.height))
-    const w = Math.max(1, Math.round(bitmap.width * escala))
-    const h = Math.max(1, Math.round(bitmap.height * escala))
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(bitmap, 0, 0, w, h)
-    const img = ctx.getImageData(0, 0, w, h)
-    const d = img.data
-    const contraste = 1.25
-    for (let i = 0; i < d.length; i += 4) {
-      let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-      g = (g - 128) * contraste + 128
-      g = g < 0 ? 0 : g > 255 ? 255 : g
-      d[i] = d[i + 1] = d[i + 2] = g
-    }
-    ctx.putImageData(img, 0, 0)
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9))
-    if (blob) return new File([blob], file.name || 'comprobante.jpg', { type: 'image/jpeg' })
-  } catch (e) {
-    console.warn('No se pudo preprocesar el comprobante, se usa el original:', e)
-  }
-  return file
-}
-
-// Procesar OCR (envía el comprobante ya optimizado al backend)
+// Procesar OCR (envía el comprobante tal cual al backend)
 async function procesarOCR(file) {
   procesandoOCR.value = true
   errorOCR.value = ''
   ocrExitoso.value = false
 
   try {
-    const imagen = await preprocesarComprobante(file)
     const formData = new FormData()
-    formData.append('comprobante', imagen)
+    formData.append('comprobante', file)
     formData.append('monto_esperado', montoIngresado.value)
 
     const res = await clienteHttp.post('/comandas/validar-comprobante', formData, {

@@ -40,6 +40,41 @@ async function obtenerTitularDestino() {
   return TITULAR_POR_DEFECTO
 }
 
+// ---- Worker de OCR REUTILIZABLE ----
+// Tesseract.recognize() creaba un motor nuevo y cargaba los modelos de idioma
+// (varios MB) EN CADA comprobante -> ese era el costo real (no el tamaño de la
+// imagen). Reutilizando un worker, el modelo se carga UNA sola vez y las
+// siguientes lecturas son mucho más rápidas.
+let _ocrWorker = null
+let _ocrWorkerPromise = null
+async function obtenerWorkerOCR() {
+  if (_ocrWorker) return _ocrWorker
+  if (!_ocrWorkerPromise) {
+    _ocrWorkerPromise = Tesseract.createWorker('spa+eng')
+      .then(w => { _ocrWorker = w; return w })
+      .catch(e => { _ocrWorkerPromise = null; throw e })
+  }
+  return _ocrWorkerPromise
+}
+
+// Distancia de edición (Levenshtein) para tolerar 1-2 errores del OCR al comparar
+// números de transacción (ej. 0/O, 8/B, 1/I) y no dejar reusar el MISMO comprobante.
+function distanciaEdicion(a, b) {
+  a = String(a || ''); b = String(b || '')
+  const m = a.length, n = b.length
+  if (!m) return n
+  if (!n) return m
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + c)
+    }
+  }
+  return dp[m][n]
+}
+
 // POST /api/comandas/validar-comprobante (IA OCR Real para comprobantes)
 router.post('/validar-comprobante', verificarToken, upload.single('comprobante'), async (req, res) => {
   try {
@@ -50,10 +85,10 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ error: 'Monto esperado de la comanda no especificado' })
     }
 
-    // 1. Ejecutar OCR usando Tesseract.js en español + inglés
-    //    (los comprobantes bancarios bolivianos están en español; usar 'spa+eng'
-    //    mejora mucho la precisión frente a solo 'eng').
-    const { data: { text } } = await Tesseract.recognize(req.file.path, 'spa+eng')
+    // 1. Ejecutar OCR con el worker REUTILIZABLE (spa+eng). El modelo se carga una
+    //    sola vez; a partir de la 2da lectura es mucho más rápido.
+    const worker = await obtenerWorkerOCR()
+    const { data: { text } } = await worker.recognize(req.file.path)
 
     const cleanedText = text.replace(/\s+/g, ' ')
 
@@ -82,19 +117,32 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
 
     const transaccionId = analisis.transaccionId
 
-    // 3. VALIDACIÓN DE SEGURIDAD: evitar comprobantes ya usados (duplicidad)
-    const duplicadoComanda = await prisma.comanda.findFirst({
-      where: { comprobante_url: { contains: `|TX:${transaccionId}` } }
-    })
-    if (duplicadoComanda) {
-      return res.status(400).json({ valido: false, error: `Este comprobante ya fue utilizado para pagar la comanda #${duplicadoComanda.id_comanda}. ID Transacción duplicado: #${transaccionId}` })
+    // 3. SEGURIDAD: NO permitir reusar el mismo comprobante. Se comprueba por
+    //    número de transacción EXACTO y también por transacción PARECIDA dentro de
+    //    los comprobantes del MISMO banco y MISMO monto (tolera 1 error del OCR, que
+    //    hacía que el mismo comprobante pasara dos veces por leerse un poco distinto).
+    const marcaExacta = `|TX:${transaccionId}`
+    const marcaBancoMonto = `|M:${montoEsperado}|B:${analisis.banco}`
+
+    const [comExacta, recExacta] = await Promise.all([
+      prisma.comanda.findFirst({ where: { comprobante_url: { contains: marcaExacta } } }),
+      prisma.recarga_billetera.findFirst({ where: { comprobante_url: { contains: marcaExacta } } }),
+    ])
+    if (comExacta || recExacta) {
+      return res.status(400).json({ valido: false, error: `Este comprobante ya fue utilizado (N° de transacción ${transaccionId}). No se puede usar dos veces.` })
     }
 
-    const duplicadoRecarga = await prisma.recarga_billetera.findFirst({
-      where: { comprobante_url: { contains: `|TX:${transaccionId}` } }
+    const [comSimilares, recSimilares] = await Promise.all([
+      prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaBancoMonto } }, select: { comprobante_url: true } }),
+      prisma.recarga_billetera.findMany({ where: { comprobante_url: { contains: marcaBancoMonto } }, select: { comprobante_url: true } }),
+    ])
+    const txDeUrl = (url) => (String(url || '').match(/\|TX:([^|]+)/)?.[1] || '')
+    const yaUsado = [...comSimilares, ...recSimilares].some(r => {
+      const otro = txDeUrl(r.comprobante_url)
+      return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 1
     })
-    if (duplicadoRecarga) {
-      return res.status(400).json({ valido: false, error: `Este comprobante ya fue utilizado para una recarga de billetera. ID Transacción duplicado: #${transaccionId}` })
+    if (yaUsado) {
+      return res.status(400).json({ valido: false, error: 'Este comprobante ya fue utilizado (mismo banco, monto y N° de transacción). No se puede usar dos veces.' })
     }
 
     // Validación exitosa
