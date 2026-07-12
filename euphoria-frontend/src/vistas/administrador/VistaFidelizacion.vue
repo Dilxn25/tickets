@@ -95,10 +95,42 @@
 
           <div v-else class="pm-campo">
             <label>Producto de cortesía</label>
-            <select v-model="premioProducto" class="pm-select">
-              <option :value="null" disabled>Elige un producto…</option>
-              <option v-for="p in productos" :key="p.id_producto" :value="p.id_producto">{{ p.nombre_producto }}</option>
-            </select>
+            <div class="pm-buscador">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input v-model="buscarProducto" type="text" class="pm-buscar-input" placeholder="Buscar producto…" />
+              <button v-if="buscarProducto" type="button" class="pm-buscar-x" @click="buscarProducto = ''" aria-label="Limpiar búsqueda">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            <div v-if="!productos.length" class="pm-prod-vacio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+              <span>No hay productos disponibles</span>
+            </div>
+            <div v-else-if="!productosFiltrados.length" class="pm-prod-vacio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <span>Ningún producto coincide con «{{ buscarProducto }}»</span>
+            </div>
+            <div v-else class="pm-prod-grid">
+              <button
+                v-for="p in productosFiltrados"
+                :key="p.id_producto"
+                type="button"
+                class="pm-prod"
+                :class="{ elegido: premioProducto === p.id_producto }"
+                @click="premioProducto = p.id_producto"
+              >
+                <span class="pm-prod-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+                <span class="pm-prod-img">
+                  <img v-if="p.url_imagen" :src="p.url_imagen" :alt="p.nombre_producto" loading="lazy" />
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="22" height="22"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+                </span>
+                <span class="pm-prod-nom">{{ p.nombre_producto }}</span>
+                <span v-if="p.precio_base != null" class="pm-prod-precio">Bs {{ Number(p.precio_base).toFixed(2) }}</span>
+              </button>
+            </div>
             <p class="pm-nota">Queda como vale de cortesía visible para el cliente.</p>
           </div>
 
@@ -128,7 +160,14 @@ const premioModal = ref(null)
 const premioTipo = ref('descuento')
 const premioPct = ref(15)
 const premioProducto = ref(null)
+const buscarProducto = ref('')
 const guardandoPremio = ref(false)
+
+const productosFiltrados = computed(() => {
+  const q = buscarProducto.value.trim().toLowerCase()
+  if (!q) return productos.value
+  return productos.value.filter(p => (p.nombre_producto || '').toLowerCase().includes(q))
+})
 
 const consumoTotal = computed(() => clientes.value.reduce((a, c) => a + (c.consumo || 0), 0))
 const totalVip = computed(() => clientes.value.filter(c => c.es_vip).length)
@@ -153,6 +192,7 @@ function abrirPremio(c) {
   premioTipo.value = 'descuento'
   premioPct.value = 15
   premioProducto.value = null
+  buscarProducto.value = ''
 }
 async function confirmarPremio() {
   if (!premioModal.value) return
@@ -275,8 +315,33 @@ onMounted(() => { cargar(); cargarProductos() })
 .pm-pct { display: flex; align-items: center; gap: 14px; }
 .pm-pct input[type=range] { flex: 1; accent-color: var(--morado-brillante); }
 .pm-pct-val { font-family: var(--fuente-titulo); font-size: 1.5rem; font-weight: 800; color: var(--rosa-acento); min-width: 60px; text-align: right; }
-.pm-select { background: var(--fondo-input); border: 1px solid var(--borde-sutil); color: var(--texto-principal); padding: 11px 14px; border-radius: 12px; font-size: 0.9rem; outline: none; }
-.pm-select:focus { border-color: var(--morado-brillante); }
+/* Selector de producto de cortesía */
+.pm-buscador { display: flex; align-items: center; gap: 9px; background: var(--fondo-input); border: 1px solid var(--borde-sutil); border-radius: 12px; padding: 0 12px; transition: border-color 0.15s ease; }
+.pm-buscador:focus-within { border-color: var(--morado-brillante); }
+.pm-buscador > svg { flex-shrink: 0; color: var(--texto-desactivado); }
+.pm-buscar-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--texto-principal); font-size: 0.9rem; padding: 11px 0; }
+.pm-buscar-input::placeholder { color: var(--texto-desactivado); }
+.pm-buscar-x { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(255,255,255,0.06); color: var(--texto-secundario); cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+.pm-buscar-x:hover { background: rgba(255,255,255,0.12); color: var(--texto-principal); }
+
+.pm-prod-vacio { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 12px; text-align: center; color: var(--texto-desactivado); }
+.pm-prod-vacio svg { opacity: 0.6; }
+.pm-prod-vacio span { font-size: 0.82rem; }
+
+.pm-prod-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 46vh; overflow-y: auto; padding: 2px; margin: 0 -2px; scrollbar-width: thin; }
+.pm-prod-grid::-webkit-scrollbar { width: 5px; }
+.pm-prod-grid::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.35); border-radius: 999px; }
+.pm-prod { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; padding: 12px 10px 11px; border-radius: 14px; background: var(--fondo-app); border: 1.5px solid var(--borde-sutil); cursor: pointer; transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease, background 0.15s ease; }
+.pm-prod:hover { border-color: var(--borde-activo); transform: translateY(-2px); }
+.pm-prod:active { transform: translateY(0) scale(0.97); }
+.pm-prod.elegido { border-color: var(--morado-brillante); background: rgba(168,85,247,0.12); box-shadow: 0 0 0 1px var(--morado-brillante), 0 8px 22px rgba(168,85,247,0.28); }
+.pm-prod-check { position: absolute; top: 7px; right: 7px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--gradiente-marca, linear-gradient(135deg,#A855F7,#EC4899)); color: #fff; opacity: 0; transform: scale(0.4); transition: opacity 0.18s ease, transform 0.18s var(--ease-rebote, ease); }
+.pm-prod.elegido .pm-prod-check { opacity: 1; transform: scale(1); }
+.pm-prod-img { width: 54px; height: 54px; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); color: var(--texto-desactivado); flex-shrink: 0; }
+.pm-prod-img img { width: 100%; height: 100%; object-fit: cover; }
+.pm-prod-nom { font-size: 0.8rem; font-weight: 700; color: var(--texto-principal); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pm-prod-precio { font-family: var(--fuente-titulo); font-size: 0.82rem; font-weight: 800; color: var(--rosa-acento); font-variant-numeric: tabular-nums; }
+@media (max-width: 380px) { .pm-prod-grid { grid-template-columns: 1fr; } }
 .pm-nota { font-size: 0.76rem; color: var(--texto-desactivado); line-height: 1.4; }
 .pm-acciones { display: flex; gap: 10px; }
 .pm-btn { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.2s ease; }

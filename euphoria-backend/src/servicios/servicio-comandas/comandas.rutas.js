@@ -102,14 +102,31 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
     }
 
-    // 2. Validación FLEXIBLE con PASOS: busca en todo el texto la referencia
-    //    "Consumo Euphoria"/titular, el monto y un N° de transacción. Cada paso se
-    //    devuelve para mostrarlo al cliente y auditar dónde falla. Robusta al ruido
-    //    del OCR de fotos (por eso antes fallaba tanto).
+    // 2. Validación en DOS etapas:
+    //    a) ESTRICTA por plantilla: primero IDENTIFICA el banco (BCP, BNB, BISA,
+    //       Unión, Yape, Yasta...) y extrae sus campos de las etiquetas propias del
+    //       banco. Es la vía preferida porque ancla el monto/N° a su etiqueta real.
+    //    b) Si la estricta no reconoce ni valida el comprobante, se usa la FLEXIBLE
+    //       de respaldo: busca en TODO el texto la referencia "Consumo Euphoria"/
+    //       titular, el monto y un N° de transacción con dígitos. Robusta al ruido
+    //       del OCR de fotos.
+    //    En AMBOS casos la respuesta lleva el array 'pasos' con las MISMAS claves que
+    //    el front ya usa: 'pago_euphoria', 'monto', 'transaccion' (+ 'no_repetido' abajo).
     const titular = await obtenerTitularDestino()
-    const analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
-    const pasos = [...(analisis.pasos || [])]
-    console.log(`[OCR] ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
+    let analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+    let pasos
+    if (analisis.ok) {
+      // La estricta valida los tres criterios a la vez: si pasó, los tres están OK.
+      pasos = [
+        { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria', ok: true },
+        { clave: 'monto', etiqueta: 'Monto correcto', ok: true },
+        { clave: 'transaccion', etiqueta: 'N° de transacción', ok: true },
+      ]
+    } else {
+      analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
+      pasos = [...(analisis.pasos || [])]
+    }
+    console.log(`[OCR] banco:${analisis.banco || '-'} ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
 
     if (!analisis.ok) {
       return res.status(400).json({ valido: false, error: analisis.error, pasos })

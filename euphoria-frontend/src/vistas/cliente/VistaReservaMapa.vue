@@ -548,12 +548,22 @@ function cancelarPin() {
 function cerrarExito() {
   reservaOk.value = null
 }
-// Agrega ambos productos del combo sugerido al carrito y lleva al carrito
+// Agrega los productos del combo sugerido APLICANDO su descuento (precio_combo)
+// y marcándolos como 'combo' para que el backend cobre el precio rebajado, no el
+// de catálogo. Antes agregaba a precio completo (por eso mostraba 45.5 y cobraba 55).
 function agregarCombo(c) {
   let agregado = false
+  const factor = (Number(c.precio_combo) > 0 && Number(c.precio_normal) > 0)
+    ? Number(c.precio_combo) / Number(c.precio_normal) : 1
   for (const p of c.productos || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
-    if (prod) { tiendaCarrito.agregarItem(prod); agregado = true }
+    if (prod) {
+      const baseNum = parseFloat(prod.precio_base) || 0
+      const prodDesc = { ...prod, precio_base: Math.round(baseNum * factor * 100) / 100, estado_promocion: false, combo: true }
+      const cant = Number(p.cantidad) || 1
+      for (let n = 0; n < cant; n++) tiendaCarrito.agregarItem(prodDesc)
+      agregado = true
+    }
   }
   if (agregado) router.push('/cliente/carrito')
   else msgError.value = 'No se pudo agregar el combo. Intenta desde el catálogo.'

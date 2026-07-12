@@ -358,6 +358,9 @@ const premioAplicado = ref(0)
 const totalCobrado = ref(0)
 const premioPct = ref(10)
 const premioMax = ref(50)
+// Nombre real del producto de cortesía (prod:ID). Se resuelve del catálogo vigente
+// porque el backend solo entrega el ID en usuario.premio_perfil (no el nombre).
+const premioProdNombre = ref('')
 // Premio activo del cliente: 'pendiente' (perfil), 'desc:N' (descuento fidelización)
 // o 'prod:ID' (cortesía de producto, no descuenta dinero). El backend aplica lo mismo.
 const premioTipo = computed(() => {
@@ -365,16 +368,16 @@ const premioTipo = computed(() => {
   if (!p || p === 'usado') return null
   if (p === 'pendiente') return { tipo: 'perfil' }
   if (p.startsWith('desc:')) return { tipo: 'desc', pct: Math.min(Math.max(parseFloat(p.slice(5)) || 0, 0), 50) }
-  if (p.startsWith('prod:')) return { tipo: 'prod' }
+  if (p.startsWith('prod:')) return { tipo: 'prod', id: parseInt(p.slice(5), 10) || 0 }
   return null
 })
 const premioActivo = computed(() => !!premioTipo.value && items.value.length > 0)
 const premioEtiqueta = computed(() => {
   const pt = premioTipo.value
   if (!pt) return ''
-  if (pt.tipo === 'perfil') return `Premio perfil completo −${premioPct.value}%`
-  if (pt.tipo === 'desc') return `Premio de fidelización −${pt.pct}%`
-  return 'Cortesía de fidelización'
+  if (pt.tipo === 'perfil') return `Tienes ${premioPct.value}% de descuento en tu próximo pedido`
+  if (pt.tipo === 'desc') return `Tienes ${pt.pct}% de descuento en tu próximo pedido`
+  return premioProdNombre.value ? `Cortesía: ${premioProdNombre.value}` : 'Cortesía de producto para ti'
 })
 const descuentoPremio = computed(() => {
   const pt = premioTipo.value
@@ -560,8 +563,16 @@ async function cargarConfigPremio() {
 async function sincronizarPrecios() {
   try {
     const prods = await clienteHttp.get('/productos')
-    const cambio = tiendaCarrito.actualizarPrecios(Array.isArray(prods) ? prods : (prods.productos || []))
+    const lista = Array.isArray(prods) ? prods : (prods.productos || [])
+    const cambio = tiendaCarrito.actualizarPrecios(lista)
     if (cambio) errorPago.value = 'Algunos precios del catálogo cambiaron: tu carrito ya está actualizado.'
+    // Si el premio activo es una cortesía de producto, resolvemos su nombre real
+    // del catálogo (el backend solo entrega el ID en usuario.premio_perfil).
+    const pt = premioTipo.value
+    if (pt?.tipo === 'prod' && pt.id) {
+      const prod = lista.find(x => x.id_producto === pt.id)
+      if (prod?.nombre_producto) premioProdNombre.value = prod.nombre_producto
+    }
   } catch { /* si falla, el backend igual cobra el precio vigente */ }
 }
 

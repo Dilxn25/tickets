@@ -569,23 +569,17 @@
               class="input-file-hidden"
             />
 
-            <!-- Validación del comprobante, PASO A PASO -->
-            <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr" :class="{ 'con-pasos': pasosValidacion.length }">
-              <template v-if="!pasosValidacion.length">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
-                  <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line>
-                  <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-                  <line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line>
-                  <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
-                </svg>
-                <p>Leyendo el comprobante…</p>
-              </template>
-              <ul v-else class="ocr-pasos">
-                <li v-for="(p, i) in pasosValidacion" :key="i" class="ocr-paso" :class="{ visible: p.visible, 'paso-ok': p.visible && p.ok, 'paso-fail': p.visible && !p.ok }">
+            <!-- Validación del comprobante EN TIEMPO REAL: los pasos aparecen desde
+                 el inicio (validando…) y se marcan ✓/✗ conforme se resuelven. -->
+            <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr con-pasos">
+              <p class="ocr-titulo">Validando tu comprobante…</p>
+              <ul class="ocr-pasos">
+                <li v-for="(p, i) in pasosValidacion" :key="i" class="ocr-paso visible" :class="{ 'paso-ok': p.ok === true, 'paso-fail': p.ok === false, 'paso-cargando': p.ok === null, 'paso-skip': p.ok === 'skip' }">
                   <span class="ocr-paso-icono">
-                    <svg v-if="!p.visible" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
-                    <svg v-else-if="p.ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <svg v-if="p.ok === null" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
+                    <svg v-else-if="p.ok === true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <svg v-else-if="p.ok === false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   </span>
                   <span class="ocr-paso-txt">{{ p.etiqueta }}</span>
                 </li>
@@ -1329,18 +1323,28 @@ function limpiarArchivo() {
   }
 }
 
-// Validación PASO A PASO: revela cada check (referencia, monto, transacción, no
-// repetido) uno por uno. Es más entretenido que una rueda y sirve de auditoría
-// (se ve exactamente en qué paso falla). Se detiene en el primer paso que falla.
+// Validación PASO A PASO EN VIVO: los pasos se muestran desde el inicio con
+// "validando…" (spinner) y se marcan ✓/✗ conforme el backend los resuelve. Sirve
+// de auditoría: se ve exactamente en qué paso se traba.
+const PASOS_ESPERADOS = [
+  { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria' },
+  { clave: 'monto', etiqueta: 'Monto correcto' },
+  { clave: 'transaccion', etiqueta: 'N° de transacción' },
+  { clave: 'no_repetido', etiqueta: 'Comprobante no repetido' },
+]
 const pasosValidacion = ref([])
-async function mostrarPasos(pasos) {
-  pasosValidacion.value = (pasos || []).map(p => ({ ...p, visible: false }))
+function iniciarPasos() {
+  pasosValidacion.value = PASOS_ESPERADOS.map(p => ({ ...p, ok: null }))
+}
+async function resolverPasos(resPasos) {
+  const mapa = new Map((resPasos || []).map(p => [p.clave, p]))
   for (let i = 0; i < pasosValidacion.value.length; i++) {
-    await new Promise(r => setTimeout(r, 480))
-    pasosValidacion.value[i].visible = true
-    if (!pasosValidacion.value[i].ok) break
+    await new Promise(r => setTimeout(r, 420))
+    const paso = pasosValidacion.value[i]
+    paso.ok = mapa.has(paso.clave) ? !!mapa.get(paso.clave).ok : false
+    if (!paso.ok) { for (let j = i + 1; j < pasosValidacion.value.length; j++) pasosValidacion.value[j].ok = 'skip'; break }
   }
-  await new Promise(r => setTimeout(r, 350))
+  await new Promise(r => setTimeout(r, 300))
 }
 
 // Procesar OCR (envía el comprobante tal cual al backend)
@@ -1348,7 +1352,7 @@ async function procesarOCR(file) {
   procesandoOCR.value = true
   errorOCR.value = ''
   ocrExitoso.value = false
-  pasosValidacion.value = []
+  iniciarPasos()
 
   try {
     const formData = new FormData()
@@ -1359,7 +1363,7 @@ async function procesarOCR(file) {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
 
-    if (res.pasos?.length) await mostrarPasos(res.pasos)
+    await resolverPasos(res.pasos)
 
     if (res.valido) {
       ocrExitoso.value = true
@@ -1375,7 +1379,7 @@ async function procesarOCR(file) {
   } catch (error) {
     console.error('Error en OCR:', error)
     const data = error?.response?.data || error || {}
-    if (data.pasos?.length) await mostrarPasos(data.pasos)
+    await resolverPasos(data.pasos)
     const mensaje = data.error || 'No pudimos leer el comprobante. Toma la foto nítida y completa, o súbela desde tus archivos.'
     errorOCR.value = mensaje
     archivoComprobante.value = null
@@ -3028,7 +3032,10 @@ button.mov-fila:focus-visible {
 .estado-ocr.con-pasos { display: block; }
 
 /* Validación paso a paso */
+.ocr-titulo { margin: 0 0 12px; font-weight: 700; font-size: 0.92rem; color: var(--texto-principal); }
 .ocr-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ocr-paso.paso-skip { opacity: 0.5; }
+.ocr-paso.paso-skip .ocr-paso-icono { color: var(--texto-desactivado); }
 .ocr-paso {
   display: flex; align-items: center; gap: 10px;
   opacity: 0.4; transform: translateX(-4px);

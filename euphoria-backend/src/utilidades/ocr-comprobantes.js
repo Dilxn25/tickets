@@ -90,8 +90,9 @@ const PLANTILLAS = [
     nombre: 'Banco de Crédito BCP',
     deteccion: [/banco\s+de\s+cr[eé]dito/i, /\bbcp\b/i, /bm\s*qr/i, /enviado\s+por/i],
     monto: /monto\s*:?\s*bs\.?\s*([\d.,]+)/i,
+    montoRespaldo: /\bmonto\b[^0-9]{0,8}bs\.?\s*([\d.,]+)/i,
     transaccion: /n[uú]mero\s+de\s+transacci[oó]n\s*:?\s*(\d{8,20})/i,
-    fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/i,
+    fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
     motivo: /motivo\s*:?\s*(.{2,45}?)\s*de\s*la\s*cuenta/i,
     // El SEGUNDO "A nombre de" es el destinatario (el primero es el pagador);
     // "Ala cuenta"/"Del bafico" son lecturas reales del OCR sobre la muestra.
@@ -103,9 +104,25 @@ const PLANTILLAS = [
     deteccion: [/\bbnb\b/i, /comprobante\s+electr[oó]nico/i, /transferencia\s+interbancaria/i, /bancarizaci[oó]n/i],
     monto: /la\s+suma\s+de\s+bs\.?\s*:?\s*([\d.,]+)/i,
     transaccion: /bancarizaci[oó]n\s*:?\s*([a-z0-9]{6,15})/i,
-    fecha: /fecha\s+de\s+la\s+transacci[oó]n\s*:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/i,
+    fecha: /fecha\s+de\s+la\s+transacci[oó]n\s*:?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
     motivo: /referencia\s*:?\s*(.{2,45}?)\s*fecha\s+de/i,
     destinatario: /nombre\s+del\s+destinatario\s*:?\s*(.{4,50}?)\s+banco\s+destino/i,
+  },
+  {
+    banco: 'UNION',
+    nombre: 'Banco Unión',
+    // El comprobante de la app de Banco Unión NO imprime la palabra "Unión":
+    // se reconoce por su estructura -> encabezado "COMPROBANTE DE PAGO",
+    // el importe como "Pagó Bs. 20.00" y el campo propio "Transacción N°:".
+    deteccion: [/comprobante\s+de\s+pago/i, /pag[oó]\s+bs/i, /transacci[oó]n\s+n[e°ºo]/i, /\bbanco\s+uni[oó]n\b/i],
+    monto: /pag[oó]\s+bs\.?\s*([\d.,]+)/i,
+    // El OCR parte el N° en dos ("...2566 03799"): se capturan dígitos con
+    // espacios internos y el análisis los junta (transaccionId sin espacios).
+    transaccion: /transacci[oó]n\s+n?[e°ºo]?\s*:?\s*(\d[\d\s]{6,30}\d)/i,
+    fecha: /comprobante\s+de\s+pago\s+(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
+    motivo: /referencia\s*:?\s*(.{2,45}?)(?:\s{2,}|$)/i,
+    // "Pagó Bs. 20.00 A: NOMBRE  BANCO ..." -> el nombre va entre el monto y el banco.
+    destinatario: /pag[oó]\s+bs\.?\s*[\d.,]+\s*a\s*:?\s*(.{4,50}?)\s+banco\s+/i,
   },
   {
     banco: 'BISA',
@@ -115,7 +132,7 @@ const PLANTILLAS = [
     deteccion: [/\bbisa\b/i, /pago\s*qr\s*realizado/i, /ci\s*\/\s*nit/i],
     monto: /monto\s*:?\s*bs\.?\s*([\d.,]+)/i,
     transaccion: /n[°º0oa]?\s*\.?\s*transacci[oó]n\s*:?\s*(\d{8,15})/i,
-    fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/i,
+    fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
     motivo: /motivo\s*:?\s*(.{2,45}?)\s*n[°º0oa]?\s*\.?\s*transacci/i,
     destinatario: /\bpara\s+(.{4,50}?)\s+ci\s*\/\s*nit/i,
   },
@@ -160,7 +177,7 @@ const PLANTILLA_GENERICA = {
   deteccion: [/./],
   monto: /(?:monto|importe|total(?:\s+pagado)?|la\s+suma)\s*(?:de\s+bs\.?|\(bs\.?\))?\s*:?\s*(?:bs\.?)?\s*([\d.,]+)/i,
   transaccion: /(?:n[°ºo.]{0,2}\s*(?:de\s+)?(?:transacci[oó]n|operaci[oó]n)|referencia|bancarizaci[oó]n|comprobante\s*n[°ºo.]{0,2})\s*:?\s*#?\s*([a-z0-9-]{6,20})/i,
-  fecha: /(?:fecha[^0-9]{0,25})?(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/i,
+  fecha: /(?:fecha[^0-9]{0,25})?(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
   fechaTextoRespaldo: /(\d{1,2})\s*(?:de\s*)?(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?\s*(?:de\s*)?(\d{4})/i,
   motivo: /(?:motivo|glosa|concepto|referencia|detalle)\s*:?\s*(.{2,45}?)(?:\s{2,}|\s(?:n[°ºo]|fecha|de\s+la\s+cuenta|monto)|$)/i,
   destinatario: /(?:destinatario|beneficiario|para|a\s+nombre\s+de|a\s+favor\s+de)\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s.]{4,50})/i,
@@ -208,7 +225,9 @@ function analizarComprobante(textoOCR, montoEsperado, hoy = new Date(), opciones
     // Número de transacción del campo propio del banco: obligatorio
     const t = texto.match(p.transaccion)
     if (!t) { ultimaFalla = { p, campo: 'transaccion' }; continue }
-    const transaccionId = t[1].toUpperCase()
+    // Algunos bancos (Unión) llegan con el N° partido por el OCR ("...2566 03799"):
+    // se quitan los espacios internos para tener un único identificador comparable.
+    const transaccionId = t[1].replace(/\s+/g, '').toUpperCase()
     // Un N° de transacción REAL siempre tiene DÍGITOS. Si lo capturado no tiene
     // (ej. "CONSUMO" tomado de "Referencia: Consumo Euphoria", o una palabra suelta),
     // NO es un número de transacción válido: se prueba la siguiente plantilla.
@@ -328,6 +347,13 @@ function extraerTransaccion(texto) {
   let m
   while ((m = rxEtiq.exec(texto)) !== null) {
     const tok = m[1].toUpperCase()
+    if (/\d/.test(tok)) return tok
+  }
+  // Orden inverso "Transacción N°: 12345 67890" (Banco Unión), con el N° partido
+  // por el OCR: se juntan los dígitos quitando los espacios internos.
+  const mTrail = texto.match(/transacci[oó]n\s+n?[e°ºo]?\s*:?\s*(\d[\d\s]{5,30}\d)/i)
+  if (mTrail) {
+    const tok = mTrail[1].replace(/\s+/g, '').toUpperCase()
     if (/\d/.test(tok)) return tok
   }
   const tokens = (texto.match(/[a-z0-9-]{8,25}/gi) || [])

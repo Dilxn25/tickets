@@ -17,6 +17,7 @@ const { subirFotoPerfil, eliminarImagen } = require('../../config/cloudinary')
 const { normalizarRespuesta } = require('../../utilidades/texto')
 const { enviarCorreo, plantilla } = require('../../utilidades/correo')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
+const { notificar } = require('../../utilidades/notificaciones')
 const crypto = require('crypto')
 
 // Genera un código numérico de 6 dígitos para verificaciones por correo.
@@ -648,21 +649,35 @@ router.post('/:id/premio', async (req, res) => {
   try {
     const { tipo, valor_pct, id_producto } = req.body
     let premio
+    let notif
     if (tipo === 'producto') {
       const pid = Number(id_producto)
       if (!pid) return res.status(400).json({ error: 'Elige un producto de cortesía.' })
       const prod = await prisma.producto.findUnique({ where: { id_producto: pid } })
       if (!prod) return res.status(404).json({ error: 'Producto no encontrado.' })
       premio = `prod:${pid}`
+      notif = {
+        tipo: 'premio',
+        titulo: 'Tienes una cortesía',
+        mensaje: `El local te regaló: ${prod.nombre_producto}. Se te entregará al atenderte en tu próximo evento.`,
+        url: '/cliente/perfil',
+      }
     } else {
       const pct = Math.min(Math.max(parseInt(valor_pct) || 0, 1), 50)
       premio = `desc:${pct}`
+      notif = {
+        tipo: 'premio',
+        titulo: 'Tienes un premio',
+        mensaje: `El local te regaló un ${pct}% de descuento para tu próximo pedido.`,
+        url: '/cliente/perfil',
+      }
     }
     const u = await prisma.usuario.update({
       where: { id_usuario: Number(req.params.id) },
       data: { premio_perfil: premio },
       select: { id_usuario: true, premio_perfil: true },
     })
+    await notificar(u.id_usuario, notif)
     res.json({ ok: true, premio: u.premio_perfil })
   } catch (e) { res.status(500).json({ error: 'No se pudo otorgar el premio' }) }
 })
