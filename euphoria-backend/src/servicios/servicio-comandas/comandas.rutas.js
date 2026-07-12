@@ -102,63 +102,46 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
     }
 
-    // 2. Analizar contra las plantillas de bancos soportados (BCP/BNB/BISA/Yape):
-    //    reconoce el banco emisor, extrae monto y nro. de transacción DE SUS
-    //    etiquetas (no por aparición suelta) y exige fecha de hoy.
-    //    Reglas calibradas con comprobantes reales — ver utilidades/ocr-comprobantes.js
+    // 2. Validación FLEXIBLE con PASOS: busca en todo el texto la referencia
+    //    "Consumo Euphoria"/titular, el monto y un N° de transacción. Cada paso se
+    //    devuelve para mostrarlo al cliente y auditar dónde falla. Robusta al ruido
+    //    del OCR de fotos (por eso antes fallaba tanto).
     const titular = await obtenerTitularDestino()
-    let analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
-    // Si la validación ESTRICTA (por plantilla de banco) falla, se usa la FLEXIBLE:
-    // busca en TODO el texto la referencia "Consumo Euphoria", el destinatario
-    // (titular), el monto ingresado y un N° de transacción con dígitos. Es robusta
-    // al ruido del OCR de fotos (por eso antes fallaba tanto al tomar foto).
-    if (!analisis.ok) {
-      analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
-    }
-    // Resumen sin datos personales (seguro para logs de operación)
-    console.log(`[OCR] banco: ${analisis.banco || '?'} | ok: ${analisis.ok} | TX: ${analisis.transaccionId || '-'}`)
+    const analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
+    const pasos = [...(analisis.pasos || [])]
+    console.log(`[OCR] ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
 
     if (!analisis.ok) {
-      return res.status(400).json({ valido: false, banco: analisis.banco, error: analisis.error })
+      return res.status(400).json({ valido: false, error: analisis.error, pasos })
     }
-
     const transaccionId = analisis.transaccionId
 
-    // 3. SEGURIDAD: NO permitir reusar el mismo comprobante. Se comprueba por
-    //    número de transacción EXACTO y también por transacción PARECIDA dentro de
-    //    los comprobantes del MISMO banco y MISMO monto (tolera 1 error del OCR, que
-    //    hacía que el mismo comprobante pasara dos veces por leerse un poco distinto).
-    const marcaExacta = `|TX:${transaccionId}`
-    const marcaBancoMonto = `|M:${montoEsperado}|B:${analisis.banco}`
-
-    const [comExacta, recExacta] = await Promise.all([
-      prisma.comanda.findFirst({ where: { comprobante_url: { contains: marcaExacta } } }),
-      prisma.recarga_billetera.findFirst({ where: { comprobante_url: { contains: marcaExacta } } }),
-    ])
-    if (comExacta || recExacta) {
-      return res.status(400).json({ valido: false, error: `Este comprobante ya fue utilizado (N° de transacción ${transaccionId}). No se puede usar dos veces.` })
-    }
-
-    const [comSimilares, recSimilares] = await Promise.all([
-      prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaBancoMonto } }, select: { comprobante_url: true } }),
-      prisma.recarga_billetera.findMany({ where: { comprobante_url: { contains: marcaBancoMonto } }, select: { comprobante_url: true } }),
+    // 3. NO REUSAR el mismo comprobante: mismo MONTO + N° de transacción casi
+    //    idéntico (tolera 2 errores del OCR, que hacían pasar el mismo comprobante
+    //    varias veces por leerse un poco distinto entre foto y foto).
+    const marcaMonto = `|M:${montoEsperado}`
+    const [comSim, recSim] = await Promise.all([
+      prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
+      prisma.recarga_billetera.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
     ])
     const txDeUrl = (url) => (String(url || '').match(/\|TX:([^|]+)/)?.[1] || '')
-    const yaUsado = [...comSimilares, ...recSimilares].some(r => {
+    const duplicado = [...comSim, ...recSim].some(r => {
       const otro = txDeUrl(r.comprobante_url)
-      return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 1
+      return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 2
     })
-    if (yaUsado) {
-      return res.status(400).json({ valido: false, error: 'Este comprobante ya fue utilizado (mismo banco, monto y N° de transacción). No se puede usar dos veces.' })
+    pasos.push({ clave: 'no_repetido', etiqueta: 'Comprobante no repetido', ok: !duplicado })
+    if (duplicado) {
+      return res.status(400).json({ valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos })
     }
 
     // Validación exitosa
     res.json({
       valido: true,
       banco: analisis.banco,
-      mensaje: `Comprobante ${analisis.nombreBanco} verificado correctamente`,
+      mensaje: 'Comprobante verificado correctamente',
       url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco}`,
-      transaccionId
+      transaccionId,
+      pasos,
     })
 
   } catch (error) {

@@ -342,20 +342,30 @@ function analizarComprobanteFlexible(textoOCR, montoEsperado, opciones = {}) {
     .split('|').map(t => t.trim()).filter(Boolean)
   const texto = String(textoOCR || '').replace(/\s+/g, ' ')
 
+  // Cada paso se devuelve para mostrarlo al cliente y auditar dónde falla.
   const tieneReferencia = contieneConsumoEuphoria(texto)
   const destinatarioOk = titulares.some(t => coincideTitular(texto, t))
-  if (!tieneReferencia && !destinatarioOk) {
-    return { ok: false, error: 'No pudimos verificar que el pago sea a Euphoria: no vimos "Consumo Euphoria" ni el titular de la cuenta. Toma la foto completa y nítida (que se vea la referencia y el destinatario).' }
-  }
-  if (!montoAparece(texto, montoEsperado)) {
-    return { ok: false, error: `No encontramos el monto Bs ${Number(montoEsperado).toFixed(2)} en el comprobante. Verifica que el monto ingresado sea el mismo del comprobante.` }
-  }
+  const esParaEuphoria = tieneReferencia || destinatarioOk
+  const montoOk = montoAparece(texto, montoEsperado)
   const transaccionId = extraerTransaccion(texto)
+
+  const pasos = [
+    { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria', ok: esParaEuphoria },
+    { clave: 'monto', etiqueta: 'Monto correcto', ok: montoOk },
+    { clave: 'transaccion', etiqueta: 'N° de transacción', ok: !!transaccionId },
+  ]
+
+  if (!esParaEuphoria) {
+    return { ok: false, pasos, error: 'El pago no es a la cuenta de Euphoria (no vimos "Consumo Euphoria" ni el titular). Sube la captura completa y nítida.' }
+  }
+  if (!montoOk) {
+    return { ok: false, pasos, error: `El monto no coincide: no encontramos Bs ${Number(montoEsperado).toFixed(2)} en el comprobante.` }
+  }
   if (!transaccionId) {
-    return { ok: false, error: 'No pudimos leer el número de transacción. Toma la foto completa y nítida.' }
+    return { ok: false, pasos, error: 'No pudimos leer el N° de transacción. Toma la foto completa y nítida.' }
   }
   return {
-    ok: true, banco: 'OTRO', nombreBanco: 'tu banco', monto: Number(montoEsperado),
+    ok: true, pasos, banco: 'OTRO', nombreBanco: 'tu banco', monto: Number(montoEsperado),
     transaccionId, validadoPor: tieneReferencia ? 'referencia' : 'destinatario',
   }
 }

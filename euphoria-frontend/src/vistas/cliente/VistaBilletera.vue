@@ -569,19 +569,27 @@
               class="input-file-hidden"
             />
 
-            <!-- OCR Processing -->
-            <div v-if="procesandoOCR" class="estado-ocr">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
-                <line x1="12" y1="2" x2="12" y2="6"></line>
-                <line x1="12" y1="18" x2="12" y2="22"></line>
-                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
-                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-                <line x1="2" y1="12" x2="6" y2="12"></line>
-                <line x1="18" y1="12" x2="22" y2="12"></line>
-                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
-                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
-              </svg>
-              <p>Validando comprobante...</p>
+            <!-- Validación del comprobante, PASO A PASO -->
+            <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr" :class="{ 'con-pasos': pasosValidacion.length }">
+              <template v-if="!pasosValidacion.length">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                  <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line>
+                  <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                  <line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line>
+                  <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg>
+                <p>Leyendo el comprobante…</p>
+              </template>
+              <ul v-else class="ocr-pasos">
+                <li v-for="(p, i) in pasosValidacion" :key="i" class="ocr-paso" :class="{ visible: p.visible, 'paso-ok': p.visible && p.ok, 'paso-fail': p.visible && !p.ok }">
+                  <span class="ocr-paso-icono">
+                    <svg v-if="!p.visible" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
+                    <svg v-else-if="p.ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </span>
+                  <span class="ocr-paso-txt">{{ p.etiqueta }}</span>
+                </li>
+              </ul>
             </div>
             <p v-if="ocrExitoso" class="exito-mensaje">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1321,11 +1329,26 @@ function limpiarArchivo() {
   }
 }
 
+// Validación PASO A PASO: revela cada check (referencia, monto, transacción, no
+// repetido) uno por uno. Es más entretenido que una rueda y sirve de auditoría
+// (se ve exactamente en qué paso falla). Se detiene en el primer paso que falla.
+const pasosValidacion = ref([])
+async function mostrarPasos(pasos) {
+  pasosValidacion.value = (pasos || []).map(p => ({ ...p, visible: false }))
+  for (let i = 0; i < pasosValidacion.value.length; i++) {
+    await new Promise(r => setTimeout(r, 480))
+    pasosValidacion.value[i].visible = true
+    if (!pasosValidacion.value[i].ok) break
+  }
+  await new Promise(r => setTimeout(r, 350))
+}
+
 // Procesar OCR (envía el comprobante tal cual al backend)
 async function procesarOCR(file) {
   procesandoOCR.value = true
   errorOCR.value = ''
   ocrExitoso.value = false
+  pasosValidacion.value = []
 
   try {
     const formData = new FormData()
@@ -1336,27 +1359,26 @@ async function procesarOCR(file) {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
 
+    if (res.pasos?.length) await mostrarPasos(res.pasos)
+
     if (res.valido) {
       ocrExitoso.value = true
       comprobanteProcesado.value = true
       urlComprobanteGenerado.value = res.url_comprobante
       procesandoOCR.value = false // Liberar flag antes de llamar a completar
-
-      // Llamar a completar recarga automáticamente tras validación exitosa
       await completarRecarga()
     } else {
-      // El backend respondió 200 pero el comprobante no es válido (ilegible o monto no coincide).
-      // limpiarArchivo() resetea errorOCR, por eso se asigna el mensaje después.
-      limpiarArchivo()
-      errorOCR.value = res.mensaje || res.error || 'El comprobante no pudo validarse. Verifica el monto e inténtalo de nuevo.'
+      const msg = res.error || res.mensaje || 'El comprobante no pudo validarse.'
+      errorOCR.value = msg
+      archivoComprobante.value = null // permite reintentar con otro/mismo archivo
     }
   } catch (error) {
     console.error('Error en OCR:', error)
-    // limpiarArchivo() resetea errorOCR, por eso se asigna el mensaje después;
-    // sin esto el input queda "ocupado" y no se puede reintentar con el mismo archivo.
-    const mensaje = error.response?.data?.error || error.error || 'No pudimos leer el comprobante. Toma la foto nítida y completa (que se vean el monto, la fecha y el número), o súbela desde tus archivos.'
-    limpiarArchivo()
+    const data = error?.response?.data || error || {}
+    if (data.pasos?.length) await mostrarPasos(data.pasos)
+    const mensaje = data.error || 'No pudimos leer el comprobante. Toma la foto nítida y completa, o súbela desde tus archivos.'
     errorOCR.value = mensaje
+    archivoComprobante.value = null
   } finally {
     procesandoOCR.value = false
   }
@@ -3002,6 +3024,26 @@ button.mov-fila:focus-visible {
   margin-top: 1rem;
   font-size: 0.9rem;
 }
+/* Cuando muestra la lista de pasos, apila (no en fila) */
+.estado-ocr.con-pasos { display: block; }
+
+/* Validación paso a paso */
+.ocr-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ocr-paso {
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0.4; transform: translateX(-4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.ocr-paso.visible { opacity: 1; transform: translateX(0); }
+.ocr-paso-icono {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: var(--radio-full);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.06); color: var(--texto-secundario);
+}
+.ocr-paso.paso-ok .ocr-paso-icono { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+.ocr-paso.paso-fail .ocr-paso-icono { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.ocr-paso-txt { font-size: 0.9rem; font-weight: 600; }
+.ocr-paso.paso-fail .ocr-paso-txt { color: #f87171; }
 
 .spin { animation: spin 2s linear infinite; }
 
