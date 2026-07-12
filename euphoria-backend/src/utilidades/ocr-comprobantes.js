@@ -300,4 +300,64 @@ function analizarComprobante(textoOCR, montoEsperado, hoy = new Date(), opciones
   }
 }
 
-module.exports = { analizarComprobante, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }
+// ---- VALIDACIÓN FLEXIBLE (robusta al ruido del OCR de fotos) ----------------
+// No exige la plantilla exacta de un banco. Valida SOLO lo esencial buscándolo en
+// TODO el texto (tolerando que el OCR lea las etiquetas un poco distinto):
+//   1. Referencia "Consumo Euphoria"  (el pago es para Euphoria)
+//   2. Destinatario = titular configurado (Dilan Rafael Arauco Paniagua)
+//   3. El MONTO ingresado aparece junto a "Bs"/"monto"/"suma"
+//   4. Un N° de transacción CON DÍGITOS (la unicidad se valida en la ruta)
+// Basta con (1 ó 2) + 3 + 4. Es lo que se pidió: parsear el contenido y verificar
+// esos campos, sin rechazar por no reconocer la plantilla del banco.
+
+// ¿Aparece el monto esperado, ligado a una etiqueta de importe (no a una cuenta/fecha)?
+function montoAparece(texto, montoEsperado) {
+  const rx = /(?:bs\.?|monto|importe|suma\s+de|total(?:\s+pagado)?)\s*:?\s*(?:bs\.?)?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)/gi
+  let m
+  while ((m = rx.exec(texto)) !== null) {
+    const v = parsearMonto(m[1])
+    if (v !== null && Math.abs(v - montoEsperado) <= 0.01) return true
+  }
+  return false
+}
+
+// Extrae un N° de transacción (con dígitos): primero cerca de su etiqueta, si no,
+// el token alfanumérico más largo con varios dígitos.
+function extraerTransaccion(texto) {
+  const rxEtiq = /(?:n[°ºo.]{0,3}\s*(?:de\s+)?(?:transacci[oó]n|operaci[oó]n|[oó]rden)|bancarizaci[oó]n|comprobante\s*n[°ºo.]{0,3})\s*:?\s*#?\s*([a-z0-9-]{6,25})/gi
+  let m
+  while ((m = rxEtiq.exec(texto)) !== null) {
+    const tok = m[1].toUpperCase()
+    if (/\d/.test(tok)) return tok
+  }
+  const tokens = (texto.match(/[a-z0-9-]{8,25}/gi) || [])
+    .map(t => t.toUpperCase())
+    .filter(t => (t.match(/\d/g) || []).length >= 4)
+    .sort((a, b) => b.length - a.length)
+  return tokens[0] || null
+}
+
+function analizarComprobanteFlexible(textoOCR, montoEsperado, opciones = {}) {
+  const titulares = String(opciones.titular || TITULAR_POR_DEFECTO)
+    .split('|').map(t => t.trim()).filter(Boolean)
+  const texto = String(textoOCR || '').replace(/\s+/g, ' ')
+
+  const tieneReferencia = contieneConsumoEuphoria(texto)
+  const destinatarioOk = titulares.some(t => coincideTitular(texto, t))
+  if (!tieneReferencia && !destinatarioOk) {
+    return { ok: false, error: 'No pudimos verificar que el pago sea a Euphoria: no vimos "Consumo Euphoria" ni el titular de la cuenta. Toma la foto completa y nítida (que se vea la referencia y el destinatario).' }
+  }
+  if (!montoAparece(texto, montoEsperado)) {
+    return { ok: false, error: `No encontramos el monto Bs ${Number(montoEsperado).toFixed(2)} en el comprobante. Verifica que el monto ingresado sea el mismo del comprobante.` }
+  }
+  const transaccionId = extraerTransaccion(texto)
+  if (!transaccionId) {
+    return { ok: false, error: 'No pudimos leer el número de transacción. Toma la foto completa y nítida.' }
+  }
+  return {
+    ok: true, banco: 'OTRO', nombreBanco: 'tu banco', monto: Number(montoEsperado),
+    transaccionId, validadoPor: tieneReferencia ? 'referencia' : 'destinatario',
+  }
+}
+
+module.exports = { analizarComprobante, analizarComprobanteFlexible, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }

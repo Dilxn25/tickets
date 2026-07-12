@@ -18,7 +18,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
-const { analizarComprobante, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
+const { analizarComprobante, analizarComprobanteFlexible, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
 
@@ -107,7 +107,14 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
     //    etiquetas (no por aparición suelta) y exige fecha de hoy.
     //    Reglas calibradas con comprobantes reales — ver utilidades/ocr-comprobantes.js
     const titular = await obtenerTitularDestino()
-    const analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+    let analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+    // Si la validación ESTRICTA (por plantilla de banco) falla, se usa la FLEXIBLE:
+    // busca en TODO el texto la referencia "Consumo Euphoria", el destinatario
+    // (titular), el monto ingresado y un N° de transacción con dígitos. Es robusta
+    // al ruido del OCR de fotos (por eso antes fallaba tanto al tomar foto).
+    if (!analisis.ok) {
+      analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
+    }
     // Resumen sin datos personales (seguro para logs de operación)
     console.log(`[OCR] banco: ${analisis.banco || '?'} | ok: ${analisis.ok} | TX: ${analisis.transaccionId || '-'}`)
 
