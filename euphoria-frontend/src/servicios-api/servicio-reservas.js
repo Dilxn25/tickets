@@ -45,8 +45,9 @@ export const servicioReservas = {
   },
 
   /** Cancelar una reserva (devuelve a billetera según la regla de 24 h) */
-  async cancelarReserva(idEntrada) {
-    return api.post(`/reservas/${idEntrada}/cancelar`, {})
+  async cancelarReserva(idEntrada, opciones = {}) {
+    // opciones.cancelar_pedidos = true → "Cancelar todo" (devuelve pedidos + reserva)
+    return api.post(`/reservas/${idEntrada}/cancelar`, opciones)
   },
 
   // ---- Recepción: reservas gestionadas para grupos grandes ----

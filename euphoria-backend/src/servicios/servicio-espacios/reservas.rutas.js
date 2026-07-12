@@ -1098,19 +1098,21 @@ router.post('/:id/cancelar', soloRoles('Cliente'), async (req, res) => {
     if (evento?.estado === 'terminado') return res.status(409).json({ error: 'El evento ya terminó.' })
 
     // El pedido NO puede quedar huérfano: si hay pedidos ACTIVOS ligados a esta
-    // reserva (no consumidos ni devueltos), el cliente debe resolverlos primero
-    // (pedir su devolución). Así no queda un pedido sin evento con reglas raras.
-    const pedidosActivos = await prisma.comanda.count({
+    // reserva, o el cliente los resuelve primero, o usa "Cancelar todo"
+    // (cancelar_pedidos: true) que devuelve los pedidos y la reserva de una vez.
+    const forzar = req.body.cancelar_pedidos === true
+    const pedidosActivos = await prisma.comanda.findMany({
       where: {
         id_entrada: id,
         estado_despacho: { notIn: ['Cancelada', 'Reembolsada', 'Completada'] },
         estado_entrega: { not: 'entregado' },
       },
+      include: { detalle_comanda: true },
     })
-    if (pedidosActivos > 0) {
+    if (pedidosActivos.length > 0 && !forzar) {
       return res.status(409).json({
-        error: `Tienes ${pedidosActivos} pedido(s) activo(s) para este evento. Pide su devolución en "Mis pedidos" antes de cancelar la reserva.`,
-        pedidos_activos: pedidosActivos,
+        error: `Tienes ${pedidosActivos.length} pedido(s) activo(s) para este evento.`,
+        pedidos_activos: pedidosActivos.length,
       })
     }
 
@@ -1118,18 +1120,34 @@ router.post('/:id/cancelar', soloRoles('Cliente'), async (req, res) => {
     const pct = comisionSegunFecha24(evento?.fecha_hora_inicio, await comisionCancelacion())
     const reembolso = Math.round(total * (1 - pct / 100) * 100) / 100
 
+    let reembolsoPedidos = 0
     await prisma.$transaction(async (tx) => {
+      const bill = await tx.billetera.findUnique({ where: { id_usuario: ent.id_usuario } })
+      // "Cancelar todo": devolver los pedidos activos (reponer stock + devolver a
+      // la billetera con la MISMA comisión de la reserva) y marcarlos Reembolsada.
+      if (forzar && pedidosActivos.length && bill) {
+        for (const c of pedidosActivos) {
+          const totalP = c.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
+          const reembP = Math.round(totalP * (1 - pct / 100) * 100) / 100
+          for (const d of c.detalle_comanda) {
+            await tx.producto.update({ where: { id_producto: d.id_producto }, data: { stock_actual: { increment: d.cantidad } } })
+          }
+          if (reembP > 0) {
+            await tx.billetera.update({ where: { id_billetera: bill.id_billetera }, data: { saldo_actual: { increment: reembP }, ultima_actualizacion: new Date() } })
+            await tx.transaccion.create({ data: { id_billetera: bill.id_billetera, id_comanda: c.id_comanda, id_responsable: ent.id_usuario, tipo_operacion: 'reembolso', monto: reembP, fecha_hora: new Date() } })
+            reembolsoPedidos += reembP
+          }
+          await tx.comanda.update({ where: { id_comanda: c.id_comanda }, data: { estado_despacho: 'Reembolsada', estado_entrega: 'reembolsado' } })
+        }
+      }
       // Desvincular pedidos de esta reserva (evita romper el FK al borrarla)
       await tx.comanda.updateMany({ where: { id_entrada: id }, data: { id_entrada: null } })
       // Liberar la mesa
       if (ent.id_mesa) await tx.mesa_espacio.updateMany({ where: { id_mesa: ent.id_mesa }, data: { estado_ocupacion: 'libre' } })
-      // Devolver a la billetera (si se pagó y corresponde)
-      if (reembolso > 0 && total > 0) {
-        const bill = await tx.billetera.findUnique({ where: { id_usuario: ent.id_usuario } })
-        if (bill) {
-          await tx.billetera.update({ where: { id_billetera: bill.id_billetera }, data: { saldo_actual: { increment: reembolso }, ultima_actualizacion: new Date() } })
-          await tx.transaccion.create({ data: { id_billetera: bill.id_billetera, id_responsable: req.usuario.id, tipo_operacion: 'reembolso', monto: reembolso, fecha_hora: new Date() } })
-        }
+      // Devolver a la billetera la RESERVA (si se pagó y corresponde)
+      if (reembolso > 0 && total > 0 && bill) {
+        await tx.billetera.update({ where: { id_billetera: bill.id_billetera }, data: { saldo_actual: { increment: reembolso }, ultima_actualizacion: new Date() } })
+        await tx.transaccion.create({ data: { id_billetera: bill.id_billetera, id_responsable: req.usuario.id, tipo_operacion: 'reembolso', monto: reembolso, fecha_hora: new Date() } })
       }
       await tx.registro_aforo.deleteMany({ where: { id_entrada: id } })
       await tx.entrada.delete({ where: { id_entrada: id } })
@@ -1140,8 +1158,9 @@ router.post('/:id/cancelar', soloRoles('Cliente'), async (req, res) => {
       if (ent.id_mesa) global.io.emit('mesa_actualizada', { id_zona: ent.id_zona, id_mesa: ent.id_mesa, estado: 'libre' })
     }
     await actualizarLlenoEvento(ent.zona?.id_evento)
-    await notificar(ent.id_usuario, { tipo: 'reserva', titulo: 'Reserva cancelada', mensaje: reembolso > 0 ? `Se te devolvieron Bs ${reembolso} a tu billetera.` : 'Reserva cancelada.', url: '/cliente/billetera' })
-    res.json({ ok: true, total, comision_pct: pct, sin_comision: pct === 0, reembolsado: reembolso })
+    const totalDevuelto = Math.round((reembolso + reembolsoPedidos) * 100) / 100
+    await notificar(ent.id_usuario, { tipo: 'reserva', titulo: 'Reserva cancelada', mensaje: totalDevuelto > 0 ? `Se te devolvieron Bs ${totalDevuelto} a tu billetera${reembolsoPedidos > 0 ? ' (reserva + pedidos)' : ''}.` : 'Reserva cancelada.', url: '/cliente/billetera' })
+    res.json({ ok: true, total, comision_pct: pct, sin_comision: pct === 0, reembolsado: reembolso, reembolsado_pedidos: reembolsoPedidos, reembolsado_total: totalDevuelto })
   } catch (e) {
     console.error('Error cancelando reserva:', e)
     res.status(500).json({ error: 'No se pudo cancelar la reserva' })

@@ -207,6 +207,24 @@ const tabActiva = ref('vigentes')
 const historialAbierto = ref(null)
 const cancelando = ref(null)
 
+// Hace la llamada de cancelación y maneja el éxito (limpia "estás en vivo" + recarga).
+async function ejecutarCancelacion(r, forzar) {
+  const res = await servicioReservas.cancelarReserva(r.id_entrada, forzar ? { cancelar_pedidos: true } : {})
+  const devuelto = Number(res.reembolsado_total ?? res.reembolsado) || 0
+  notif.exito(devuelto > 0
+    ? `Reserva cancelada. Bs ${devuelto.toFixed(2)} a tu billetera${res.reembolsado_pedidos > 0 ? ' (reserva + pedidos)' : (res.sin_comision ? ' (sin comisión)' : '')}`
+    : 'Reserva cancelada')
+  // Si cancelaste la reserva del evento en el que "estabas en vivo", límpialo.
+  try {
+    const ev = JSON.parse(localStorage.getItem('euphoria_evento_actual') || 'null')
+    if (ev && r.evento && ev.nombre === r.evento) {
+      localStorage.removeItem('euphoria_evento_actual')
+      tiendaCarrito.setEventoActivo(null)
+    }
+  } catch { /* sin evento guardado */ }
+  await cargar()
+}
+
 async function cancelarReserva(r) {
   const ok = await notif.confirmar({
     titulo: 'Cancelar reserva',
@@ -216,21 +234,24 @@ async function cancelarReserva(r) {
   if (!ok) return
   cancelando.value = r.id_entrada
   try {
-    const res = await servicioReservas.cancelarReserva(r.id_entrada)
-    notif.exito(Number(res.reembolsado) > 0 ? `Reserva cancelada. Bs ${Number(res.reembolsado).toFixed(2)} a tu billetera${res.sin_comision ? ' (sin comisión)' : ''}` : 'Reserva cancelada')
-    // Si cancelaste la reserva del evento en el que "estabas en vivo", límpialo
-    // para que el inicio deje de mostrarte como dentro del evento.
-    try {
-      const ev = JSON.parse(localStorage.getItem('euphoria_evento_actual') || 'null')
-      if (ev && r.evento && ev.nombre === r.evento) {
-        localStorage.removeItem('euphoria_evento_actual')
-        tiendaCarrito.setEventoActivo(null)
-      }
-    } catch { /* sin evento guardado */ }
-    await cargar()
+    await ejecutarCancelacion(r, false)
   } catch (err) {
     const data = err?.response?.data || err
-    notif.error(data?.error || 'No se pudo cancelar la reserva')
+    // Si hay pedidos activos para este evento, ofrecer "Cancelar todo".
+    if (data?.pedidos_activos > 0) {
+      const cancelarTodo = await notif.confirmar({
+        variante: 'peligro',
+        titulo: 'Tienes pedidos activos',
+        mensaje: `Tienes ${data.pedidos_activos} pedido(s) para este evento. Para cancelar la reserva primero hay que devolver esos pedidos. ¿Cancelar TODO (pedidos + reserva) y recibir la devolución de ambos?`,
+        textoConfirmar: 'Cancelar todo',
+      })
+      if (cancelarTodo) {
+        try { await ejecutarCancelacion(r, true) }
+        catch (e2) { notif.error((e2?.response?.data || e2)?.error || 'No se pudo cancelar todo') }
+      }
+    } else {
+      notif.error(data?.error || 'No se pudo cancelar la reserva')
+    }
   } finally { cancelando.value = null }
 }
 

@@ -366,6 +366,7 @@ import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { servicioEventos } from '@/servicios-api/servicio-eventos.js'
+import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
@@ -587,13 +588,27 @@ onMounted(async () => {
   if (eventoGuardado) {
     try {
       const parsed = JSON.parse(eventoGuardado)
+      // "Estás en vivo" solo si el cliente REALMENTE tiene una reserva ACTIVA para
+      // ese evento. Antes solo se validaba que el evento existiera, por eso el
+      // banner persistía aunque hubieras cancelado tu reserva.
       try {
-        await servicioEventos.obtenerDisponible(parsed.id)
-        eventoActual.value = parsed
+        const resp = await servicioReservas.misReservas()
+        const lista = Array.isArray(resp) ? resp : (resp?.reservas || [])
+        const tieneReservaActiva = lista.some(r =>
+          !r.completo && r.estado_fecha !== 'finalizada' &&
+          (String(r.id_evento) === String(parsed.id) || r.evento === parsed.nombre)
+        )
+        if (tieneReservaActiva) {
+          eventoActual.value = parsed
+        } else {
+          // Ya no tiene reserva (canceló o terminó): se limpia el estado.
+          localStorage.removeItem('euphoria_evento_actual')
+          eventoActual.value = null
+          tiendaCarrito.setEventoActivo(null)
+        }
       } catch (err) {
-        localStorage.removeItem('euphoria_evento_actual')
+        // Si no se pudo validar, no mostramos el banner (mejor no afirmar de más).
         eventoActual.value = null
-        modalCancelado.value = true
       }
     } catch (e) {
       console.error(e)
