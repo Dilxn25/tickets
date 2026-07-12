@@ -12,12 +12,20 @@
 //   - Yape: el monto en fuente gigante sale partido ("Bs1 00" = Bs 100)
 //           y la fecha viene como "09 jun. 2026"
 //
-// Un comprobante solo es válido si:
-//   1. Coincide con la plantilla de un banco soportado
-//   2. El monto extraído DE SU ETIQUETA coincide con el esperado
-//   3. Se extrae el número de transacción del campo propio del banco
-//   4. La fecha del comprobante es la de hoy
-//   5. El pago fue A NUESTRA CUENTA: el motivo/referencia dice
+// Flujo: primero se IDENTIFICA EL BANCO por su léxico (deteccion) y recién
+// después se validan los campos SEGÚN LA PLANTILLA DE ESE BANCO — cada banco
+// imprime campos distintos (Yape no tiene motivo/referencia; BNB/BCP/BISA/
+// Unión sí). Si un banco puntúa en detección NO se cae a la genérica: se
+// reporta exactamente qué campo falló en ESE banco. Solo cuando NINGÚN banco
+// registrado puntúa se usa la validación GENÉRICA (analizarComprobanteFlexible)
+// con los campos preestablecidos (destino/monto/N° de transacción).
+//
+// Un comprobante es válido si:
+//   1. El monto extraído DE SU ETIQUETA coincide con el esperado
+//   2. Se extrae el número de transacción del campo propio del banco
+//   3. La fecha del comprobante es la de hoy (la genérica no valida fecha:
+//      no conoce el formato en que su banco la imprime)
+//   4. El pago fue A NUESTRA CUENTA: el motivo/referencia dice
 //      "Consumo Euphoria" o el destinatario es el titular configurado
 //      (clave 'ocr_titular_destino' en la tabla configuracion). Sin esto,
 //      cualquiera podía subir un comprobante de un pago a OTRA cuenta.
@@ -166,168 +174,172 @@ const PLANTILLAS = [
     // El destinatario está en "Cuenta destino ... | NOMBRE | ..." antes de "Cuenta origen"
     destinatario: /cuenta\s+destino\s*:?\s*(.{4,70}?)\s+cuenta\s+origen/i,
   },
+  {
+    banco: 'GANADERO',
+    nombre: 'Banco Ganadero',
+    // Comprobante "Pago QR" del Banco Ganadero (distinto al de Yasta): encabezado
+    // "BANCO GANADERO" + "¡Pago QR exitoso!" (el "¡" lo lee como "i").
+    deteccion: [/banco\s+ganadero/i, /pago\s*qr\s*exitoso/i],
+    // El OCR NO lee el "Bs" (va en verde, otra fuente): el monto es el número
+    // grande justo debajo de "Pago QR exitoso" -> se ancla a esa palabra.
+    monto: /exitoso[!¡\s]*(?:bs\.?\s*)?([\d.,]+)/i,
+    montoRespaldo: /\bbs\.?\s*([\d.,]+)/i,
+    transaccion: /nro\.?\s*:?\s*(\d{6,20})/i,
+    // "4 de Mayo, 2026 a las 08:47"  (mes en palabra, con "de" antes)
+    fechaTexto: /(\d{1,2})\s+de\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*,?\s+(?:de\s+)?(\d{4})/i,
+    motivo: /(?:motivo|glosa|referencia)\s*:?\s*(.{2,45}?)(?:\s{2,}|$)/i,
+    // El destinatario real es la CUENTA DE DESTINO (no el comercio del encabezado).
+    destinatario: /cuenta\s+de\s+destino\s*:?\s*(.{4,50}?)\s+banco\s+/i,
+  },
 ]
-
-// Plantilla GENÉRICA: acepta comprobantes de CUALQUIER banco con las mismas
-// 5 validaciones, ancladas a las etiquetas más comunes de la banca boliviana.
-// Se usa solo cuando ninguna plantilla específica reconoce el comprobante.
-const PLANTILLA_GENERICA = {
-  banco: 'OTRO',
-  nombre: 'tu banco',
-  deteccion: [/./],
-  monto: /(?:monto|importe|total(?:\s+pagado)?|la\s+suma)\s*(?:de\s+bs\.?|\(bs\.?\))?\s*:?\s*(?:bs\.?)?\s*([\d.,]+)/i,
-  transaccion: /(?:n[°ºo.]{0,2}\s*(?:de\s+)?(?:transacci[oó]n|operaci[oó]n)|referencia|bancarizaci[oó]n|comprobante\s*n[°ºo.]{0,2})\s*:?\s*#?\s*([a-z0-9-]{6,20})/i,
-  fecha: /(?:fecha[^0-9]{0,25})?(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
-  fechaTextoRespaldo: /(\d{1,2})\s*(?:de\s*)?(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?\s*(?:de\s*)?(\d{4})/i,
-  motivo: /(?:motivo|glosa|concepto|referencia|detalle)\s*:?\s*(.{2,45}?)(?:\s{2,}|\s(?:n[°ºo]|fecha|de\s+la\s+cuenta|monto)|$)/i,
-  destinatario: /(?:destinatario|beneficiario|para|a\s+nombre\s+de|a\s+favor\s+de)\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s.]{4,50})/i,
-}
 
 // Titular por defecto de la cuenta receptora (respaldo si la clave
 // 'ocr_titular_destino' no existe en la tabla configuracion).
 const TITULAR_POR_DEFECTO = 'Dilan Rafael Arauco Paniagua'
 
+// Evalúa TODOS los campos de una plantilla por separado (sin cortar en el
+// primer fallo) para poder reportar exactamente qué falló en ESE banco.
+// campos.X: true = extraído y válido, false = falló, null = el banco no lo tiene.
+function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
+  const r = {
+    campos: { monto: false, transaccion: false, fecha: false, destino: false },
+    monto: null, transaccionId: null, destinatario: '', fechaLeida: null, motivoEuphoria: false,
+  }
+
+  // Monto anclado a la etiqueta del banco (nunca "el número aparece en alguna
+  // parte"), con tolerancia de centavo por el OCR.
+  let m = texto.match(p.monto)
+  if (!m && p.montoRespaldo) m = texto.match(p.montoRespaldo)
+  if (m) r.monto = parsearMonto(m[1])
+  r.campos.monto = r.monto !== null && Math.abs(r.monto - montoEsperado) <= 0.01
+
+  // Número de transacción del campo propio del banco. Algunos (Unión) llegan con
+  // el N° partido por el OCR ("...2566 03799"): se quitan los espacios internos.
+  // Un N° REAL siempre tiene DÍGITOS: si lo capturado no tiene (ej. "CONSUMO"
+  // tomado de "Referencia: Consumo Euphoria"), no es un N° de transacción.
+  const t = texto.match(p.transaccion)
+  if (t) {
+    const tok = t[1].replace(/\s+/g, '').toUpperCase()
+    if (/\d/.test(tok)) { r.transaccionId = tok; r.campos.transaccion = true }
+  }
+
+  // Fecha del comprobante: debe ser de hoy (numérica o en palabras según el banco)
+  if (p.fecha) {
+    const f = texto.match(p.fecha)
+    if (f) {
+      r.fechaLeida = `${f[1]}/${f[2]}/${f[3]}`
+      r.campos.fecha = esFechaHoy(f[1], f[2], f[3], hoy)
+    }
+  } else if (p.fechaTexto) {
+    const f = texto.match(p.fechaTexto)
+    if (f) {
+      const mesNum = MESES_ABREV[f[2].toLowerCase().slice(0, 3)]
+      r.fechaLeida = `${String(f[1]).padStart(2, '0')}/${String(mesNum).padStart(2, '0')}/${f[3]}`
+      r.campos.fecha = mesNum ? esFechaHoy(f[1], mesNum, f[3], hoy) : false
+    }
+  }
+
+  // Destino: el pago debe ser A NUESTRA CUENTA. Pasa si el motivo/referencia
+  // dice "Consumo Euphoria" o si el destinatario es el titular configurado.
+  // En bancos SIN motivo (Yape) solo cuenta el destinatario. Sin esto,
+  // cualquiera subía el comprobante de un pago a otra cuenta.
+  const motivoTexto = p.motivo ? (texto.match(p.motivo)?.[1] || '') : ''
+  r.destinatario = (p.destinatario ? (texto.match(p.destinatario)?.[1] || '') : '').trim()
+  r.motivoEuphoria = contieneConsumoEuphoria(motivoTexto)
+  r.campos.destino = (!p.motivo && !p.destinatario)
+    ? null
+    : (r.motivoEuphoria || titulares.some(tt => coincideTitular(r.destinatario, tt)))
+
+  return r
+}
+
+// Mensaje del PRIMER campo fallido, en el mismo orden en que el cliente ve
+// los pasos (monto → transacción → fecha → destino).
+function describirFallo(p, ev, montoEsperado, hoy) {
+  if (ev.campos.monto === false) {
+    return ev.monto === null
+      ? `No pudimos leer el monto del comprobante ${p.nombre}. Sube una captura nítida.`
+      : `El monto del comprobante ${p.nombre} es Bs. ${ev.monto.toFixed(2)} y no coincide con el monto ingresado (Bs. ${Number(montoEsperado).toFixed(2)}).`
+  }
+  if (ev.campos.transaccion === false) {
+    return `No pudimos leer el número de transacción del comprobante ${p.nombre}. Sube la captura original completa, sin recortes.`
+  }
+  if (ev.campos.fecha === false) {
+    if (!ev.fechaLeida) return `No pudimos leer la fecha del comprobante ${p.nombre}. Sube la captura completa donde se vea la fecha de la operación.`
+    const dd = String(hoy.getDate()).padStart(2, '0')
+    const mm = String(hoy.getMonth() + 1).padStart(2, '0')
+    return `El comprobante ${p.nombre} tiene fecha ${ev.fechaLeida}: solo se aceptan transferencias de hoy (${dd}/${mm}/${hoy.getFullYear()}).`
+  }
+  const conMotivo = !!p.motivo
+  return ev.destinatario
+    ? `El comprobante ${p.nombre} muestra un pago a "${ev.destinatario}", que no es la cuenta de Euphoria.${conMotivo ? " Si pagaste a nuestra cuenta, pon 'Consumo Euphoria' en el motivo/glosa de la transferencia." : ''}`
+    : `No pudimos verificar que el pago fue a la cuenta de Euphoria.${conMotivo ? " Pon 'Consumo Euphoria' en el motivo/glosa de la transferencia y sube la captura completa." : ' Sube la captura completa donde se vea el destinatario.'}`
+}
+
 /**
- * Analiza el texto OCR de un comprobante contra las plantillas de bancos
- * soportados. No consulta la BD (la unicidad se valida en la ruta).
+ * Analiza el texto OCR de un comprobante: IDENTIFICA EL BANCO primero y valida
+ * los campos según la plantilla de ESE banco. Si ningún banco registrado
+ * puntúa, delega en la validación genérica (analizarComprobanteFlexible).
+ * No consulta la BD (la unicidad se valida en la ruta).
  *
  * @param {string} textoOCR  texto plano del OCR (con espacios normalizados)
  * @param {number} montoEsperado
  * @param {Date}   [hoy]      inyectable para pruebas
  * @param {object} [opciones] { titular: 'Nombre Del Titular|Otro Alias' }
- * @returns {{ok: boolean, banco?: string, nombreBanco?: string, monto?: number,
- *            transaccionId?: string, destinatario?: string, error?: string}}
+ * @returns {{ok: boolean, banco: string|null, nombreBanco: string,
+ *            campos: {monto: boolean|null, transaccion: boolean|null,
+ *                     fecha: boolean|null, destino: boolean|null},
+ *            monto?: number, transaccionId?: string, destinatario?: string,
+ *            sinMotivo: boolean, validadoPor?: string, error?: string}}
  */
 function analizarComprobante(textoOCR, montoEsperado, hoy = new Date(), opciones = {}) {
   const titulares = String(opciones.titular || TITULAR_POR_DEFECTO)
     .split('|').map(t => t.trim()).filter(Boolean)
   const texto = String(textoOCR || '').replace(/\s+/g, ' ')
 
-  // 1. Reconocer el banco emisor: candidatos por léxico, confirmados por estructura
+  // 1. IDENTIFICAR EL BANCO emisor: candidatos por léxico, el de más puntos gana
   const candidatas = PLANTILLAS
     .map(p => ({ p, puntos: p.deteccion.filter(rx => rx.test(texto)).length }))
     .filter(c => c.puntos > 0)
     .sort((a, b) => b.puntos - a.puntos)
 
-  // Cualquier banco es válido: si ninguna plantilla específica calza, se usa la
-  // GENÉRICA (mismas 5 validaciones, con etiquetas comunes de la banca boliviana).
-  candidatas.push({ p: PLANTILLA_GENERICA })
+  // Banco NO registrado: validación GENÉRICA con campos preestablecidos, sin
+  // exigirle las etiquetas de una plantilla que no le corresponde.
+  if (!candidatas.length) return analizarComprobanteFlexible(textoOCR, montoEsperado, opciones)
 
-  // 2. Con la plantilla más probable que logre extraer sus campos, validar todo
-  let ultimaFalla = null
-  for (const { p } of candidatas) {
-    // Monto anclado a la etiqueta del banco (nunca "el número aparece en alguna parte")
-    let m = texto.match(p.monto)
-    if (!m && p.montoRespaldo) m = texto.match(p.montoRespaldo)
-    if (!m) { ultimaFalla = { p, campo: 'monto' }; continue }
-    const monto = parsearMonto(m[1])
+  // 2. Banco identificado: validar los campos SEGÚN SU plantilla. Si varios
+  //    bancos puntúan (léxico compartido, ej. "Banco Ganadero" como destino),
+  //    gana el primero cuyos campos validan completos; si ninguno, se reportan
+  //    los fallos del más probable. NUNCA se cae a la genérica: el cliente
+  //    debe ver exactamente qué falló en SU banco.
+  const evaluadas = candidatas.map(({ p }) => ({ p, ev: evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) }))
+  const esValida = ({ ev }) => Object.values(ev.campos).every(v => v !== false)
+  const { p, ev } = evaluadas.find(esValida) || evaluadas[0]
 
-    // Número de transacción del campo propio del banco: obligatorio
-    const t = texto.match(p.transaccion)
-    if (!t) { ultimaFalla = { p, campo: 'transaccion' }; continue }
-    // Algunos bancos (Unión) llegan con el N° partido por el OCR ("...2566 03799"):
-    // se quitan los espacios internos para tener un único identificador comparable.
-    const transaccionId = t[1].replace(/\s+/g, '').toUpperCase()
-    // Un N° de transacción REAL siempre tiene DÍGITOS. Si lo capturado no tiene
-    // (ej. "CONSUMO" tomado de "Referencia: Consumo Euphoria", o una palabra suelta),
-    // NO es un número de transacción válido: se prueba la siguiente plantilla.
-    if (!/\d/.test(transaccionId)) { ultimaFalla = { p, campo: 'transaccion' }; continue }
-
-    // Fecha del comprobante: debe ser de hoy
-    let fechaOk = false
-    let fechaLeida = null
-    if (p.fecha) {
-      const f = texto.match(p.fecha)
-      if (f) {
-        fechaLeida = `${f[1]}/${f[2]}/${f[3]}`
-        fechaOk = esFechaHoy(f[1], f[2], f[3], hoy)
-      } else if (p.fechaTextoRespaldo) {
-        // Genérica: algunos bancos escriben "07 de julio 2026"
-        const ft = texto.match(p.fechaTextoRespaldo)
-        if (ft) {
-          const mesNum = MESES_ABREV[ft[2].toLowerCase().slice(0, 3)]
-          fechaLeida = `${String(ft[1]).padStart(2, '0')}/${String(mesNum).padStart(2, '0')}/${ft[3]}`
-          fechaOk = mesNum ? esFechaHoy(ft[1], mesNum, ft[3], hoy) : false
-        }
-      }
-    } else if (p.fechaTexto) {
-      const f = texto.match(p.fechaTexto)
-      if (f) {
-        const mesNum = MESES_ABREV[f[2].toLowerCase().slice(0, 3)]
-        fechaLeida = `${String(f[1]).padStart(2, '0')}/${String(mesNum).padStart(2, '0')}/${f[3]}`
-        fechaOk = mesNum ? esFechaHoy(f[1], mesNum, f[3], hoy) : false
-      }
-    }
-    if (!fechaLeida) {
-      return {
-        ok: false, banco: p.banco,
-        error: `No pudimos leer la fecha del comprobante ${p.nombre}. Sube la captura completa donde se vea la fecha de la operación.`,
-      }
-    }
-    if (!fechaOk) {
-      const dd = String(hoy.getDate()).padStart(2, '0')
-      const mm = String(hoy.getMonth() + 1).padStart(2, '0')
-      return {
-        ok: false, banco: p.banco,
-        error: `El comprobante ${p.nombre} tiene fecha ${fechaLeida}: solo se aceptan transferencias de hoy (${dd}/${mm}/${hoy.getFullYear()}).`,
-      }
-    }
-
-    // Monto: comparación numérica exacta (tolerancia de centavo por el OCR)
-    if (monto === null || Math.abs(monto - montoEsperado) > 0.01) {
-      return {
-        ok: false, banco: p.banco,
-        error: monto === null
-          ? `No pudimos leer el monto del comprobante ${p.nombre}. Sube una captura nítida.`
-          : `El monto del comprobante ${p.nombre} es Bs. ${monto.toFixed(2)} y no coincide con el monto ingresado (Bs. ${montoEsperado.toFixed(2)}).`,
-      }
-    }
-
-    // Destino: el pago debe ser A NUESTRA CUENTA. Pasa si el motivo/referencia
-    // dice "Consumo Euphoria" o si el destinatario es el titular configurado.
-    // Sin esto cualquiera subía el comprobante de un pago a otra cuenta.
-    const motivoTexto = p.motivo ? (texto.match(p.motivo)?.[1] || '') : ''
-    const destinatarioTexto = p.destinatario ? (texto.match(p.destinatario)?.[1] || '') : ''
-    const motivoEuphoria = contieneConsumoEuphoria(motivoTexto)
-    const destinatarioOk = titulares.some(t => coincideTitular(destinatarioTexto, t))
-
-    if (!motivoEuphoria && !destinatarioOk) {
-      const conMotivo = !!p.motivo
-      return {
-        ok: false, banco: p.banco, destinatario: destinatarioTexto || undefined,
-        error: destinatarioTexto
-          ? `El comprobante ${p.nombre} muestra un pago a "${destinatarioTexto.trim()}", que no es la cuenta de Euphoria.${conMotivo ? " Si pagaste a nuestra cuenta, pon 'Consumo Euphoria' en el motivo/glosa de la transferencia." : ''}`
-          : `No pudimos verificar que el pago fue a la cuenta de Euphoria.${conMotivo ? " Pon 'Consumo Euphoria' en el motivo/glosa de la transferencia y sube la captura completa." : ' Sube la captura completa donde se vea el destinatario.'}`,
-      }
-    }
-
-    return {
-      ok: true, banco: p.banco, nombreBanco: p.nombre, monto, transaccionId,
-      destinatario: destinatarioTexto.trim() || undefined,
-      validadoPor: motivoEuphoria ? 'motivo' : 'destinatario',
-    }
+  const resultado = {
+    ok: Object.values(ev.campos).every(v => v !== false),
+    banco: p.banco,
+    nombreBanco: p.nombre,
+    campos: ev.campos,
+    monto: ev.monto ?? undefined,
+    transaccionId: ev.transaccionId || undefined,
+    destinatario: ev.destinatario || undefined,
+    sinMotivo: !p.motivo, // el front etiqueta 'destino' como "Destinatario correcto" en bancos sin motivo (Yape)
   }
-
-  // Ningún candidato pudo extraer sus campos estructurales
-  const p = ultimaFalla?.p
-  return {
-    ok: false,
-    banco: p?.banco,
-    error: p
-      ? `El comprobante parece de ${p.nombre} pero no pudimos leer su ${ultimaFalla.campo === 'monto' ? 'monto' : 'número de transacción'}. Sube la captura original completa, sin recortes.`
-      : 'El comprobante no pudo validarse. Sube la captura original completa y nítida.',
-  }
+  if (resultado.ok) resultado.validadoPor = ev.motivoEuphoria ? 'motivo' : 'destinatario'
+  else resultado.error = describirFallo(p, ev, montoEsperado, hoy)
+  return resultado
 }
 
-// ---- VALIDACIÓN FLEXIBLE (robusta al ruido del OCR de fotos) ----------------
-// No exige la plantilla exacta de un banco. Valida SOLO lo esencial buscándolo en
-// TODO el texto (tolerando que el OCR lea las etiquetas un poco distinto):
-//   1. Referencia "Consumo Euphoria"  (el pago es para Euphoria)
-//   2. Destinatario = titular configurado (Dilan Rafael Arauco Paniagua)
-//   3. El MONTO ingresado aparece junto a "Bs"/"monto"/"suma"
-//   4. Un N° de transacción CON DÍGITOS (la unicidad se valida en la ruta)
-// Basta con (1 ó 2) + 3 + 4. Es lo que se pidió: parsear el contenido y verificar
-// esos campos, sin rechazar por no reconocer la plantilla del banco.
+// ---- VALIDACIÓN GENÉRICA para bancos NO registrados (banco: null) -----------
+// Robusta al ruido del OCR de fotos: no exige la plantilla de ningún banco,
+// valida los campos preestablecidos buscándolos en TODO el texto (tolerando
+// que el OCR lea las etiquetas un poco distinto):
+//   1. Destino: referencia "Consumo Euphoria" O destinatario = titular configurado
+//   2. El MONTO ingresado aparece junto a "Bs"/"monto"/"suma"
+//   3. Un N° de transacción CON DÍGITOS (la unicidad se valida en la ruta)
+// No valida fecha (no conoce el formato del banco): campos.fecha = null y ese
+// paso se omite en el front. Devuelve la MISMA forma que analizarComprobante.
 
 // ¿Aparece el monto esperado, ligado a una etiqueta de importe (no a una cuenta/fecha)?
 function montoAparece(texto, montoEsperado) {
@@ -368,32 +380,36 @@ function analizarComprobanteFlexible(textoOCR, montoEsperado, opciones = {}) {
     .split('|').map(t => t.trim()).filter(Boolean)
   const texto = String(textoOCR || '').replace(/\s+/g, ' ')
 
-  // Cada paso se devuelve para mostrarlo al cliente y auditar dónde falla.
+  // Cada campo se evalúa por separado para mostrarle al cliente qué falló.
   const tieneReferencia = contieneConsumoEuphoria(texto)
   const destinatarioOk = titulares.some(t => coincideTitular(texto, t))
-  const esParaEuphoria = tieneReferencia || destinatarioOk
   const montoOk = montoAparece(texto, montoEsperado)
   const transaccionId = extraerTransaccion(texto)
 
-  const pasos = [
-    { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria', ok: esParaEuphoria },
-    { clave: 'monto', etiqueta: 'Monto correcto', ok: montoOk },
-    { clave: 'transaccion', etiqueta: 'N° de transacción', ok: !!transaccionId },
-  ]
-
-  if (!esParaEuphoria) {
-    return { ok: false, pasos, error: 'El pago no es a la cuenta de Euphoria (no vimos "Consumo Euphoria" ni el titular). Sube la captura completa y nítida.' }
+  const campos = {
+    monto: montoOk,
+    transaccion: !!transaccionId,
+    fecha: null, // la genérica no valida fecha (no conoce el formato del banco)
+    destino: tieneReferencia || destinatarioOk,
   }
-  if (!montoOk) {
-    return { ok: false, pasos, error: `El monto no coincide: no encontramos Bs ${Number(montoEsperado).toFixed(2)} en el comprobante.` }
+  const resultado = {
+    ok: Object.values(campos).every(v => v !== false),
+    banco: null,
+    nombreBanco: 'tu banco',
+    campos,
+    monto: montoOk ? Number(montoEsperado) : undefined,
+    transaccionId: transaccionId || undefined,
+    sinMotivo: false, // la genérica sí acepta motivo/glosa ("Consumo Euphoria")
   }
-  if (!transaccionId) {
-    return { ok: false, pasos, error: 'No pudimos leer el N° de transacción. Toma la foto completa y nítida.' }
+  if (resultado.ok) {
+    resultado.validadoPor = tieneReferencia ? 'referencia' : 'destinatario'
+    return resultado
   }
-  return {
-    ok: true, pasos, banco: 'OTRO', nombreBanco: 'tu banco', monto: Number(montoEsperado),
-    transaccionId, validadoPor: tieneReferencia ? 'referencia' : 'destinatario',
-  }
+  // Mensaje del PRIMER campo fallido, en el mismo orden de los pasos del cliente.
+  if (!montoOk) resultado.error = `El monto no coincide: no encontramos Bs ${Number(montoEsperado).toFixed(2)} en el comprobante.`
+  else if (!transaccionId) resultado.error = 'No pudimos leer el N° de transacción. Toma la foto completa y nítida.'
+  else resultado.error = 'El pago no es a la cuenta de Euphoria (no vimos "Consumo Euphoria" ni el titular). Sube la captura completa y nítida.'
+  return resultado
 }
 
 module.exports = { analizarComprobante, analizarComprobanteFlexible, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }

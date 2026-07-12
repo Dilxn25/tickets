@@ -18,7 +18,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
-const { analizarComprobante, analizarComprobanteFlexible, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
+const { analizarComprobante, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
 
@@ -102,30 +102,33 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
     }
 
-    // 2. Validación en DOS etapas:
-    //    a) ESTRICTA por plantilla: primero IDENTIFICA el banco (BCP, BNB, BISA,
-    //       Unión, Yape, Yasta...) y extrae sus campos de las etiquetas propias del
-    //       banco. Es la vía preferida porque ancla el monto/N° a su etiqueta real.
-    //    b) Si la estricta no reconoce ni valida el comprobante, se usa la FLEXIBLE
-    //       de respaldo: busca en TODO el texto la referencia "Consumo Euphoria"/
-    //       titular, el monto y un N° de transacción con dígitos. Robusta al ruido
-    //       del OCR de fotos.
-    //    En AMBOS casos la respuesta lleva el array 'pasos' con las MISMAS claves que
-    //    el front ya usa: 'pago_euphoria', 'monto', 'transaccion' (+ 'no_repetido' abajo).
+    // 2. Validación POR BANCO: analizarComprobante IDENTIFICA el banco primero
+    //    (BCP, BNB, BISA, Unión, Yape, Yasta...) y valida los campos según la
+    //    plantilla de ESE banco — cada banco imprime campos distintos (Yape no
+    //    tiene motivo/referencia). Solo si ningún banco registrado calza, cae
+    //    internamente a la validación GENÉRICA (banco: null) con los campos
+    //    preestablecidos (destino/monto/N° de transacción, sin fecha).
     const titular = await obtenerTitularDestino()
-    let analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
-    let pasos
-    if (analisis.ok) {
-      // La estricta valida los tres criterios a la vez: si pasó, los tres están OK.
-      pasos = [
-        { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria', ok: true },
-        { clave: 'monto', etiqueta: 'Monto correcto', ok: true },
-        { clave: 'transaccion', etiqueta: 'N° de transacción', ok: true },
-      ]
-    } else {
-      analisis = analizarComprobanteFlexible(cleanedText, montoEsperado, { titular })
-      pasos = [...(analisis.pasos || [])]
+    const analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+
+    // Pasos que ve el cliente, en orden: banco → monto → transacción → fecha →
+    // destino (→ no repetido al final). El paso 'banco' SIEMPRE va en ok:true:
+    // identificar el banco no es un fallo, y la genérica también es válida (solo
+    // cambia la etiqueta). Los campos en null (no aplican al banco) se omiten.
+    const campos = analisis.campos || {}
+    const pasos = [{
+      clave: 'banco',
+      etiqueta: analisis.banco ? `Banco: ${analisis.nombreBanco}` : 'Banco no registrado · validación genérica',
+      ok: true,
+    }]
+    const agregarPaso = (clave, etiqueta) => {
+      if (campos[clave] !== null && campos[clave] !== undefined) pasos.push({ clave, etiqueta, ok: !!campos[clave] })
     }
+    agregarPaso('monto', 'Monto correcto')
+    agregarPaso('transaccion', 'N° de transacción')
+    agregarPaso('fecha', 'Comprobante de hoy')
+    // En bancos sin motivo (Yape) el destino solo puede ser el destinatario.
+    agregarPaso('destino', analisis.sinMotivo ? 'Destinatario correcto' : 'Pago a Euphoria')
     console.log(`[OCR] banco:${analisis.banco || '-'} ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
 
     if (!analisis.ok) {
@@ -151,12 +154,13 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos })
     }
 
-    // Validación exitosa
+    // Validación exitosa (banco 'OTRO' en la marca cuando validó la genérica)
     res.json({
       valido: true,
       banco: analisis.banco,
+      monto: analisis.monto,
       mensaje: 'Comprobante verificado correctamente',
-      url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco}`,
+      url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco || 'OTRO'}`,
       transaccionId,
       pasos,
     })
@@ -231,18 +235,29 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     // precio contra el base y este %, así el cliente nunca puede descontar de más.
     const cfgDescCombo = await prisma.configuracion.findUnique({ where: { clave: 'ia_descuento_combos' } })
     const descComboPct = Math.min(Math.max(parseFloat(cfgDescCombo?.valor) || 10, 0), 90)
-    const nItemsCombo = productosJSON.filter(i => i.combo === true).reduce((a, i) => a + (Number(i.cantidad) || 0), 0)
+    // Los ítems de cortesía NO cuentan para armar el paquete de combo (son gratis)
+    const nItemsCombo = productosJSON.filter(i => i.combo === true && i.cortesia !== true).reduce((a, i) => a + (Number(i.cantidad) || 0), 0)
     const comboHabilitado = nItemsCombo >= 2
 
     // Calcular total verificando precios reales en BD para mayor seguridad
     let total_calculado = 0
     const detalles_crear = []
+    // CORTESÍA (premio 'prod:ID' que da el admin): el cliente canjea 1 unidad
+    // GRATIS de ese producto. Aquí solo se detecta y se cobra a Bs 0; la
+    // validación del premio y su marcado como 'usado' van en el flujo Billetera.
+    let cortesiaItem = null
 
     for (const item of productosJSON) {
       const prodBD = await prisma.producto.findUnique({ where: { id_producto: item.id_producto } })
       if (!prodBD) return res.status(400).json({ error: `Producto ID ${item.id_producto} no encontrado` })
 
-      const cantidad = Number(item.cantidad)
+      const esCortesia = item.cortesia === true
+      if (esCortesia && cortesiaItem) {
+        return res.status(400).json({ error: 'Solo puedes canjear una cortesía por pedido' })
+      }
+
+      // La cortesía siempre es 1 sola unidad (si piden más, se fuerza a 1)
+      const cantidad = esCortesia ? 1 : Number(item.cantidad)
       if (!Number.isInteger(cantidad) || cantidad <= 0) {
         return res.status(400).json({ error: `Cantidad inválida para ${prodBD.nombre_producto}` })
       }
@@ -260,7 +275,12 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       // paquete real (>=2), se aplica el % de descuento del config sobre el PRECIO
       // BASE de la BD. El precio se recalcula en el servidor (no se confía en el
       // cliente): así el descuento es exactamente el configurado, ni más ni menos.
-      if (item.combo === true && comboHabilitado) {
+      if (esCortesia) {
+        // CORTESÍA: cuesta Bs 0 y punto. No recibe combo ni precio dinámico
+        // (se ignora item.precio_unitario). El stock SÍ se descuenta normal.
+        precioUnitario = 0
+        cortesiaItem = { id_producto: item.id_producto, nombre: prodBD.nombre_producto }
+      } else if (item.combo === true && comboHabilitado) {
         const base = Number(prodBD.precio_base)
         // Se HONRA el precio con descuento MOSTRADO al cliente (incluye el redondeo
         // "atractivo" de la IA), siempre que sea un descuento de combo razonable:
@@ -291,6 +311,12 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         precio_cobrado: precioUnitario,
         subtotal: sub
       })
+    }
+
+    // La cortesía solo se canjea en el flujo Billetera (el cliente desde su app):
+    // con otro método de pago no hay premio contra el cual validarla.
+    if (cortesiaItem && metodo_pago !== 'Billetera') {
+      return res.status(400).json({ error: 'La cortesía solo se canjea pagando con tu billetera' })
     }
 
     // Origen del pedido según quién lo crea
@@ -397,12 +423,14 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       // es una cortesía de producto y NO aplica descuento aquí.
       let premioDescuento = 0
       let premioActual = null
+      let premioPerfilDueno = null
       if (pagaElDueno) {
         const duenoPremio = await prisma.usuario.findUnique({
           where: { id_usuario: billetera.id_usuario },
           select: { premio_perfil: true },
         })
-        const pp = duenoPremio?.premio_perfil
+        premioPerfilDueno = duenoPremio?.premio_perfil || null
+        const pp = premioPerfilDueno
         if (pp === 'pendiente') {
           const { pct, max } = await leerConfigPremio()
           premioDescuento = Math.min(Math.round(total_calculado * (pct / 100) * 100) / 100, max)
@@ -413,6 +441,14 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           premioActual = pp
         }
       }
+
+      // CORTESÍA: solo la canjea el DUEÑO de la billetera y solo si su premio es
+      // exactamente 'prod:ID' de ese producto. Se corta ANTES de descontar nada
+      // (el ítem ya viene a Bs 0 en los detalles, sería regalarlo sin premio).
+      if (cortesiaItem && (!pagaElDueno || premioPerfilDueno !== `prod:${cortesiaItem.id_producto}`)) {
+        return res.status(400).json({ error: 'No tienes esa cortesía disponible' })
+      }
+
       const total_cobrar = Math.max(0, Math.round((total_calculado - premioDescuento) * 100) / 100)
 
       // Chequeo rápido (mejora la experiencia); la garantía real es el descuento condicional atómico de abajo.
@@ -434,6 +470,17 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
             })
             // Otro cobro simultáneo ya lo usó: se cobra el total sin descuento
             if (premio.count === 0) throw new Error('PREMIO_YA_USADO')
+          }
+
+          // CORTESÍA: se marca 'usado' de forma condicional y atómica (mismo
+          // patrón que el descuento). Si otro cobro simultáneo ya la canjeó,
+          // count === 0 y se aborta todo: no se regala el producto dos veces.
+          if (cortesiaItem) {
+            const canje = await tx.usuario.updateMany({
+              where: { id_usuario: billetera.id_usuario, premio_perfil: `prod:${cortesiaItem.id_producto}` },
+              data: { premio_perfil: 'usado' },
+            })
+            if (canje.count === 0) throw new Error('PREMIO_YA_USADO')
           }
 
           const descuento = await tx.billetera.updateMany({
@@ -522,6 +569,8 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           premio_aplicado: premioDescuento,
           total_cobrado: total_cobrar,
         }),
+        // Nombre del producto canjeado gratis (para que el front lo confirme)
+        ...(cortesiaItem && { cortesia_canjeada: cortesiaItem.nombre }),
       })
     }
     
@@ -987,6 +1036,18 @@ function comisionSegunFecha(fechaEvento, comisionPct) {
   const faltanMs = new Date(fechaEvento).getTime() - Date.now()
   return faltanMs > 24 * 3600 * 1000 ? 0 : comisionPct
 }
+// LO REALMENTE PAGADO por una comanda: el monto de su transacción 'Consumo'
+// (la fila creada al cobrar, con premios/descuentos ya aplicados). Es la ÚNICA
+// base correcta del reembolso: los detalles guardan precios plenos y devolver
+// sobre ellos regala dinero (ej. pagó 47 con descuento y se devolvían 55).
+// Respaldo (pedidos viejos o en efectivo, sin transacción): total de detalles.
+async function obtenerPagadoReal(idComanda, totalDetalles) {
+  const t = await prisma.transaccion.findFirst({
+    where: { id_comanda: idComanda, tipo_operacion: 'Consumo' },
+    select: { monto: true },
+  })
+  return t ? Number(t.monto) : totalDetalles
+}
 
 // GET /api/comandas/config-reembolso — el cliente ve la comisión vigente.
 router.get('/config-reembolso', verificarToken, async (req, res) => {
@@ -1029,10 +1090,20 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
       },
     })
     const comisionBase = await obtenerComisionReembolso()
+    // LO REALMENTE PAGADO por comanda (base del reembolso estimado): la
+    // transacción 'Consumo' del cobro ya trae premios/descuentos aplicados.
+    // UNA sola query para todas las comandas (sin N+1) y se mapea por id.
+    const consumos = await prisma.transaccion.findMany({
+      where: { id_comanda: { in: comandas.map(c => c.id_comanda) }, tipo_operacion: 'Consumo' },
+      select: { id_comanda: true, monto: true },
+    })
+    const pagadoPorComanda = new Map(consumos.map(t => [t.id_comanda, Number(t.monto)]))
     let lista = comandas.map(c => {
       const zonaEv = c.entrada?.zona || c.mesa_espacio?.zona || null
       const fechaEvento = zonaEv?.evento?.fecha_hora_inicio || null
       const total = c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal), 0)
+      // Sin transacción (pedidos viejos/efectivo) el respaldo es el total pleno
+      const total_pagado = pagadoPorComanda.has(c.id_comanda) ? pagadoPorComanda.get(c.id_comanda) : total
       const estado = c.estado_despacho
       const entregado = c.estado_entrega === 'entregado' || estado === 'Completada'
       const cerrado = ['Cancelada', 'Reembolsada'].includes(estado)
@@ -1055,11 +1126,13 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
         id_evento: zonaEv?.id_evento || null,
         evento: zonaEv?.evento?.nombre_evento || null,
         total,
+        // Lo que el cliente pagó de verdad (con premio/descuento aplicado)
+        total_pagado,
         entregado,
         puede_reembolso,
         comision_pct: comisionPct,
         sin_comision: comisionPct === 0,
-        reembolso_estimado: puede_reembolso ? calcularReembolso(total, comisionPct) : 0,
+        reembolso_estimado: puede_reembolso ? calcularReembolso(total_pagado, comisionPct) : 0,
         items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad, subtotal: Number(d.subtotal) })),
       }
     })
@@ -1115,10 +1188,13 @@ router.post('/:id/solicitar-reembolso', verificarToken, async (req, res) => {
     if (c.metodo_pago !== 'Billetera') return res.status(400).json({ error: 'Solo se devuelven a la billetera los pedidos pagados con billetera.' })
 
     const total = c.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
+    // Base del reembolso: LO REALMENTE PAGADO (los detalles guardan precios
+    // plenos; si pagó con premio/descuento, devolver el total pleno regala dinero).
+    const pagadoReal = await obtenerPagadoReal(c.id_comanda, total)
     // Regla de 24 h: más de 24 h antes del evento no cobra comisión.
     const fechaEvento = c.entrada?.zona?.evento?.fecha_hora_inicio || c.mesa_espacio?.zona?.evento?.fecha_hora_inicio || null
     const comisionPct = comisionSegunFecha(fechaEvento, await obtenerComisionReembolso())
-    const reembolso = calcularReembolso(total, comisionPct)
+    const reembolso = calcularReembolso(pagadoReal, comisionPct)
 
     await prisma.$transaction(async (tx) => {
       // Reponer stock
@@ -1142,8 +1218,10 @@ router.post('/:id/solicitar-reembolso', verificarToken, async (req, res) => {
     res.json({
       mensaje: 'Devolución procesada',
       total,
+      total_pagado: pagadoReal,
       comision_pct: comisionPct,
-      comision_retenida: total - reembolso,
+      // La comisión se retiene sobre lo pagado, no sobre el total pleno
+      comision_retenida: Math.round((pagadoReal - reembolso) * 100) / 100,
       reembolsado: reembolso,
     })
   } catch (e) {
@@ -1172,6 +1250,9 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
     // Solo se ejecuta al pasar de un estado NO cancelado a Cancelada (evita doble reembolso).
     if (estado === 'Cancelada' && actual.estado_despacho !== 'Cancelada') {
       const total = actual.detalle_comanda.reduce((s, d) => s + Number(d.subtotal || 0), 0)
+      // Se devuelve LO REALMENTE PAGADO (con premio/descuento aplicado), no el
+      // total pleno de los detalles: devolver de más regala dinero del local.
+      const pagadoReal = await obtenerPagadoReal(actual.id_comanda, total)
       let reembolsado = false
       await prisma.$transaction(async (tx) => {
         // 1) Reponer stock de cada producto
@@ -1182,12 +1263,12 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
           })
         }
         // 2) Reembolso a la billetera si el pago fue con Billetera
-        if (actual.metodo_pago === 'Billetera' && actual.id_cliente && total > 0) {
+        if (actual.metodo_pago === 'Billetera' && actual.id_cliente && pagadoReal > 0) {
           const bill = await tx.billetera.findUnique({ where: { id_usuario: actual.id_cliente } })
           if (bill) {
             await tx.billetera.update({
               where: { id_billetera: bill.id_billetera },
-              data: { saldo_actual: { increment: total }, ultima_actualizacion: new Date() },
+              data: { saldo_actual: { increment: pagadoReal }, ultima_actualizacion: new Date() },
             })
             await tx.transaccion.create({
               data: {
@@ -1195,7 +1276,7 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
                 id_comanda: actual.id_comanda,
                 id_responsable: req.usuario.id,
                 tipo_operacion: 'reembolso',
-                monto: total,
+                monto: pagadoReal,
                 fecha_hora: new Date(),
               },
             })

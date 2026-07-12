@@ -1358,6 +1358,9 @@ import Paginacion from '@/componentes/comunes/Paginacion.vue'
 import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+// Logo importado como módulo: Vite lo empaqueta con hash y ruta válida en
+// producción. La ruta /src/ solo existe en el dev-server y daba 404 al desplegar.
+import logoUrl from '@/activos/imagenes/logo-euphoria.png'
 const notif = useNotificaciones()
 
 // Umbral único de stock bajo para reposición, usado tanto en la alerta de
@@ -1681,7 +1684,6 @@ async function exportarPDF() {
 
   // El iframe se renderiza FUERA DE PANTALLA a ancho carta (816px = 8.5in),
   const fechaGen = new Date().toLocaleString();
-  const logoUrl = `${window.location.origin}/src/activos/imagenes/logo-euphoria.png`;
 
   // Rango de fechas cubierto por el reporte (para rotular el encabezado)
   const rangoFechas = (filtroDesde.value || filtroHasta.value)

@@ -526,6 +526,22 @@ a:hover { color: var(--morado-hover); }
 .orbe-deco.morado { background: var(--morado-brillante); }
 .orbe-deco.rosa   { background: var(--rosa-acento); }
 
+/* ---- Spinner de carga (utilidad única, reemplaza las copias por vista) ---- */
+/* Antes cada vista redefinía .spinner + @keyframes girar con medidas distintas
+   (34/38/44px). Ahora: <span class="spinner"></span>, y el tamaño se ajusta con
+   --spinner-tam si hace falta (por defecto 38px). */
+.spinner {
+  width: var(--spinner-tam, 38px);
+  height: var(--spinner-tam, 38px);
+  border: 3px solid rgba(168, 85, 247, 0.25);
+  border-top-color: var(--morado-brillante);
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+.spinner-sm { --spinner-tam: 22px; border-width: 2px; }
+.spinner-lg { --spinner-tam: 54px; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
 /* Respeto por usuarios que prefieren menos movimiento */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

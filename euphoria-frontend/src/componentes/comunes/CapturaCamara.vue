@@ -26,9 +26,6 @@
       </button>
     </div>
     <input ref="inputFile" type="file" accept="image/*" class="captura-input-oculto" @change="alSubir" />
-    <!-- Cámara NATIVA del teléfono (foto nítida con autoenfoque real). 'capture'
-         hace que el sistema abra la cámara del celular en vez del video del navegador. -->
-    <input ref="inputCamara" type="file" accept="image/*" capture="environment" class="captura-input-oculto" @change="alSubir" />
     <!-- Lector oculto para decodificar QR desde una foto (modo qr) -->
     <div :id="readerFileId" class="captura-input-oculto"></div>
 
@@ -79,6 +76,10 @@ const props = defineProps({
   deshabilitado: { type: Boolean, default: false },
   textoGuia: { type: String, default: 'Coloca el documento dentro del marco' },
   nombreArchivo: { type: String, default: 'captura.jpg' },
+  // Chequeo previo opcional: si devuelve false, no se abre la cámara ni la galería.
+  // La vista dueña muestra su propio error (ej. "Ingresa un monto válido primero")
+  // ANTES de que el usuario gaste una foto.
+  validarAntes: { type: Function, default: null },
 })
 const emit = defineEmits(['archivo', 'codigo'])
 const notif = useNotificaciones()
@@ -91,7 +92,6 @@ const readerFileId = `cam-file-${uid}`
 const etiquetaCamara = props.modo === 'qr' ? 'Escanear QR' : 'Tomar foto'
 
 const inputFile = ref(null)
-const inputCamara = ref(null)
 const videoCamara = ref(null)
 const camaraAbierta = ref(false)
 const qrDetectado = ref(false)
@@ -100,6 +100,7 @@ let scannerQr = null
 
 function abrirArchivo() {
   if (props.deshabilitado) return
+  if (props.validarAntes && props.validarAntes() === false) return
   inputFile.value?.click()
 }
 
@@ -116,14 +117,13 @@ async function alSubir(e) {
 
 async function abrirCamara() {
   if (props.deshabilitado || camaraAbierta.value) return
-  // FOTO (comprobante): usar la CÁMARA NATIVA del teléfono. Da una foto nítida
-  // con autoenfoque real y alta resolución (la misma cámara del celular), a
-  // diferencia del video de getUserMedia que salía borroso. Es la solución al
-  // comprobante borroso. El QR sí necesita el escaneo en vivo (getUserMedia).
-  if (props.modo === 'foto') {
-    inputCamara.value?.click()
-    return
-  }
+  if (props.validarAntes && props.validarAntes() === false) return
+  // Cámara in-app con marco guía para AMBOS modos:
+  //  - foto: getUserMedia HD (2560x1440) + autoenfoque continuo + ImageCapture.
+  //    takePhoto (foto real nítida, no un frame de video). Es la captura que se
+  //    validó en la billetera; da el recuadro "enfoca aquí" que la cámara nativa
+  //    del sistema no ofrecía.
+  //  - qr: escaneo en vivo con html5-qrcode.
   if (!navigator.mediaDevices?.getUserMedia) {
     notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
     abrirArchivo()
@@ -132,7 +132,8 @@ async function abrirCamara() {
   qrDetectado.value = false
   camaraAbierta.value = true
   await nextTick()
-  iniciarEscaneoQr()
+  if (props.modo === 'foto') await iniciarVideo()
+  else iniciarEscaneoQr()
 }
 
 async function iniciarVideo() {

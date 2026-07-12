@@ -39,9 +39,13 @@
       <p>{{ mensajeExito }}</p>
       <p v-if="premioAplicado > 0" class="premio-exito">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-        Premio aplicado: −Bs. {{ premioAplicado.toFixed(2) }} · Pagaste Bs. {{ totalCobrado.toFixed(2) }}
+        Premio aplicado: −Bs. {{ formatoMoneda(premioAplicado) }} · Pagaste Bs. {{ formatoMoneda(totalCobrado) }}
       </p>
-      <p class="saldo-exito">Saldo restante: <b>Bs. {{ saldo.toFixed(2) }}</b></p>
+      <p v-if="cortesiaCanjeada" class="premio-exito">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+        Cortesía incluida: {{ cortesiaCanjeada }} · Bs. {{ formatoMoneda(0) }}
+      </p>
+      <p class="saldo-exito">Saldo restante: <b>Bs. {{ formatoMoneda(saldo) }}</b></p>
       <RouterLink to="/cliente/catalogo" class="cta-isla brillo-hover">
         <span>Seguir pidiendo</span>
         <span class="cta-icono">
@@ -94,7 +98,7 @@
           <span class="lista-conteo">{{ totalItems }} {{ totalItems === 1 ? 'unidad' : 'unidades' }}</span>
         </div>
         <TransitionGroup name="item" tag="div" class="lista-items escalonar">
-          <article v-for="item in items" :key="item.id" class="item-carrito">
+          <article v-for="item in items" :key="item.linea ?? item.id" class="item-carrito" :class="{ 'item-cortesia': item.cortesia }">
             <!-- Combos: su composición en fotos solapadas, igual que en su tarjeta -->
             <div
               class="item-media"
@@ -108,10 +112,19 @@
 
             <div class="info-item">
               <h3>{{ item.nombre }}</h3>
-              <p class="precio-unitario">Bs. {{ item.precio.toFixed(2) }} <span class="por-unidad">c/u</span></p>
+              <!-- Línea cortesía: regalo canjeado a Bs 0 (el precio normal va tachado) -->
+              <p v-if="item.cortesia" class="precio-unitario">
+                <span class="badge-cortesia">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="11" height="11" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                  Cortesía
+                </span>
+                <s v-if="precioCatalogoCortesia(item) > 0" class="precio-tachado">Bs. {{ formatoMoneda(precioCatalogoCortesia(item)) }}</s>
+                <b class="precio-cero">Bs. {{ formatoMoneda(0) }}</b>
+              </p>
+              <p v-else class="precio-unitario">Bs. {{ formatoMoneda(item.precio) }} <span class="por-unidad">c/u</span></p>
             </div>
 
-            <button class="btn-eliminar" @click="eliminarItem(item.id)" title="Quitar del pedido" aria-label="Quitar del pedido" type="button">
+            <button class="btn-eliminar" @click="eliminarItem(item)" title="Quitar del pedido" aria-label="Quitar del pedido" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -121,17 +134,22 @@
             </button>
 
             <div class="item-acciones">
-              <div class="cantidad-control">
-                <button class="btn-cantidad" @click="disminuirCantidad(item.id)" type="button" aria-label="Disminuir">−</button>
+              <!-- Cortesía: cantidad fija 1, sin stepper (si la quita puede volver a agregarla) -->
+              <span v-if="item.cortesia" class="cortesia-fija">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                1 unidad de regalo
+              </span>
+              <div v-else class="cantidad-control">
+                <button class="btn-cantidad" @click="disminuirCantidad(item)" type="button" aria-label="Disminuir">−</button>
                 <Transition name="pop" mode="out-in">
                   <span :key="item.cantidad" class="cantidad">{{ item.cantidad }}</span>
                 </Transition>
-                <button class="btn-cantidad" @click="aumentarCantidad(item.id)" type="button" aria-label="Aumentar">+</button>
+                <button class="btn-cantidad" @click="aumentarCantidad(item)" type="button" aria-label="Aumentar">+</button>
               </div>
 
               <div class="subtotal">
                 <p class="label">Subtotal</p>
-                <p class="valor">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</p>
+                <p class="valor" :class="{ 'valor-cortesia': item.cortesia }">Bs. {{ formatoMoneda(item.precio * item.cantidad) }}</p>
               </div>
             </div>
           </article>
@@ -179,7 +197,7 @@
                 </svg>
                 Subtotal
               </span>
-              <span>Bs. {{ subtotal.toFixed(2) }}</span>
+              <span>Bs. {{ formatoMoneda(subtotal) }}</span>
             </div>
             <div class="fila-mini fila-saldo">
               <span class="fila-etiqueta">
@@ -190,7 +208,7 @@
                 </svg>
                 Tu saldo
               </span>
-              <span :class="saldoInsuficiente ? 'saldo-rojo' : 'saldo-verde'">{{ cargandoSaldo ? '…' : 'Bs. ' + saldo.toFixed(2) }}</span>
+              <span :class="saldoInsuficiente ? 'saldo-rojo' : 'saldo-verde'">{{ cargandoSaldo ? '…' : 'Bs. ' + formatoMoneda(saldo) }}</span>
             </div>
 
             <!-- Premio de fidelización (perfil / descuento / cortesía) -->
@@ -200,13 +218,24 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
                   {{ premioEtiqueta }}
                 </span>
-                <span v-if="descuentoPremio > 0" class="premio-monto">−Bs. {{ descuentoPremio.toFixed(2) }}</span>
+                <span v-if="descuentoPremio > 0" class="premio-monto">−Bs. {{ formatoMoneda(descuentoPremio) }}</span>
               </div>
               <div v-if="descuentoPremio > 0" class="premio-fila premio-total">
                 <span>Pagarías</span>
-                <span>Bs. {{ totalConPremio.toFixed(2) }}</span>
+                <span>Bs. {{ formatoMoneda(totalConPremio) }}</span>
               </div>
-              <p class="premio-nota">{{ descuentoPremio > 0 ? 'El descuento se aplica al pagar con tu billetera.' : 'El local te dará esta cortesía al atenderte.' }}</p>
+              <!-- Canje de cortesía: el cliente elige recibirla en ESTE pedido (línea a Bs 0) -->
+              <button
+                v-if="premioTipo?.tipo === 'prod' && premioProducto && !cortesiaEnCarrito"
+                type="button" class="btn-canje" @click="agregarCortesia">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                Agregar a este pedido
+              </button>
+              <span v-else-if="premioTipo?.tipo === 'prod' && cortesiaEnCarrito" class="canje-hecho">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="14" height="14" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                En tu pedido · Bs. {{ formatoMoneda(0) }}
+              </span>
+              <p class="premio-nota">{{ premioNota }}</p>
             </div>
 
             <div class="total-mini">
@@ -217,7 +246,7 @@
                 Total a pagar
               </span>
               <span class="total-cifra">
-                <span class="total-moneda">Bs.</span>{{ totalAnimado.toFixed(2) }}
+                <span class="total-moneda">Bs.</span>{{ formatoMoneda(totalAnimado) }}
               </span>
             </div>
 
@@ -272,7 +301,7 @@
             </div>
 
             <div v-else-if="!cargandoSaldo && saldoInsuficiente" class="alerta alerta-error">
-              Te falta Bs. {{ (total - saldo).toFixed(2) }} para completar el pago.
+              Te falta Bs. {{ formatoMoneda(total - saldo) }} para completar el pago.
               <RouterLink to="/cliente/billetera" class="cta-recargar">Recargar billetera</RouterLink>
             </div>
 
@@ -290,7 +319,7 @@
       <div v-if="pidiendoPin" class="modal-pin-overlay">
         <div class="modal-pin-caja">
           <h3>Confirma con tu PIN</h3>
-          <p>Tu billetera está protegida. Ingresa tu PIN de 4 dígitos para autorizar el pago de Bs. {{ total.toFixed(2) }}.</p>
+          <p>Tu billetera está protegida. Ingresa tu PIN de 4 dígitos para autorizar el pago de Bs. {{ formatoMoneda(total) }}.</p>
           <input
             v-model="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
             class="input-pin-carrito" placeholder="••••" @input="pin = pin.replace(/\D/g, '').slice(0, 4)" @keyup.enter="pin.length === 4 && irAPagar()" />
@@ -317,6 +346,7 @@ import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { storeToRefs } from 'pinia'
+import { formatoMoneda } from '@/utilidades/formato.js'
 
 const router = useRouter()
 const tienda = useTiendaAutenticacion()
@@ -361,6 +391,11 @@ const premioMax = ref(50)
 // Nombre real del producto de cortesía (prod:ID). Se resuelve del catálogo vigente
 // porque el backend solo entrega el ID en usuario.premio_perfil (no el nombre).
 const premioProdNombre = ref('')
+// Producto completo del catálogo para poder CANJEAR la cortesía: al agregarlo
+// el store crea una línea aparte a Bs 0 con cantidad fija 1.
+const premioProducto = ref(null)
+// Nombre de la cortesía ya canjeada en el pago (para el panel de éxito)
+const cortesiaCanjeada = ref('')
 // Premio activo del cliente: 'pendiente' (perfil), 'desc:N' (descuento fidelización)
 // o 'prod:ID' (cortesía de producto, no descuenta dinero). El backend aplica lo mismo.
 const premioTipo = computed(() => {
@@ -387,6 +422,36 @@ const descuentoPremio = computed(() => {
   return 0 // cortesía de producto: se entrega aparte, no descuenta el total
 })
 const totalConPremio = computed(() => Math.max(total.value - descuentoPremio.value, 0))
+// ¿La cortesía del premio ya está en el carrito como línea de regalo?
+const cortesiaEnCarrito = computed(() => {
+  const pt = premioTipo.value
+  if (pt?.tipo !== 'prod') return false
+  return items.value.some(i => i.cortesia && i.id === pt.id)
+})
+// Nota del bloque de premio según el tipo y si la cortesía ya va en el pedido
+const premioNota = computed(() => {
+  if (descuentoPremio.value > 0) return 'El descuento se aplica al pagar con tu billetera.'
+  if (cortesiaEnCarrito.value) return 'Tu cortesía va en este pedido a Bs. 0.00.'
+  if (premioProducto.value) return 'Agrégala a este pedido o pídela al local al atenderte.'
+  return 'El local te dará esta cortesía al atenderte.'
+})
+
+// Canje de cortesía: el cliente decide recibirla en ESTE pedido. El store crea
+// una línea separada a Bs 0 (cantidad fija 1) y el backend valida y cobra 0.
+function agregarCortesia() {
+  const prod = premioProducto.value
+  if (!prod || cortesiaEnCarrito.value) return
+  const r = tiendaCarrito.agregarItem({ ...prod, cortesia: true })
+  if (r && r.ok === false) errorPago.value = r.mensaje || 'No se pudo agregar la cortesía.'
+  else errorPago.value = ''
+}
+
+// Precio de catálogo de la línea cortesía (para mostrarlo tachado junto al Bs 0).
+// Se lee del campo que guarde el store o, en su defecto, del producto del premio.
+function precioCatalogoCortesia(item) {
+  const n = Number(item.precio_normal ?? item.precio_original ?? item.precio_base ?? premioProducto.value?.precio_base ?? 0)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
 
 // Subtotal y total se manejan en el store directamente
 
@@ -440,19 +505,21 @@ const getRazonDeshabilitado = computed(() => {
   return ''
 })
 
-function aumentarCantidad(id) {
-  const r = tiendaCarrito.aumentarCantidad(id)
+// El store identifica cada línea por su clave: linea ?? id (las cortesías van
+// en una línea aparte del mismo producto, por eso no basta el id).
+function aumentarCantidad(item) {
+  const r = tiendaCarrito.aumentarCantidad(item.linea ?? item.id)
   if (r && r.ok === false) errorPago.value = r.mensaje || 'No hay más stock disponible.'
   else errorPago.value = ''
 }
 
-function disminuirCantidad(id) {
-  tiendaCarrito.disminuirCantidad(id)
+function disminuirCantidad(item) {
+  tiendaCarrito.disminuirCantidad(item.linea ?? item.id)
   errorPago.value = ''
 }
 
-function eliminarItem(id) {
-  tiendaCarrito.eliminarItem(id)
+function eliminarItem(item) {
+  tiendaCarrito.eliminarItem(item.linea ?? item.id)
 }
 
 // PIN de la billetera (si está protegida, el backend lo exige también aquí)
@@ -487,7 +554,9 @@ async function irAPagar() {
       // El precio con descuento se muestra al cliente; el flag 'combo' hace que el
       // backend aplique (y valide) el descuento del config para el combo/pack.
       precio_unitario: i.precio,
-      combo: !!i.combo
+      combo: !!i.combo,
+      // Canje de cortesía: el backend valida el premio 'prod:ID' y cobra Bs 0.
+      ...(i.cortesia && { cortesia: true })
     }))
     formData.append('productos', JSON.stringify(productosParaBackend))
     formData.append('modo_entrega', modoEntrega.value)
@@ -505,6 +574,17 @@ async function irAPagar() {
       premioAplicado.value = Number(resPago.premio_aplicado)
       totalCobrado.value = Number(resPago.total_cobrado ?? 0)
       // El premio ya se usó: lo reflejamos en el store local para ocultar la fila del resumen
+      if (tienda.usuario) {
+        tienda.usuario.premio_perfil = 'usado'
+        localStorage.setItem('euphoria_usuario', JSON.stringify(tienda.usuario))
+      }
+    }
+
+    // Cortesía canjeada en este pedido: el backend ya consumió el premio, lo
+    // reflejamos localmente para no volver a ofrecerla (y avisamos en el éxito).
+    const lineaCortesia = items.value.find(i => i.cortesia)
+    if (lineaCortesia) {
+      cortesiaCanjeada.value = lineaCortesia.nombre || premioProdNombre.value || 'tu regalo'
       if (tienda.usuario) {
         tienda.usuario.premio_perfil = 'usado'
         localStorage.setItem('euphoria_usuario', JSON.stringify(tienda.usuario))
@@ -567,17 +647,25 @@ async function sincronizarPrecios() {
     const cambio = tiendaCarrito.actualizarPrecios(lista)
     if (cambio) errorPago.value = 'Algunos precios del catálogo cambiaron: tu carrito ya está actualizado.'
     // Si el premio activo es una cortesía de producto, resolvemos su nombre real
-    // del catálogo (el backend solo entrega el ID en usuario.premio_perfil).
+    // del catálogo (el backend solo entrega el ID en usuario.premio_perfil) y
+    // guardamos el producto completo para poder canjearla (agregarla a Bs 0).
     const pt = premioTipo.value
     if (pt?.tipo === 'prod' && pt.id) {
       const prod = lista.find(x => x.id_producto === pt.id)
       if (prod?.nombre_producto) premioProdNombre.value = prod.nombre_producto
+      if (prod) premioProducto.value = prod
     }
   } catch { /* si falla, el backend igual cobra el precio vigente */ }
 }
 
 let socketCarrito = null
 onMounted(async () => {
+  // Saneo: si quedó una línea cortesía de una sesión anterior pero el premio ya
+  // no está disponible (o cambió de producto), se retira; el backend la rechazaría.
+  const pt = premioTipo.value
+  for (const i of [...items.value]) {
+    if (i.cortesia && (pt?.tipo !== 'prod' || i.id !== pt.id)) tiendaCarrito.eliminarItem(i.linea ?? i.id)
+  }
   await cargarSaldo()
   // Config del premio (estimado del resumen): no bloquea el saldo ni el pago
   cargarConfigPremio()
@@ -1171,6 +1259,54 @@ onBeforeUnmount(() => { if (socketCarrito) socketCarrito.disconnect() })
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- Línea cortesía: regalo canjeado a Bs 0 (filo ámbar + badge) ---- */
+.item-cortesia { border-color: rgba(253, 230, 138, 0.32); }
+.item-cortesia::before {
+  background: linear-gradient(180deg, #F59E0B, #EC4899);
+  opacity: 1;
+}
+.badge-cortesia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2px 8px;
+  margin-right: 0.4rem;
+  border-radius: var(--radio-full);
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(253, 230, 138, 0.4);
+  color: #FDE68A;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.badge-cortesia svg { flex-shrink: 0; }
+.precio-tachado {
+  text-decoration: line-through;
+  color: var(--texto-desactivado);
+  margin-right: 0.35rem;
+}
+.precio-cero { color: #FDE68A; font-weight: 800; }
+/* Cantidad fija de la cortesía (sin stepper): chip informativo en su lugar */
+.cortesia-fija {
+  grid-area: control;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: max-content;
+  padding: 9px 14px;
+  border-radius: var(--radio-full);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(253, 230, 138, 0.3);
+  color: #FDE68A;
+  font-weight: 700;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.cortesia-fija svg { flex-shrink: 0; }
+.subtotal .valor.valor-cortesia { color: #FDE68A; }
+
 .btn-eliminar {
   grid-area: eliminar;
   background: transparent;
@@ -1386,6 +1522,53 @@ onBeforeUnmount(() => { if (socketCarrito) socketCarrito.disconnect() })
   line-height: 1.4;
   color: var(--texto-desactivado);
 }
+
+/* Canje de cortesía: botón compacto dentro del bloque de premio */
+.btn-canje {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radio-full);
+  border: 1px solid rgba(253, 230, 138, 0.45);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(236, 72, 153, 0.14));
+  color: #FDE68A;
+  font-weight: 700;
+  font-size: 0.84rem;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 6px 16px rgba(245, 158, 11, 0.16);
+  transition: transform 0.2s var(--ease-cine), box-shadow 0.2s ease, background 0.2s ease;
+}
+.btn-canje svg { flex-shrink: 0; }
+.btn-canje:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.34), rgba(236, 72, 153, 0.2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 22px rgba(245, 158, 11, 0.26);
+}
+.btn-canje:active { transform: scale(0.98); }
+.btn-canje:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--fondo-tarjeta), 0 0 0 4px rgba(253, 230, 138, 0.5);
+}
+/* Cortesía ya agregada: confirmación compacta en el mismo bloque */
+.canje-hecho {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: var(--radio-full);
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #86EFAC;
+  font-weight: 700;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.canje-hecho svg { flex-shrink: 0; }
 
 /* Premio aplicado en el estado de éxito */
 .carrito-vacio .premio-exito {

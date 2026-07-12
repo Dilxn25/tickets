@@ -129,34 +129,9 @@
             </p>
           </div>
 
-          <!-- Escáner QR para Nueva Billetera -->
-          <div v-if="!camaraAbrirActiva" style="margin-bottom:0.5rem;">
-            <button type="button" class="btn-accion-secundario" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:0.65rem;" @click="iniciarCamaraAbrir">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              Escanear QR del cliente
-            </button>
-          </div>
-          <div v-show="camaraAbrirActiva" style="margin-bottom:1rem;">
-            <div class="qr-scanner-wrapper">
-              <div id="reader-abrir"></div>
-              <div class="qr-overlay">
-                <div class="qr-overlay-top"></div>
-                <div class="qr-overlay-middle">
-                  <div class="qr-overlay-side"></div>
-                  <div class="qr-viewfinder" :class="{ 'qr-detected': qrAbrirDetectado }">
-                    <span class="corner tl"></span><span class="corner tr"></span>
-                    <span class="corner bl"></span><span class="corner br"></span>
-                    <div class="scan-line" v-if="!qrAbrirDetectado"></div>
-                  </div>
-                  <div class="qr-overlay-side"></div>
-                </div>
-                <div class="qr-overlay-bottom">
-                  <p class="qr-hint" v-if="!qrAbrirDetectado">Apunta al QR del cliente para pre-llenar el CI</p>
-                  <p class="qr-hint qr-hint-ok" v-else>&#x2713; Código detectado</p>
-                </div>
-              </div>
-            </div>
-            <button type="button" class="btn-accion-principal" style="width:100%;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);box-shadow:none;" @click="detenerCamaraAbrir">Detener Cámara</button>
+          <!-- Escáner QR para Nueva Billetera (captura unificada) -->
+          <div style="margin-bottom:1rem;">
+            <CapturaCamara modo="qr" texto-guia="Apunta al QR del cliente para pre-llenar el CI" @codigo="onQrAbrir" />
           </div>
 
 
@@ -288,30 +263,8 @@
 
             <div class="qr-separador"><span>Luego sube el comprobante</span></div>
 
-            <div class="botones-comprobante">
-              <label class="btn-cargar-archivo">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                Subir archivo
-                <input type="file" accept="image/*" @change="cargarArchivoRecarga" class="input-oculto" />
-              </label>
-              <button type="button" class="btn-cargar-archivo" @click="iniciarCamaraComprobanteAbrir">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                Abrir cámara
-              </button>
-            </div>
-            <div v-show="camaraComprobanteAbrirActiva" style="margin-top:0.75rem;">
-              <div class="qr-scanner-wrapper"><div id="reader-comprobante-abrir"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteAbrirDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteAbrirDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteAbrirDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Detectado</p></div></div></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--color-exito);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('abrir')">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                  Tomar Foto
-                </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteAbrir">Cancelar</button>
-              </div>
-            </div>
+            <!-- Captura unificada del comprobante (foto HD o galería) -->
+            <CapturaCamara modo="foto" :deshabilitado="validandoOCR" texto-guia="Coloca el comprobante dentro del marco" nombre-archivo="comprobante.jpg" @archivo="onFotoComprobante" />
 
 
             <div v-if="archivoRecarga" class="archivo-preview anim-fade">
@@ -501,30 +454,8 @@
 
             <div class="qr-separador"><span>Luego sube el comprobante</span></div>
 
-            <div class="botones-comprobante">
-              <label class="btn-cargar-archivo">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                Subir archivo
-                <input type="file" accept="image/*" @change="cargarArchivoRecarga" class="input-oculto" />
-              </label>
-              <button type="button" class="btn-cargar-archivo" @click="iniciarCamaraComprobanteRecargar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                Abrir cámara
-              </button>
-            </div>
-            <div v-show="camaraComprobanteRecargarActiva" style="margin-top:0.75rem;">
-              <div class="qr-scanner-wrapper"><div id="reader-comprobante-recargar"></div><div class="qr-overlay"><div class="qr-overlay-top"></div><div class="qr-overlay-middle"><div class="qr-overlay-side"></div><div class="qr-viewfinder-vertical" :class="{ 'qr-detected': qrComprobanteRecargarDetectado }"><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span><div class="scan-line" v-if="!qrComprobanteRecargarDetectado"></div></div><div class="qr-overlay-side"></div></div><div class="qr-overlay-bottom"><p class="qr-hint" v-if="!qrComprobanteRecargarDetectado">Por favor enfoca el comprobante dentro del rectángulo</p><p class="qr-hint qr-hint-ok" v-else>&#x2713; Comprobante detectado</p></div></div></div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--color-exito);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:6px;" @click="tomarFoto('recargar')">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                  Tomar Foto
-                </button>
-                <button type="button" style="flex: 1; padding:0.6rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--color-error);border-radius:var(--radio-md);cursor:pointer;font-size:0.85rem;" @click="detenerCamaraComprobanteRecargar">Cancelar</button>
-              </div>
-            </div>
+            <!-- Captura unificada del comprobante (foto HD o galería) -->
+            <CapturaCamara modo="foto" :deshabilitado="validandoOCR" texto-guia="Coloca el comprobante dentro del marco" nombre-archivo="comprobante.jpg" @archivo="onFotoComprobante" />
 
             <div v-if="archivoRecarga" class="archivo-preview anim-fade">
               <img :src="previewArchivoRecarga" class="preview-img" />
@@ -890,10 +821,10 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 const notif = useNotificaciones()
 import QRCode from 'qrcode'
-import { Html5Qrcode } from 'html5-qrcode'
 import { io } from 'socket.io-client'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
+import { formatoFecha } from '@/utilidades/formato.js'
 
 const tabActiva = ref('recargar')
 const modalExito = ref(null)
@@ -995,9 +926,8 @@ function verificarIdentificador() {
   }, 400)
 }
 
-// ---- Recargar (autocompletado) ----
-const busquedaCliente = ref('')
-const resultadosBusqueda = ref([])
+// ---- Recargar ----
+// (la búsqueda con autocompletado vive en el componente BuscadorCliente)
 const clienteSeleccionado = ref(null)
 const montoRecarga = ref('')
 const metodoPago = ref('efectivo')
@@ -1030,34 +960,6 @@ function esTrxQr(trx) {
   return !!trx.comprobante_url
 }
 
-function formatoFecha(fechaIso) {
-  if (!fechaIso) return ''
-  const d = new Date(fechaIso)
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-}
-
-// Autocompletado
-let timerBusqueda = null
-async function buscarCliente() {
-  clearTimeout(timerBusqueda)
-  if (!busquedaCliente.value || busquedaCliente.value.length < 1) {
-    resultadosBusqueda.value = []
-    return
-  }
-  timerBusqueda = setTimeout(async () => {
-    try {
-      const res = await clienteHttp.get(`/cajero/buscar-cliente?q=${busquedaCliente.value}`)
-      resultadosBusqueda.value = Array.isArray(res) ? res : []
-    } catch { resultadosBusqueda.value = [] }
-  }, 250)
-}
-
-function seleccionarCliente(u) {
-  clienteSeleccionado.value = u
-  busquedaCliente.value = `${u.nombres} - ${u.telefono || u.ci_carnet}`
-  resultadosBusqueda.value = []
-}
-
 // Escáner de Recargar: identifica al cliente a partir de CUALQUIER QR suyo
 // (token de pago JWT o identificador). El backend lo resuelve.
 async function onQrRecarga(texto) {
@@ -1070,104 +972,10 @@ async function onQrRecarga(texto) {
   }
 }
 
-// Archivo comprobante cajero
-// === SCANNER QR COMPROBANTE — Nueva Billetera ===
-let scannerComprobanteAbrirInst = null
-const camaraComprobanteAbrirActiva = ref(false)
-const qrComprobanteAbrirDetectado = ref(false)
-
-function iniciarCamaraComprobanteAbrir() {
-  qrComprobanteAbrirDetectado.value = false
-  camaraComprobanteAbrirActiva.value = true
-  setTimeout(() => {
-    scannerComprobanteAbrirInst = crearScanner(
-      'reader-comprobante-abrir',
-      (decodedText) => {
-        qrComprobanteAbrirDetectado.value = true
-        setTimeout(() => {
-          detenerCamaraComprobanteAbrir()
-          // Extraer número de transacción del QR y guardarlo
-          transaccionIdOCR.value = decodedText
-          ocrExitoso.value = true
-        }, 400)
-      },
-      () => { camaraComprobanteAbrirActiva.value = false; errorRecargar.value = 'No se pudo acceder a la cámara. Verifica los permisos.' }
-    )
-  }, 100)
-}
-function detenerCamaraComprobanteAbrir() {
-  qrComprobanteAbrirDetectado.value = false
-  if (scannerComprobanteAbrirInst && scannerComprobanteAbrirInst.isScanning) {
-    scannerComprobanteAbrirInst.stop().then(() => scannerComprobanteAbrirInst.clear()).catch(() => {})
-  }
-  camaraComprobanteAbrirActiva.value = false
-}
-
-// === SCANNER QR COMPROBANTE — Recargar ===
-let scannerComprobanteRecargarInst = null
-const camaraComprobanteRecargarActiva = ref(false)
-const qrComprobanteRecargarDetectado = ref(false)
-
-function iniciarCamaraComprobanteRecargar() {
-  qrComprobanteRecargarDetectado.value = false
-  camaraComprobanteRecargarActiva.value = true
-  setTimeout(() => {
-    scannerComprobanteRecargarInst = crearScanner(
-      'reader-comprobante-recargar',
-      (decodedText) => {
-        qrComprobanteRecargarDetectado.value = true
-        setTimeout(() => {
-          detenerCamaraComprobanteRecargar()
-          transaccionIdOCR.value = decodedText
-          ocrExitoso.value = true
-        }, 400)
-      },
-      () => { camaraComprobanteRecargarActiva.value = false; errorRecargar.value = 'No se pudo acceder a la cámara. Verifica los permisos.' }
-    )
-  }, 100)
-}
-function detenerCamaraComprobanteRecargar() {
-  qrComprobanteRecargarDetectado.value = false
-  if (scannerComprobanteRecargarInst && scannerComprobanteRecargarInst.isScanning) {
-    scannerComprobanteRecargarInst.stop().then(() => scannerComprobanteRecargarInst.clear()).catch(() => {})
-  }
-  camaraComprobanteRecargarActiva.value = false
-}
-
-// === TOMAR FOTO MANUAL DEL COMPROBANTE ===
-function tomarFoto(tipo) {
-  const containerId = tipo === 'abrir' ? 'reader-comprobante-abrir' : 'reader-comprobante-recargar'
-  const container = document.getElementById(containerId)
-  if (!container) return
-  const video = container.querySelector('video')
-  if (!video) {
-    errorRecargar.value = 'No se encontró la fuente de video.'
-    return
-  }
-
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-  canvas.toBlob((blob) => {
-    if (!blob) return
-    const file = new File([blob], 'comprobante_captura.jpg', { type: 'image/jpeg' })
-    
-    // Detener la cámara correspondiente
-    if (tipo === 'abrir') detenerCamaraComprobanteAbrir()
-    else detenerCamaraComprobanteRecargar()
-
-    // Cargar el archivo como si se hubiera subido manualmente y pasarlo al OCR
-    archivoRecarga.value = file
-    previewArchivoRecarga.value = URL.createObjectURL(file)
-    validarOCRCajero(file)
-  }, 'image/jpeg', 0.9)
-}
-
-function cargarArchivoRecarga(event) {
-  const file = event.target.files?.[0]
+// Comprobante cajero — la captura (foto HD o galería) está unificada en
+// CapturaCamara. Recibe el File emitido, muestra la previsualización y lo
+// valida por OCR (misma lógica que antes al subir/tomar la foto).
+function onFotoComprobante(file) {
   if (!file) return
   archivoRecarga.value = file
   previewArchivoRecarga.value = URL.createObjectURL(file)
@@ -1232,140 +1040,13 @@ const errorConsulta = ref('')
 const cargandoConsulta = ref(false)
 const qrConsultaBase64 = ref(null)
 
-// === HELPER: función genérica para arrancar un scanner ===
-function crearScanner(readerId, onDetect, onError) {
-  const inst = new Html5Qrcode(readerId)
-  // Intentar primero cámara trasera (environment)
-  inst.start(
-    { facingMode: 'environment' },
-    { fps: 10 },
-    onDetect,
-    () => { /* ignorar errores de frame */ }
-  ).catch((err) => {
-    // Fallback: si falla (muy común en PC/Laptops), intentar cámara frontal o cualquiera disponible
-    inst.start(
-      { facingMode: 'user' },
-      { fps: 10 },
-      onDetect,
-      () => { /* ignorar errores de frame */ }
-    ).catch(onError)
-  })
-  return inst
-}
-
-// === ESCÁNER QR CAJERO (Sección Consultar) ===
-let scannerCajeroInstancia = null
-const camaraCajeroActiva = ref(false)
-const qrCajeroDetectado = ref(false)
-
-function iniciarCamaraCajero() {
-  qrCajeroDetectado.value = false
-  camaraCajeroActiva.value = true
-  setTimeout(() => {
-    scannerCajeroInstancia = crearScanner(
-      'reader-cajero',
-      async (decodedText) => {
-        if (!esQrClienteValido(decodedText)) return;
-        qrCajeroDetectado.value = true
-        setTimeout(async () => {
-          detenerCamaraCajero()
-          busquedaConsulta.value = decodedText
-          try {
-            const res = await clienteHttp.get(`/cajero/consultar-billetera/${decodedText}`)
-            resultadoConsulta.value = res
-            clienteConsultaSeleccionado.value = { nombres: res.nombres, apellidos: res.apellidos, ci_carnet: decodedText, telefono: decodedText }
-            busquedaConsulta.value = `${res.nombres} ${res.apellidos}`
-            qrConsultaBase64.value = await QRCode.toDataURL(res.token_qr || res.qr_publico, {
-              width: 250, margin: 1, color: { dark: '#10002b', light: '#ffffff' }
-            })
-          } catch (e) { errorConsulta.value = 'No se encontró ninguna billetera con ese QR.' }
-        }, 400)
-      },
-      () => { errorConsulta.value = 'No se pudo acceder a la cámara. Verifica permisos o si está en uso.'; camaraCajeroActiva.value = false }
-    )
-  }, 100)
-}
-
-function detenerCamaraCajero() {
-  qrCajeroDetectado.value = false
-  if (scannerCajeroInstancia && scannerCajeroInstancia.isScanning) {
-    scannerCajeroInstancia.stop().then(() => scannerCajeroInstancia.clear()).catch(() => {})
-  }
-  camaraCajeroActiva.value = false
-}
-
-// === ESCÁNER QR (Sección Recargar — identificar cliente) ===
-let scannerRecargaInstancia = null
-const camaraRecargaActiva = ref(false)
-const qrRecargaDetectado = ref(false)
-
-function iniciarCamaraRecarga() {
-  qrRecargaDetectado.value = false
-  camaraRecargaActiva.value = true
-  setTimeout(() => {
-    scannerRecargaInstancia = crearScanner(
-      'reader-recarga',
-      async (decodedText) => {
-        if (!esQrClienteValido(decodedText)) return;
-        qrRecargaDetectado.value = true
-        setTimeout(async () => {
-          detenerCamaraRecarga()
-          try {
-            const res = await clienteHttp.get(`/cajero/buscar-cliente?q=${decodedText}`)
-            const lista = Array.isArray(res) ? res : []
-            if (lista.length > 0) {
-              seleccionarCliente(lista[0])
-            } else {
-              busquedaCliente.value = decodedText
-            }
-          } catch { busquedaCliente.value = decodedText }
-        }, 400)
-      },
-      () => { camaraRecargaActiva.value = false; errorRecargar.value = 'No se pudo acceder a la cámara. Verifica permisos o si está en uso.' }
-    )
-  }, 100)
-}
-
-function detenerCamaraRecarga() {
-  qrRecargaDetectado.value = false
-  if (scannerRecargaInstancia && scannerRecargaInstancia.isScanning) {
-    scannerRecargaInstancia.stop().then(() => scannerRecargaInstancia.clear()).catch(() => {})
-  }
-  camaraRecargaActiva.value = false
-}
-
-// === ESCÁNER QR (Sección Nueva Billetera — pre-llenar CI) ===
-let scannerAbrirInstancia = null
-const camaraAbrirActiva = ref(false)
-const qrAbrirDetectado = ref(false)
-
-function iniciarCamaraAbrir() {
-  qrAbrirDetectado.value = false
-  camaraAbrirActiva.value = true
-  setTimeout(() => {
-    scannerAbrirInstancia = crearScanner(
-      'reader-abrir',
-      (decodedText) => {
-        if (!esQrClienteValido(decodedText)) return;
-        qrAbrirDetectado.value = true
-        setTimeout(() => {
-          detenerCamaraAbrir()
-          // Pre-llenar el campo de CI con lo que devuelva el QR
-          nuevoId.value = decodedText
-          verificarIdentificador()
-        }, 400)
-      },
-      () => { camaraAbrirActiva.value = false; errorIdExiste.value = 'No se pudo acceder a la cámara. Verifica permisos.' }
-    )
-  }, 100)
-}
-
-function detenerCamaraAbrir() {
-  qrAbrirDetectado.value = false
-  if (scannerAbrirInstancia && scannerAbrirInstancia.isScanning) {
-    scannerAbrirInstancia.stop().then(() => scannerAbrirInstancia.clear()).catch(() => {})
-  }
-  camaraAbrirActiva.value = false
+// Escáner de Nueva Billetera: pre-llena el CI/identificador desde el QR del
+// cliente (misma verificación que hacía el escáner legacy). La captura QR en
+// vivo está unificada en CapturaCamara.
+function onQrAbrir(texto) {
+  if (!esQrClienteValido(texto)) return
+  nuevoId.value = texto
+  verificarIdentificador()
 }
 
 const busquedaConsulta = ref('')
@@ -1541,7 +1222,6 @@ async function recargarCliente() {
       })
     }
     clienteSeleccionado.value = null
-    busquedaCliente.value = ''
     montoRecarga.value = ''
     efectivoRecibido.value = ''
     ocrExitoso.value = null
@@ -2129,35 +1809,6 @@ onMounted(() => {
 .vuelto-ok { background: rgba(34,197,94,0.12); color: var(--color-exito); }
 .vuelto-error { background: rgba(239,68,68,0.12); color: var(--color-error); }
 
-/* === QR SCANNER OVERLAY === */
-.qr-scanner-wrapper { position: relative; width: 100%; border-radius: var(--radio-lg); overflow: hidden; background: #000; border: 1px solid var(--borde-activo); }
-.qr-scanner-wrapper #reader-cajero { width: 100%; height: 260px; }
-.qr-scanner-wrapper #reader-cajero__dashboard_section_csr,
-.qr-scanner-wrapper #reader-cajero__status_span { display: none !important; }
-.qr-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; }
-.qr-overlay-top, .qr-overlay-bottom { flex: 1; background: rgba(0,0,0,0.55); }
-.qr-overlay-middle { display: flex; flex-direction: row; }
-.qr-overlay-side { flex: 1; background: rgba(0,0,0,0.55); }
-.qr-overlay-bottom { display: flex; align-items: flex-start; justify-content: center; padding-top: 8px; }
-.qr-viewfinder { width: 200px; height: 200px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(34,197,94,0.5); }
-.qr-viewfinder-vertical { width: 180px; height: 260px; position: relative; transition: box-shadow 0.3s ease; }
-.qr-viewfinder-vertical.qr-detected { box-shadow: 0 0 0 3px var(--color-exito) inset, 0 0 20px rgba(34,197,94,0.5); }
-.corner { position: absolute; width: 20px; height: 20px; border-color: #fff; border-style: solid; transition: border-color 0.3s ease; }
-.qr-viewfinder.qr-detected .corner, .qr-viewfinder-vertical.qr-detected .corner { border-color: var(--color-exito); }
-.corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-.corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
-.corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
-.corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.scan-line { position: absolute; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--morado-brillante), var(--rosa-acento), var(--morado-brillante), transparent); box-shadow: 0 0 8px rgba(168,85,247,0.8); animation: scan-move 1.8s ease-in-out infinite; }
-@keyframes scan-move { 0% { top: 10px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: calc(100% - 10px); opacity: 0; } }
-.qr-hint { color: rgba(255,255,255,0.75); font-size: 0.75rem; text-align: center; margin: 0; padding: 0 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-.qr-hint-ok { color: var(--color-exito); font-weight: 700; font-size: 0.82rem; }
-.btn-accion-secundario { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.35); color: var(--morado-hover); border-radius: var(--radio-md); cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease); }
-.btn-accion-secundario:hover { background: rgba(168,85,247,0.22); border-color: var(--borde-activo); transform: translateY(-2px); }
-.btn-accion-secundario:active { transform: translateY(0) scale(0.98); }
-.btn-accion-secundario:focus-visible { outline: none; border-color: var(--morado-brillante); box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.35)); }
-
 /* Flujo QR */
 .flujo-qr {
   border: 1px solid var(--borde-sutil);
@@ -2310,47 +1961,6 @@ onMounted(() => {
   margin: 0;
 }
 
-
-.botones-comprobante {
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-}
-
-.btn-cargar-archivo {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(168,85,247,0.06);
-  border: 1px solid var(--borde-sutil);
-  border-radius: var(--radio-md);
-  padding: 0.8rem 1.2rem;
-  color: var(--texto-secundario);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--trans-normal, 0.2s) var(--ease-suave, ease);
-  flex: 1;
-  justify-content: center;
-}
-
-.btn-cargar-archivo:hover {
-  border-color: var(--borde-activo);
-  color: var(--texto-principal);
-  background: rgba(168,85,247,0.12);
-  transform: translateY(-2px);
-}
-
-.btn-cargar-archivo:active {
-  transform: translateY(0) scale(0.98);
-}
-
-.btn-cargar-archivo:focus-within {
-  border-color: var(--morado-brillante);
-  box-shadow: var(--anillo-foco, 0 0 0 2px rgba(168,85,247,0.3));
-}
-
-.input-oculto { display: none; }
 
 .archivo-preview {
   position: relative;
@@ -3065,16 +2675,6 @@ onMounted(() => {
     font-size: 1rem;
   }
 
-  /* Botones subir archivo en columna */
-  .botones-comprobante {
-    flex-direction: column;
-  }
-
-  .btn-cargar-archivo {
-    justify-content: center;
-    padding: 0.9rem 1rem;
-  }
-
   /* Pendientes */
   .header-pendientes {
     flex-direction: column;
@@ -3125,7 +2725,6 @@ onMounted(() => {
 /* Respeta la preferencia de movimiento reducido */
 @media (prefers-reduced-motion: reduce) {
   .anim-fade,
-  .scan-line,
   .spin {
     animation: none !important;
   }
@@ -3133,8 +2732,6 @@ onMounted(() => {
   .btn-metodo,
   .btn-ubicacion,
   .btn-accion-principal,
-  .btn-accion-secundario,
-  .btn-cargar-archivo,
   .item-pendiente,
   .resultado-item {
     transition: none;
@@ -3143,8 +2740,6 @@ onMounted(() => {
   .btn-metodo:hover,
   .btn-ubicacion:hover,
   .btn-accion-principal:hover:not(:disabled),
-  .btn-accion-secundario:hover,
-  .btn-cargar-archivo:hover,
   .item-pendiente:hover {
     transform: none;
   }

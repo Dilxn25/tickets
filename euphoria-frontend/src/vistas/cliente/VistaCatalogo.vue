@@ -278,7 +278,23 @@
                 <span v-if="detalleProducto.estado_promocion" class="precio-tachado">Bs.{{ detalleProducto.precio_base }}</span>
                 <span class="precio-final">Bs.{{ detalleProducto.estado_promocion ? detalleProducto.precio_promocion : detalleProducto.precio_base }}</span>
               </div>
-              <button class="btn-entendido detalle-agregar" :disabled="cargandoDetalle" @click="agregarAlCarrito(detalleProducto)">Agregar</button>
+              <!-- Feedback DENTRO del modal: al agregar, el botón se convierte en el
+                   mismo stepper (+/-) de la tarjeta. Así el usuario ve la confirmación
+                   sin que el mini-carrito aparezca superpuesto sobre el modal. -->
+              <Transition name="accion" mode="out-in">
+                <div v-if="cantidadEnCarrito(detalleProducto.id_producto) > 0" key="stepper" class="stepper stepper-detalle" @click.stop>
+                  <button class="btn-step" :aria-label="cantidadEnCarrito(detalleProducto.id_producto) === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click.stop="quitarUno(detalleProducto.id_producto)">
+                    <svg v-if="cantidadEnCarrito(detalleProducto.id_producto) === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                  <span :key="cantidadEnCarrito(detalleProducto.id_producto)" class="stepper-cant">{{ cantidadEnCarrito(detalleProducto.id_producto) }}</span>
+                  <button class="btn-step mas" aria-label="Agregar uno" @click.stop="aumentarDesdeCarta(detalleProducto)">
+                    <svg v-if="idAgregado === detalleProducto.id_producto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                </div>
+                <button v-else key="agregar" class="btn-entendido detalle-agregar" :disabled="cargandoDetalle" @click="agregarDesdeDetalle(detalleProducto)">Agregar</button>
+              </Transition>
             </div>
           </div>
         </div>
@@ -291,7 +307,7 @@
           <button @click="mostrarMiniCarrito = false" class="btn-ocultar-panel" aria-label="Ocultar el pedido"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
         <TransitionGroup tag="div" name="linea" class="lista-items-panel">
-          <div v-for="item in tiendaCarrito.items" :key="item.id" class="item-panel">
+          <div v-for="item in tiendaCarrito.items" :key="item.linea || item.id" class="item-panel">
             <!-- Combos: miniaturas de su composición solapadas, como en su tarjeta -->
             <div class="mini-thumb" :class="{ 'thumb-combo': (item.imagenes?.length || 0) > 1, 'thumb-3': (item.imagenes?.length || 0) >= 3 }">
               <template v-if="(item.imagenes?.length || 0) > 1">
@@ -303,14 +319,14 @@
             <div class="mini-info">
               <span class="nom-panel">{{ item.nombre }}</span>
               <div class="control-cantidad-mini">
-                <button class="btn-mini-cant" :aria-label="item.cantidad === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click="quitarUno(item.id)">−</button>
+                <button class="btn-mini-cant" :aria-label="item.cantidad === 1 ? 'Quitar del pedido' : 'Quitar uno'" @click="quitarUno(item.linea || item.id)">−</button>
                 <span class="cant-panel">{{ item.cantidad }}</span>
-                <button class="btn-mini-cant" aria-label="Agregar uno" @click="aumentarConAviso(item.id)">+</button>
+                <button class="btn-mini-cant" aria-label="Agregar uno" @click="aumentarConAviso(item.linea || item.id)">+</button>
               </div>
             </div>
             <div class="mini-der">
               <span class="prec-panel">Bs. {{ (item.precio * item.cantidad).toFixed(2) }}</span>
-              <button class="btn-quitar-item" :aria-label="'Quitar ' + item.nombre + ' del pedido'" @click="tiendaCarrito.eliminarItem(item.id)">
+              <button class="btn-quitar-item" :aria-label="'Quitar ' + item.nombre + ' del pedido'" @click="tiendaCarrito.eliminarItem(item.linea || item.id)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
             </div>
@@ -500,23 +516,34 @@ function marcarAgregado(id) {
   timerAgregado = setTimeout(() => { idAgregado.value = null }, 900)
 }
 
-// Cantidad de un producto ya en el pedido (para mostrar el stepper en la tarjeta)
+// Línea del pedido a la que apunta una clave: primero por 'linea' exacta (el
+// mini-carrito pasa item.linea) y, si llega un id suelto (tarjetas), la línea
+// a precio normal de ese producto (las de combo/cortesía van aparte).
+function lineaDeClave(clave) {
+  return tiendaCarrito.items.find(i => i.linea === clave)
+    || tiendaCarrito.items.find(i => i.id === clave && !i.combo && !i.cortesia)
+    || tiendaCarrito.items.find(i => i.id === clave)
+}
+
+// Cantidad de un producto ya en el pedido (para mostrar el stepper en la tarjeta).
+// Solo cuenta la línea a precio normal: las líneas de combo/cortesía tienen su
+// propio precio y se manejan desde el mini-carrito, no desde la tarjeta.
 function cantidadEnCarrito(idProducto) {
-  const item = tiendaCarrito.items.find(i => i.id === idProducto)
+  const item = tiendaCarrito.items.find(i => i.id === idProducto && !i.combo && !i.cortesia)
   return item ? item.cantidad : 0
 }
 
 // −1: si queda en cero, se elimina el item del pedido
-function quitarUno(idItem) {
-  const item = tiendaCarrito.items.find(i => i.id === idItem)
+function quitarUno(clave) {
+  const item = lineaDeClave(clave)
   if (!item) return
-  if (item.cantidad <= 1) tiendaCarrito.eliminarItem(idItem)
-  else tiendaCarrito.disminuirCantidad(idItem)
+  if (item.cantidad <= 1) tiendaCarrito.eliminarItem(item.linea || item.id)
+  else tiendaCarrito.disminuirCantidad(item.linea || item.id)
 }
 
 // +1 desde el mini-carrito: si topa el stock, avisa en vez de fallar en silencio
-function aumentarConAviso(idItem) {
-  const r = tiendaCarrito.aumentarCantidad(idItem)
+function aumentarConAviso(clave) {
+  const r = tiendaCarrito.aumentarCantidad(clave)
   if (r && r.ok === false) notif.advertencia(r.mensaje || 'No hay más stock disponible.')
 }
 
@@ -524,7 +551,7 @@ function aumentarConAviso(idItem) {
 function aumentarDesdeCarta(producto) {
   // Si la línea del pedido quedó sin foto o sin composición (combos agregados
   // antes de este cambio), la completamos con los datos del catálogo
-  const linea = tiendaCarrito.items.find(i => i.id === producto.id_producto)
+  const linea = tiendaCarrito.items.find(i => i.id === producto.id_producto && !i.combo && !i.cortesia)
   if (linea && (!linea.imagen || !(linea.imagenes && linea.imagenes.length))) {
     const conImg = conImagenParaCarrito(producto)
     if (!linea.imagen && conImg.url_imagen) linea.imagen = conImg.url_imagen
@@ -604,6 +631,15 @@ async function agregarAlCarrito(producto) {
   }
   marcarAgregado(productoActual.id_producto)
   mostrarMiniCarrito.value = true
+}
+
+// "Agregar" desde el modal-detalle. Si el cliente NO está en un evento, cerramos
+// el modal primero para que la alerta ("no estás en ningún evento") quede sola y
+// totalmente visible. Si sí puede pedir, no cerramos: el propio modal muestra el
+// stepper (+/-) como confirmación, sin que el mini-carrito se superponga.
+async function agregarDesdeDetalle(producto) {
+  if (!eventoActivoId.value) cerrarDetalle()
+  await agregarAlCarrito(producto)
 }
 </script>
 
@@ -1150,10 +1186,11 @@ async function agregarAlCarrito(producto) {
   .sk-img, .sk-linea, .sk-precio, .sk-boton { animation: none; }
 }
 
-/* Modal Alerta Custom */
+/* Modal Alerta Custom — es una alerta, así que va por ENCIMA de todo (--z-toast),
+   incluido el modal-detalle: antes quedaba oculta detrás de él. */
 .modal-alerta {
   position: fixed; inset: 0; background: rgba(8, 4, 20, 0.82);
-  z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  z-index: var(--z-toast); display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .modal-contenido {
   background: var(--gradiente-sutil); border: 1px solid var(--borde-activo);
@@ -1173,10 +1210,10 @@ async function agregarAlCarrito(producto) {
 .btn-entendido:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-entendido:active { transform: scale(0.96); }
 
-/* Modal Detalle Producto */
+/* Modal Detalle Producto — nivel de modal; queda por debajo de la alerta/toast. */
 .modal-detalle {
   position: fixed; inset: 0; background: rgba(8, 4, 20, 0.82);
-  z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
 .detalle-contenido {
   position: relative;
@@ -1230,7 +1267,9 @@ async function agregarAlCarrito(producto) {
   border: 1px solid var(--borde-activo);
   border-radius: var(--radio-lg);
   box-shadow: var(--sombra-modal), var(--sombra-glow);
-  z-index: 100000;
+  /* Flota sobre la carta pero POR DEBAJO del modal-detalle y de la alerta:
+     así ya no aparece superpuesto sobre un modal abierto. */
+  z-index: var(--z-overlay);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1414,7 +1453,8 @@ async function agregarAlCarrito(producto) {
   font-size: 1rem;
   font-variant-numeric: tabular-nums;
   box-shadow: var(--glow-morado);
-  z-index: 100000;
+  /* Coherente con el panel: por debajo del modal-detalle y de la alerta. */
+  z-index: var(--z-overlay);
   cursor: pointer;
   transition: box-shadow var(--trans-normal), transform var(--trans-rapida);
 }

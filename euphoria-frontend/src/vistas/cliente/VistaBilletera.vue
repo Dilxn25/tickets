@@ -518,23 +518,17 @@
           <!-- Subir Comprobante -->
           <div class="info-recarga-paso"><span class="num-paso">3</span> Sube tu comprobante para validarlo</div>
           <div class="campo-comprobante">
-            <div v-if="!archivoComprobante" class="opciones-comprobante">
-              <button type="button" class="btn-opcion-comprobante" :disabled="procesandoOCR" @click="triggerUpload">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <span>Subir imagen</span>
-              </button>
-              <button type="button" class="btn-opcion-comprobante" :disabled="procesandoOCR" @click="abrirCamara">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                  <circle cx="12" cy="13" r="4"></circle>
-                </svg>
-                <span>Tomar foto</span>
-              </button>
-            </div>
+            <!-- Captura unificada: "Tomar foto" (cámara in-app HD) y "Subir foto"
+                 (galería) viven en CapturaCamara; ambas emiten el File a cargarComprobante. -->
+            <CapturaCamara
+              v-if="!archivoComprobante"
+              modo="foto"
+              texto-guia="Encuadra tu comprobante aquí"
+              nombre-archivo="comprobante-foto.jpg"
+              :deshabilitado="procesandoOCR"
+              :validar-antes="validarAntesDeCapturar"
+              @archivo="cargarComprobante"
+            />
 
             <div v-else class="vista-previa-comprobante">
               <div class="info-archivo">
@@ -551,24 +545,6 @@
                 </svg>
               </button>
             </div>
-            <input
-              ref="inputFile"
-              type="file"
-              accept="image/*"
-              @change="cargarComprobante"
-              class="input-file-hidden"
-            />
-            <!-- Cámara NATIVA del teléfono (foto nítida con autoenfoque real).
-                 'capture' abre la cámara del celular, no el video del navegador. -->
-            <input
-              ref="inputCamaraComprobante"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              @change="cargarComprobante"
-              class="input-file-hidden"
-            />
-
             <!-- Validación del comprobante EN TIEMPO REAL: los pasos aparecen desde
                  el inicio (validando…) y se marcan ✓/✗ conforme se resuelven. -->
             <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr con-pasos">
@@ -605,29 +581,6 @@
         </div>
       </div>
     </div>
-    </Teleport>
-
-    <!-- CÁMARA PARA FOTOGRAFIAR EL COMPROBANTE -->
-    <Teleport to="body">
-      <div v-if="camaraAbierta" class="camara-overlay">
-        <video ref="videoCamara" class="camara-video" autoplay playsinline muted></video>
-        <div class="camara-guia">
-          <div class="guia-marco" aria-hidden="true">
-            <span class="guia-esquina ge-tl"></span>
-            <span class="guia-esquina ge-tr"></span>
-            <span class="guia-esquina ge-bl"></span>
-            <span class="guia-esquina ge-br"></span>
-          </div>
-          <p class="guia-texto">Encuadra tu comprobante aquí</p>
-        </div>
-        <div class="camara-controles">
-          <button type="button" class="btn-camara-cancelar" @click="cerrarCamara">Cancelar</button>
-          <button type="button" class="btn-capturar" aria-label="Capturar foto" @click="capturarFoto">
-            <span class="btn-capturar-interno" aria-hidden="true"></span>
-          </button>
-          <span class="camara-espaciador" aria-hidden="true"></span>
-        </div>
-      </div>
     </Teleport>
 
     <!-- QR A PANTALLA COMPLETA (fondo blanco, brillo alto para el escáner) -->
@@ -762,13 +715,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
+import { formatoMoneda, formatoMonto, formatoFecha } from '@/utilidades/formato.js'
 
 const router = useRouter()
 const tienda = useTiendaAutenticacion()
@@ -854,14 +809,7 @@ const procesandoOCR = ref(false)
 const comprobanteProcesado = ref(false)
 const ocrExitoso = ref(false)
 const errorOCR = ref('')
-const inputFile = ref(null)
 const urlComprobanteGenerado = ref('')
-
-function triggerUpload() {
-  if (inputFile.value) {
-    inputFile.value.click()
-  }
-}
 
 // ===== OJITO DEL PIN: revelar con contraseña (con ticket de 5 minutos) =====
 const modalRevelarPin = ref(false)
@@ -1073,7 +1021,6 @@ function limpiarFormularioRecarga() {
   errorOCR.value = ''
   procesandoOCR.value = false
   urlComprobanteGenerado.value = ''
-  if (inputFile.value) inputFile.value.value = ''
 }
 
 // Montos rápidos de recarga
@@ -1178,11 +1125,20 @@ async function guardarPin() {
   }
 }
 
-// Cargar comprobante
-function cargarComprobante(event) {
-  const file = event.target.files?.[0]
-  // Limpiar el input permite volver a tomar/elegir la MISMA foto si hace falta.
-  if (event.target) event.target.value = ''
+// Chequeo previo de CapturaCamara: exigir un monto válido ANTES de abrir la
+// cámara/galería, para que el usuario no gaste una foto y recién ahí se entere.
+function validarAntesDeCapturar() {
+  validarMonto()
+  if (!montoIngresado.value || errorMonto.value) {
+    errorOCR.value = 'Ingresa un monto válido primero'
+    return false
+  }
+  errorOCR.value = ''
+  return true
+}
+
+// Cargar comprobante: recibe el File emitido por CapturaCamara (foto o galería).
+function cargarComprobante(file) {
   if (!file) return
 
   if (!file.type.startsWith('image/')) {
@@ -1202,146 +1158,53 @@ function cargarComprobante(event) {
   procesarOCR(file)
 }
 
-// ===== TOMAR FOTO AL COMPROBANTE (CÁMARA NATIVA del teléfono) =====
-// Antes se usaba getUserMedia (video del navegador, baja resolución) y el
-// comprobante salía BORROSO. Ahora "Tomar foto" abre la cámara NATIVA del
-// celular con capture="environment": foto nítida, autoenfoque real, alta
-// resolución — la misma cámara que saca fotos claras en el teléfono.
-const camaraAbierta = ref(false)
-const videoCamara = ref(null)
-const inputCamaraComprobante = ref(null)
-let streamCamara = null
-
-async function abrirCamara() {
-  if (procesandoOCR.value || camaraAbierta.value) return
-  // Un monto válido primero (mismo camino que subir archivo).
-  validarMonto()
-  if (!montoIngresado.value || errorMonto.value) {
-    errorOCR.value = 'Ingresa un monto válido primero'
-    return
-  }
-  errorOCR.value = ''
-  if (!navigator.mediaDevices?.getUserMedia) {
-    notif.advertencia('No pudimos abrir la cámara en este dispositivo. Elige la foto desde tus archivos.')
-    triggerUpload()
-    return
-  }
-
-  try {
-    // ALTA RESOLUCIÓN + autoenfoque continuo: clave para que el comprobante salga
-    // nítido y el OCR lea el monto. Antes se pedía sin resolución (640x480 borroso).
-    try {
-      streamCamara = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 2560 },
-          height: { ideal: 1440 },
-          advanced: [{ focusMode: 'continuous' }],
-        },
-        audio: false,
-      })
-    } catch {
-      // Si el equipo no soporta esa resolución, se reintenta con lo básico.
-      streamCamara = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-    }
-    // Reforzar el autoenfoque continuo sobre la pista ya activa (algunos navegadores
-    // ignoran 'advanced' en getUserMedia pero sí aceptan applyConstraints).
-    try {
-      const track = streamCamara.getVideoTracks?.()[0]
-      const caps = track?.getCapabilities?.()
-      if (caps?.focusMode?.includes?.('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
-    } catch { /* enfoque por defecto */ }
-
-    camaraAbierta.value = true
-    await nextTick()
-    if (videoCamara.value) videoCamara.value.srcObject = streamCamara
-    else cerrarCamara()
-  } catch (error) {
-    console.error('Error abriendo la cámara:', error)
-    cerrarCamara()
-    notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
-    triggerUpload()
-  }
-}
-
-function cerrarCamara() {
-  if (streamCamara) {
-    streamCamara.getTracks().forEach(t => t.stop())
-    streamCamara = null
-  }
-  camaraAbierta.value = false
-}
-
-async function capturarFoto() {
-  const video = videoCamara.value
-  if (!video || !video.videoWidth) return
-  let blob = null
-
-  // Foto a resolución nativa con enfoque de FOTO (más nítida que un frame de video).
-  try {
-    const track = streamCamara?.getVideoTracks?.()[0]
-    if (track && typeof window.ImageCapture === 'function') {
-      const capturador = new ImageCapture(track)
-      await new Promise(r => setTimeout(r, 350)) // deja asentar el autoenfoque
-      let opciones = {}
-      try {
-        const caps = await capturador.getPhotoCapabilities()
-        if (caps?.imageWidth?.max && caps?.imageHeight?.max) opciones = { imageWidth: caps.imageWidth.max, imageHeight: caps.imageHeight.max }
-      } catch { /* resolución por defecto */ }
-      blob = await capturador.takePhoto(opciones)
-    }
-  } catch { blob = null }
-
-  // Respaldo (iOS/Safari): frame del video a resolución nativa, JPEG alta calidad.
-  if (!blob) {
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-    blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95))
-  }
-
-  cerrarCamara()
-  if (!blob) {
-    notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
-    return
-  }
-  // La foto sigue EXACTAMENTE el mismo camino que un archivo elegido.
-  const file = new File([blob], 'comprobante-foto.jpg', { type: blob.type || 'image/jpeg' })
-  archivoComprobante.value = file
-  procesarOCR(file)
-}
-
 // Limpiar el archivo subido si hubo un error o seleccionó mal
 function limpiarArchivo() {
   archivoComprobante.value = null
   comprobanteProcesado.value = false
   ocrExitoso.value = false
   errorOCR.value = ''
-  if (inputFile.value) {
-    inputFile.value.value = ''
-  }
 }
 
 // Validación PASO A PASO EN VIVO: los pasos se muestran desde el inicio con
 // "validando…" (spinner) y se marcan ✓/✗ conforme el backend los resuelve. Sirve
-// de auditoría: se ve exactamente en qué paso se traba.
-const PASOS_ESPERADOS = [
-  { clave: 'pago_euphoria', etiqueta: 'Pago a Euphoria' },
+// de auditoría: se ve exactamente en qué paso se traba. La lista es DINÁMICA:
+// el backend identifica el banco del comprobante y devuelve los pasos reales
+// (etiquetas y orden según el banco); estos placeholders solo cubren la espera.
+const PASOS_PLACEHOLDER = [
+  { clave: 'banco', etiqueta: 'Identificando banco…' },
   { clave: 'monto', etiqueta: 'Monto correcto' },
   { clave: 'transaccion', etiqueta: 'N° de transacción' },
+  { clave: 'fecha', etiqueta: 'Comprobante de hoy' },
+  { clave: 'destino', etiqueta: 'Pago a Euphoria' },
   { clave: 'no_repetido', etiqueta: 'Comprobante no repetido' },
 ]
 const pasosValidacion = ref([])
 function iniciarPasos() {
-  pasosValidacion.value = PASOS_ESPERADOS.map(p => ({ ...p, ok: null }))
+  pasosValidacion.value = PASOS_PLACEHOLDER.map(p => ({ ...p, ok: null }))
 }
 async function resolverPasos(resPasos) {
-  const mapa = new Map((resPasos || []).map(p => [p.clave, p]))
+  // Sin pasos (error de red/500): se limpia la lista y queda solo el mensaje
+  // de error controlado que muestra procesarOCR.
+  if (!Array.isArray(resPasos) || !resPasos.length) {
+    pasosValidacion.value = []
+    return
+  }
+  // Reconstruir con los pasos REALES del backend (los que no aplican al banco
+  // no vienen y se omiten). Cada paso conserva su etiqueta placeholder mientras
+  // gira el spinner y adopta la del backend al resolverse: así el primero pasa
+  // de "Identificando banco…" a "Banco: Yape" antes de validar los campos.
+  const placeholders = new Map(PASOS_PLACEHOLDER.map(p => [p.clave, p.etiqueta]))
+  pasosValidacion.value = resPasos.map(p => ({
+    clave: p.clave,
+    etiqueta: placeholders.get(p.clave) || p.etiqueta,
+    ok: null,
+  }))
   for (let i = 0; i < pasosValidacion.value.length; i++) {
     await new Promise(r => setTimeout(r, 420))
     const paso = pasosValidacion.value[i]
-    paso.ok = mapa.has(paso.clave) ? !!mapa.get(paso.clave).ok : false
+    paso.etiqueta = resPasos[i].etiqueta || paso.etiqueta
+    paso.ok = !!resPasos[i].ok
     if (!paso.ok) { for (let j = i + 1; j < pasosValidacion.value.length; j++) pasosValidacion.value[j].ok = 'skip'; break }
   }
   await new Promise(r => setTimeout(r, 300))
@@ -1462,28 +1325,6 @@ async function cargarSaldo() {
   }
 }
 
-// Formato moneda
-function formatoMoneda(valor) {
-  return parseFloat(valor).toLocaleString('es-BO', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
-
-// Monto de movimiento con signo (+ recargas / − consumos y reservas)
-function formatoMonto(monto) {
-  const n = Number(monto) || 0
-  return `${n > 0 ? '+' : n < 0 ? '−' : ''} Bs. ${formatoMoneda(Math.abs(n))}`
-}
-
-// Formato fecha (fecha y hora por separado, criterio global del proyecto)
-function formatoFecha(fecha) {
-  if (!fecha) return '-'
-  const d = new Date(fecha)
-  if (isNaN(d.getTime())) return '-'
-  return `${d.toLocaleDateString('es-BO')} · ${d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`
-}
-
 onMounted(async () => {
   // Arrancar siempre con el formulario de recarga en limpio: si la página se
   // recargó o se reabrió el flujo, no debe quedar rastro del comprobante previo.
@@ -1509,7 +1350,6 @@ onUnmounted(() => {
     socketBilletera.disconnect()
   }
   ocultarPinRevelado()
-  cerrarCamara()
 })
 </script>
 
@@ -2846,175 +2686,7 @@ button.mov-fila:focus-visible {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* Dos opciones para el comprobante: subir imagen o tomar foto */
-.opciones-comprobante {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.btn-opcion-comprobante {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-  background: var(--fondo-tarjeta);
-  border: 2px dashed var(--borde-color);
-  border-radius: 10px;
-  padding: 1.4rem 0.75rem;
-  color: var(--texto-secundario);
-  font-family: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease, transform 0.2s ease;
-}
-
-.btn-opcion-comprobante:hover:not(:disabled) {
-  border-color: var(--morado-brillante);
-  background: rgba(168, 85, 247, 0.08);
-  color: var(--texto-principal);
-}
-
-.btn-opcion-comprobante:active:not(:disabled) { transform: scale(0.98); }
-
-.btn-opcion-comprobante:focus-visible {
-  outline: 2px solid var(--borde-activo);
-  outline-offset: 2px;
-}
-
-.btn-opcion-comprobante:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .input-file-hidden { display: none; }
-
-/* ============ CÁMARA DEL COMPROBANTE ============ */
-.camara-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-  background: #000;
-}
-
-.camara-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.camara-guia {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.1rem;
-  padding: 1.5rem 1.5rem 9rem;
-  pointer-events: none;
-}
-
-/* Recuadro guía vertical ~3:4 con esquinas resaltadas */
-.guia-marco {
-  position: relative;
-  width: min(78vw, 42dvh);
-  aspect-ratio: 3 / 4;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 18px;
-  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
-}
-
-.guia-esquina {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border: 4px solid var(--morado-hover);
-}
-
-.ge-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 18px; }
-.ge-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 18px; }
-.ge-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 18px; }
-.ge-br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 18px; }
-
-.guia-texto {
-  margin: 0;
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.92rem;
-  text-align: center;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
-}
-
-.camara-controles {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 1.25rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-}
-
-.btn-camara-cancelar {
-  justify-self: start;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: var(--radio-full);
-  color: #fff;
-  padding: 0.55rem 1.15rem;
-  font-family: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.25s ease;
-}
-
-.btn-camara-cancelar:hover { background: rgba(255, 255, 255, 0.18); }
-
-.btn-camara-cancelar:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  outline-offset: 2px;
-}
-
-.btn-capturar {
-  justify-self: center;
-  width: 74px;
-  height: 74px;
-  border-radius: var(--radio-full);
-  background: rgba(255, 255, 255, 0.22);
-  border: 3px solid #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.btn-capturar-interno {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radio-full);
-  background: #fff;
-  transition: transform 0.15s ease;
-}
-
-.btn-capturar:hover .btn-capturar-interno { transform: scale(0.94); }
-.btn-capturar:active .btn-capturar-interno { transform: scale(0.85); }
-
-.btn-capturar:focus-visible {
-  outline: 3px solid var(--morado-hover);
-  outline-offset: 3px;
-}
-
-.camara-espaciador { justify-self: end; }
 
 .estado-ocr {
   display: flex;
@@ -3049,7 +2721,7 @@ button.mov-fila:focus-visible {
 }
 .ocr-paso.paso-ok .ocr-paso-icono { background: rgba(52, 211, 153, 0.15); color: #34d399; }
 .ocr-paso.paso-fail .ocr-paso-icono { background: rgba(239, 68, 68, 0.15); color: #f87171; }
-.ocr-paso-txt { font-size: 0.9rem; font-weight: 600; }
+.ocr-paso-txt { font-size: 0.9rem; font-weight: 600; min-width: 0; overflow-wrap: break-word; } /* etiquetas largas del banco caben en móvil */
 .ocr-paso.paso-fail .ocr-paso-txt { color: #f87171; }
 
 .spin { animation: spin 2s linear infinite; }

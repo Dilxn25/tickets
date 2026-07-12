@@ -270,6 +270,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
+import { formatoMoneda, formatoMonto, formatoFecha } from '@/utilidades/formato.js'
 
 const router = useRouter()
 const notif = useNotificaciones()
@@ -367,27 +368,8 @@ function cerrarDetalleConsumo() {
   consumoDetalle.value = null
 }
 
-// Formato moneda
-function formatoMoneda(valor) {
-  return parseFloat(valor).toLocaleString('es-BO', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
-
-// Monto de movimiento con signo (+ recargas / − consumos y reservas)
-function formatoMonto(monto) {
-  const n = Number(monto) || 0
-  return `${n > 0 ? '+' : n < 0 ? '−' : ''} Bs. ${formatoMoneda(Math.abs(n))}`
-}
-
-// Formato fecha (fecha y hora, criterio global del proyecto)
-function formatoFecha(fecha) {
-  if (!fecha) return '-'
-  const d = new Date(fecha)
-  if (isNaN(d.getTime())) return '-'
-  return `${d.toLocaleDateString('es-BO')} · ${d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`
-}
+// Moneda, monto con signo y fecha vienen de la utilidad compartida
+// (@/utilidades/formato.js) para que se vean IGUAL en toda la app.
 
 onMounted(cargarMovimientos)
 </script>

@@ -29,17 +29,30 @@
       <button v-for="e in eventosDisponibles" :key="e.id" class="pf-chip" :class="{ activo: eventoFiltro === e.id }" @click="eventoFiltro = e.id">{{ e.nombre }}</button>
     </div>
 
-    <div v-if="cargando" class="ped-estado"><div class="spinner"></div></div>
+    <div v-if="cargando" class="ped-estado"><span class="spinner"></span></div>
 
-    <div v-else-if="!listaVisible.length" class="ped-vacio">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="46" height="46"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-      <p>{{ tab === 'activos' ? 'No tienes pedidos en curso.' : 'Aún no hay pedidos en tu historial.' }}</p>
+    <!-- Error: la carga falló (no ocultarlo tras un "no hay pedidos") -->
+    <div v-else-if="error" class="ped-estado-panel">
+      <div class="ped-halo error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="34" height="34"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <h3 class="ped-estado-titulo">No pudimos cargar tus pedidos</h3>
+      <p class="ped-estado-sub">Revisa tu conexión e inténtalo de nuevo.</p>
+      <button class="ped-reintentar" @click="cargar">Reintentar</button>
+    </div>
+
+    <div v-else-if="!listaVisible.length" class="ped-estado-panel">
+      <div class="ped-halo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="34" height="34"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+      </div>
+      <h3 class="ped-estado-titulo">{{ tab === 'activos' ? 'Sin pedidos en curso' : 'Historial vacío' }}</h3>
+      <p class="ped-estado-sub">{{ tab === 'activos' ? 'Lo que pidas en el evento aparecerá aquí.' : 'Aún no hay pedidos completados.' }}</p>
     </div>
 
     <ul v-else class="ped-lista">
       <li v-for="p in listaVisible" :key="p.id_comanda" class="ped-item" :class="{ listo: esListoBarra(p) }">
         <div class="ped-top">
-          <span class="ped-fecha">{{ formatearFecha(p.fecha) }}</span>
+          <span class="ped-fecha">{{ formatoFecha(p.fecha) }}</span>
           <span class="ped-estado-chip" :class="claseEstado(p)">{{ etiquetaEstado(p) }}</span>
         </div>
         <ul class="ped-items">
@@ -51,7 +64,15 @@
           <span class="ped-badge metodo">{{ p.metodo_pago }}</span>
           <span v-if="p.modo_entrega" class="ped-badge entrega">{{ p.modo_entrega === 'llevar' ? 'A la mesa' : 'En barra' }}</span>
           <span v-if="p.mesa" class="ped-badge">Mesa {{ p.mesa }}</span>
-          <span class="ped-total">Bs. {{ p.total.toFixed(2) }}</span>
+          <!-- Devolución honesta: si pagó menos que el total pleno (premio/descuento),
+               se muestra el total tachado y lo realmente pagado destacado -->
+          <span class="ped-total">
+            <template v-if="pagoDistinto(p)">
+              <s class="pt-pleno">{{ formatoBs(p.total) }}</s>
+              <b class="pt-pagado">Pagaste {{ formatoBs(p.total_pagado) }}</b>
+            </template>
+            <template v-else>{{ formatoBs(p.total) }}</template>
+          </span>
         </div>
         <!-- Definir entrega: pedido activo, sin modo aún, Y el cliente YA ingresó al evento -->
         <div v-if="!p.modo_entrega && esActivo(p) && p.ingresado" class="ped-entrega">
@@ -69,7 +90,7 @@
         <!-- Devolución -->
         <div v-if="p.puede_reembolso" class="ped-reembolso">
           <span class="pr-info">
-            ¿No vas a consumirlo? Te devolvemos <b>Bs {{ p.reembolso_estimado.toFixed(2) }}</b> a tu billetera.
+            ¿No vas a consumirlo? Te devolvemos <b>{{ formatoBs(p.reembolso_estimado) }}</b> a tu billetera.
             <em v-if="p.sin_comision" class="pr-full">Sin comisión (faltan +24 h).</em>
             <em v-else class="pr-com">Dentro de 24 h: comisión {{ p.comision_pct }}%.</em>
           </span>
@@ -88,12 +109,14 @@ import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import { formatoFecha, formatoBs } from '@/utilidades/formato.js'
 
 const auth = useTiendaAutenticacion()
 const notif = useNotificaciones()
 
 const pedidos = ref([])
 const cargando = ref(true)
+const error = ref(false)
 const tab = ref('activos')
 const eventoFiltro = ref(null)
 const comisionPct = ref(10)
@@ -134,10 +157,14 @@ const listaVisible = computed(() => {
 
 function esListoBarra(p) { return p.estado === 'Listo' && p.modo_entrega === 'barra' }
 
-function formatearFecha(f) {
-  try { return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) }
-  catch { return '' }
+// Devolución honesta: el backend informa total_pagado (lo realmente cobrado,
+// con premio/descuentos). Si existe y difiere del total pleno, se muestra lo pagado.
+function pagoDistinto(p) {
+  if (p.total_pagado === null || p.total_pagado === undefined) return false
+  const pagado = Number(p.total_pagado)
+  return Number.isFinite(pagado) && Math.abs(pagado - Number(p.total)) > 0.009
 }
+
 function etiquetaOrigen(o) { return o === 'app' ? 'Desde tu app' : (o === 'caja' ? 'En caja' : 'Con el mesero') }
 function etiquetaEstado(p) {
   if (esListoBarra(p)) return 'Listo para recoger'
@@ -154,6 +181,7 @@ function claseEstado(p) {
 
 async function cargar() {
   cargando.value = true
+  error.value = false
   try {
     const [ped, cfg] = await Promise.all([
       clienteHttp.get('/comandas/mis-pedidos'),
@@ -161,14 +189,16 @@ async function cargar() {
     ])
     pedidos.value = ped
     comisionPct.value = cfg.comision_pct ?? 10
-  } catch { pedidos.value = [] }
+  } catch { error.value = true }
   finally { cargando.value = false }
 }
 
 async function pedirDevolucion(p) {
+  // Se devuelve sobre lo realmente pagado (con premio/descuentos), no el total pleno
+  const base = pagoDistinto(p) ? p.total_pagado : p.total
   const mensaje = p.sin_comision
-    ? `Faltan más de 24 h para el evento: te devolvemos el TOTAL de Bs ${p.total.toFixed(2)} a tu billetera. ¿Confirmas?`
-    : `Estás dentro de las 24 h previas: te devolvemos Bs ${p.reembolso_estimado.toFixed(2)} (el local retiene ${p.comision_pct}% de Bs ${p.total.toFixed(2)}). ¿Confirmas?`
+    ? `Faltan más de 24 h para el evento: te devolvemos el TOTAL de ${formatoBs(base)} a tu billetera. ¿Confirmas?`
+    : `Estás dentro de las 24 h previas: te devolvemos ${formatoBs(p.reembolso_estimado)} (el local retiene ${p.comision_pct}% de ${formatoBs(base)}). ¿Confirmas?`
   const ok = await notif.confirmar({
     titulo: 'Pedir devolución',
     mensaje,
@@ -178,7 +208,7 @@ async function pedirDevolucion(p) {
   reembolsando.value = p.id_comanda
   try {
     const r = await clienteHttp.post(`/comandas/${p.id_comanda}/solicitar-reembolso`, {})
-    notif.exito(`Devolución hecha: Bs ${Number(r.reembolsado).toFixed(2)} a tu billetera`)
+    notif.exito(`Devolución hecha: ${formatoBs(r.reembolsado)} a tu billetera`)
     await cargar()
   } catch (err) {
     const data = err?.response?.data || err
@@ -225,13 +255,46 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .pf-chip.activo { border-color: var(--morado-brillante); color: var(--texto-principal); background: rgba(168,85,247,0.12); }
 
 .ped-estado { display: flex; justify-content: center; padding: 3rem; }
-.spinner { width: 34px; height: 34px; border: 4px solid var(--borde-sutil); border-top-color: var(--morado-brillante); border-radius: 50%; animation: girar 1s linear infinite; }
-@keyframes girar { to { transform: rotate(360deg); } }
-.ped-vacio { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 3rem 1rem; color: var(--texto-secundario); text-align: center; }
-.ped-vacio svg { color: var(--morado-brillante); opacity: 0.6; }
+
+/* Estados vacío / error — panel premium (halo + título + subtítulo) */
+.ped-estado-panel {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: var(--esp-7) var(--esp-5); margin-top: 8px; text-align: center;
+}
+.ped-halo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 80px; height: 80px; margin-bottom: 2px; border-radius: var(--radio-full);
+  color: var(--morado-hover);
+  background: radial-gradient(circle at 50% 38%, rgba(168,85,247,0.26), rgba(168,85,247,0.04));
+  border: 1px solid var(--borde-sutil); box-shadow: inset 0 0 22px rgba(168,85,247,0.14);
+}
+.ped-halo.error {
+  color: #FCA5A5;
+  background: radial-gradient(circle at 50% 38%, rgba(239,68,68,0.22), rgba(239,68,68,0.04));
+  border-color: rgba(239,68,68,0.3); box-shadow: inset 0 0 22px rgba(239,68,68,0.12);
+}
+.ped-estado-titulo { font-family: var(--fuente-titulo); font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); }
+.ped-estado-sub { font-size: 0.88rem; line-height: 1.5; color: var(--texto-secundario); max-width: 34ch; }
+.ped-reintentar {
+  margin-top: 6px; padding: 11px 26px; border-radius: var(--radio-full);
+  border: none; background: var(--gradiente-marca); color: #fff;
+  font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(168,85,247,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ped-reintentar:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(236,72,153,0.4); }
+.ped-reintentar:active { transform: scale(0.98); }
 
 .ped-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.ped-item { background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); padding: 14px 16px; }
+.ped-item {
+  background: var(--gradiente-sutil);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-tarjeta);
+  padding: 14px 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.ped-item:hover { border-color: var(--borde-activo); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(10, 6, 26, 0.5); }
 .ped-item.listo { border-color: rgba(34,197,94,0.5); box-shadow: 0 0 20px rgba(34,197,94,0.15); }
 .ped-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .ped-fecha { font-size: 0.8rem; color: var(--texto-secundario); }
@@ -249,7 +312,10 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-badge.evento { background: rgba(99,102,241,0.16); color: #C7D2FE; border-color: transparent; }
 .ped-badge.origen-app { background: rgba(168,85,247,0.18); color: #E9D5FF; border-color: transparent; }
 .ped-badge.metodo { background: rgba(236,72,153,0.14); color: #F9A8D4; border-color: transparent; }
-.ped-total { margin-left: auto; font-family: var(--fuente-titulo); font-weight: 800; color: var(--rosa-acento); font-variant-numeric: tabular-nums; }
+.ped-total { margin-left: auto; display: inline-flex; align-items: baseline; gap: 7px; font-family: var(--fuente-titulo); font-weight: 800; color: var(--rosa-acento); font-variant-numeric: tabular-nums; }
+/* Pagó menos que el total pleno (premio/descuento): pleno tachado, pagado destacado */
+.pt-pleno { text-decoration: line-through; color: var(--texto-desactivado); font-weight: 600; font-size: 0.78rem; }
+.pt-pagado { color: var(--rosa-acento); white-space: nowrap; }
 
 .ped-entrega { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); }
 .ped-nota-ingreso {

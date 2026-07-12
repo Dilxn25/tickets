@@ -38,7 +38,7 @@
 
           <div class="billetera-saldo">
             <span class="saldo-etiqueta">Saldo disponible</span>
-            <h2 class="saldo-monto" v-if="!cargandoBilletera">Bs. {{ saldoBilletera.toFixed(2) }}</h2>
+            <h2 class="saldo-monto" v-if="!cargandoBilletera">Bs. {{ formatoMoneda(saldoBilletera) }}</h2>
             <div v-else class="saldo-cargando">Cargando saldo...</div>
           </div>
 
@@ -256,11 +256,11 @@
             <div class="combo-nombre">{{ combo.nombre }}</div>
             <div v-if="composicionCombo(combo)" class="combo-composicion" :title="composicionCombo(combo)">{{ composicionCombo(combo) }}</div>
             <div class="combo-precios">
-              <span class="combo-normal">Bs {{ combo.precio_normal.toFixed(2) }}</span>
+              <span class="combo-normal">Bs {{ formatoMoneda(combo.precio_normal) }}</span>
               <span class="combo-flecha" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
               </span>
-              <span class="combo-final">Bs {{ combo.precio_combo.toFixed(2) }}</span>
+              <span class="combo-final">Bs {{ formatoMoneda(combo.precio_combo) }}</span>
             </div>
             <button class="btn-combo" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
@@ -311,7 +311,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 22L16 22"></path><path d="M12 18L12 22"></path><path d="M12 15C16.4183 15 20 11.4183 20 7L4 7C4 11.4183 7.58172 15 12 15Z"></path><path d="M4 3L20 3"></path></svg>
               </div>
               <div class="img-prod-velo" aria-hidden="true"></div>
-              <p class="precio-flotante">Bs. {{ (parseFloat(prod.precio_base) || 0).toFixed(2) }}</p>
+              <p class="precio-flotante">Bs. {{ formatoMoneda(prod.precio_base) }}</p>
             </div>
             <div class="info-prod-mini">
               <h4>{{ prod.nombre_producto }}</h4>
@@ -371,6 +371,7 @@ import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { formatoMoneda } from '@/utilidades/formato.js'
 
 const router = useRouter()
 const notif = useNotificaciones()

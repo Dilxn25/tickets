@@ -85,4 +85,15 @@
   --esp-5: 24px;
   --esp-6: 32px;
   --esp-7: 48px;
+
+  /* CAPAS (z-index) — escala única para overlays. Regla: las notificaciones/
+     toasts van SIEMPRE por encima de todo (incluso de la cámara) para que un
+     error controlado nunca quede tapado. Evita los números mágicos sueltos
+     (99999/100000) que hacían impredecible qué overlay tapaba a cuál. */
+  --z-navbar:        100;
+  --z-overlay:       1000;   /* fondo oscurecido de un modal */
+  --z-modal:         1100;   /* contenido de modal (detalle, confirmaciones) */
+  --z-qr-fullscreen: 1200;   /* QR de pago/entrada a pantalla completa */
+  --z-camara:        1300;   /* overlay de cámara (foto o escaneo) */
+  --z-toast:         1400;   /* notificaciones y alertas: por encima de todo */
 }
