@@ -26,6 +26,9 @@
       </button>
     </div>
     <input ref="inputFile" type="file" accept="image/*" class="captura-input-oculto" @change="alSubir" />
+    <!-- Cámara NATIVA del teléfono (foto nítida con autoenfoque real). 'capture'
+         hace que el sistema abra la cámara del celular en vez del video del navegador. -->
+    <input ref="inputCamara" type="file" accept="image/*" capture="environment" class="captura-input-oculto" @change="alSubir" />
     <!-- Lector oculto para decodificar QR desde una foto (modo qr) -->
     <div :id="readerFileId" class="captura-input-oculto"></div>
 
@@ -88,6 +91,7 @@ const readerFileId = `cam-file-${uid}`
 const etiquetaCamara = props.modo === 'qr' ? 'Escanear QR' : 'Tomar foto'
 
 const inputFile = ref(null)
+const inputCamara = ref(null)
 const videoCamara = ref(null)
 const camaraAbierta = ref(false)
 const qrDetectado = ref(false)
@@ -101,7 +105,7 @@ function abrirArchivo() {
 
 async function alSubir(e) {
   const file = e.target.files?.[0]
-  if (inputFile.value) inputFile.value.value = '' // permite reelegir el mismo archivo
+  if (e.target) e.target.value = '' // permite reelegir/recapturar el mismo archivo
   if (!file) return
   if (props.modo === 'qr') {
     await decodificarQrDesdeArchivo(file)
@@ -112,6 +116,14 @@ async function alSubir(e) {
 
 async function abrirCamara() {
   if (props.deshabilitado || camaraAbierta.value) return
+  // FOTO (comprobante): usar la CÁMARA NATIVA del teléfono. Da una foto nítida
+  // con autoenfoque real y alta resolución (la misma cámara del celular), a
+  // diferencia del video de getUserMedia que salía borroso. Es la solución al
+  // comprobante borroso. El QR sí necesita el escaneo en vivo (getUserMedia).
+  if (props.modo === 'foto') {
+    inputCamara.value?.click()
+    return
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
     notif.advertencia('No pudimos abrir la cámara. Elige la foto desde tus archivos.')
     abrirArchivo()
@@ -120,8 +132,7 @@ async function abrirCamara() {
   qrDetectado.value = false
   camaraAbierta.value = true
   await nextTick()
-  if (props.modo === 'qr') iniciarEscaneoQr()
-  else iniciarVideo()
+  iniciarEscaneoQr()
 }
 
 async function iniciarVideo() {
