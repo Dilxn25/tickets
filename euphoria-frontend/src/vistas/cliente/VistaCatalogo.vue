@@ -41,7 +41,7 @@
           Combos
         </button>
         <button
-          v-for="c in categorias"
+          v-for="c in categoriasVisibles"
           :key="c.id_categoria"
           class="cat-btn"
           :class="{ activo: filtroCategoria === c.id_categoria }"
@@ -408,6 +408,12 @@ const destacados = computed(() =>
 
 // ¿Hay combos disponibles? (para mostrar su pestaña y su sección)
 const hayCombos = computed(() => productos.value.some(p => p.es_combo && p.stock_actual > 0))
+
+// Categorías del menú SIN la categoría "Combos": los combos tienen su propia
+// pestaña dedicada, así que no se repite la categoría con el mismo nombre.
+const categoriasVisibles = computed(() =>
+  categorias.value.filter(c => (c.nombre_categoria || '').trim().toLowerCase() !== 'combos')
+)
 
 function coincideBusqueda(p) {
   const q = busqueda.value.toLowerCase()

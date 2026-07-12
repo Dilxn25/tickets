@@ -1484,7 +1484,9 @@ function urlImagenBase(ruta) {
   if (!ruta) return ''
   const rutaLimpia = ruta.split('|')[0]
   if (rutaLimpia.startsWith('http')) return rutaLimpia
-  const backend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
+  // Ruta relativa al mismo origen (en producción el backend sirve todo). Antes
+  // usaba localhost:3000 y las imágenes no cargaban en producción.
+  const backend = import.meta.env.VITE_URL_BACKEND || ''
   return `${backend}${rutaLimpia}`
 }
 
@@ -1584,9 +1586,9 @@ onMounted(() => {
   cargarHistorial()
   cargarPendientesBadge()
 
-  // Websockets para actualización en tiempo real
-  const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
-  socket = io(urlBackend)
+  // Websockets para actualización en tiempo real (mismo origen; en dev Vite
+  // hace proxy de /socket.io). Antes usaba localhost:3000 y no conectaba en produccion.
+  socket = io({ path: '/socket.io' })
 
   socket.on('recarga_registrada', () => {
     cargarHistorial()

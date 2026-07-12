@@ -125,8 +125,9 @@ function hace(fecha) {
 
 onMounted(() => {
   cargar()
-  const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
-  socket = io(urlBackend)
+  // Mismo origen (el backend sirve el frontend en producción; en dev Vite hace
+  // proxy de /socket.io). Antes usaba localhost:3000 y en producción no conectaba.
+  socket = io({ path: '/socket.io' })
   socket.on('notificacion', (d) => {
     if (d?.id_usuario && auth.usuario && d.id_usuario === auth.usuario.id) cargar()
   })

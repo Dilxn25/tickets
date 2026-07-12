@@ -296,8 +296,9 @@ onMounted(() => {
   cargarTablero(true)
   intervalo = setInterval(() => cargarTablero(false), 10000)
   tickTimer = setInterval(() => { ahoraTick.value = Date.now() }, 1000)
-  const urlBackend = import.meta.env.VITE_URL_BACKEND || 'http://localhost:3000'
-  socket = io(urlBackend)
+  // Mismo origen (en producción el backend sirve el frontend; en dev Vite hace
+  // proxy de /socket.io). Antes usaba localhost:3000 y no conectaba en producción.
+  socket = io({ path: '/socket.io' })
   socket.on('nueva_comanda', () => cargarTablero())
   socket.on('pedido_listo', () => cargarTablero())
   socket.on('pedido_pool', () => cargarTablero())
