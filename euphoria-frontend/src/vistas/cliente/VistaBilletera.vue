@@ -558,6 +558,16 @@
               @change="cargarComprobante"
               class="input-file-hidden"
             />
+            <!-- Cámara NATIVA del teléfono (foto nítida con autoenfoque real).
+                 'capture' abre la cámara del celular, no el video del navegador. -->
+            <input
+              ref="inputCamaraComprobante"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              @change="cargarComprobante"
+              class="input-file-hidden"
+            />
 
             <!-- OCR Processing -->
             <div v-if="procesandoOCR" class="estado-ocr">
@@ -1169,6 +1179,8 @@ async function guardarPin() {
 // Cargar comprobante
 function cargarComprobante(event) {
   const file = event.target.files?.[0]
+  // Limpiar el input permite volver a tomar/elegir la MISMA foto si hace falta.
+  if (event.target) event.target.value = ''
   if (!file) return
 
   if (!file.type.startsWith('image/')) {
@@ -1188,23 +1200,39 @@ function cargarComprobante(event) {
   procesarOCR(file)
 }
 
-// ===== TOMAR FOTO AL COMPROBANTE (cámara trasera) =====
+// ===== TOMAR FOTO AL COMPROBANTE (CÁMARA NATIVA del teléfono) =====
+// Antes se usaba getUserMedia (video del navegador, baja resolución) y el
+// comprobante salía BORROSO. Ahora "Tomar foto" abre la cámara NATIVA del
+// celular con capture="environment": foto nítida, autoenfoque real, alta
+// resolución — la misma cámara que saca fotos claras en el teléfono.
 const camaraAbierta = ref(false)
 const videoCamara = ref(null)
+const inputCamaraComprobante = ref(null)
 let streamCamara = null
 
-async function abrirCamara() {
-  if (procesandoOCR.value || camaraAbierta.value) return
-
-  // Mismo camino que subir archivo: primero un monto válido.
+function abrirCamara() {
+  if (procesandoOCR.value) return
+  // Un monto válido primero (mismo camino que subir archivo).
   validarMonto()
   if (!montoIngresado.value || errorMonto.value) {
     errorOCR.value = 'Ingresa un monto válido primero'
     return
   }
   errorOCR.value = ''
+  // Abre la cámara nativa del celular.
+  inputCamaraComprobante.value?.click()
+}
 
-  // Sin cámara disponible (permiso, hardware o contexto no seguro): respaldo con archivos.
+// Cámara antigua por getUserMedia (ya no se usa para el comprobante; se conserva
+// por si algún flujo la invoca). El comprobante ahora usa la cámara nativa.
+async function abrirCamaraLegacy() {
+  if (procesandoOCR.value || camaraAbierta.value) return
+  validarMonto()
+  if (!montoIngresado.value || errorMonto.value) {
+    errorOCR.value = 'Ingresa un monto válido primero'
+    return
+  }
+  errorOCR.value = ''
   if (!navigator.mediaDevices?.getUserMedia) {
     notif.advertencia('No pudimos abrir la cámara en este dispositivo. Elige la foto desde tus archivos.')
     triggerUpload()
