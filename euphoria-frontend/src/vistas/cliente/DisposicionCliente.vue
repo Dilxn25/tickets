@@ -436,13 +436,17 @@ function confirmarCerrarSesion() {
 .pildora-nav {
   pointer-events: auto;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 2px;
+  gap: 0;
   width: 100%;
   max-width: 520px;
   height: 66px;
-  padding: 8px 10px;
+  /* Sin padding vertical: cada tab llena TODA la altura de la píldora.
+     Antes los enlaces medían 48px dentro de 66px y las franjas superior e
+     inferior (el padding) no respondían al toque: en el celular el pulgar
+     caía justo ahí y la barra "no funcionaba". */
+  padding: 0 10px;
   border-radius: var(--radio-full);
   background: linear-gradient(180deg, rgba(36, 21, 86, 0.72), rgba(14, 8, 33, 0.82));
   backdrop-filter: blur(26px) saturate(160%);
@@ -464,12 +468,17 @@ function confirmarCerrarSesion() {
   color: var(--texto-secundario);
   text-decoration: none;
   gap: 3px;
-  border-radius: var(--radio-full);
+  /* Sin radio en el enlace: su fondo es transparente (el halo visible es
+     .tab-glow, que tiene su propio radio) y el radio-full volvía las
+     esquinas de cada tab transparentes al toque (hitbox recortada). */
+  border-radius: 0;
   transition: color var(--trans-normal), transform 0.3s var(--ease-rebote);
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
-  padding: 4px 2px;
+  /* El padding vertical vive en el enlace (no en la píldora) para que el
+     área tocable sea la barra completa, sin franjas muertas. */
+  padding: 8px 2px;
 }
 .tab-item:hover { color: var(--texto-principal); }
 .tab-item:hover .icono { transform: translateY(-2px); }

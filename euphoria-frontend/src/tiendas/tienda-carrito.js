@@ -19,6 +19,7 @@ export const useTiendaCarrito = defineStore('carrito', () => {
         carritoInicial = parsed.map(item => {
           const combo = item.combo === true
           const cortesia = item.cortesia === true
+          const agrupado = item.esComboAgrupado === true && Array.isArray(item.productos)
           return {
             ...item,
             // Las cortesías son regalo del local: precio 0 y 1 unidad, siempre
@@ -27,7 +28,11 @@ export const useTiendaCarrito = defineStore('carrito', () => {
             stock: Number.isFinite(parseInt(item.stock)) ? parseInt(item.stock) : null,
             combo,
             cortesia,
-            linea: claveLinea(item.id, combo, cortesia),
+            // Los combos AGRUPADOS conservan su clave propia ('combo:...') y su
+            // composición; el resto recalcula la clave por id + flags.
+            linea: agrupado ? item.linea : claveLinea(item.id, combo, cortesia),
+            esComboAgrupado: agrupado,
+            productos: agrupado ? item.productos : undefined,
             // Los combos guardan su composición (2-3 fotos solapadas, como su tarjeta)
             imagenes: Array.isArray(item.imagenes) && item.imagenes.length
               ? item.imagenes.filter(Boolean)
@@ -134,6 +139,82 @@ export const useTiendaCarrito = defineStore('carrito', () => {
     return { ok: true }
   }
 
+  // Agrega un COMBO/PACK como UNA sola línea agrupada. El precio de combo vale
+  // por el paquete completo: aumentar cantidad = llevar OTRO combo entero
+  // (2 combos = 2 redbull + 2 whisky), nunca unidades sueltas a precio de combo.
+  // combo: { clave, nombre, imagenes: [], maxCombos: number|null,
+  //          productos: [{ id_producto, cantidad, precio_unitario, nombre }] }
+  // El precio de la línea = suma exacta de sus componentes con descuento: lo que
+  // se muestra es EXACTAMENTE lo que el backend cobrará al expandir el combo.
+  function agregarCombo(combo) {
+    const productos = (combo.productos || []).filter(p => p && p.id_producto)
+    if (!productos.length) return { ok: false, mensaje: 'Combo sin productos disponibles' }
+    const linea = `combo:${combo.clave}`
+    const precioCombo = Math.round(productos.reduce(
+      (s, p) => s + (Number(p.precio_unitario) || 0) * (Number(p.cantidad) || 1), 0) * 100) / 100
+    const max = Number.isFinite(parseInt(combo.maxCombos)) ? parseInt(combo.maxCombos) : null
+
+    const existente = items.value.find(i => i.linea === linea)
+    if (existente) {
+      if (max !== null) existente.stock = max
+      if (existente.stock !== null && existente.cantidad >= existente.stock) {
+        return { ok: false, mensaje: `Máximo disponible: ${existente.stock} combos` }
+      }
+      existente.cantidad++
+    } else {
+      if (max !== null && max < 1) return { ok: false, mensaje: 'Sin stock para armar el combo' }
+      const imagenes = (Array.isArray(combo.imagenes) ? combo.imagenes.filter(Boolean) : []).slice(0, 3)
+      items.value.push({
+        id: null, // no es un producto del catálogo: es un paquete
+        linea,
+        nombre: combo.nombre || productos.map(p => p.nombre).filter(Boolean).join(' + '),
+        precio: precioCombo,
+        cantidad: 1,
+        stock: max,
+        imagen: imagenes[0] || '',
+        imagenes,
+        combo: true,
+        esComboAgrupado: true,
+        productos: productos.map(p => ({
+          id_producto: p.id_producto,
+          cantidad: Number(p.cantidad) || 1,
+          precio_unitario: Number(p.precio_unitario) || 0,
+          nombre: p.nombre || '',
+        })),
+      })
+    }
+    guardarCarrito()
+    return { ok: true }
+  }
+
+  // Expande el carrito al formato que espera POST /comandas/crear: los combos
+  // agrupados se abren en sus productos reales (con el precio con descuento por
+  // unidad y el flag combo que el backend valida contra el % del config).
+  function itemsParaCheckout() {
+    const salida = []
+    for (const item of items.value) {
+      if (item.esComboAgrupado && Array.isArray(item.productos)) {
+        for (const c of item.productos) {
+          salida.push({
+            id_producto: c.id_producto,
+            cantidad: (Number(c.cantidad) || 1) * item.cantidad,
+            precio_unitario: c.precio_unitario,
+            combo: true,
+          })
+        }
+      } else {
+        salida.push({
+          id_producto: item.id,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio,
+          combo: !!item.combo,
+          ...(item.cortesia && { cortesia: true }),
+        })
+      }
+    }
+    return salida
+  }
+
   // Recibe la clave 'linea' (o un id, por retrocompatibilidad)
   function aumentarCantidad(clave) {
     const item = buscarLinea(clave)
@@ -223,6 +304,8 @@ export const useTiendaCarrito = defineStore('carrito', () => {
     eventoActivoId,
     setEventoActivo,
     agregarItem,
+    agregarCombo,
+    itemsParaCheckout,
     aumentarCantidad,
     disminuirCantidad,
     eliminarItem,

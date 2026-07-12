@@ -100,6 +100,9 @@ const PLANTILLAS = [
     monto: /monto\s*:?\s*bs\.?\s*([\d.,]+)/i,
     montoRespaldo: /\bmonto\b[^0-9]{0,8}bs\.?\s*([\d.,]+)/i,
     transaccion: /n[uú]mero\s+de\s+transacci[oó]n\s*:?\s*(\d{8,20})/i,
+    // El N° del BCP es el ÚNICO número de 16 dígitos del comprobante (las
+    // cuentas tienen 14 y 10): si la foto pierde la etiqueta, vale el último.
+    transaccionRespaldo: /(?:^|\D)(\d{16})(?=\D|$)/g,
     fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
     motivo: /motivo\s*:?\s*(.{2,45}?)\s*de\s*la\s*cuenta/i,
     // El SEGUNDO "A nombre de" es el destinatario (el primero es el pagador);
@@ -139,9 +142,10 @@ const PLANTILLAS = [
     // CI/NIT + "N° Transaccion" (sin "de" en medio) identifica al BISA.
     deteccion: [/\bbisa\b/i, /pago\s*qr\s*realizado/i, /ci\s*\/\s*nit/i],
     monto: /monto\s*:?\s*bs\.?\s*([\d.,]+)/i,
-    transaccion: /n[°º0oa]?\s*\.?\s*transacci[oó]n\s*:?\s*(\d{8,15})/i,
+    // "N°" degenera en N*, N", N' según el ángulo/brillo de la foto
+    transaccion: /n[°º0oa*"']?\s*\.?\s*transacci[oó]n\s*:?\s*(\d{8,15})/i,
     fecha: /fecha\s*y\s*hora\s*:?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
-    motivo: /motivo\s*:?\s*(.{2,45}?)\s*n[°º0oa]?\s*\.?\s*transacci/i,
+    motivo: /motivo\s*:?\s*(.{2,45}?)\s*n[°º0oa*"']?\s*\.?\s*transacci/i,
     destinatario: /\bpara\s+(.{4,50}?)\s+ci\s*\/\s*nit/i,
   },
   {
@@ -200,18 +204,46 @@ const TITULAR_POR_DEFECTO = 'Dilan Rafael Arauco Paniagua'
 // Evalúa TODOS los campos de una plantilla por separado (sin cortar en el
 // primer fallo) para poder reportar exactamente qué falló en ESE banco.
 // campos.X: true = extraído y válido, false = falló, null = el banco no lo tiene.
+// ¿El MONTO ESPERADO aparece en el texto con bordes no numéricos y cerca de un
+// ancla de dinero (Bs/$/monto/pagó/yapeaste)? Es un respaldo para cuando la foto
+// pierde la ETIQUETA del monto pero el número sí se lee (ej. Yape lee "$100" o
+// "85100" en vez de "Bs 100"). Busca SOLO el valor esperado — nunca "cualquier
+// número" — así una cuenta o un teléfono no pueden validar el campo.
+function montoEsperadoEnTexto(texto, montoEsperado) {
+  const n = Number(montoEsperado)
+  if (!Number.isFinite(n) || n <= 0) return false
+  const entero = String(Math.trunc(n))
+  const conDec = n.toFixed(2)
+  const variantesNum = [conDec, conDec.replace('.', ','), ...(n % 1 === 0 ? [entero] : [])]
+  for (const v of variantesNum) {
+    const rx = new RegExp(`(?:^|[^0-9])${v.replace('.', '\\.')}(?:[^0-9]|$)`, 'g')
+    let m
+    while ((m = rx.exec(texto)) !== null) {
+      const desde = Math.max(0, m.index - 35)
+      const cerca = texto.slice(desde, m.index + v.length + 35)
+      if (/(bs|\$|monto|importe|suma|total|pag[oó]|yapeaste)/i.test(cerca)) return true
+    }
+  }
+  return false
+}
+
 function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
   const r = {
     campos: { monto: false, transaccion: false, fecha: false, destino: false },
     monto: null, transaccionId: null, destinatario: '', fechaLeida: null, motivoEuphoria: false,
   }
 
-  // Monto anclado a la etiqueta del banco (nunca "el número aparece en alguna
-  // parte"), con tolerancia de centavo por el OCR.
+  // Monto anclado a la etiqueta del banco, con tolerancia de centavo por el OCR.
   let m = texto.match(p.monto)
   if (!m && p.montoRespaldo) m = texto.match(p.montoRespaldo)
   if (m) r.monto = parsearMonto(m[1])
   r.campos.monto = r.monto !== null && Math.abs(r.monto - montoEsperado) <= 0.01
+  // RESPALDO (solo si la etiqueta se perdió, NUNCA si el monto leído difiere):
+  // el monto esperado aparece con bordes no numéricos junto a un ancla de dinero.
+  if (r.monto === null && (montoAparece(texto, montoEsperado) || montoEsperadoEnTexto(texto, montoEsperado))) {
+    r.monto = Number(montoEsperado)
+    r.campos.monto = true
+  }
 
   // Número de transacción del campo propio del banco. Algunos (Unión) llegan con
   // el N° partido por el OCR ("...2566 03799"): se quitan los espacios internos.
@@ -221,6 +253,14 @@ function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
   if (t) {
     const tok = t[1].replace(/\s+/g, '').toUpperCase()
     if (/\d/.test(tok)) { r.transaccionId = tok; r.campos.transaccion = true }
+  }
+  // RESPALDO estructural del banco (ej. BCP: su N° es el ÚNICO número de 16
+  // dígitos; la foto borrosa pierde la etiqueta pero el número sí se lee).
+  if (!r.campos.transaccion && p.transaccionRespaldo) {
+    let ultimo = null, mt
+    const rx = new RegExp(p.transaccionRespaldo.source, p.transaccionRespaldo.flags.includes('g') ? p.transaccionRespaldo.flags : p.transaccionRespaldo.flags + 'g')
+    while ((mt = rx.exec(texto)) !== null) ultimo = mt[1]
+    if (ultimo && /\d/.test(ultimo)) { r.transaccionId = ultimo.replace(/\s+/g, '').toUpperCase(); r.campos.transaccion = true }
   }
 
   // Fecha del comprobante: debe ser de hoy (numérica o en palabras según el banco)
@@ -238,6 +278,16 @@ function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
       r.campos.fecha = mesNum ? esFechaHoy(f[1], mesNum, f[3], hoy) : false
     }
   }
+  // RESPALDO (solo si NO se leyó ninguna fecha etiquetada): la fecha pegada a una
+  // hora ("15/06/2026 08:44:26") es la fecha de la operación — los comprobantes
+  // no imprimen otra fecha con hora.
+  if (!r.campos.fecha && r.fechaLeida === null) {
+    const fh = texto.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})[^0-9]{0,6}\d{1,2}:\d{2}/)
+    if (fh) {
+      r.fechaLeida = `${fh[1]}/${fh[2]}/${fh[3]}`
+      r.campos.fecha = esFechaHoy(fh[1], fh[2], fh[3], hoy)
+    }
+  }
 
   // Destino: el pago debe ser A NUESTRA CUENTA. Pasa si el motivo/referencia
   // dice "Consumo Euphoria" o si el destinatario es el titular configurado.
@@ -249,6 +299,13 @@ function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
   r.campos.destino = (!p.motivo && !p.destinatario)
     ? null
     : (r.motivoEuphoria || titulares.some(tt => coincideTitular(r.destinatario, tt)))
+  // RESPALDO (solo si NO se pudo extraer NINGÚN destinatario ni motivo — la foto
+  // perdió las etiquetas): el titular configurado aparece en el texto completo.
+  // Mismo nivel de confianza que la validación genérica. Si un destinatario SÍ
+  // se extrajo y es OTRA persona, esto NO se aplica (el pago fue a otra cuenta).
+  if (r.campos.destino === false && !r.destinatario && !motivoTexto) {
+    r.campos.destino = titulares.some(tt => coincideTitular(texto, tt)) || contieneConsumoEuphoria(texto)
+  }
 
   return r
 }
@@ -412,4 +469,136 @@ function analizarComprobanteFlexible(textoOCR, montoEsperado, opciones = {}) {
   return resultado
 }
 
-module.exports = { analizarComprobante, analizarComprobanteFlexible, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }
+// ============================================================
+// OCR ROBUSTO MULTI-PASADA
+// ============================================================
+// La foto de un comprobante en la disco llega borrosa, oscura, con brillo,
+// rotada o lejana. Una sola lectura falla en esos casos ("reconoce el banco
+// pero no la información"). Aquí se hacen VARIAS pasadas de Tesseract con
+// preprocesamientos distintos (sharp) y se FUSIONAN los campos entre pasadas
+// del MISMO banco: una pasada puede leer bien el monto y otra el N° de
+// transacción. Prioridad del negocio: que FUNCIONE aunque tarde.
+const sharp = require('sharp')
+
+// Variantes de preprocesamiento, de la más natural a la más agresiva. Cada
+// una ataca un defecto típico de la foto:
+//   gris-contraste → fotos oscuras o lavadas por el brillo de la pantalla
+//   binarizada     → reflejos/moiré de fotografiar una pantalla
+//   ampliada       → foto lejana o recorte chico (Tesseract lee mejor grande)
+async function variantesDePreprocesado(entrada) {
+  const variantes = [{ nombre: 'original', imagen: entrada }]
+  let ancho = 0
+  try { ancho = (await sharp(entrada, { failOn: 'none' }).metadata()).width || 0 } catch { /* sin metadata seguimos */ }
+  const intentar = async (nombre, fabrica) => {
+    try { variantes.push({ nombre, imagen: await fabrica() }) } catch { /* esa variante no se pudo: seguimos */ }
+  }
+  await intentar('gris-contraste', () =>
+    sharp(entrada, { failOn: 'none' }).grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer())
+  await intentar('binarizada', () =>
+    sharp(entrada, { failOn: 'none' }).grayscale().normalize().threshold(160).jpeg({ quality: 95 }).toBuffer())
+  // Contraste FUERTE + gamma: recupera etiquetas grises pequeñas lavadas por el
+  // brillo de la pantalla ("Nro.", "Fecha y hora" desaparecían en fotos brillosas)
+  await intentar('contraste-fuerte', () =>
+    sharp(entrada, { failOn: 'none' }).grayscale().gamma(2.2).linear(1.55, -55).sharpen({ sigma: 1.2 })
+      .jpeg({ quality: 95 }).toBuffer())
+  // Umbral ALTO: en fotos lavadas por el brillo, el texto gris queda apenas más
+  // oscuro que el fondo; binarizar recién en 215 lo separa (en 160 desaparecía —
+  // verificado con la muestra real del Ganadero brillosa, que recuperó el N°,
+  // la fecha y el banco completos con este umbral).
+  await intentar('umbral-alto', () =>
+    sharp(entrada, { failOn: 'none' }).grayscale().normalize().threshold(215).jpeg({ quality: 95 }).toBuffer())
+  // Ampliada + nítida: fotos lejanas o texto pequeño. Tesseract necesita el
+  // texto GRANDE: se apunta a ~1700px de ancho como mínimo (una captura de
+  // celular angosta de 413px a 1.8x seguía siendo chica y fallaba).
+  if (ancho > 0 && ancho < 1700) {
+    await intentar('ampliada', () =>
+      sharp(entrada, { failOn: 'none' }).resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1700), 2600), kernel: 'lanczos3' })
+        .grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer())
+  }
+  return variantes
+}
+
+// Puntaje de un análisis: banco identificado + campos leídos (+10 si es válido)
+function puntuarAnalisis(r) {
+  if (!r) return -1
+  let p = r.banco ? 2 : 0
+  const c = r.campos || {}
+  for (const k of ['monto', 'transaccion', 'fecha', 'destino']) if (c[k] === true) p++
+  if (r.ok) p += 10
+  return p
+}
+
+// Fusiona los análisis de pasadas del MISMO banco: los campos que una pasada
+// leyó bien completan los que otra falló. Si el conjunto queda completo, el
+// comprobante es válido (todas las pasadas son la MISMA imagen, solo cambia
+// el preprocesamiento). Devuelve el mejor resultado (fusionado o no).
+function fusionarAnalisis(resultados) {
+  const porBanco = new Map()
+  for (const r of resultados) {
+    const clave = r.banco || '(generico)'
+    if (!porBanco.has(clave)) porBanco.set(clave, [])
+    porBanco.get(clave).push(r)
+  }
+  let mejor = null
+  for (const lista of porBanco.values()) {
+    const base = { ...lista[0], campos: { ...(lista[0].campos || {}) } }
+    for (const r of lista.slice(1)) {
+      const c = r.campos || {}
+      for (const k of ['monto', 'transaccion', 'fecha', 'destino']) {
+        if (base.campos[k] !== true && c[k] === true) {
+          base.campos[k] = true
+          if (k === 'monto' && r.monto != null) base.monto = r.monto
+          if (k === 'transaccion' && r.transaccionId) base.transaccionId = r.transaccionId
+          if (k === 'destino') {
+            if (r.destinatario) base.destinatario = r.destinatario
+            if (r.validadoPor) base.validadoPor = r.validadoPor
+          }
+        }
+      }
+    }
+    const c = base.campos || {}
+    const completo = ['monto', 'transaccion', 'fecha', 'destino']
+      .every(k => c[k] === true || c[k] === null || c[k] === undefined)
+    if (completo && base.transaccionId && base.monto != null && !base.ok) {
+      base.ok = true
+      base.error = undefined
+      base.fusionado = true
+    }
+    if (puntuarAnalisis(base) > puntuarAnalisis(mejor)) mejor = base
+  }
+  return mejor
+}
+
+/**
+ * Análisis robusto: varias pasadas de OCR con preprocesamientos distintos,
+ * corte temprano en cuanto una pasada (o la fusión de varias) valida todo.
+ *
+ * @param {Buffer|string} entrada  bytes de la imagen (o ruta local)
+ * @param {number} montoEsperado
+ * @param {object} worker    worker de Tesseract ya inicializado (reutilizable)
+ * @param {Date}   [hoy]
+ * @param {object} [opciones] { titular }
+ */
+async function analizarComprobanteRobusto(entrada, montoEsperado, worker, hoy = new Date(), opciones = {}) {
+  const variantes = await variantesDePreprocesado(entrada)
+  const resultados = []
+  for (const v of variantes) {
+    let texto = ''
+    try {
+      const { data } = await worker.recognize(v.imagen)
+      texto = String(data.text || '')
+    } catch { continue }
+    const r = analizarComprobante(texto.replace(/\s+/g, ' '), montoEsperado, hoy, opciones)
+    r.pasada = v.nombre
+    if (r.ok) return r // pasada perfecta: no seguimos gastando CPU
+    resultados.push(r)
+    const fusion = fusionarAnalisis(resultados)
+    if (fusion && fusion.ok) return fusion
+  }
+  return fusionarAnalisis(resultados) || {
+    ok: false, banco: null, campos: {},
+    error: 'El comprobante no pudo validarse. Sube la captura original completa y nítida.',
+  }
+}
+
+module.exports = { analizarComprobante, analizarComprobanteRobusto, analizarComprobanteFlexible, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }

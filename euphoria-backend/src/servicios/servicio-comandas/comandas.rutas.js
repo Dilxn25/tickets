@@ -18,7 +18,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
-const { analizarComprobante, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
+const { analizarComprobante, analizarComprobanteRobusto, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
 
@@ -85,31 +85,29 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ error: 'Monto esperado de la comanda no especificado' })
     }
 
-    // 1. Ejecutar OCR con el worker REUTILIZABLE (spa+eng). El modelo se carga una
-    //    sola vez; a partir de la 2da lectura es mucho más rápido.
+    // 1. OCR ROBUSTO multi-pasada con el worker REUTILIZABLE (spa+eng): varias
+    //    lecturas con preprocesamientos distintos (gris/contraste, binarizada,
+    //    ampliada) y fusión de campos entre pasadas. Prioridad del negocio:
+    //    que FUNCIONE aunque tarde. La imagen se descarga UNA vez de Cloudinary
+    //    (multer la subió ahí) porque el preprocesamiento necesita los bytes.
     const worker = await obtenerWorkerOCR()
-    const { data: { text } } = await worker.recognize(req.file.path)
-
-    const cleanedText = text.replace(/\s+/g, ' ')
-
-    // El texto del comprobante trae datos personales (nombres, cuentas): solo se
-    // registra en logs/archivo bajo depuración explícita (DEBUG_OCR=true en .env).
-    if (process.env.DEBUG_OCR === 'true') {
-      console.log(`[OCR] Monto esperado: Bs. ${montoEsperado}`)
-      console.log(`[OCR] Texto extraído:`, cleanedText)
-      const fs = require('fs')
-      const path = require('path')
-      fs.writeFileSync(path.join(process.cwd(), 'comprobante.txt'), text)
+    const titular = await obtenerTitularDestino()
+    let analisis
+    try {
+      const resp = await fetch(req.file.path)
+      if (!resp.ok) throw new Error(`descarga ${resp.status}`)
+      const bufferImg = Buffer.from(await resp.arrayBuffer())
+      analisis = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, new Date(), { titular })
+    } catch (e) {
+      // Respaldo: si la descarga falla, una sola pasada directa desde la URL
+      console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
+      const { data: { text } } = await worker.recognize(req.file.path)
+      analisis = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, new Date(), { titular })
     }
 
-    // 2. Validación POR BANCO: analizarComprobante IDENTIFICA el banco primero
-    //    (BCP, BNB, BISA, Unión, Yape, Yasta...) y valida los campos según la
-    //    plantilla de ESE banco — cada banco imprime campos distintos (Yape no
-    //    tiene motivo/referencia). Solo si ningún banco registrado calza, cae
-    //    internamente a la validación GENÉRICA (banco: null) con los campos
-    //    preestablecidos (destino/monto/N° de transacción, sin fecha).
-    const titular = await obtenerTitularDestino()
-    const analisis = analizarComprobante(cleanedText, montoEsperado, new Date(), { titular })
+    if (process.env.DEBUG_OCR === 'true') {
+      console.log(`[OCR] Monto esperado: Bs. ${montoEsperado} · pasada: ${analisis.pasada || 'única'} · fusionado: ${!!analisis.fusionado}`)
+    }
 
     // Pasos que ve el cliente, en orden: banco → monto → transacción → fecha →
     // destino (→ no repetido al final). El paso 'banco' SIEMPRE va en ok:true:

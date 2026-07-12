@@ -1180,8 +1180,11 @@ const PASOS_PLACEHOLDER = [
   { clave: 'no_repetido', etiqueta: 'Comprobante no repetido' },
 ]
 const pasosValidacion = ref([])
+// Al iniciar solo se ve EL PRIMER paso ("Identificando banco…"): los demás van
+// APARECIENDO de a uno conforme se resuelven, en el orden en que el backend
+// los validó (primero el banco, luego los campos de ESA plantilla).
 function iniciarPasos() {
-  pasosValidacion.value = PASOS_PLACEHOLDER.map(p => ({ ...p, ok: null }))
+  pasosValidacion.value = [{ ...PASOS_PLACEHOLDER[0], ok: null }]
 }
 async function resolverPasos(resPasos) {
   // Sin pasos (error de red/500): se limpia la lista y queda solo el mensaje
@@ -1190,22 +1193,18 @@ async function resolverPasos(resPasos) {
     pasosValidacion.value = []
     return
   }
-  // Reconstruir con los pasos REALES del backend (los que no aplican al banco
-  // no vienen y se omiten). Cada paso conserva su etiqueta placeholder mientras
-  // gira el spinner y adopta la del backend al resolverse: así el primero pasa
-  // de "Identificando banco…" a "Banco: Yape" antes de validar los campos.
-  const placeholders = new Map(PASOS_PLACEHOLDER.map(p => [p.clave, p.etiqueta]))
-  pasosValidacion.value = resPasos.map(p => ({
-    clave: p.clave,
-    etiqueta: placeholders.get(p.clave) || p.etiqueta,
-    ok: null,
-  }))
-  for (let i = 0; i < pasosValidacion.value.length; i++) {
-    await new Promise(r => setTimeout(r, 420))
+  // Secuencial: se resuelve el paso visible, y SOLO si pasó aparece el
+  // siguiente (girando) hasta agotar los pasos del backend. Si uno falla,
+  // ahí termina la lista: no se muestran validaciones que nunca corrieron.
+  for (let i = 0; i < resPasos.length; i++) {
+    if (i >= pasosValidacion.value.length) {
+      pasosValidacion.value.push({ clave: resPasos[i].clave, etiqueta: resPasos[i].etiqueta, ok: null })
+    }
+    await new Promise(r => setTimeout(r, 430))
     const paso = pasosValidacion.value[i]
     paso.etiqueta = resPasos[i].etiqueta || paso.etiqueta
     paso.ok = !!resPasos[i].ok
-    if (!paso.ok) { for (let j = i + 1; j < pasosValidacion.value.length; j++) pasosValidacion.value[j].ok = 'skip'; break }
+    if (!paso.ok) break
   }
   await new Promise(r => setTimeout(r, 300))
 }

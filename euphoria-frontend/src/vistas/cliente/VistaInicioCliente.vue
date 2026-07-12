@@ -469,6 +469,57 @@ async function cargarDatosInicio() {
     .catch(() => { combos.value = [] })
 
   await Promise.allSettled([cargaEventos, cargaProductos, cargaSaldo, cargaCombos])
+  // Con productos Y combos cargados: la tarjeta muestra EL PRECIO QUE SE COBRARÁ
+  ajustarPreciosCombos()
+}
+
+// La sugerencia de la IA calcula su precio con el % ACTUAL del config, pero si el
+// local ya tiene ese combo como PRODUCTO REAL se cobra el precio de BD (fijado al
+// crearlo). Antes la tarjeta mostraba una cosa (46.60) y se cobraba otra (50):
+// aquí se corrige cada tarjeta al precio real de cobro.
+function ajustarPreciosCombos() {
+  if (!productosCompletos.value.length || !combos.value.length) return
+  for (const c of combos.value) {
+    const real = buscarComboReal(c)
+    // Precio "normal" de referencia: la suma de los componentes a catálogo
+    let normal = 0
+    for (const p of c.productos || []) {
+      const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
+      normal += (parseFloat(prod?.precio_base) || 0) * (Number(p.cantidad) || 1)
+    }
+    if (real) {
+      const precioReal = (real.estado_promocion && parseFloat(real.precio_promocion) > 0)
+        ? parseFloat(real.precio_promocion)
+        : parseFloat(real.precio_base)
+      c.precio_combo = Math.round(precioReal * 100) / 100
+    } else {
+      // Sin combo real: lo cobrado será la suma de componentes con el descuento
+      // aplicado POR UNIDAD (redondeo idéntico al del carrito y al del backend)
+      const factor = (Number(c.precio_combo) > 0 && Number(c.precio_normal) > 0)
+        ? Number(c.precio_combo) / Number(c.precio_normal) : 1
+      let suma = 0
+      for (const p of c.productos || []) {
+        const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
+        const base = parseFloat(prod?.precio_base) || 0
+        suma += (Math.round(base * factor * 100) / 100) * (Number(p.cantidad) || 1)
+      }
+      if (suma > 0) c.precio_combo = Math.round(suma * 100) / 100
+    }
+    if (normal > 0) {
+      c.precio_normal = Math.round(normal * 100) / 100
+      c.descuento_pct = Math.max(0, Math.round((1 - c.precio_combo / c.precio_normal) * 100))
+    }
+  }
+}
+
+// Busca el combo REAL del catálogo con la misma composición que la sugerencia
+function buscarComboReal(combo) {
+  const firma = (combo.productos || []).map(p => `${p.id_producto}:1`).sort().join('|')
+  return productosCompletos.value.find(p =>
+    p.es_combo && (p.combos_como_padre || []).length &&
+    p.combos_como_padre.map(x => `${x.id_producto_hijo}:${x.cantidad}`).sort().join('|') === firma &&
+    p.stock_actual > 0
+  )
 }
 
 // Genera y muestra el QR de pago elegido a pantalla completa, sin salir del inicio.
@@ -527,16 +578,16 @@ async function agregarCombo(combo) {
   // El catálogo completo puede seguir cargando si el usuario toca rápido:
   // sin esta espera, no se encontraba el combo real y se cobraba precio suelto.
   if (!productosCompletos.value.length) {
-    try { productosCompletos.value = await servicioProductos.listar() } catch (e) { /* sigue con lo que haya */ }
+    try {
+      productosCompletos.value = await servicioProductos.listar()
+      ajustarPreciosCombos()
+    } catch (e) { /* sigue con lo que haya */ }
   }
-  const firmaSugerida = combo.productos.map(p => `${p.id_producto}:1`).sort().join('|')
-  const comboReal = productosCompletos.value.find(p =>
-    p.es_combo && (p.combos_como_padre || []).length &&
-    p.combos_como_padre.map(c => `${c.id_producto_hijo}:${c.cantidad}`).sort().join('|') === firmaSugerida &&
-    p.stock_actual > 0
-  )
+  const comboReal = buscarComboReal(combo)
   if (comboReal) {
-    // Los combos van al carrito con su COMPOSICIÓN (2-3 fotos solapadas, como su tarjeta)
+    // Combo REAL del catálogo: una línea con SU precio de BD (el mismo que la
+    // tarjeta muestra tras ajustarPreciosCombos). El stepper lleva combos
+    // enteros porque la línea ES el producto combo.
     const imagenesCombo = combo.productos.map(p => p.url_imagen).filter(Boolean).slice(0, 3)
     const r = tiendaCarrito.agregarItem({
       ...comboReal,
@@ -548,29 +599,43 @@ async function agregarCombo(combo) {
     return
   }
 
-  // No hay un combo REAL con esa composición: se agregan los productos APLICANDO
-  // el descuento del combo (marcados como 'combo' -> el backend valida y cobra el
-  // precio rebajado, no el de catálogo). Antes se cobraba el precio completo.
+  // Sin combo real: va como UNA línea AGRUPADA del carrito. El precio de combo
+  // vale por el paquete completo; aumentar cantidad = llevar OTRO combo entero
+  // (nunca unidades sueltas a precio de combo). Al pagar se expande a sus
+  // productos reales con el descuento por unidad.
   const factor = (Number(combo.precio_combo) > 0 && Number(combo.precio_normal) > 0)
     ? Number(combo.precio_combo) / Number(combo.precio_normal) : 1
-  let agregados = 0, omitidos = 0
-  for (const p of combo.productos) {
+  const componentes = []
+  let maxCombos = null
+  for (const p of combo.productos || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
-    if (!prod || prod.stock_actual <= 0) { omitidos++; continue }
-    const baseNum = parseFloat(prod.precio_base) || 0
-    const prodDesc = { ...prod, precio_base: Math.round(baseNum * factor * 100) / 100, estado_promocion: false, combo: true }
+    if (!prod || prod.stock_actual <= 0) continue
     const cant = Number(p.cantidad) || 1
-    let ok = false
-    for (let n = 0; n < cant; n++) {
-      const r = tiendaCarrito.agregarItem(prodDesc)
-      if (!(r && r.ok === false)) ok = true
-    }
-    if (ok) agregados++
-    else omitidos++
+    const base = parseFloat(prod.precio_base) || 0
+    componentes.push({
+      id_producto: prod.id_producto,
+      cantidad: cant,
+      precio_unitario: Math.round(base * factor * 100) / 100,
+      nombre: prod.nombre_producto,
+    })
+    // Cuántos combos completos alcanza a armar el stock de este componente
+    const alcanza = Math.floor((parseInt(prod.stock_actual) || 0) / cant)
+    maxCombos = maxCombos === null ? alcanza : Math.min(maxCombos, alcanza)
   }
-  if (!agregados) { notif.error('No se pudo agregar el combo: productos sin stock.'); return }
-  if (omitidos) notif.advertencia('Algunos productos del combo no tenían stock y no se agregaron.')
-  else notif.exito('Combo agregado con su descuento.')
+  // El combo se vende COMPLETO: si falta stock de algún componente, no se arma
+  if (!componentes.length || componentes.length < (combo.productos || []).length) {
+    notif.error('No se pudo agregar el combo: productos sin stock.')
+    return
+  }
+  const r = tiendaCarrito.agregarCombo({
+    clave: componentes.map(c => `${c.id_producto}:${c.cantidad}`).sort().join('|'),
+    nombre: combo.nombre,
+    imagenes: combo.productos.map(p => p.url_imagen).filter(Boolean).slice(0, 3),
+    maxCombos,
+    productos: componentes,
+  })
+  if (r && r.ok === false) { notif.advertencia(r.mensaje || 'Sin stock del combo.'); return }
+  notif.exito('Combo agregado con su descuento.')
   router.push('/cliente/carrito')
 }
 

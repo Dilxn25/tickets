@@ -548,69 +548,87 @@ function cancelarPin() {
 function cerrarExito() {
   reservaOk.value = null
 }
-// Agrega los productos del combo sugerido APLICANDO su descuento (precio_combo)
-// y marcándolos como 'combo' para que el backend cobre el precio rebajado, no el
-// de catálogo. Antes agregaba a precio completo (por eso mostraba 45.5 y cobraba 55).
+// Agrega el combo sugerido como UNA línea AGRUPADA del carrito: el precio de
+// combo vale por el paquete completo (aumentar cantidad = otro combo entero,
+// nunca unidades sueltas a precio de combo). Al pagar se expande a sus
+// productos reales con el descuento por unidad.
 function agregarCombo(c) {
-  let agregado = false
   const factor = (Number(c.precio_combo) > 0 && Number(c.precio_normal) > 0)
     ? Number(c.precio_combo) / Number(c.precio_normal) : 1
+  const componentes = []
+  let maxCombos = null
   for (const p of c.productos || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === p.id_producto)
-    if (prod) {
-      const baseNum = parseFloat(prod.precio_base) || 0
-      const prodDesc = { ...prod, precio_base: Math.round(baseNum * factor * 100) / 100, estado_promocion: false, combo: true }
-      const cant = Number(p.cantidad) || 1
-      for (let n = 0; n < cant; n++) tiendaCarrito.agregarItem(prodDesc)
-      agregado = true
-    }
+    if (!prod || prod.stock_actual <= 0) continue
+    const cant = Number(p.cantidad) || 1
+    const base = parseFloat(prod.precio_base) || 0
+    componentes.push({
+      id_producto: prod.id_producto,
+      cantidad: cant,
+      precio_unitario: Math.round(base * factor * 100) / 100,
+      nombre: prod.nombre_producto,
+    })
+    const alcanza = Math.floor((parseInt(prod.stock_actual) || 0) / cant)
+    maxCombos = maxCombos === null ? alcanza : Math.min(maxCombos, alcanza)
   }
-  if (agregado) router.push('/cliente/carrito')
-  else msgError.value = 'No se pudo agregar el combo. Intenta desde el catálogo.'
+  if (!componentes.length || componentes.length < (c.productos || []).length) {
+    msgError.value = 'No se pudo agregar el combo. Intenta desde el catálogo.'
+    return
+  }
+  const r = tiendaCarrito.agregarCombo({
+    clave: componentes.map(x => `${x.id_producto}:${x.cantidad}`).sort().join('|'),
+    nombre: c.nombre || componentes.map(x => x.nombre).join(' + '),
+    imagenes: (c.productos || []).map(p => p.url_imagen).filter(Boolean).slice(0, 3),
+    maxCombos,
+    productos: componentes,
+  })
+  if (r && r.ok === false) { msgError.value = r.mensaje || 'Sin stock del combo.'; return }
+  router.push('/cliente/carrito')
 }
 
-// Agrega un PACK completo al carrito (cada producto con su cantidad del patrón).
-// Se aplica el DESCUENTO del pack a cada producto y se marca como 'combo' para que
-// el backend valide y cobre el precio con descuento (no el de catálogo).
+// Agrega el PACK como UNA línea AGRUPADA del carrito: el precio del pack vale
+// por el paquete completo (aumentar cantidad = otro pack entero). Al pagar se
+// expande a sus productos reales con el descuento del pack por unidad.
 function agregarPack(pk) {
-  let agregado = false
   // Factor de descuento implícito del pack (precio_pack / precio_normal).
   const factor = (Number(pk.precio_pack) > 0 && Number(pk.precio_normal) > 0)
     ? Number(pk.precio_pack) / Number(pk.precio_normal) : 1
+  const componentes = []
+  const imagenes = []
+  let maxPacks = null
   for (const it of pk.items || []) {
     const prod = productosCompletos.value.find(x => x.id_producto === it.id_producto)
-    if (prod) {
-      // Cada producto del pack va con su propia foto (sin mutar el original):
-      // - combos: su composición (2-3 fotos solapadas, como en su tarjeta)
-      // - simples sin foto: la foto que trae el item del pack
-      let prodConImagen = prod
-      if (prod.es_combo) {
-        const imagenes = (prod.combos_como_padre || [])
-          .map(c => c.url_imagen || c.producto?.url_imagen || '')
-          .filter(Boolean)
-          .slice(0, 3)
-        if (imagenes.length) {
-          prodConImagen = { ...prod, url_imagen: prod.url_imagen || imagenes[0], imagenes_combo: imagenes }
-        } else if (!prod.url_imagen && it.url_imagen) {
-          prodConImagen = { ...prod, url_imagen: it.url_imagen }
-        }
-      } else if (!prod.url_imagen && it.url_imagen) {
-        prodConImagen = { ...prod, url_imagen: it.url_imagen }
-      }
-      // Aplica el descuento del pack a este producto y lo marca como combo.
-      const baseNum = parseFloat(prodConImagen.precio_base) || 0
-      prodConImagen = {
-        ...prodConImagen,
-        precio_base: Math.round(baseNum * factor * 100) / 100,
-        estado_promocion: false,
-        combo: true,
-      }
-      for (let n = 0; n < (it.cantidad || 1); n++) tiendaCarrito.agregarItem(prodConImagen)
-      agregado = true
-    }
+    if (!prod || prod.stock_actual <= 0) continue
+    const cant = Number(it.cantidad) || 1
+    const base = parseFloat(prod.precio_base) || 0
+    componentes.push({
+      id_producto: prod.id_producto,
+      cantidad: cant,
+      precio_unitario: Math.round(base * factor * 100) / 100,
+      nombre: prod.nombre_producto,
+    })
+    // Foto del componente para la composición de la línea (como su tarjeta)
+    const foto = prod.url_imagen
+      || (prod.es_combo ? (prod.combos_como_padre || []).map(c => c.url_imagen || c.producto?.url_imagen || '').find(Boolean) : '')
+      || it.url_imagen || ''
+    if (foto) imagenes.push(foto)
+    const alcanza = Math.floor((parseInt(prod.stock_actual) || 0) / cant)
+    maxPacks = maxPacks === null ? alcanza : Math.min(maxPacks, alcanza)
   }
-  if (agregado) router.push('/cliente/carrito')
-  else msgError.value = 'No se pudo agregar el pack. Intenta desde el catálogo.'
+  // El pack se vende COMPLETO: si falta stock de un componente, no se arma
+  if (!componentes.length || componentes.length < (pk.items || []).length) {
+    msgError.value = 'No se pudo agregar el pack. Intenta desde el catálogo.'
+    return
+  }
+  const r = tiendaCarrito.agregarCombo({
+    clave: 'pack|' + componentes.map(x => `${x.id_producto}:${x.cantidad}`).sort().join('|'),
+    nombre: pk.nombre || resumenPack(pk),
+    imagenes: imagenes.slice(0, 3),
+    maxCombos: maxPacks,
+    productos: componentes,
+  })
+  if (r && r.ok === false) { msgError.value = r.mensaje || 'Sin stock del pack.'; return }
+  router.push('/cliente/carrito')
 }
 // Resumen corto del pack: "1× Ron + 4× RedBull"
 function resumenPack(pk) {

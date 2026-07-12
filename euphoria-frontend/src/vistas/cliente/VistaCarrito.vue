@@ -121,6 +121,18 @@
                 <s v-if="precioCatalogoCortesia(item) > 0" class="precio-tachado">Bs. {{ formatoMoneda(precioCatalogoCortesia(item)) }}</s>
                 <b class="precio-cero">Bs. {{ formatoMoneda(0) }}</b>
               </p>
+              <!-- Combo agrupado: el precio vale por el PAQUETE completo; el
+                   stepper lleva otro combo entero (no unidades sueltas) -->
+              <template v-else-if="item.esComboAgrupado">
+                <p class="combo-detalle">{{ (item.productos || []).map(p => `${p.cantidad}× ${p.nombre}`).join(' · ') }}</p>
+                <p class="precio-unitario">
+                  <span class="badge-combo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="11" height="11" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                    Combo
+                  </span>
+                  Bs. {{ formatoMoneda(item.precio) }} <span class="por-unidad">por combo</span>
+                </p>
+              </template>
               <p v-else class="precio-unitario">Bs. {{ formatoMoneda(item.precio) }} <span class="por-unidad">c/u</span></p>
             </div>
 
@@ -547,17 +559,11 @@ async function irAPagar() {
     formData.append('id_cliente', tienda.usuario.id)
     if (pidiendoPin.value && pin.value) formData.append('pin', pin.value)
 
-    // Preparar el array de productos esperado por el backend
-    const productosParaBackend = items.value.map(i => ({
-      id_producto: i.id,
-      cantidad: i.cantidad,
-      // El precio con descuento se muestra al cliente; el flag 'combo' hace que el
-      // backend aplique (y valide) el descuento del config para el combo/pack.
-      precio_unitario: i.precio,
-      combo: !!i.combo,
-      // Canje de cortesía: el backend valida el premio 'prod:ID' y cobra Bs 0.
-      ...(i.cortesia && { cortesia: true })
-    }))
+    // Array de productos para el backend: los combos AGRUPADOS se expanden a
+    // sus productos reales (cantidad del componente × combos llevados) con el
+    // precio con descuento por unidad y el flag 'combo' (el backend lo valida
+    // contra el % del config). Las cortesías van con su flag y el resto igual.
+    const productosParaBackend = tiendaCarrito.itemsParaCheckout()
     formData.append('productos', JSON.stringify(productosParaBackend))
     formData.append('modo_entrega', modoEntrega.value)
     if (entradaElegida.value) formData.append('id_entrada', entradaElegida.value)
@@ -1282,6 +1288,35 @@ onBeforeUnmount(() => { if (socketCarrito) socketCarrito.disconnect() })
   vertical-align: middle;
 }
 .badge-cortesia svg { flex-shrink: 0; }
+/* ---- Línea de combo agrupado: el precio vale por el paquete entero ---- */
+.badge-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2px 8px;
+  margin-right: 0.4rem;
+  border-radius: var(--radio-full);
+  background: rgba(168, 85, 247, 0.16);
+  border: 1px solid rgba(192, 132, 252, 0.4);
+  color: var(--morado-hover);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.badge-combo svg { flex-shrink: 0; }
+.combo-detalle {
+  margin: 2px 0 4px;
+  font-size: 0.74rem;
+  color: var(--texto-secundario);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .precio-tachado {
   text-decoration: line-through;
   color: var(--texto-desactivado);

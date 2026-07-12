@@ -36,7 +36,7 @@
         <div v-else :id="readerLiveId" class="captura-video captura-reader"></div>
 
         <div class="captura-guia">
-          <div class="guia-marco" :class="{ 'guia-marco-qr': modo === 'qr', detectado: qrDetectado }" aria-hidden="true">
+          <div ref="marcoGuia" class="guia-marco" :class="{ 'guia-marco-qr': modo === 'qr', detectado: qrDetectado }" aria-hidden="true">
             <span class="guia-esquina ge-tl"></span>
             <span class="guia-esquina ge-tr"></span>
             <span class="guia-esquina ge-bl"></span>
@@ -93,6 +93,7 @@ const etiquetaCamara = props.modo === 'qr' ? 'Escanear QR' : 'Tomar foto'
 
 const inputFile = ref(null)
 const videoCamara = ref(null)
+const marcoGuia = ref(null)
 const camaraAbierta = ref(false)
 const qrDetectado = ref(false)
 let streamCamara = null
@@ -281,6 +282,15 @@ async function capturarFoto() {
     blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95))
   }
 
+  // 3) RECORTE AL MARCO GUÍA (antes de cerrar la cámara: necesita su geometría).
+  //    La foto se queda SOLO con lo encuadrado (+margen): el texto de los
+  //    costados confundía al OCR y la imagen completa lo hacía lento. NO se
+  //    reduce la resolución: la zona útil conserva cada píxel original.
+  if (blob) {
+    const recortado = await recortarAlMarco(blob)
+    if (recortado) blob = recortado
+  }
+
   cerrarCamara()
   if (!blob) {
     notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
@@ -289,6 +299,50 @@ async function capturarFoto() {
   const tipo = blob.type || 'image/jpeg'
   const nombre = tipo.includes('png') ? props.nombreArchivo.replace(/\.jpe?g$/i, '.png') : props.nombreArchivo
   emit('archivo', new File([blob], nombre, { type: tipo }))
+}
+
+// Recorta la foto al rectángulo que el usuario ve como marco guía. Mapea el
+// marco (coordenadas de pantalla) al stream (object-fit: cover implica escala
+// y recorte) y de ahí a la FOTO (ImageCapture puede entregar otra resolución:
+// se escala proporcionalmente eje por eje). Si algo falla, devuelve null y se
+// usa la foto completa (nunca se pierde la captura).
+async function recortarAlMarco(blob) {
+  try {
+    const video = videoCamara.value
+    const marco = marcoGuia.value
+    if (!video || !marco || !video.videoWidth) return null
+    const cont = video.getBoundingClientRect()
+    const rm = marco.getBoundingClientRect()
+    if (!cont.width || !rm.width) return null
+    const vw = video.videoWidth, vh = video.videoHeight
+    // object-fit: cover -> el stream se escala para CUBRIR el contenedor
+    const escala = Math.max(cont.width / vw, cont.height / vh)
+    const offX = (vw * escala - cont.width) / 2
+    const offY = (vh * escala - cont.height) / 2
+    // Marco en píxeles del stream, con 6% de margen (por si el encuadre quedó justo)
+    const margen = 0.06
+    const mw = rm.width / escala, mh = rm.height / escala
+    const exX = mw * margen, exY = mh * margen
+    const mx = (rm.left - cont.left + offX) / escala - exX
+    const my = (rm.top - cont.top + offY) / escala - exY
+    // La foto puede tener otra resolución que el stream: proporción por eje
+    const bmp = await createImageBitmap(blob)
+    const rx = bmp.width / vw, ry = bmp.height / vh
+    const sx = Math.max(0, Math.round(mx * rx))
+    const sy = Math.max(0, Math.round(my * ry))
+    const sw = Math.min(bmp.width - sx, Math.round((mw + exX * 2) * rx))
+    const sh = Math.min(bmp.height - sy, Math.round((mh + exY * 2) * ry))
+    if (sw < 200 || sh < 200) { bmp.close?.(); return null } // recorte sospechoso: mejor la foto completa
+    const canvas = document.createElement('canvas')
+    canvas.width = sw
+    canvas.height = sh
+    canvas.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh)
+    bmp.close?.()
+    return await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95))
+  } catch (e) {
+    console.warn('No se pudo recortar al marco; se usa la foto completa:', e)
+    return null
+  }
 }
 
 onUnmounted(cerrarCamara)
