@@ -209,6 +209,10 @@ function analizarComprobante(textoOCR, montoEsperado, hoy = new Date(), opciones
     const t = texto.match(p.transaccion)
     if (!t) { ultimaFalla = { p, campo: 'transaccion' }; continue }
     const transaccionId = t[1].toUpperCase()
+    // Un N° de transacción REAL siempre tiene DÍGITOS. Si lo capturado no tiene
+    // (ej. "CONSUMO" tomado de "Referencia: Consumo Euphoria", o una palabra suelta),
+    // NO es un número de transacción válido: se prueba la siguiente plantilla.
+    if (!/\d/.test(transaccionId)) { ultimaFalla = { p, campo: 'transaccion' }; continue }
 
     // Fecha del comprobante: debe ser de hoy
     let fechaOk = false
