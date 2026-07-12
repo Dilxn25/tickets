@@ -243,7 +243,7 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         where: { id_billetera: billetera.id_billetera, tipo_operacion: { in: ['Consumo', 'Reserva', 'reembolso', 'retiro', 'Retiro'] } },
         include: {
           usuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
-          comanda: { select: { id_comanda: true, metodo_pago: true, detalle_comanda: { select: { subtotal: true } }, _count: { select: { detalle_comanda: true } } } },
+          comanda: { select: { id_comanda: true, metodo_pago: true, origen: true, modo_entrega: true, detalle_comanda: { select: { subtotal: true } }, _count: { select: { detalle_comanda: true } } } },
         },
         orderBy: { fecha_hora: 'desc' },
         take: 100,
@@ -329,12 +329,20 @@ router.get('/movimientos', verificarToken, async (req, res) => {
           Number(e.monto_pagado) === Number(t.monto)
         )
       }
+      // Título y detalle del consumo según ORIGEN y cómo se entregó REALMENTE.
+      // Antes todo consumo decía "Pedido en barra" aunque fuera desde la app.
+      const origenComanda = t.comanda?.origen
+      const modoEntrega = t.comanda?.modo_entrega
+      const tituloConsumo = origenComanda === 'app' ? 'Pedido en la app' : 'Pedido en barra'
+      const entregaTxt = modoEntrega === 'llevar' ? 'Te lo llevaron a tu lugar'
+        : (modoEntrega === 'barra' ? 'Recogido en barra' : null)
+      const baseConsumo = esAutoservicio ? 'Pedido desde tu app' : (responsable ? `Te atendió ${responsable}` : 'Pago con billetera')
       movimientos.push({
         id: `T-${t.id_transaccion}`,
         tipo: esConsumo ? 'consumo' : 'reserva',
-        titulo: esConsumo ? 'Pedido en barra' : 'Reserva de espacio',
+        titulo: esConsumo ? tituloConsumo : 'Reserva de espacio',
         detalle: esConsumo
-          ? (esAutoservicio ? 'Pedido desde tu app' : (responsable ? `Te atendió ${responsable}` : 'Pago con billetera'))
+          ? (entregaTxt ? `${baseConsumo} · ${entregaTxt}` : baseConsumo)
           : (entradaAsociada
               ? `${entradaAsociada.mesa_espacio ? `${entradaAsociada.mesa_espacio.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${entradaAsociada.mesa_espacio.numero_nombre}` : 'Entrada general'} · ${entradaAsociada.zona?.evento?.nombre_evento || entradaAsociada.zona?.nombre_zona || 'Evento'}`
               : 'Pago de reserva'),
@@ -559,12 +567,14 @@ router.get('/admin/flujo-dinero', verificarToken, soloRoles('Administrador'), as
     const devuelto = suma(t => t === 'reembolso')
     const retirado = suma(t => t === 'retiro')
 
-    // Retenido por normas (diferencia entre lo debitado y lo entregado en retiros).
+    // Redondeo entregado DE MÁS en los retiros en efectivo (se da un poco más para
+    // no lidiar con centavos). Se reporta para que la CAJA cuadre: el efectivo
+    // entregado = retirado + redondeo. No es comisión (los retiros no cobran).
     const whereRetiro = (req.query.desde || req.query.hasta)
       ? { estado: 'pagado', fecha_pago: rango }
       : { estado: 'pagado' }
     const retAgg = await prisma.solicitud_retiro.aggregate({ where: whereRetiro, _sum: { diferencia: true, monto_entregado: true } })
-    const retenido = Number(retAgg._sum.diferencia || 0)
+    const redondeo = Number(retAgg._sum.diferencia || 0)
     const entregado_efectivo = Number(retAgg._sum.monto_entregado || 0)
 
     res.json({
@@ -573,7 +583,10 @@ router.get('/admin/flujo-dinero', verificarToken, soloRoles('Administrador'), as
       devuelto: Math.round(devuelto * 100) / 100,
       retirado: Math.round(retirado * 100) / 100,
       entregado_efectivo: Math.round(entregado_efectivo * 100) / 100,
-      retenido: Math.round(retenido * 100) / 100,
+      // Redondeo entregado de más en efectivo (para cuadrar caja). Alias `retenido`
+      // por compatibilidad con la UI existente.
+      redondeo: Math.round(redondeo * 100) / 100,
+      retenido: Math.round(redondeo * 100) / 100,
       saldo_neto: Math.round((entro - retirado) * 100) / 100,
       conteos: {
         recargas: cuenta(esRecarga),

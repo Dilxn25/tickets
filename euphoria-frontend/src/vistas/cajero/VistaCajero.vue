@@ -718,11 +718,12 @@
               <label>Retirar de billetera
                 <input type="number" min="0" :max="r.saldo_actual" step="0.01" v-model.number="r._retirar" class="retiro-input" />
               </label>
-              <label>Entregar en efectivo
-                <input type="number" min="0" step="0.01" v-model.number="r._entregar" class="retiro-input" />
-              </label>
             </div>
-            <p class="retiro-dif">Diferencia (queda para el local): <b>Bs {{ ((Number(r._retirar)||0) - (Number(r._entregar)||0)).toFixed(2) }}</b></p>
+            <p class="retiro-dif">
+              {{ r.metodo === 'qr' ? 'Transferir (monto exacto):' : 'Entregar en efectivo:' }}
+              <b>Bs {{ entregarRetiro(r).toFixed(2) }}</b>
+              <span v-if="redondeoRetiro(r) > 0" class="retiro-redondeo"> · redondeo +Bs {{ redondeoRetiro(r).toFixed(2) }}</span>
+            </p>
             <div class="retiro-acciones">
               <button class="btn-pagar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="pagarRetiro(r)">
                 {{ procesandoRetiro === r.id_solicitud ? '…' : 'Registrar retiro' }}
@@ -730,7 +731,7 @@
               <button class="btn-rechazar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="rechazarRetiro(r)">Rechazar</button>
             </div>
           </template>
-          <p v-else class="retiro-pagado">Retiró Bs {{ r.monto_retirado }} · recibió Bs {{ r.monto_entregado }} · diferencia Bs {{ r.diferencia }}</p>
+          <p v-else class="retiro-pagado">Retiró Bs {{ r.monto_retirado }} · recibió Bs {{ r.monto_entregado }}<span v-if="Number(r.diferencia) > 0"> · redondeo +Bs {{ r.diferencia }}</span></p>
         </div>
       </div>
     </div>
@@ -914,15 +915,27 @@ async function cargarRetiros() {
 async function cargarPendientesBadge() {
   try { retirosPendientes.value = await clienteHttp.get('/cajero/retiros?estado=pendiente') } catch { /* nada */ }
 }
+// Cuánto se entrega según el método: EFECTIVO redondea hacia arriba a 0.10
+// (el cliente recibe un poco más, nunca menos); QR/transferencia es exacto.
+function entregarRetiro(r) {
+  const retirar = Number(r._retirar) || 0
+  if (retirar <= 0) return 0
+  if (r.metodo === 'qr') return Math.round(retirar * 100) / 100
+  return Math.ceil(retirar * 10) / 10
+}
+function redondeoRetiro(r) {
+  return Math.round((entregarRetiro(r) - (Number(r._retirar) || 0)) * 100) / 100
+}
 async function pagarRetiro(r) {
-  const retirar = Number(r._retirar), entregar = Number(r._entregar)
+  const retirar = Number(r._retirar)
   if (!(retirar > 0)) { notif.advertencia('El monto a retirar debe ser mayor a 0.'); return }
   if (retirar > r.saldo_actual) { notif.advertencia('No puede retirar más que el saldo del cliente.'); return }
-  if (entregar < 0 || entregar > retirar) { notif.advertencia('Lo entregado no puede ser mayor a lo retirado.'); return }
   procesandoRetiro.value = r.id_solicitud
   try {
-    const res = await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/pagar`, { monto_retirado: retirar, monto_entregado: entregar })
-    notif.exito(`Retiro registrado. Diferencia para el local: Bs ${res.diferencia}.`)
+    // El backend calcula lo entregado (efectivo redondea arriba, QR exacto).
+    const res = await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/pagar`, { monto_retirado: retirar })
+    const comoRecibe = r.metodo === 'qr' ? 'Transfiere' : 'Entrega'
+    notif.exito(`Retiro registrado. ${comoRecibe} Bs ${res.entregado}${Number(res.diferencia) > 0 ? ` (redondeo +Bs ${res.diferencia})` : ''}.`)
     cargarRetiros()
   } catch (e) { notif.error(e?.error || 'No se pudo procesar el retiro.') }
   finally { procesandoRetiro.value = null }

@@ -1133,8 +1133,8 @@
           <span class="flujo-sub">entregado en efectivo: Bs {{ (flujo.entregado_efectivo || 0).toFixed(2) }}</span>
         </div>
         <div class="flujo-card f-retenido">
-          <span class="flujo-label">Retenido por normas</span>
-          <span class="flujo-valor">Bs {{ (flujo.retenido || 0).toFixed(2) }}</span>
+          <span class="flujo-label">Redondeo entregado (efectivo)</span>
+          <span class="flujo-valor">Bs {{ (flujo.redondeo ?? flujo.retenido ?? 0).toFixed(2) }}</span>
           <span class="flujo-sub">diferencia en retiros</span>
         </div>
       </div>

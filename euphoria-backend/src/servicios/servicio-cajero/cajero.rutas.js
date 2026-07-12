@@ -366,13 +366,20 @@ router.get('/retiros', async (req, res) => {
   }
 })
 
-// Procesa un retiro: descuenta de la billetera y registra cuánto se entregó en
-// efectivo (puede diferir por redondeo/normas → se guarda la diferencia).
-async function procesarRetiro({ id_cliente, monto_retirado, monto_entregado, id_cajero }) {
+// Procesa un retiro SIN COMISIÓN. El monto que sale de la billetera (retirado) es
+// exacto; lo que recibe el cliente (entregado) depende del método:
+//   - EFECTIVO: se redondea HACIA ARRIBA a 0.10 (recibe un poco más, nunca menos,
+//     para no lidiar con centavos). Ese "de más" se registra como REDONDEO para
+//     que la caja cuadre (pequeña fuga controlada, no es comisión).
+//   - QR / transferencia: monto EXACTO (sin redondeo).
+async function procesarRetiro({ id_cliente, monto_retirado, metodo, id_cajero }) {
   const retirado = Math.round(Number(monto_retirado) * 100) / 100
-  const entregado = Math.round(Number(monto_entregado) * 100) / 100
   if (!(retirado > 0)) return { error: 'El monto a retirar debe ser mayor a 0.', status: 400 }
-  if (!(entregado >= 0)) return { error: 'El monto entregado no es válido.', status: 400 }
+
+  const esEfectivo = (metodo || 'persona') !== 'qr'
+  const entregado = esEfectivo ? Math.ceil(retirado * 10) / 10 : retirado
+  // redondeo = lo que el local entrega DE MÁS (>= 0). Se guarda para la caja.
+  const redondeo = Math.round((entregado - retirado) * 100) / 100
 
   const billetera = await prisma.billetera.findUnique({ where: { id_usuario: id_cliente } })
   if (!billetera) return { error: 'El cliente no tiene billetera.', status: 404 }
@@ -390,7 +397,8 @@ async function procesarRetiro({ id_cliente, monto_retirado, monto_entregado, id_
     })
   })
   if (global.io) global.io.emit('billetera_actualizada', { id_usuario: id_cliente })
-  return { diferencia: Math.round((retirado - entregado) * 100) / 100, retirado, entregado, ahora }
+  // `diferencia` = redondeo entregado de más (para el reporte de caja).
+  return { diferencia: redondeo, redondeo, retirado, entregado, esEfectivo, ahora }
 }
 
 // POST /api/cajero/retiros/:id/pagar  Body: { monto_retirado, monto_entregado }
@@ -404,7 +412,7 @@ router.post('/retiros/:id/pagar', async (req, res) => {
     const r = await procesarRetiro({
       id_cliente: sol.id_cliente,
       monto_retirado: req.body.monto_retirado,
-      monto_entregado: req.body.monto_entregado,
+      metodo: sol.metodo,
       id_cajero: req.usuario.id,
     })
     if (r.error) return res.status(r.status).json({ error: r.error })
@@ -413,7 +421,10 @@ router.post('/retiros/:id/pagar', async (req, res) => {
       where: { id_solicitud: id },
       data: { estado: 'pagado', monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
     })
-    await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`, url: '/cliente/billetera' })
+    const msgRetiro = r.esEfectivo
+      ? `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`
+      : `Se retiraron Bs ${r.retirado} de tu billetera. Se transfirieron Bs ${r.entregado} a tu cuenta/QR.`
+    await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: msgRetiro, url: '/cliente/billetera' })
     res.json({ mensaje: 'Retiro pagado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia })
   } catch (error) {
     if (error.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'El saldo cambió; el cliente ya no tiene ese monto.' })
@@ -446,14 +457,18 @@ router.post('/retiro-directo', async (req, res) => {
     const cliente = await prisma.usuario.findUnique({ where: { id_usuario: id_cliente } })
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado.' })
 
-    const r = await procesarRetiro({ id_cliente, monto_retirado: req.body.monto_retirado, monto_entregado: req.body.monto_entregado, id_cajero: req.usuario.id })
+    const metodo = req.body.metodo === 'qr' ? 'qr' : 'persona'
+    const r = await procesarRetiro({ id_cliente, monto_retirado: req.body.monto_retirado, metodo, id_cajero: req.usuario.id })
     if (r.error) return res.status(r.status).json({ error: r.error })
 
     // Deja registro (como solicitud ya pagada) para el historial y el reporte.
     await prisma.solicitud_retiro.create({
-      data: { id_cliente, metodo: 'persona', estado: 'pagado', saldo_al_solicitar: r.retirado, monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
+      data: { id_cliente, metodo, estado: 'pagado', saldo_al_solicitar: r.retirado, monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
     })
-    await notificar(id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`, url: '/cliente/billetera' })
+    const msgRetiro = r.esEfectivo
+      ? `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`
+      : `Se retiraron Bs ${r.retirado} de tu billetera. Se transfirieron Bs ${r.entregado} a tu cuenta/QR.`
+    await notificar(id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: msgRetiro, url: '/cliente/billetera' })
     res.json({ mensaje: 'Retiro realizado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia })
   } catch (error) {
     if (error.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'El saldo cambió.' })

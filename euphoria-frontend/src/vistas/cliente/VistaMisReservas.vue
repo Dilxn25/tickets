@@ -188,11 +188,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { useTiempoReal } from '@/composables/useTiempoReal'
 import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
 
 const notif = useNotificaciones()
 const router = useRouter()
+const tiendaCarrito = useTiendaCarrito()
 const reservas = ref([])
 // Color por zona (según lo pagado): la reserva más cara = dorado (VIP).
 const mapaColores = computed(() => mapaColorPorPrecio(reservas.value.map(r => r.monto_pagado)))
@@ -216,6 +218,15 @@ async function cancelarReserva(r) {
   try {
     const res = await servicioReservas.cancelarReserva(r.id_entrada)
     notif.exito(Number(res.reembolsado) > 0 ? `Reserva cancelada. Bs ${Number(res.reembolsado).toFixed(2)} a tu billetera${res.sin_comision ? ' (sin comisión)' : ''}` : 'Reserva cancelada')
+    // Si cancelaste la reserva del evento en el que "estabas en vivo", límpialo
+    // para que el inicio deje de mostrarte como dentro del evento.
+    try {
+      const ev = JSON.parse(localStorage.getItem('euphoria_evento_actual') || 'null')
+      if (ev && r.evento && ev.nombre === r.evento) {
+        localStorage.removeItem('euphoria_evento_actual')
+        tiendaCarrito.setEventoActivo(null)
+      }
+    } catch { /* sin evento guardado */ }
     await cargar()
   } catch (err) {
     const data = err?.response?.data || err

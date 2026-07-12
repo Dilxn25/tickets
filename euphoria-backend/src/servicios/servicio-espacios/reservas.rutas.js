@@ -1097,6 +1097,23 @@ router.post('/:id/cancelar', soloRoles('Cliente'), async (req, res) => {
     const evento = ent.zona?.evento
     if (evento?.estado === 'terminado') return res.status(409).json({ error: 'El evento ya terminó.' })
 
+    // El pedido NO puede quedar huérfano: si hay pedidos ACTIVOS ligados a esta
+    // reserva (no consumidos ni devueltos), el cliente debe resolverlos primero
+    // (pedir su devolución). Así no queda un pedido sin evento con reglas raras.
+    const pedidosActivos = await prisma.comanda.count({
+      where: {
+        id_entrada: id,
+        estado_despacho: { notIn: ['Cancelada', 'Reembolsada', 'Completada'] },
+        estado_entrega: { not: 'entregado' },
+      },
+    })
+    if (pedidosActivos > 0) {
+      return res.status(409).json({
+        error: `Tienes ${pedidosActivos} pedido(s) activo(s) para este evento. Pide su devolución en "Mis pedidos" antes de cancelar la reserva.`,
+        pedidos_activos: pedidosActivos,
+      })
+    }
+
     const total = Number(ent.monto_pagado || 0)
     const pct = comisionSegunFecha24(evento?.fecha_hora_inicio, await comisionCancelacion())
     const reembolso = Math.round(total * (1 - pct / 100) * 100) / 100
