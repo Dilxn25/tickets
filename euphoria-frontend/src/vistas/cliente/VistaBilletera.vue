@@ -1210,23 +1210,9 @@ const videoCamara = ref(null)
 const inputCamaraComprobante = ref(null)
 let streamCamara = null
 
-function abrirCamara() {
-  if (procesandoOCR.value) return
-  // Un monto válido primero (mismo camino que subir archivo).
-  validarMonto()
-  if (!montoIngresado.value || errorMonto.value) {
-    errorOCR.value = 'Ingresa un monto válido primero'
-    return
-  }
-  errorOCR.value = ''
-  // Abre la cámara nativa del celular.
-  inputCamaraComprobante.value?.click()
-}
-
-// Cámara antigua por getUserMedia (ya no se usa para el comprobante; se conserva
-// por si algún flujo la invoca). El comprobante ahora usa la cámara nativa.
-async function abrirCamaraLegacy() {
+async function abrirCamara() {
   if (procesandoOCR.value || camaraAbierta.value) return
+  // Un monto válido primero (mismo camino que subir archivo).
   validarMonto()
   if (!montoIngresado.value || errorMonto.value) {
     errorOCR.value = 'Ingresa un monto válido primero'
@@ -1240,17 +1226,34 @@ async function abrirCamaraLegacy() {
   }
 
   try {
-    streamCamara = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
-      audio: false
-    })
+    // ALTA RESOLUCIÓN + autoenfoque continuo: clave para que el comprobante salga
+    // nítido y el OCR lea el monto. Antes se pedía sin resolución (640x480 borroso).
+    try {
+      streamCamara = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 2560 },
+          height: { ideal: 1440 },
+          advanced: [{ focusMode: 'continuous' }],
+        },
+        audio: false,
+      })
+    } catch {
+      // Si el equipo no soporta esa resolución, se reintenta con lo básico.
+      streamCamara = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    }
+    // Reforzar el autoenfoque continuo sobre la pista ya activa (algunos navegadores
+    // ignoran 'advanced' en getUserMedia pero sí aceptan applyConstraints).
+    try {
+      const track = streamCamara.getVideoTracks?.()[0]
+      const caps = track?.getCapabilities?.()
+      if (caps?.focusMode?.includes?.('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+    } catch { /* enfoque por defecto */ }
+
     camaraAbierta.value = true
     await nextTick()
-    if (videoCamara.value) {
-      videoCamara.value.srcObject = streamCamara
-    } else {
-      cerrarCamara()
-    }
+    if (videoCamara.value) videoCamara.value.srcObject = streamCamara
+    else cerrarCamara()
   } catch (error) {
     console.error('Error abriendo la cámara:', error)
     cerrarCamara()
@@ -1267,26 +1270,44 @@ function cerrarCamara() {
   camaraAbierta.value = false
 }
 
-function capturarFoto() {
+async function capturarFoto() {
   const video = videoCamara.value
   if (!video || !video.videoWidth) return
+  let blob = null
 
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-
-  canvas.toBlob((blob) => {
-    cerrarCamara()
-    if (!blob) {
-      notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
-      return
+  // Foto a resolución nativa con enfoque de FOTO (más nítida que un frame de video).
+  try {
+    const track = streamCamara?.getVideoTracks?.()[0]
+    if (track && typeof window.ImageCapture === 'function') {
+      const capturador = new ImageCapture(track)
+      await new Promise(r => setTimeout(r, 350)) // deja asentar el autoenfoque
+      let opciones = {}
+      try {
+        const caps = await capturador.getPhotoCapabilities()
+        if (caps?.imageWidth?.max && caps?.imageHeight?.max) opciones = { imageWidth: caps.imageWidth.max, imageHeight: caps.imageHeight.max }
+      } catch { /* resolución por defecto */ }
+      blob = await capturador.takePhoto(opciones)
     }
-    // La foto sigue EXACTAMENTE el mismo camino que un archivo elegido.
-    const file = new File([blob], 'comprobante-foto.jpg', { type: 'image/jpeg' })
-    archivoComprobante.value = file
-    procesarOCR(file)
-  }, 'image/jpeg', 0.92)
+  } catch { blob = null }
+
+  // Respaldo (iOS/Safari): frame del video a resolución nativa, JPEG alta calidad.
+  if (!blob) {
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95))
+  }
+
+  cerrarCamara()
+  if (!blob) {
+    notif.error('No se pudo capturar la foto. Inténtalo de nuevo.')
+    return
+  }
+  // La foto sigue EXACTAMENTE el mismo camino que un archivo elegido.
+  const file = new File([blob], 'comprobante-foto.jpg', { type: blob.type || 'image/jpeg' })
+  archivoComprobante.value = file
+  procesarOCR(file)
 }
 
 // Limpiar el archivo subido si hubo un error o seleccionó mal
@@ -1333,7 +1354,7 @@ async function procesarOCR(file) {
     console.error('Error en OCR:', error)
     // limpiarArchivo() resetea errorOCR, por eso se asigna el mensaje después;
     // sin esto el input queda "ocupado" y no se puede reintentar con el mismo archivo.
-    const mensaje = error.response?.data?.error || error.error || 'No se pudo validar el comprobante mediante IA'
+    const mensaje = error.response?.data?.error || error.error || 'No pudimos leer el comprobante. Toma la foto nítida y completa (que se vean el monto, la fecha y el número), o súbela desde tus archivos.'
     limpiarArchivo()
     errorOCR.value = mensaje
   } finally {
