@@ -87,6 +87,10 @@ if (fs.existsSync(distFrontend)) {
   app.use(express.static(distFrontend))
   app.use((req, res, next) => {
     if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+      // index.html NO se cachea: así cada recarga toma SIEMPRE la última versión
+      // desplegada (los assets con hash sí se cachean, son inmutables). Sin esto
+      // el navegador podía seguir sirviendo la app vieja tras un nuevo deploy.
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate')
       return res.sendFile(path.join(distFrontend, 'index.html'))
     }
     next()
