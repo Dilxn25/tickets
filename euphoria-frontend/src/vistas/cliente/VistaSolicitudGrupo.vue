@@ -23,14 +23,29 @@
       </div>
     </template>
 
-    <!-- Ya hay una propuesta del local: aceptar o rechazar -->
+    <!-- Ya hay una propuesta del local: SE VE EN EL MAPA y se acepta/rechaza -->
     <template v-else-if="miSolicitud && miSolicitud.estado === 'propuesta'">
       <div class="sg-propuesta">
         <div class="sgp-ic">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"></path></svg>
         </div>
         <h2>El local te propone estos lugares</h2>
-        <p>No se pudieron dar exactamente los que pediste, pero sí estos. ¿Los confirmas?</p>
+
+        <!-- El cliente VE la propuesta en el plano (verde brillante; el resto atenuado) -->
+        <div v-for="z in zonasConPropuesta" :key="'p-' + z.id_zona" class="sg-zona sgp-mapa">
+          <div class="sg-zona-tit">{{ z.nombre_zona }}</div>
+          <div class="sg-plano" :style="{ aspectRatio: z.proporcion || 1.6 }">
+            <button
+              v-for="el in z.mesa_espacio" :key="el.id_mesa" type="button"
+              class="sg-elem"
+              :class="[claseElem(el), { propuesto: idsPropuestas.has(el.id_mesa), atenuado: !idsPropuestas.has(el.id_mesa) }]"
+              :style="estiloElem(el)" disabled
+            >
+              <span>{{ el.numero_nombre }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="sgp-mesas">
           <span v-for="m in miSolicitud.mesas_propuestas" :key="m.id_mesa" class="sgp-chip">{{ m.nombre }}</span>
         </div>
@@ -143,6 +158,13 @@ async function cargarMiSolicitud() {
   } catch { miSolicitud.value = null }
 }
 
+// Propuesta EN EL MAPA: solo las zonas que contienen lugares propuestos, con
+// esos lugares en verde brillante y el resto del plano atenuado.
+const idsPropuestas = computed(() => new Set((miSolicitud.value?.mesas_propuestas || []).map(m => m.id_mesa)))
+const zonasConPropuesta = computed(() =>
+  zonas.value.filter(z => (z.mesa_espacio || []).some(el => idsPropuestas.value.has(el.id_mesa)))
+)
+
 async function responder(acepta) {
   if (!miSolicitud.value) return
   respondiendo.value = true
@@ -250,6 +272,15 @@ onMounted(async () => {
 .sg-elem.elegible { background: rgba(168,85,247,0.5); border-color: var(--morado-brillante); }
 .sg-elem.elegible:active { background: rgba(168,85,247,0.8); }
 .sg-elem.sel { background: var(--gradiente-marca); border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
+/* Propuesta del local vista en el mapa: lo propuesto brilla, el resto se apaga */
+.sgp-mapa { text-align: left; margin-top: 14px; }
+.sg-elem.propuesto {
+  background: rgba(34,197,94,0.55) !important; border-color: #4ADE80 !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.65), 0 0 16px rgba(34,197,94,0.8);
+  opacity: 1 !important; z-index: 2;
+}
+.sg-elem.atenuado { opacity: 0.22; }
+.sg-elem:disabled { cursor: default; }
 .sg-elem.ocupada { background: rgba(120,120,140,0.35); cursor: not-allowed; }
 .sg-elem.deco { background: rgba(80,80,100,0.2); cursor: default; }
 

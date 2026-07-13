@@ -249,21 +249,34 @@
               </button>
             </div>
 
-            <!-- Alguna ocupada → proponer alternativa -->
+            <!-- Alguna ocupada → proponer alternativa EN EL MAPA -->
             <div v-else class="sg-prop">
-              <p class="sg-aviso">Algún lugar ya no está libre. No puedes confirmar tal cual: arma una propuesta y envíasela al cliente para que la confirme.</p>
-              <span class="sg-lbl">Propón mesas disponibles (toca para elegir):</span>
-              <div class="sg-libres">
-                <button
-                  v-for="m in mesasLibresEvento" :key="m.id_mesa" type="button"
-                  class="sol-mchip elegible" :class="{ sel: propuestaSel.includes(m.id_mesa) }"
-                  @click="togglePropuesta(m)"
-                >{{ etiquetaMesaProp(m) }}</button>
-                <p v-if="!mesasLibresEvento.length" class="gest-vacio">No quedan mesas libres en el evento.</p>
+              <span class="sg-lbl">Toca {{ cupoPropuesta }} lugar(es) libres en el mapa · lo que pidió el cliente está marcado:</span>
+              <div v-for="z in planosVivo" :key="'prop-' + z.id_zona" class="mv-zona">
+                <p class="mv-zona-nombre">{{ z.nombre_zona }}</p>
+                <div class="mv-plano" :style="{ aspectRatio: String(z.proporcion || 1.6) }">
+                  <button
+                    v-for="m in z.mesas" :key="m.id_mesa" type="button"
+                    class="mv-el"
+                    :class="[claseMesaVivo(m), {
+                      tent: idsTentativas.has(m.id_mesa),
+                      sel: propuestaSel.includes(m.id_mesa),
+                    }]"
+                    :style="estiloMesaVivo(m)"
+                    :disabled="claseMesaVivo(m) !== 'lib'"
+                    @click="togglePropuestaMapa(m)"
+                  >
+                    <span class="mv-el-txt">{{ m.numero_nombre }}</span>
+                  </button>
+                </div>
               </div>
-              <button class="btn-primario" :disabled="!propuestaSel.length || gestionandoSol" @click="proponerSolicitud">
-                {{ gestionandoSol ? 'Enviando…' : `Enviar propuesta (${propuestaSel.length})` }}
-              </button>
+              <div class="sg-prop-acciones">
+                <!-- No alcanza: responder con disculpa, jamás una oferta incoherente -->
+                <button class="btn-sec sg-sin-disp" :disabled="gestionandoSol" @click="rechazarSolicitud">Sin disponibilidad</button>
+                <button class="btn-primario" :disabled="propuestaSel.length !== cupoPropuesta || gestionandoSol" @click="proponerSolicitud">
+                  {{ gestionandoSol ? 'Enviando…' : `Enviar propuesta (${propuestaSel.length}/${cupoPropuesta})` }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -541,10 +554,40 @@ const mesasLibresEvento = computed(() => {
   return out
 })
 function etiquetaMesaProp(m) { return `${m.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${m.numero_nombre}` }
-function togglePropuesta(m) {
+
+// ===== Propuesta EN EL MAPA =====
+// La oferta debe ser COHERENTE: tantos lugares como pidió el cliente. El mapa
+// marca lo que él pidió (anillo) y solo deja tocar lugares LIBRES.
+const idsTentativas = computed(() => new Set((solSel.value?.mesas_tentativas || []).map(m => m.id_mesa)))
+const cupoPropuesta = computed(() => (solSel.value?.mesas_tentativas || []).length || 1)
+function togglePropuestaMapa(m) {
+  if (claseMesaVivo(m) !== 'lib') return
   const i = propuestaSel.value.indexOf(m.id_mesa)
-  if (i >= 0) propuestaSel.value.splice(i, 1)
-  else propuestaSel.value.push(m.id_mesa)
+  if (i >= 0) { propuestaSel.value.splice(i, 1); return }
+  if (propuestaSel.value.length >= cupoPropuesta.value) {
+    notif.advertencia(`El cliente pidió ${cupoPropuesta.value} lugar(es): quita uno para cambiar la elección.`)
+    return
+  }
+  propuestaSel.value.push(m.id_mesa)
+}
+// No hay lugares suficientes: disculpa honesta (jamás una oferta incoherente)
+async function rechazarSolicitud() {
+  if (!solSel.value) return
+  const ok = await notif.confirmar({
+    titulo: '¿Responder que no hay disponibilidad?',
+    mensaje: 'El cliente recibirá una disculpa: no hay lugares suficientes para su grupo.',
+    textoConfirmar: 'Sí, avisar',
+  })
+  if (!ok) return
+  gestionandoSol.value = true
+  try {
+    const r = await clienteHttp.post(`/reservas/solicitudes-grupo/${solSel.value.id_solicitud}/rechazar`)
+    notif.exito(r.mensaje || 'Se avisó al cliente.')
+    solSel.value = null
+    await cargarSolicitudes()
+  } catch (e) {
+    notif.error(e?.response?.data?.error || e?.error || 'No se pudo responder')
+  } finally { gestionandoSol.value = false }
 }
 
 const zonasEnAlerta = computed(() => zonas.value.filter(z => z.estado === 'alerta' || z.estado === 'lleno'))
@@ -1135,6 +1178,13 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .mv-el:hover:not(.deco) { filter: brightness(1.25); }
 .mv-el.busca { box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(168,85,247,0.9); z-index: 2; }
 .mv-el.apagado { opacity: 0.25; }
+/* Propuesta de grupos: lo que PIDIÓ el cliente (anillo punteado) y lo elegido */
+.mv-el.tent { box-shadow: 0 0 0 2px rgba(168,85,247,0.9); outline: 2px dashed rgba(192,132,252,0.9); outline-offset: 2px; z-index: 2; }
+.mv-el.sel { box-shadow: 0 0 0 3px #fff, 0 0 16px rgba(34,197,94,0.9); z-index: 3; filter: brightness(1.3); }
+.mv-el:disabled { cursor: not-allowed; }
+.sg-prop-acciones { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.sg-prop-acciones .btn-primario { flex: 1; }
+.sg-sin-disp { border-color: rgba(239,68,68,0.4); color: var(--color-error); }
 /* Detalle de la mesa tocada */
 .mv-detalle { border-radius: var(--radio-lg); border: 1px solid var(--borde-sutil); padding: 12px 14px; background: var(--gradiente-sutil); }
 .mv-detalle.res { border-color: rgba(245,158,11,0.45); }

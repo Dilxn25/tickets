@@ -1028,6 +1028,24 @@ router.post('/solicitudes-grupo/:id/proponer', soloRoles('Recepcionista', 'Admin
     if (!s || !['pendiente', 'propuesta'].includes(s.estado)) return res.status(404).json({ error: 'Solicitud no disponible.' })
     const mesas = Array.isArray(req.body.mesas) ? req.body.mesas.filter(m => m && m.id_mesa).map(m => ({ id_mesa: Number(m.id_mesa), nombre: String(m.nombre || '').slice(0, 50) })) : []
     if (!mesas.length) return res.status(400).json({ error: 'Elige al menos una mesa para proponer.' })
+
+    // OFERTA COHERENTE: si el cliente pidió N lugares, la propuesta lleva N
+    // lugares (nunca "pidió 3 mesas y le ofrezco 1 mesa y una silla" — eso es
+    // burlarse). Si no alcanzan, recepción usa /rechazar con disculpa.
+    const tentativas = s.mesas_tentativas ? JSON.parse(s.mesas_tentativas) : []
+    if (tentativas.length && mesas.length !== tentativas.length) {
+      return res.status(400).json({
+        error: `El cliente pidió ${tentativas.length} lugares: propón exactamente ${tentativas.length} (elegiste ${mesas.length}) o responde que no hay disponibilidad.`,
+      })
+    }
+    // Solo se proponen lugares que SIGUEN libres (nada de ofrecer ocupados).
+    const filas = await prisma.mesa_espacio.findMany({
+      where: { id_mesa: { in: mesas.map(m => m.id_mesa) } },
+      select: { id_mesa: true, numero_nombre: true, estado_ocupacion: true },
+    })
+    const noLibre = filas.find(f => f.estado_ocupacion !== 'libre')
+    if (noLibre) return res.status(409).json({ error: `La mesa ${noLibre.numero_nombre} ya no está libre: quítala de la propuesta.` })
+
     await prisma.solicitud_grupo.update({
       where: { id_solicitud: s.id_solicitud },
       data: { mesas_propuestas: JSON.stringify(mesas), estado: 'propuesta' },
@@ -1040,6 +1058,29 @@ router.post('/solicitudes-grupo/:id/proponer', soloRoles('Recepcionista', 'Admin
   } catch (e) {
     console.error('Error proponiendo:', e)
     res.status(500).json({ error: 'No se pudo enviar la propuesta' })
+  }
+})
+
+// POST /api/reservas/solicitudes-grupo/:id/rechazar — recepción responde que NO
+// hay disponibilidad (disculpa). Es la salida honesta cuando no alcanzan los
+// lugares que pidió el cliente: mejor una disculpa que una oferta incoherente.
+router.post('/solicitudes-grupo/:id/rechazar', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const s = await prisma.solicitud_grupo.findUnique({ where: { id_solicitud: Number(req.params.id) } })
+    if (!s || !['pendiente', 'propuesta'].includes(s.estado)) return res.status(404).json({ error: 'Solicitud no disponible.' })
+    await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'rechazada' } })
+    if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'rechazada' })
+    emitirRecurso('reservas', { id_cliente: s.id_cliente })
+    await notificar(s.id_cliente, {
+      tipo: 'reserva',
+      titulo: 'Sobre tu reserva de grupo',
+      mensaje: 'Lo sentimos: no hay lugares suficientes para tu grupo en este evento. Te esperamos en el próximo.',
+      url: '/cliente/mis-reservas',
+    })
+    res.json({ ok: true, mensaje: 'Se avisó al cliente que no hay disponibilidad.' })
+  } catch (e) {
+    console.error('Error rechazando solicitud:', e)
+    res.status(500).json({ error: 'No se pudo responder la solicitud' })
   }
 })
 
