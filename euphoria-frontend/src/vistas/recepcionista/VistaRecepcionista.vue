@@ -4,7 +4,7 @@
     <header class="recep-head">
       <div class="recep-head-txt">
         <h1 class="titulo">Recepción</h1>
-        <p class="subtitulo">Controla ingresos, cobra en puerta y gestiona reservas en tiempo real</p>
+        <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
       </div>
       <label v-if="eventos.length" class="selector-wrap">
         <span class="selector-lbl">Evento activo</span>
@@ -44,13 +44,13 @@
 
         <!-- ============ PESTAÑA 1: INGRESO POR RESERVA ============ -->
         <div v-show="pestana === 'reserva'" class="flujo">
-          <p class="flujo-desc">El cliente ya reservó: escanea el QR de su entrada o valida su código. Una entrada puede admitir a varias personas y usarse por tandas.</p>
-
           <CapturaCamara modo="qr" texto-guia="Coloca el QR de la entrada dentro del marco" @codigo="alEscanearEntrada" />
 
           <div class="separador"><span>o ingresa el código</span></div>
           <form class="form-codigo" @submit.prevent="validarCodigo">
-            <input v-model="codigoManual" type="text" class="input-codigo" placeholder="Ej: 6ADB2FF8F57C" maxlength="20" />
+            <!-- El código siempre se ve y se busca en MAYÚSCULAS aunque el
+                 recepcionista escriba minúsculas -->
+            <input v-model="codigoManual" @input="codigoManual = codigoManual.toUpperCase()" type="text" class="input-codigo" placeholder="Ej: 6ADB2FF8F57C" maxlength="20" autocapitalize="characters" style="text-transform: uppercase;" />
             <button class="btn-primario" type="submit" :disabled="procesando || !codigoManual.trim()">Validar</button>
           </form>
 
@@ -94,8 +94,6 @@
 
         <!-- ============ PESTAÑA 2: INGRESO DE LA NOCHE (WALK-IN) ============ -->
         <div v-show="pestana === 'noche'" class="flujo">
-          <p class="flujo-desc">Gente que llega sin reserva. Elige a dónde entra: el precio ya está definido en el mapa. Se cobra en puerta y el ingreso al aforo es inmediato.</p>
-
           <div class="walk-tipo">
             <button class="wt-op" :class="{ activo: walkTipo === 'general' }" @click="walkTipo = 'general'">
               <b>Entrada general</b><span>Cobra por persona</span>
@@ -202,8 +200,6 @@
 
         <!-- ============ PESTAÑA 3: GRUPOS GRANDES ============ -->
         <div v-show="pestana === 'grupos'" class="flujo">
-          <p class="flujo-desc">Reservas de empresa, cumpleaños o grupos grandes. Los clientes pueden mandarte solicitudes desde su app con lugares tentativos; también puedes armar una directo aquí.</p>
-
           <!-- Bandeja de solicitudes -->
           <div class="solicitudes">
             <div class="sol-cab">
@@ -372,7 +368,16 @@ const notif = useNotificaciones()
 
 const eventos = ref([])
 const idEventoSel = ref(null)
-const opcionesEvento = computed(() => eventos.value.map(e => ({ value: e.id_evento, label: e.nombre_evento })))
+// Etiqueta bonita del estado del evento (para que el recepcionista sepa cuál
+// está en curso, cuál es próximo y cuál terminó — antes todos parecían activos).
+const ESTADO_EVENTO = {
+  planificacion: 'Planificación', promocion: 'Próximo',
+  en_transcurso: 'En curso', lleno: 'Lleno', terminado: 'Terminado',
+}
+const opcionesEvento = computed(() => eventos.value.map(e => ({
+  value: e.id_evento,
+  label: `${e.nombre_evento} · ${ESTADO_EVENTO[e.estado] || e.estado}`,
+})))
 const zonas = ref([])
 const aforoTotal = ref(0)
 const capacidadTotal = ref(0)
