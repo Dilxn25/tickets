@@ -7,7 +7,6 @@
         <p class="fid-sub">Tus clientes que más consumen. Prémialos y conviértelos en habituales.</p>
       </div>
       <!-- El ranking se recalcula solo cuando entra una venta (socket 'ventas'). -->
-      <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
     </header>
 
     <div v-if="!cargando && clientes.length" class="fid-kpis">

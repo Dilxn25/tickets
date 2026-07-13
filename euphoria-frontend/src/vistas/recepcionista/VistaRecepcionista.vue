@@ -4,7 +4,6 @@
     <header class="recep-head">
       <div class="recep-head-txt">
         <h1 class="titulo">Recepción</h1>
-        <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
       </div>
       <label v-if="eventos.length" class="selector-wrap">
         <span class="selector-lbl">Evento activo</span>
@@ -202,11 +201,9 @@
         <div v-show="pestana === 'grupos'" class="flujo">
           <!-- Bandeja de solicitudes -->
           <div class="solicitudes">
+            <!-- La bandeja se actualiza sola por socket (solicitud_grupo). -->
             <div class="sol-cab">
               <b>Solicitudes de clientes</b>
-              <!-- Sin botón de refrescar: la bandeja se actualiza sola por socket
-                   (solicitud_grupo) apenas un cliente envía una solicitud. -->
-              <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
             </div>
             <div v-if="!solicitudes.length" class="sol-vacia">No hay solicitudes pendientes.</div>
             <div v-else class="sol-lista">

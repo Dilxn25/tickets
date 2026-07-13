@@ -15,7 +15,6 @@
         </div>
       </div>
       <div class="cabecera-acciones">
-        <span v-if="!cargando && eventos.length" class="pulso-vivo"><span class="dot"></span>En vivo</span>
         <div v-if="eventos.length" class="selector-evento"><BaseSelect v-model="idEventoSel" :options="opcionesEvento" placeholder="Selecciona un evento" @update:model-value="cargarAforo" /></div>
       </div>
     </div>
@@ -112,9 +111,6 @@
         </div>
       </div>
 
-      <p class="live-nota">
-        <span class="dot"></span> Actualización automática en vivo
-      </p>
       </div><!-- /aforo-izq -->
 
       <!-- Mapa en vivo (columna derecha, siempre visible) -->
@@ -354,7 +350,6 @@ onDeactivated(() => {
 .vista-subtitulo { font-size: 0.9rem; color: var(--texto-secundario); margin-top: 2px; }
 
 .cabecera-acciones { display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; }
-.pulso-vivo { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.01em; color: #7ef0b0; padding: 7px 13px; border-radius: var(--radio-full); background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.28); }
 .selector-evento { min-width: 220px; }
 
 .cargando { display: flex; justify-content: center; padding: 4rem; }
@@ -362,7 +357,7 @@ onDeactivated(() => {
 @keyframes girar { to { transform: rotate(360deg); } }
 .vacio { display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--texto-secundario); padding: 4.5rem 2rem; }
 .vacio-icono { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radio-full); background: rgba(155,89,182,0.12); border: 1px solid var(--borde-sutil); margin-bottom: var(--esp-4); }
-.vacio-icono .dot { width: 12px; height: 12px; background: var(--morado-brillante); box-shadow: 0 0 10px rgba(168,85,247,0.7); animation: latido 1.8s infinite; }
+.vacio-icono .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--morado-brillante); box-shadow: 0 0 10px rgba(168,85,247,0.7); animation: latido 1.8s infinite; }
 .vacio-titulo { font-family: var(--fuente-titulo); font-size: 1.05rem; font-weight: 700; color: var(--texto-principal); margin-bottom: 4px; }
 
 /* Resumen (panel hero: gauge + KPIs) */
@@ -416,8 +411,6 @@ onDeactivated(() => {
 .zona-pie { display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; color: var(--texto-secundario); margin-top: var(--esp-3); font-variant-numeric: tabular-nums; }
 .zp-pct { font-weight: 700; color: var(--c); }
 
-.live-nota { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: var(--esp-6); font-size: 0.8rem; color: var(--texto-secundario); }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); animation: latido 1.4s infinite; }
 @keyframes latido { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* Preview del mapa en vivo */
@@ -470,7 +463,7 @@ onDeactivated(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner, .dot, .vacio-icono .dot { animation: none; }
+  .spinner, .vacio-icono .dot { animation: none; }
   .barra-relleno, .anillo-valor, .zona-card, .selector-evento, .titulo-medallon { transition: none; }
 }
 </style>
