@@ -89,6 +89,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { validarComprobanteAsync } from '@/utilidades/validar-comprobante.js'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 
 const props = defineProps({ cliente: { type: Object, required: true } })
@@ -125,7 +126,8 @@ async function validarComprobante(archivo) {
     const fd = new FormData()
     fd.append('comprobante', archivo)
     fd.append('monto_esperado', String(monto.value))
-    const r = await clienteHttp.post('/comandas/validar-comprobante', fd)
+    // Asíncrono: el backend responde un id y aquí se espera el resultado real
+    const r = await validarComprobanteAsync(fd, (etapa) => { pasosOcr.value = [{ clave: 'banco', etiqueta: etapa, ok: true }] })
     pasosOcr.value = r.pasos || []
     ocrOk.value = !!r.valido
     archivoValidado = archivo

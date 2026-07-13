@@ -1,0 +1,123 @@
+// ============================================
+// EUPHORIA — Vigía del correo del banco (segunda validación de depósitos)
+// ============================================
+// Banco Unión manda una "NOTIFICACIÓN ACH" al correo del establecimiento por
+// cada movimiento. Este vigía lee la bandeja por IMAP, distingue DEPÓSITOS
+// (dinero que ENTRA a la cuenta del local) de egresos/retiros, extrae los
+// datos y los guarda en `deposito_correo`. La validación de recargas los usa
+// como comprobación de que el dinero llegó DE VERDAD (un correo del banco no
+// se puede falsificar, a diferencia de una captura editada).
+//
+// Variables de entorno:
+//   CORREO_IMAP_USUARIO  (ej. araucodilan@gmail.com)
+//   CORREO_IMAP_CLAVE    (contraseña de aplicación de Gmail)
+//   CORREO_IMAP_HOST     (opcional, por defecto imap.gmail.com)
+// Sin credenciales el vigía simplemente no arranca (el OCR sigue solo).
+
+const { ImapFlow } = require('imapflow')
+const { simpleParser } = require('mailparser')
+const prisma = require('../config/base-de-datos')
+
+const INTERVALO_MS = 60 * 1000 // revisar cada minuto
+let corriendo = false
+
+// ---- Parseo de la NOTIFICACIÓN ACH (texto plano del correo) ----
+// Deposito = la plata ENTRA: el correo dice "recibida del Banco Origen …".
+// Egreso  = la plata SALE: "La orden enviada vía QR-Unimóvil Plus…" (se ignora).
+function parsearNotificacionACH(texto) {
+  const t = String(texto || '').replace(/\s+/g, ' ')
+  if (!/NOTIFICACI[OÓ]N ACH/i.test(t)) return null
+  const esDeposito = /recibida del Banco Origen/i.test(t)
+  if (!esDeposito) return null // egreso u otro tipo: no es un depósito al local
+
+  const campo = (etiqueta) => {
+    const m = t.match(new RegExp(`${etiqueta}\\s*:?\\s*([^:]+?)(?=\\s+[A-ZÑ][^:]{2,40}:|\\s*$)`, 'i'))
+    return m ? m[1].trim() : null
+  }
+  // Nº de orden: primero el explícito, si no el del encabezado "ACH NRO: xxxx"
+  const orden = campo('N[úu]mero de Orden ACH') || (t.match(/ACH NRO:\s*(\d{6,})/i)?.[1] ?? null)
+  const montoTxt = campo('Monto')
+  const monto = montoTxt ? parseFloat(montoTxt.replace(/[^\d.,]/g, '').replace(',', '.')) : NaN
+  const fechaTxt = campo('Fecha de transacci[óo]n') // dd/mm/yyyy
+  const horaTxt = campo('Hora de transacci[óo]n') || '00:00:00'
+  let fecha = null
+  const fm = String(fechaTxt || '').match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (fm) {
+    const hm = String(horaTxt).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) || [null, 0, 0, 0]
+    fecha = new Date(Number(fm[3]), Number(fm[2]) - 1, Number(fm[1]), Number(hm[1]) || 0, Number(hm[2]) || 0, Number(hm[3]) || 0)
+  }
+  if (!orden || !Number.isFinite(monto) || monto <= 0 || !fecha) return null
+
+  return {
+    orden_ach: orden,
+    monto,
+    glosa: (campo('Glosa') || '').slice(0, 200),
+    originante: (campo('Nombre del Originante') || '').slice(0, 150),
+    banco_origen: (campo('Banco Origen') || '').slice(0, 100),
+    fecha_transaccion: fecha,
+  }
+}
+
+async function revisarBandeja(cliente) {
+  const lock = await cliente.getMailboxLock('INBOX')
+  try {
+    // Solo correos del banco sin leer (el vigía los marca al procesarlos)
+    const ids = await cliente.search({ seen: false, from: 'bancounion.com.bo' })
+    if (!ids || !ids.length) return 0
+    let nuevos = 0
+    for (const id of ids) {
+      try {
+        const msg = await cliente.fetchOne(id, { source: true })
+        const mail = await simpleParser(msg.source)
+        const texto = `${mail.subject || ''} ${mail.text || ''} ${(mail.html || '').replace(/<[^>]+>/g, ' ')}`
+        const dep = parsearNotificacionACH(texto)
+        await cliente.messageFlagsAdd(id, ['\\Seen'])
+        if (!dep) continue
+        await prisma.deposito_correo.upsert({
+          where: { orden_ach: dep.orden_ach },
+          update: {}, // ya registrado: no tocar (protege el flag `usado`)
+          create: dep,
+        })
+        nuevos++
+        console.log(`[correo] depósito registrado: Bs ${dep.monto} · orden ${dep.orden_ach} · "${dep.glosa}"`)
+      } catch (e) {
+        console.warn('[correo] no se pudo procesar un mensaje:', e.message)
+      }
+    }
+    return nuevos
+  } finally {
+    lock.release()
+  }
+}
+
+async function cicloVigia() {
+  const usuario = process.env.CORREO_IMAP_USUARIO
+  const clave = process.env.CORREO_IMAP_CLAVE
+  const cliente = new ImapFlow({
+    host: process.env.CORREO_IMAP_HOST || 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: { user: usuario, pass: clave },
+    logger: false,
+  })
+  await cliente.connect()
+  try { await revisarBandeja(cliente) } finally { await cliente.logout().catch(() => {}) }
+}
+
+function iniciarVigiaCorreo() {
+  if (!process.env.CORREO_IMAP_USUARIO || !process.env.CORREO_IMAP_CLAVE) {
+    console.log('[correo] vigía desactivado (faltan CORREO_IMAP_USUARIO / CORREO_IMAP_CLAVE)')
+    return
+  }
+  const tick = async () => {
+    if (corriendo) return
+    corriendo = true
+    try { await cicloVigia() } catch (e) { console.warn('[correo] vigía falló este ciclo:', e.message) }
+    corriendo = false
+  }
+  tick()
+  setInterval(tick, INTERVALO_MS).unref()
+  console.log(`[correo] vigía activo: revisa ${process.env.CORREO_IMAP_USUARIO} cada ${INTERVALO_MS / 1000}s`)
+}
+
+module.exports = { iniciarVigiaCorreo, parsearNotificacionACH }

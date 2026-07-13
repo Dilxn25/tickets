@@ -962,6 +962,7 @@ import { io } from 'socket.io-client'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { validarComprobanteAsync } from '@/utilidades/validar-comprobante.js'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { servicioComandas } from '@/servicios-api/servicio-comandas.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
@@ -1634,9 +1635,8 @@ async function validarComprobante(archivo) {
     formData.append('comprobante', archivo)
     formData.append('monto_esperado', totalCarrito.value)
 
-    const res = await clienteHttp.post('/comandas/validar-comprobante', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    // Asíncrono con polling (el análisis ya no muere por el corte de 100s)
+    const res = await validarComprobanteAsync(formData)
 
     if (res.valido) {
       comprobanteValido.value = true

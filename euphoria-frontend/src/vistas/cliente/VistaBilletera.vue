@@ -725,6 +725,7 @@ import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
+import { validarComprobanteAsync } from '@/utilidades/validar-comprobante.js'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import { formatoMoneda, formatoMonto, formatoFecha } from '@/utilidades/formato.js'
 
@@ -1224,9 +1225,9 @@ async function procesarOCR(file) {
     formData.append('comprobante', file)
     formData.append('monto_esperado', montoIngresado.value)
 
-    const res = await clienteHttp.post('/comandas/validar-comprobante', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    // Asíncrono con polling: en el servidor el análisis tarda (CPU limitada)
+    // y la petición ya no se corta a los 100s — se espera el resultado real.
+    const res = await validarComprobanteAsync(formData)
 
     await resolverPasos(res.pasos)
 

@@ -179,6 +179,11 @@ io.on('connection', socket => {
   })
 })
 
+// Vigía del correo del banco (segunda validación de depósitos): lee las
+// NOTIFICACIÓN ACH de Banco Unión por IMAP y registra los depósitos.
+const { iniciarVigiaCorreo } = require('./src/utilidades/vigia-correo')
+iniciarVigiaCorreo()
+
 servidorHttp.listen(PUERTO, () => {
   console.log('\n EUPHORIA Backend corriendo')
   console.log(`   API:     http://localhost:${PUERTO}/api/estado`)

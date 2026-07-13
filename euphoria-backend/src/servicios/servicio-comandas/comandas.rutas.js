@@ -83,6 +83,43 @@ function encolarOCR(tarea) {
   return turno
 }
 
+// Análisis en curso/terminados (en memoria): el frontend hace polling por id.
+// Se limpian a los 20 minutos.
+const analisisEnCurso = new Map()
+setInterval(() => {
+  const limite = Date.now() - 20 * 60e3
+  for (const [id, a] of analisisEnCurso) if (a.creado < limite) analisisEnCurso.delete(id)
+}, 5 * 60e3).unref()
+
+// SEGUNDA VALIDACIÓN: depósito ACH registrado por el vigía del correo del
+// banco. Debe coincidir el monto EXACTO, tener glosa de Euphoria, ser de HOY
+// (hora boliviana) y no haberse usado para otra recarga. Se marca usado de
+// forma atómica para que dos análisis no cobren el mismo depósito.
+async function validarPorCorreo(monto) {
+  try {
+    const hoy = hoyBolivia()
+    const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+    const dep = await prisma.deposito_correo.findFirst({
+      where: {
+        usado: false,
+        monto: monto,
+        fecha_transaccion: { gte: inicioDia },
+        glosa: { contains: 'euphoria' },
+      },
+      orderBy: { fecha_transaccion: 'desc' },
+    })
+    if (!dep) return null
+    const upd = await prisma.deposito_correo.updateMany({
+      where: { id_deposito: dep.id_deposito, usado: false },
+      data: { usado: true },
+    })
+    return upd.count === 1 ? dep : null
+  } catch (e) {
+    // Sin tabla o sin vigía: la segunda validación simplemente no aplica.
+    return null
+  }
+}
+
 // Distancia de edición (Levenshtein) para tolerar 1-2 errores del OCR al comparar
 // números de transacción (ej. 0/O, 8/B, 1/I) y no dejar reusar el MISMO comprobante.
 function distanciaEdicion(a, b) {
@@ -111,95 +148,118 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       return res.status(400).json({ error: 'Monto esperado de la comanda no especificado' })
     }
 
-    // 1. OCR ROBUSTO multi-pasada con el worker REUTILIZABLE (spa+eng): varias
-    //    lecturas con preprocesamientos distintos (gris/contraste, binarizada,
-    //    ampliada) y fusión de campos entre pasadas. Prioridad del negocio:
-    //    que FUNCIONE aunque tarde. La imagen se descarga UNA vez de Cloudinary
-    //    (multer la subió ahí) porque el preprocesamiento necesita los bytes.
-    const titular = await obtenerTitularDestino()
-    // En cola: UN análisis a la vez (dos a la vez duplican los picos de memoria)
-    const analisis = await encolarOCR(async () => {
-      const worker = await obtenerWorkerOCR()
-      let r
+    // ASÍNCRONO: en Render (0.1 CPU) el OCR multi-pasada tarda minutos y el
+    // proxy CORTA toda petición a los ~100s — el análisis moría a la mitad y
+    // el cliente veía "la imagen no es clara". Ahora la petición responde al
+    // INSTANTE con un id y el análisis corre en segundo plano; el frontend
+    // pregunta el estado cada 2s (GET /validar-comprobante/:id/estado).
+    const idAnalisis = require('crypto').randomUUID()
+    const urlArchivo = req.file.path
+    analisisEnCurso.set(idAnalisis, { estado: 'procesando', etapa: 'Identificando banco…', creado: Date.now() })
+    res.status(202).json({ id_analisis: idAnalisis, pendiente: true })
+
+    // ---- Trabajo en segundo plano (fuera de la petición HTTP) ----
+    encolarOCR(async () => {
       try {
-        const resp = await fetch(req.file.path)
-        if (!resp.ok) throw new Error(`descarga ${resp.status}`)
-        const bufferImg = Buffer.from(await resp.arrayBuffer())
-        // hoyBolivia(): el servidor corre en UTC y de noche en Bolivia allá ya es
-        // "mañana" — los comprobantes del día se rechazaban por fecha.
-        r = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, hoyBolivia(), { titular })
-      } catch (e) {
-        // Respaldo: si la descarga falla, una sola pasada directa desde la URL
-        console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
-        const { data: { text } } = await worker.recognize(req.file.path)
-        r = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, hoyBolivia(), { titular })
+        const titular = await obtenerTitularDestino()
+        const worker = await obtenerWorkerOCR()
+        let analisis
+        try {
+          const resp = await fetch(urlArchivo)
+          if (!resp.ok) throw new Error(`descarga ${resp.status}`)
+          const bufferImg = Buffer.from(await resp.arrayBuffer())
+          analisis = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, hoyBolivia(), { titular })
+        } catch (e) {
+          console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
+          const { data: { text } } = await worker.recognize(urlArchivo)
+          analisis = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, hoyBolivia(), { titular })
+        }
+        await reciclarWorkerSiPesa()
+
+        // Pasos que ve el cliente: banco → monto → transacción → fecha → destino
+        const campos = analisis.campos || {}
+        const pasos = [{
+          clave: 'banco',
+          etiqueta: analisis.banco ? `Banco: ${analisis.nombreBanco}` : 'Banco no registrado · validación genérica',
+          ok: true,
+        }]
+        const agregarPaso = (clave, etiqueta) => {
+          if (campos[clave] !== null && campos[clave] !== undefined) pasos.push({ clave, etiqueta, ok: !!campos[clave] })
+        }
+        agregarPaso('monto', 'Monto correcto')
+        agregarPaso('transaccion', 'N° de transacción')
+        agregarPaso('fecha', 'Comprobante de hoy')
+        agregarPaso('destino', analisis.sinMotivo ? 'Destinatario correcto' : 'Pago a Euphoria')
+        console.log(`[OCR] banco:${analisis.banco || '-'} ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
+
+        // SEGUNDA VALIDACIÓN (correo del banco): si el OCR no validó, buscar
+        // un depósito ACH ya registrado por el vigía del correo con el mismo
+        // monto, glosa de Euphoria, de hoy y sin usar. El correo del banco no
+        // se puede falsificar: si existe, el dinero llegó.
+        if (!analisis.ok) {
+          const porCorreo = await validarPorCorreo(montoEsperado)
+          if (porCorreo) {
+            pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
+            analisisEnCurso.set(idAnalisis, {
+              estado: 'terminado', creado: Date.now(),
+              resultado: {
+                valido: true, banco: 'CORREO', monto: montoEsperado,
+                mensaje: 'Depósito confirmado por la notificación del banco',
+                url_comprobante: `${urlArchivo}|TX:${porCorreo.orden_ach}|M:${montoEsperado}|B:CORREO`,
+                transaccionId: porCorreo.orden_ach, pasos,
+              },
+            })
+            return
+          }
+          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: analisis.error, pasos } })
+          return
+        }
+
+        const transaccionId = analisis.transaccionId
+        // NO reusar el mismo comprobante (tolera 2 errores de lectura del N°)
+        const marcaMonto = `|M:${montoEsperado}`
+        const [comSim, recSim] = await Promise.all([
+          prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
+          prisma.recarga_billetera.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
+        ])
+        const txDeUrl = (url) => (String(url || '').match(/\|TX:([^|]+)/)?.[1] || '')
+        const duplicado = [...comSim, ...recSim].some(r => {
+          const otro = txDeUrl(r.comprobante_url)
+          return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 2
+        })
+        pasos.push({ clave: 'no_repetido', etiqueta: 'Comprobante no repetido', ok: !duplicado })
+        if (duplicado) {
+          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos } })
+          return
+        }
+
+        analisisEnCurso.set(idAnalisis, {
+          estado: 'terminado', creado: Date.now(),
+          resultado: {
+            valido: true, banco: analisis.banco, monto: analisis.monto,
+            mensaje: 'Comprobante verificado correctamente',
+            url_comprobante: `${urlArchivo}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco || 'OTRO'}`,
+            transaccionId, pasos,
+          },
+        })
+      } catch (error) {
+        console.error('Error en el motor de validación OCR:', error)
+        analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Error al analizar el comprobante. Vuelve a intentar.', pasos: [] } })
       }
-      await reciclarWorkerSiPesa()
-      return r
-    })
-
-    if (process.env.DEBUG_OCR === 'true') {
-      console.log(`[OCR] Monto esperado: Bs. ${montoEsperado} · pasada: ${analisis.pasada || 'única'} · fusionado: ${!!analisis.fusionado}`)
-    }
-
-    // Pasos que ve el cliente, en orden: banco → monto → transacción → fecha →
-    // destino (→ no repetido al final). El paso 'banco' SIEMPRE va en ok:true:
-    // identificar el banco no es un fallo, y la genérica también es válida (solo
-    // cambia la etiqueta). Los campos en null (no aplican al banco) se omiten.
-    const campos = analisis.campos || {}
-    const pasos = [{
-      clave: 'banco',
-      etiqueta: analisis.banco ? `Banco: ${analisis.nombreBanco}` : 'Banco no registrado · validación genérica',
-      ok: true,
-    }]
-    const agregarPaso = (clave, etiqueta) => {
-      if (campos[clave] !== null && campos[clave] !== undefined) pasos.push({ clave, etiqueta, ok: !!campos[clave] })
-    }
-    agregarPaso('monto', 'Monto correcto')
-    agregarPaso('transaccion', 'N° de transacción')
-    agregarPaso('fecha', 'Comprobante de hoy')
-    // En bancos sin motivo (Yape) el destino solo puede ser el destinatario.
-    agregarPaso('destino', analisis.sinMotivo ? 'Destinatario correcto' : 'Pago a Euphoria')
-    console.log(`[OCR] banco:${analisis.banco || '-'} ok:${analisis.ok} TX:${analisis.transaccionId || '-'} | ${pasos.map(p => p.clave + '=' + (p.ok ? 1 : 0)).join(' ')}`)
-
-    if (!analisis.ok) {
-      return res.status(400).json({ valido: false, error: analisis.error, pasos })
-    }
-    const transaccionId = analisis.transaccionId
-
-    // 3. NO REUSAR el mismo comprobante: mismo MONTO + N° de transacción casi
-    //    idéntico (tolera 2 errores del OCR, que hacían pasar el mismo comprobante
-    //    varias veces por leerse un poco distinto entre foto y foto).
-    const marcaMonto = `|M:${montoEsperado}`
-    const [comSim, recSim] = await Promise.all([
-      prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
-      prisma.recarga_billetera.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
-    ])
-    const txDeUrl = (url) => (String(url || '').match(/\|TX:([^|]+)/)?.[1] || '')
-    const duplicado = [...comSim, ...recSim].some(r => {
-      const otro = txDeUrl(r.comprobante_url)
-      return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 2
-    })
-    pasos.push({ clave: 'no_repetido', etiqueta: 'Comprobante no repetido', ok: !duplicado })
-    if (duplicado) {
-      return res.status(400).json({ valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos })
-    }
-
-    // Validación exitosa (banco 'OTRO' en la marca cuando validó la genérica)
-    res.json({
-      valido: true,
-      banco: analisis.banco,
-      monto: analisis.monto,
-      mensaje: 'Comprobante verificado correctamente',
-      url_comprobante: `${req.file.path}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco || 'OTRO'}`,
-      transaccionId,
-      pasos,
     })
 
   } catch (error) {
     console.error('Error en el motor de validación OCR:', error)
     res.status(500).json({ error: 'Error en el motor de validación de comprobantes: ' + error.message })
   }
+})
+
+// GET /api/comandas/validar-comprobante/:id/estado — polling del análisis
+router.get('/validar-comprobante/:id/estado', verificarToken, (req, res) => {
+  const a = analisisEnCurso.get(req.params.id)
+  if (!a) return res.status(404).json({ error: 'Análisis no encontrado (expiró o no existe).' })
+  if (a.estado === 'procesando') return res.json({ pendiente: true, etapa: a.etapa })
+  res.json({ pendiente: false, ...a.resultado })
 })
 
 // POST /api/comandas/verificar-billetera
