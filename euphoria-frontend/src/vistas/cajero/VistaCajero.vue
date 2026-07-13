@@ -140,7 +140,7 @@
           </div>
 
           <!-- Ubicación como botones visuales -->
-          <div class="grupo-input">
+          <div class="grupo-input ancho-total">
             <label>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -169,6 +169,12 @@
                 </svg>
                 VIP
               </button>
+            </div>
+            <!-- Mesa/VIP: elegir la mesa concreta con buscador, lista o mapa -->
+            <div v-if="nuevaUbicacion !== 'general'" class="ubicacion-mesa anim-fade">
+              <p v-if="cargandoPlanosCajero" class="ubicacion-cargando">Cargando el mapa del evento…</p>
+              <SelectorMesa v-else-if="planosCajero.length" :zonas="planosCajero" v-model="mesaNuevaId" @cambio="mesaNuevaObj = $event" />
+              <p v-else class="ubicacion-cargando">No hay un evento activo con mapa; la ubicación quedará como {{ nuevaUbicacion === 'mesa' ? 'Mesa' : 'VIP' }}.</p>
             </div>
           </div>
 
@@ -199,9 +205,21 @@
               </svg>
               Método de pago
             </label>
-            <div class="selector-metodo">
-              <button type="button" :class="['btn-metodo', { seleccionado: nuevoMetodo === 'efectivo' }]" @click="nuevoMetodo = 'efectivo'">Efectivo</button>
-              <button type="button" :class="['btn-metodo', { seleccionado: nuevoMetodo === 'qr' }]" @click="nuevoMetodo = 'qr'">QR</button>
+            <div class="selector-metodo metodos-pago">
+              <button type="button" :class="['metodo-card', { seleccionado: nuevoMetodo === 'efectivo' }]" @click="nuevoMetodo = 'efectivo'">
+                <span class="metodo-ic efectivo">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                </span>
+                <span class="metodo-txt"><b>Efectivo</b><small>Recibes el dinero en caja</small></span>
+                <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
+              <button type="button" :class="['metodo-card', { seleccionado: nuevoMetodo === 'qr' }]" @click="nuevoMetodo = 'qr'">
+                <span class="metodo-ic qr">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+                </span>
+                <span class="metodo-txt"><b>QR</b><small>Transferencia con comprobante</small></span>
+                <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
             </div>
           </div>
 
@@ -336,7 +354,7 @@
         </div>
 
         <form @submit.prevent="recargarCliente" class="formulario-cajero">
-          <div class="grupo-input">
+          <div class="grupo-input ancho-total">
             <label>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -379,19 +397,20 @@
               </svg>
               Método de pago
             </label>
-            <div class="selector-metodo">
-              <button type="button" :class="['btn-metodo', { seleccionado: metodoPago === 'efectivo' }]" @click="metodoPago = 'efectivo'">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle>
-                </svg>
-                Efectivo
+            <div class="selector-metodo metodos-pago">
+              <button type="button" :class="['metodo-card', { seleccionado: metodoPago === 'efectivo' }]" @click="metodoPago = 'efectivo'">
+                <span class="metodo-ic efectivo">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                </span>
+                <span class="metodo-txt"><b>Efectivo</b><small>Recibes el dinero en caja</small></span>
+                <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </button>
-              <button type="button" :class="['btn-metodo', { seleccionado: metodoPago === 'qr' }]" @click="metodoPago = 'qr'">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect>
-                </svg>
-                QR
+              <button type="button" :class="['metodo-card', { seleccionado: metodoPago === 'qr' }]" @click="metodoPago = 'qr'">
+                <span class="metodo-ic qr">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+                </span>
+                <span class="metodo-txt"><b>QR</b><small>Transferencia con comprobante</small></span>
+                <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </button>
             </div>
           </div>
@@ -625,6 +644,7 @@
 
         <p v-if="!retiros.length" class="retiros-vacio">Sin solicitudes {{ filtroRetiro === 'pendiente' ? 'pendientes' : filtroRetiro === 'pagado' ? 'pagadas' : 'rechazadas' }}.</p>
 
+        <div class="retiros-lista">
         <div v-for="r in retiros" :key="r.id_solicitud" class="retiro-card">
           <div class="retiro-card-cab">
             <div class="retiro-cliente">
@@ -693,12 +713,19 @@
             Rechazada{{ r.atendido_por ? ' por ' + r.atendido_por : '' }}{{ r.motivo_rechazo ? ' · ' + r.motivo_rechazo : '' }}
           </p>
         </div>
+        </div><!-- /retiros-lista -->
 
-        <!-- Ampliar imagen (QR del cliente / comprobante) a pantalla completa -->
+        <!-- Ampliar imagen (QR del cliente / comprobante): visor oscuro con la
+             imagen enmarcada en blanco para que el QR se escanee con contraste -->
         <Teleport to="body">
-          <div v-if="imagenAmpliada" class="qr-fullscreen" @click="imagenAmpliada = null">
-            <img :src="imagenAmpliada" alt="Imagen ampliada" class="img-fs" />
-            <p class="qr-fs-hint">Toca para cerrar</p>
+          <div v-if="imagenAmpliada" class="visor-overlay" @click.self="imagenAmpliada = null">
+            <button class="visor-cerrar" @click="imagenAmpliada = null" aria-label="Cerrar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div class="visor-marco">
+              <img :src="imagenAmpliada" alt="Imagen ampliada" />
+            </div>
+            <p class="visor-hint">Toca fuera de la imagen para cerrar</p>
           </div>
         </Teleport>
       </div>
@@ -868,6 +895,8 @@ import QRCode from 'qrcode'
 import { io } from 'socket.io-client'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
+import SelectorMesa from '@/componentes/comunes/SelectorMesa.vue'
+import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import { formatoFecha } from '@/utilidades/formato.js'
 
 const tabActiva = ref('recargar')
@@ -947,6 +976,25 @@ async function rechazarRetiro(r) {
 const nuevoId = ref('')
 const nuevoPin = ref('')
 const nuevaUbicacion = ref('general')
+// Mesa/VIP: la mesa concreta se elige con buscador, lista o mapa (SelectorMesa)
+const planosCajero = ref([])
+const cargandoPlanosCajero = ref(false)
+const mesaNuevaId = ref(null)
+const mesaNuevaObj = ref(null)
+watch(nuevaUbicacion, async (u) => {
+  mesaNuevaId.value = null
+  mesaNuevaObj.value = null
+  if (u === 'general' || planosCajero.value.length || cargandoPlanosCajero.value) return
+  cargandoPlanosCajero.value = true
+  try {
+    const evs = await servicioAforo.listarEventos()
+    const activo = (evs || []).find(e => e.estado === 'en_transcurso' || e.estado === 'lleno' || e.estado === 'promocion') || evs?.[0]
+    if (activo) {
+      const r = await servicioAforo.obtenerPlanos(activo.id_evento)
+      planosCajero.value = (r.zonas || []).filter(z => (z.mesas || []).length)
+    }
+  } catch { planosCajero.value = [] } finally { cargandoPlanosCajero.value = false }
+})
 const nuevoMonto = ref('')
 const nuevoMetodo = ref('efectivo')
 const cargandoAbrir = ref(false)
@@ -1292,10 +1340,15 @@ async function abrirBilletera() {
   credencialesGeneradas.value = null
   qrBase64.value = null
   try {
+    // Con mesa elegida en el mapa, la ubicación guarda la mesa concreta
+    const etiquetaUbic = mesaNuevaObj.value
+      ? `${nuevaUbicacion.value === 'reserva' ? 'VIP' : 'Mesa'} ${mesaNuevaObj.value.numero_nombre}`
+      : nuevaUbicacion.value
     const res = await clienteHttp.post('/cajero/abrir-billetera', {
       identificador: nuevoId.value,
       pin: nuevoPin.value,
-      ubicacion: nuevaUbicacion.value,
+      ubicacion: etiquetaUbic,
+      id_mesa: mesaNuevaObj.value?.id_mesa || null,
       monto_inicial: nuevoMonto.value,
       metodo_pago: nuevoMetodo.value
     })
@@ -1407,12 +1460,15 @@ onMounted(() => {
   margin: 0 auto;
 }
 /* Escritorio: aprovechar el ancho (antes 720px fijos dejaban pasillos muertos
-   a los lados en pantallas grandes) */
+   a los lados en pantallas grandes). El formulario se reparte en 2 columnas y
+   los bloques anchos (flujos de pago, alertas, botón) cruzan las dos. */
 @media (min-width: 1200px) {
   .vista-cajero { max-width: 1040px; }
   .tarjeta-modulo { padding: 2rem 2.6rem; }
   .tabs-cajero { max-width: 1040px; }
 }
+/* (el grid de escritorio del formulario vive al FINAL del estilo para ganar
+   la cascada sobre la base .formulario-cajero) */
 
 /* Halo ambiental sutil detrás del contenido (no captura clicks) */
 .vista-cajero::before {
@@ -1675,6 +1731,63 @@ onMounted(() => {
   color: var(--texto-principal);
   box-shadow: var(--sombra-glow), inset 0 1px 0 rgba(255,255,255,0.2);
 }
+
+/* ---- Métodos de pago como TARJETAS (icono + descripción + check) ---- */
+.selector-metodo.metodos-pago { grid-template-columns: repeat(2, 1fr); }
+.metodo-card {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 14px; border-radius: var(--radio-lg);
+  border: 1.5px solid var(--borde-sutil);
+  background: rgba(255,255,255,0.02);
+  color: var(--texto-secundario); cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+.metodo-card:hover { border-color: var(--borde-activo); transform: translateY(-1px); }
+.metodo-card .metodo-ic {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+}
+.metodo-card .metodo-ic.efectivo { background: linear-gradient(135deg, #16A34A, #059669); }
+.metodo-card .metodo-ic.qr { background: linear-gradient(135deg, #8B5CF6, #6366F1); }
+.metodo-card .metodo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.metodo-card .metodo-txt b { color: var(--texto-principal); font-size: 0.92rem; }
+.metodo-card .metodo-txt small { font-size: 0.72rem; color: var(--texto-desactivado); line-height: 1.3; }
+.metodo-card .metodo-check { flex-shrink: 0; color: var(--morado-brillante); opacity: 0; transform: scale(0.6); transition: opacity 0.2s ease, transform 0.2s ease; }
+.metodo-card.seleccionado {
+  border-color: var(--morado-brillante);
+  background: rgba(168,85,247,0.1);
+  box-shadow: 0 0 18px rgba(168,85,247,0.18);
+}
+.metodo-card.seleccionado .metodo-check { opacity: 1; transform: scale(1); }
+@media (max-width: 560px) {
+  .selector-metodo.metodos-pago { grid-template-columns: 1fr; }
+}
+
+/* ---- Ubicación con mesa concreta (buscador / lista / mapa) ---- */
+.ubicacion-mesa { margin-top: 12px; }
+.ubicacion-cargando { font-size: 0.82rem; color: var(--texto-secundario); margin: 6px 0 0; }
+
+/* ---- Visor de imagen (QR del cliente / comprobante del retiro) ---- */
+.visor-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 20px;
+  background: rgba(6,3,18,0.9); backdrop-filter: blur(6px);
+}
+.visor-cerrar {
+  position: absolute; top: 18px; right: 18px;
+  width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.visor-cerrar:hover { background: rgba(255,255,255,0.16); }
+.visor-marco {
+  background: #fff; padding: 14px; border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+  max-width: min(92vw, 560px); max-height: 76vh; display: flex;
+}
+.visor-marco img { max-width: 100%; max-height: calc(76vh - 28px); object-fit: contain; border-radius: 8px; }
+.visor-hint { color: rgba(255,255,255,0.55); font-size: 0.82rem; margin: 0; }
 
 /* Alerta resultado */
 .alerta-info {
@@ -2897,4 +3010,24 @@ onMounted(() => {
 .btn-pagar-retiro:disabled { opacity: .6; cursor: wait; }
 .btn-rechazar-retiro { padding: 10px 14px; border: 1px solid rgba(239,68,68,.4); border-radius: 10px; background: rgba(239,68,68,.08); color: var(--color-error); font-weight: 700; cursor: pointer; }
 .retiro-pagado { font-size: 0.82rem; color: var(--color-exito); margin: 10px 0 0; font-weight: 600; }
+
+/* ===== Escritorio: formulario en 2 columnas (vive al FINAL del estilo para
+   ganar la cascada sobre la base flex de .formulario-cajero) ===== */
+@media (min-width: 1200px) {
+  .formulario-cajero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.1rem 1.5rem;
+    align-items: start;
+  }
+  .formulario-cajero > .flujo-efectivo,
+  .formulario-cajero > .flujo-qr,
+  .formulario-cajero > .calculadora-vuelto,
+  .formulario-cajero > .aviso-cliente-requerido,
+  .formulario-cajero > .alerta-error,
+  .formulario-cajero > .btn-accion-principal,
+  .formulario-cajero > .grupo-input.ancho-total { grid-column: 1 / -1; }
+  /* Retiros: dos tarjetas por fila */
+  .retiros-lista { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+}
 </style>

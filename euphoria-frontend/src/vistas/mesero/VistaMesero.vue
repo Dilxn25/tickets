@@ -3192,11 +3192,13 @@ onUnmounted(() => {
     flex-shrink: 0;
   }
   /* El chip del evento es el único que cede espacio: encoge con ellipsis
-     en vez de empujar a la campana o al botón Salir fuera de la pantalla. */
+     pero conserva un mínimo visible (icono + inicio del nombre). */
   .chip-evento {
-    flex: 1 1 auto; min-width: 0; max-width: none;
-    justify-content: center; padding: 6px 10px; font-size: 0.74rem;
+    flex: 1 1 auto; min-width: 88px; max-width: none;
+    justify-content: flex-start; padding: 6px 10px; font-size: 0.74rem;
   }
+  /* El badge de rol cede: es decorativo frente al nombre del evento */
+  .badge-rol { display: none; }
   .cobro-panel {
     padding: 20px 16px;
   }
@@ -3569,10 +3571,14 @@ onUnmounted(() => {
   background: rgba(168,85,247,0.14); border: 1px solid var(--borde-activo, rgba(168,85,247,0.5));
   color: var(--texto-principal); font-weight: 700; font-size: 0.82rem; cursor: pointer;
   max-width: 220px; transition: background 0.2s ease, border-color 0.2s ease;
+  /* el contenido JAMÁS se derrama fuera del botón (se recorta con ellipsis) */
+  overflow: hidden; min-width: 0;
 }
 .chip-evento:hover { background: rgba(168,85,247,0.24); }
 .chip-evento svg { color: var(--morado-hover); flex-shrink: 0; }
-.chip-evento-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width:0 + flex:1: sin esto el texto largo NO se recorta con ellipsis y
+   desborda el chip (el contenido quedaba más ancho que el propio botón). */
+.chip-evento-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Modal de selección de evento */
 .ev-sheet {
   width: 100%; max-width: 440px; background: var(--fondo-tarjeta, #17092F);

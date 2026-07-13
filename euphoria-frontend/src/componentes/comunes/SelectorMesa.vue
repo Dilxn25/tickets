@@ -153,12 +153,14 @@ function claseElem(m) {
   return 'deco'
 }
 function estiloElem(m) {
+  // left/top directos SIN translate: el plano se guarda con la esquina del
+  // elemento, y el translate lo corría media casilla (el mapa salía deforme).
   return {
-    left: (m.posicion_x || 0) + '%',
-    top: (m.posicion_y || 0) + '%',
-    width: (m.ancho || 8) + '%',
-    height: (m.alto || 8) + '%',
-    transform: `translate(-50%, -50%) rotate(${m.rotacion || 0}deg)`,
+    left: `${m.posicion_x || 0}%`,
+    top: `${m.posicion_y || 0}%`,
+    width: `${m.ancho ?? 7}%`,
+    height: `${m.alto ?? 10}%`,
+    transform: `rotate(${m.rotacion || 0}deg)`,
     borderRadius: m.forma === 'redondo' ? '50%' : '8px',
   }
 }
@@ -193,7 +195,15 @@ function estiloElem(m) {
 .sm-cerrar:hover { background: rgba(255,255,255,0.16); }
 .sm-mapa-scroll { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
 .sm-zona-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
-.sm-plano { position: relative; width: 100%; background: var(--fondo-app); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); overflow: hidden; }
+.sm-plano {
+  position: relative; width: 100%;
+  /* Cuadrícula sutil: el plano se ve como en el editor de mapas */
+  background:
+    linear-gradient(rgba(168,85,247,0.06) 1px, transparent 1px) 0 0 / 100% 9%,
+    linear-gradient(90deg, rgba(168,85,247,0.06) 1px, transparent 1px) 0 0 / 9% 100%,
+    var(--fondo-app, #0b0618);
+  border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); overflow: hidden;
+}
 .sm-elem { position: absolute; display: flex; align-items: center; justify-content: center; border: 1.5px solid transparent; font-size: 0.62rem; font-weight: 700; color: #fff; cursor: pointer; padding: 0; }
 .sm-elem span { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92%; }
 .sm-elem.elegible { background: rgba(168,85,247,0.55); border-color: var(--morado-brillante); }
