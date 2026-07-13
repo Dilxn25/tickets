@@ -848,6 +848,13 @@
           </div>
         </div>
         
+        <!-- Imprimir (solo si el cliente quiere): tarjeta con sus 2 QRs y códigos -->
+        <button @click="imprimirCredenciales" class="btn-accion-principal" style="width: 100%; margin-bottom: 0.7rem; background: rgba(168,85,247,0.14); border: 1px solid var(--borde-activo); color: var(--texto-principal); box-shadow: none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          Imprimir credenciales
+        </button>
         <button @click="credencialesGeneradas = null; qrBase64 = null; nuevoId = ''; nuevoPin = ''; nuevoMonto = ''; errorIdExiste = ''; ocrExitoso = null; archivoRecarga = null; previewArchivoRecarga = null; tabActiva = 'recargar'" class="btn-accion-principal btn-exito" style="width: 100%;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -1314,6 +1321,67 @@ async function abrirBilletera() {
     errorRecargar.value = error.error || 'Error al abrir billetera'
   } finally {
     cargandoAbrir.value = false
+  }
+}
+
+// Imprime la tarjeta de credenciales de la billetera nueva (solo si el cliente
+// quiere): sus DOS QRs (público = cobro directo; privado = protegido con PIN)
+// con sus códigos CORTOS dictables, correo y PIN. Ventana aparte solo-impresión.
+async function imprimirCredenciales() {
+  const cred = credencialesGeneradas.value
+  if (!cred) return
+  try {
+    const opcionesQR = { width: 300, margin: 1, color: { dark: '#10002b', light: '#ffffff' } }
+    const [qrPub, qrPriv] = await Promise.all([
+      QRCode.toDataURL(cred.qr_publico, opcionesQR),
+      QRCode.toDataURL(cred.token_qr, opcionesQR),
+    ])
+    const v = document.createElement('iframe')
+    v.style.position = 'fixed'; v.style.right = '0'; v.style.bottom = '0'
+    v.style.width = '0'; v.style.height = '0'; v.style.border = '0'
+    document.body.appendChild(v)
+    v.contentDocument.write(`
+      <html><head><title>Billetera Euphoria</title><style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { padding: 20px; color: #1a1030; }
+        h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+        .sub { text-align: center; font-size: 12px; color: #555; margin-bottom: 16px; }
+        .fila { display: flex; gap: 16px; justify-content: center; }
+        .qr { text-align: center; border: 1.5px solid #ccc; border-radius: 12px; padding: 12px; width: 46%; }
+        .qr img { width: 100%; max-width: 220px; }
+        .qr b { display: block; font-size: 13px; margin-top: 6px; }
+        .qr small { color: #555; font-size: 10px; }
+        .cod { font-family: monospace; font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-top: 4px; }
+        .datos { margin: 16px auto 0; max-width: 420px; font-size: 12px; border-top: 1px dashed #999; padding-top: 10px; }
+        .datos div { display: flex; justify-content: space-between; padding: 2px 0; }
+      </style></head><body>
+        <h1>EUPHORIA · Billetera</h1>
+        <p class="sub">Guarda esta tarjeta. Con tu correo y contraseña puedes entrar a la app cuando quieras.</p>
+        <div class="fila">
+          <div class="qr">
+            <img src="${qrPub}" alt="QR publico" />
+            <b>QR PÚBLICO</b>
+            <small>cobro directo en barra/caja</small>
+            <div class="cod">${cred.qr_publico}</div>
+          </div>
+          <div class="qr">
+            <img src="${qrPriv}" alt="QR privado" />
+            <b>QR PRIVADO</b>
+            <small>protegido con tu PIN</small>
+            <div class="cod">PIN: ${nuevoPin.value || '1234'}</div>
+          </div>
+        </div>
+        <div class="datos">
+          <div><span>Correo</span><b>${cred.credenciales.correo}</b></div>
+          <div><span>Contraseña inicial</span><b>${cred.credenciales.password}</b></div>
+          <div><span>Saldo inicial</span><b>Bs. ${Number(cred.saldo).toFixed(2)}</b></div>
+          <div><span>Tu código corto (díctalo al mesero)</span><b>${cred.qr_publico}</b></div>
+        </div>
+      </body></html>`)
+    v.contentDocument.close()
+    v.onload = () => { v.contentWindow.focus(); v.contentWindow.print(); setTimeout(() => v.remove(), 2000) }
+  } catch (e) {
+    notif.error('No se pudo preparar la impresión.')
   }
 }
 
