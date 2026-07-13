@@ -38,10 +38,13 @@ router.get('/', async (req, res) => {
 // para que el mesero pueda elegir una mesa tocándola en el plano.
 router.get('/mapa', async (req, res) => {
   try {
+    // El mesero elige a QUÉ evento atiende: con ?evento=id solo se devuelven las
+    // zonas de ESE evento (antes se mezclaban los mapas de los 2 eventos activos).
+    const idEvento = Number(req.query.evento) || null
     const zonas = await prisma.zona.findMany({
-      where: {
-        evento: { estado: { in: ['promocion', 'en_transcurso', 'lleno'] } },
-      },
+      where: idEvento
+        ? { id_evento: idEvento }
+        : { evento: { estado: { in: ['promocion', 'en_transcurso', 'lleno'] } } },
       orderBy: { id_zona: 'asc' },
       include: {
         evento: { select: { id_evento: true, nombre_evento: true } },
@@ -70,36 +73,43 @@ router.get('/mapa', async (req, res) => {
 router.get('/:id/reserva', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    
-    // Por ahora las reservas las sacamos buscando una comanda abierta para esa mesa
-    // o asumiendo que la mesa misma al estar "reservada" debe tener alguien asignado (en la BD actual `comanda` liga el cliente a la mesa)
-    // Buscamos la ultima comanda activa en esa mesa
-    const reserva = await prisma.comanda.findFirst({
-      where: {
-        id_mesa: id,
-        estado_despacho: { not: 'pagado' } // o un estado de reserva que manejes
-      },
-      orderBy: {
-        fecha_registro: 'desc'
-      },
+
+    // El cliente se recupera de la RESERVA real (tabla entrada), no de una comanda:
+    // antes se buscaba una comanda activa, así que si el cliente reservó pero aún
+    // no había pedido nada, el mesero no lo recuperaba (bug: "reservó la S5 pero no
+    // aparece el cliente"). Tomamos la reserva más reciente de esa mesa; si ya
+    // ingresó (estado_validacion true) tiene prioridad sobre una sin ingresar.
+    const entrada = await prisma.entrada.findFirst({
+      where: { id_mesa: id },
+      orderBy: [{ estado_validacion: 'desc' }, { fecha_reserva: 'desc' }],
       include: {
-        // Solo se exponen campos publicos del cliente (NUNCA password_hash ni datos sensibles)
-        usuario_comanda_id_clienteTousuario: {
-          select: {
-            id_usuario: true,
-            nombres: true,
-            apellidos: true,
-            telefono: true
-          }
-        }
-      }
+        usuario: { select: { id_usuario: true, nombres: true, apellidos: true, telefono: true, es_vip: true } },
+      },
     })
 
-    if (reserva && reserva.usuario_comanda_id_clienteTousuario) {
-      res.json({ cliente: reserva.usuario_comanda_id_clienteTousuario })
-    } else {
-      res.json({ cliente: null })
+    if (entrada && entrada.usuario) {
+      return res.json({
+        cliente: entrada.usuario,
+        id_entrada: entrada.id_entrada,
+        ingresado: !!entrada.estado_validacion,
+        cantidad_personas: entrada.cantidad_personas,
+      })
     }
+
+    // Respaldo: alguna comanda abierta con cliente (walk-in atendido antes)
+    const comanda = await prisma.comanda.findFirst({
+      where: { id_mesa: id, estado_despacho: { not: 'pagado' }, id_cliente: { not: null } },
+      orderBy: { fecha_registro: 'desc' },
+      include: {
+        usuario_comanda_id_clienteTousuario: {
+          select: { id_usuario: true, nombres: true, apellidos: true, telefono: true, es_vip: true },
+        },
+      },
+    })
+    if (comanda && comanda.usuario_comanda_id_clienteTousuario) {
+      return res.json({ cliente: comanda.usuario_comanda_id_clienteTousuario })
+    }
+    res.json({ cliente: null })
   } catch (error) {
     console.error('Error al obtener reserva de mesa:', error)
     res.status(500).json({ error: 'Error al obtener reserva' })

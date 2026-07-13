@@ -7,6 +7,13 @@
         <span class="badge-rol">Caja / Mesero</span>
       </div>
 
+      <!-- Evento que atiende el mesero: filtra mesas y mapa a UN solo evento -->
+      <button v-if="eventoActivo" class="chip-evento" @click="modalEvento = true" title="Cambiar de evento">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span class="chip-evento-txt">{{ eventoActivo.nombre_evento }}</span>
+        <svg v-if="eventosActivos.length > 1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
       <button class="btn-campana fade-in" :class="{ activo: mostrarModalListos }" @click="mostrarModalListos = !mostrarModalListos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         <span class="campana-badge" v-if="pedidosListos.length > 0">{{ pedidosListos.length }}</span>
@@ -783,6 +790,29 @@
       </div>
     </Teleport>
 
+    <!-- MODAL: elegir a qué EVENTO atiende el mesero (si hay 2+ activos) -->
+    <Teleport to="body">
+      <div v-if="modalEvento" class="mapa-overlay" @click.self="eventoActivoId && (modalEvento = false)">
+        <div class="ev-sheet fade-in">
+          <div class="ev-head">
+            <h3>¿A qué evento atiendes?</h3>
+            <p class="mapa-sub">Tus mesas y el mapa se ajustan a este evento.</p>
+          </div>
+          <div class="ev-lista">
+            <button
+              v-for="ev in eventosActivos" :key="ev.id_evento"
+              class="ev-item" :class="{ activo: ev.id_evento === eventoActivoId }"
+              @click="elegirEvento(ev.id_evento)">
+              <span class="ev-item-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
+              <span class="ev-item-txt">{{ ev.nombre_evento }}</span>
+              <svg v-if="ev.id_evento === eventoActivoId" class="ev-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <p v-if="!eventosActivos.length" class="ev-vacio">No hay eventos activos ahora.</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- MODAL MAPA DE MESAS (elegir tocando el plano) -->
     <Teleport to="body">
       <div v-if="modalMapaMesa" class="mapa-overlay" @click.self="modalMapaMesa = false">
@@ -950,8 +980,10 @@ const clienteAutoAsignado = ref('')
 // Mesas asignadas a este mesero (recepción se las asigna al check-in)
 const misMesas = ref([])
 async function cargarMisMesas() {
-  try { misMesas.value = await clienteHttp.get('/comandas/mis-mesas') }
-  catch { misMesas.value = [] }
+  try {
+    const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
+    misMesas.value = await clienteHttp.get(`/comandas/mis-mesas${q}`)
+  } catch { misMesas.value = [] }
 }
 // Elegir una mesa asignada = seleccionarla en la orden (y su cliente si tiene reserva)
 function elegirMesaAsignada(m) {
@@ -982,9 +1014,46 @@ const cargandoMapa = ref(false)
 const mesaDestino = ref(null)      // { id_mesa, nombre, cliente }
 async function cargarMapaZonas() {
   cargandoMapa.value = true
-  try { mapaZonas.value = await clienteHttp.get('/mesas/mapa') }
-  catch { mapaZonas.value = [] }
+  try {
+    // Filtra por el EVENTO que el mesero está atendiendo (antes salían los mapas
+    // de los 2 eventos activos mezclados). Sin evento elegido, cae al comportamiento
+    // anterior (todos los activos) para no romper nada.
+    const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
+    mapaZonas.value = await clienteHttp.get(`/mesas/mapa${q}`)
+  } catch { mapaZonas.value = [] }
   finally { cargandoMapa.value = false }
+}
+
+// ==== EVENTO QUE ATIENDE EL MESERO ====
+// Al entrar elige a qué evento atiende (si hay 2+ activos). Todo lo suyo (mapa,
+// mesas, mesas asignadas) se filtra a ESE evento. Se recuerda entre sesiones.
+const eventosActivos = ref([])
+const eventoActivoId = ref(Number(localStorage.getItem('euphoria_mesero_evento')) || null)
+const modalEvento = ref(false)
+const eventoActivo = computed(() => eventosActivos.value.find(e => e.id_evento === eventoActivoId.value) || null)
+const ESTADOS_EVENTO_ACTIVO = ['promocion', 'en_transcurso', 'lleno']
+
+async function cargarEventosActivos() {
+  try {
+    const todos = await clienteHttp.get('/aforo/eventos')
+    eventosActivos.value = (todos || []).filter(e => ESTADOS_EVENTO_ACTIVO.includes(e.estado))
+  } catch { eventosActivos.value = [] }
+  // Si el evento recordado ya no está activo, se olvida
+  if (eventoActivoId.value && !eventosActivos.value.some(e => e.id_evento === eventoActivoId.value)) {
+    eventoActivoId.value = null
+  }
+  // Un solo evento activo: se elige solo. Varios y ninguno elegido: se pregunta.
+  if (!eventoActivoId.value) {
+    if (eventosActivos.value.length === 1) elegirEvento(eventosActivos.value[0].id_evento)
+    else if (eventosActivos.value.length > 1) modalEvento.value = true
+  }
+}
+
+function elegirEvento(id) {
+  eventoActivoId.value = id
+  localStorage.setItem('euphoria_mesero_evento', String(id))
+  modalEvento.value = false
+  cargarMisMesas()
 }
 async function abrirMapaMesa() {
   mesaDestino.value = null
@@ -1133,6 +1202,7 @@ onMounted(async () => {
   
   try {
     await recargarCatalogo()
+    await cargarEventosActivos()   // define el evento que atiende (o lo pregunta)
     // Cargar mesas disponibles
     try {
       const resMesas = await clienteHttp.get('/mesas')
@@ -3364,6 +3434,39 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: center;
   padding: 16px; background: rgba(6, 3, 18, 0.72);
 }
+/* Chip del evento activo en el header */
+.chip-evento {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border-radius: var(--radio-full);
+  background: rgba(168,85,247,0.14); border: 1px solid var(--borde-activo, rgba(168,85,247,0.5));
+  color: var(--texto-principal); font-weight: 700; font-size: 0.82rem; cursor: pointer;
+  max-width: 220px; transition: background 0.2s ease, border-color 0.2s ease;
+}
+.chip-evento:hover { background: rgba(168,85,247,0.24); }
+.chip-evento svg { color: var(--morado-hover); flex-shrink: 0; }
+.chip-evento-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Modal de selección de evento */
+.ev-sheet {
+  width: 100%; max-width: 440px; background: var(--fondo-tarjeta, #17092F);
+  border: 1px solid var(--glass-borde, rgba(168,85,247,0.3)); border-radius: var(--radio-xl);
+  box-shadow: 0 30px 70px rgba(0,0,0,0.6); overflow: hidden;
+}
+.ev-head { padding: 20px 22px 6px; }
+.ev-head h3 { font-family: var(--fuente-titulo); font-size: 1.25rem; font-weight: 800; color: var(--texto-principal); margin: 0; }
+.ev-lista { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 20px; }
+.ev-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 14px 16px; border-radius: var(--radio-lg);
+  background: var(--gradiente-sutil, rgba(255,255,255,0.03)); border: 1px solid var(--borde-sutil);
+  color: var(--texto-principal); font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.ev-item:hover { border-color: var(--borde-activo); transform: translateY(-1px); }
+.ev-item.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.12); }
+.ev-item-ic { color: var(--morado-hover); display: flex; }
+.ev-item-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ev-item-check { color: var(--color-exito); flex-shrink: 0; }
+.ev-vacio { text-align: center; color: var(--texto-secundario); font-size: 0.86rem; padding: 20px 0; }
 .mapa-sheet {
   width: 100%; max-width: 620px; max-height: 90dvh; display: flex; flex-direction: column;
   background: var(--fondo-tarjeta, #17092F); border: 1px solid var(--glass-borde, rgba(168,85,247,0.3));

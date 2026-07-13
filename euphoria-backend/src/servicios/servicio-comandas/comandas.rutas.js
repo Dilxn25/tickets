@@ -992,8 +992,16 @@ router.get('/mis-listos', verificarToken, async (req, res) => {
 // GET /api/comandas/mis-mesas (mesas asignadas al mesero, con el cliente de la reserva)
 router.get('/mis-mesas', verificarToken, async (req, res) => {
   try {
+    // Filtra a las mesas del EVENTO que el mesero atiende (?evento=id): así no
+    // se le mezclan mesas de otro evento activo. La mesa pertenece a un evento
+    // vía su zona (mesa_espacio -> zona -> id_evento).
+    const idEvento = Number(req.query.evento) || null
     const asignaciones = await prisma.asignacion_mesa.findMany({
-      where: { id_mesero: req.usuario.id, estado: { in: ['asignada', 'atendiendo'] } },
+      where: {
+        id_mesero: req.usuario.id,
+        estado: { in: ['asignada', 'atendiendo'] },
+        ...(idEvento ? { mesa_espacio: { zona: { id_evento: idEvento } } } : {}),
+      },
       orderBy: { fecha_asignacion: 'desc' },
       include: {
         mesa_espacio: { select: { id_mesa: true, numero_nombre: true } },
