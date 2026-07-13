@@ -479,43 +479,54 @@ function analizarComprobanteFlexible(textoOCR, montoEsperado, opciones = {}) {
 // del MISMO banco: una pasada puede leer bien el monto y otra el N° de
 // transacción. Prioridad del negocio: que FUNCIONE aunque tarde.
 const sharp = require('sharp')
+// Sin caché de libvips: en Render (512MB) el caché de sharp acumulaba los
+// buffers de cada pasada y el proceso moría por memoria (el "se reinicia").
+sharp.cache(false)
+sharp.concurrency(1)
 
-// Variantes de preprocesamiento, de la más natural a la más agresiva. Cada
-// una ataca un defecto típico de la foto:
+// Fecha/hora ACTUAL DE BOLIVIA (America/La_Paz, UTC-4). El servidor de Render
+// corre en UTC: por la noche boliviana allá ya es "mañana", y los comprobantes
+// del día se rechazaban por fecha (fecha=0 con todo lo demás correcto).
+// La definición vive en utilidades/tiempo.js (también la usan los eventos);
+// se reexporta aquí para que las rutas de comandas la sigan importando igual.
+const { hoyBolivia } = require('./tiempo')
+
+// FÁBRICAS de variantes de preprocesamiento, de la más natural a la más
+// agresiva. Se generan UNA A LA VEZ (lazy) — antes se creaban las 5 de golpe
+// y en Render (512MB) la memoria explotaba y el servidor se reiniciaba.
 //   gris-contraste → fotos oscuras o lavadas por el brillo de la pantalla
 //   binarizada     → reflejos/moiré de fotografiar una pantalla
+//   umbral-alto    → texto gris casi invisible por el brillo (Ganadero)
 //   ampliada       → foto lejana o recorte chico (Tesseract lee mejor grande)
-async function variantesDePreprocesado(entrada) {
-  const variantes = [{ nombre: 'original', imagen: entrada }]
-  let ancho = 0
-  try { ancho = (await sharp(entrada, { failOn: 'none' }).metadata()).width || 0 } catch { /* sin metadata seguimos */ }
-  const intentar = async (nombre, fabrica) => {
-    try { variantes.push({ nombre, imagen: await fabrica() }) } catch { /* esa variante no se pudo: seguimos */ }
-  }
-  await intentar('gris-contraste', () =>
-    sharp(entrada, { failOn: 'none' }).grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer())
-  await intentar('binarizada', () =>
-    sharp(entrada, { failOn: 'none' }).grayscale().normalize().threshold(160).jpeg({ quality: 95 }).toBuffer())
-  // Contraste FUERTE + gamma: recupera etiquetas grises pequeñas lavadas por el
-  // brillo de la pantalla ("Nro.", "Fecha y hora" desaparecían en fotos brillosas)
-  await intentar('contraste-fuerte', () =>
-    sharp(entrada, { failOn: 'none' }).grayscale().gamma(2.2).linear(1.55, -55).sharpen({ sigma: 1.2 })
-      .jpeg({ quality: 95 }).toBuffer())
-  // Umbral ALTO: en fotos lavadas por el brillo, el texto gris queda apenas más
-  // oscuro que el fondo; binarizar recién en 215 lo separa (en 160 desaparecía —
-  // verificado con la muestra real del Ganadero brillosa, que recuperó el N°,
-  // la fecha y el banco completos con este umbral).
-  await intentar('umbral-alto', () =>
-    sharp(entrada, { failOn: 'none' }).grayscale().normalize().threshold(215).jpeg({ quality: 95 }).toBuffer())
-  // Ampliada + nítida: fotos lejanas o texto pequeño. Tesseract necesita el
-  // texto GRANDE: se apunta a ~1700px de ancho como mínimo (una captura de
-  // celular angosta de 413px a 1.8x seguía siendo chica y fallaba).
+function fabricasDeVariantes(ancho) {
+  const fabricas = [
+    { nombre: 'original', fabrica: (buf) => Promise.resolve(buf) },
+    {
+      nombre: 'gris-contraste',
+      fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer(),
+    },
+    {
+      nombre: 'binarizada',
+      fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().normalize().threshold(160).jpeg({ quality: 95 }).toBuffer(),
+    },
+    {
+      nombre: 'contraste-fuerte',
+      fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().gamma(2.2).linear(1.55, -55).sharpen({ sigma: 1.2 }).jpeg({ quality: 95 }).toBuffer(),
+    },
+    {
+      nombre: 'umbral-alto',
+      fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().normalize().threshold(215).jpeg({ quality: 95 }).toBuffer(),
+    },
+  ]
   if (ancho > 0 && ancho < 1700) {
-    await intentar('ampliada', () =>
-      sharp(entrada, { failOn: 'none' }).resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1700), 2600), kernel: 'lanczos3' })
-        .grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer())
+    fabricas.push({
+      nombre: 'ampliada',
+      fabrica: (buf) => sharp(buf, { failOn: 'none' })
+        .resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1700), 2600), kernel: 'lanczos3' })
+        .grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer(),
+    })
   }
-  return variantes
+  return fabricas
 }
 
 // Puntaje de un análisis: banco identificado + campos leídos (+10 si es válido)
@@ -580,17 +591,34 @@ function fusionarAnalisis(resultados) {
  * @param {object} [opciones] { titular }
  */
 async function analizarComprobanteRobusto(entrada, montoEsperado, worker, hoy = new Date(), opciones = {}) {
-  const variantes = await variantesDePreprocesado(entrada)
+  // Techo de tamaño SOLO para el análisis: fotos de 4000px por varias pasadas
+  // reventaban los 512MB de Render (el proceso se reiniciaba a mitad de la
+  // validación). 2200px de ancho dejan el texto del comprobante de sobra
+  // legible para el OCR; la foto original guardada no se toca.
+  let ancho = 0
+  try {
+    const meta = await sharp(entrada, { failOn: 'none' }).metadata()
+    ancho = meta.width || 0
+    if (ancho > 2200) {
+      entrada = await sharp(entrada, { failOn: 'none' }).resize({ width: 2200, kernel: 'lanczos3' }).jpeg({ quality: 95 }).toBuffer()
+      ancho = 2200
+    }
+  } catch { /* sin metadata seguimos con la imagen tal cual */ }
+
   const resultados = []
-  for (const v of variantes) {
+  // Variantes UNA A LA VEZ: se genera, se lee, y su buffer se libera antes de
+  // la siguiente (nunca hay más de una variante viva en memoria).
+  for (const f of fabricasDeVariantes(ancho)) {
     let texto = ''
     try {
-      const { data } = await worker.recognize(v.imagen)
+      let imagen = await f.fabrica(entrada)
+      const { data } = await worker.recognize(imagen)
+      imagen = null
       texto = String(data.text || '')
     } catch { continue }
     const r = analizarComprobante(texto.replace(/\s+/g, ' '), montoEsperado, hoy, opciones)
-    r.pasada = v.nombre
-    if (r.ok) return r // pasada perfecta: no seguimos gastando CPU
+    r.pasada = f.nombre
+    if (r.ok) return r // pasada perfecta: no seguimos gastando CPU ni memoria
     resultados.push(r)
     const fusion = fusionarAnalisis(resultados)
     if (fusion && fusion.ok) return fusion
@@ -601,4 +629,4 @@ async function analizarComprobanteRobusto(entrada, montoEsperado, worker, hoy = 
   }
 }
 
-module.exports = { analizarComprobante, analizarComprobanteRobusto, analizarComprobanteFlexible, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }
+module.exports = { analizarComprobante, analizarComprobanteRobusto, analizarComprobanteFlexible, hoyBolivia, parsearMonto, coincideTitular, contieneConsumoEuphoria, TITULAR_POR_DEFECTO }

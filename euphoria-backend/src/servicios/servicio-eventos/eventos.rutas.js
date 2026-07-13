@@ -14,6 +14,7 @@ const { subirImagenEvento } = require('../../config/cloudinary')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
 const { notificar } = require('../../utilidades/notificaciones')
 const { purgarEvento } = require('../../utilidades/purgar-espacios')
+const { hoyBolivia } = require('../../utilidades/tiempo')
 
 // Modelo de la Fase 3: tipos y estados (identificadores internos).
 const TIPOS_EVENTO = ['estandar', 'especial', 'externo']
@@ -26,7 +27,9 @@ const ESTADOS_PUBLICOS = ['promocion', 'en_transcurso', 'lleno']
 //  - "Terminado": eventos cuya fecha de fin ya pasó.
 // Devuelve cuántos se terminaron (para el aviso del panel).
 async function sincronizarEstadosPorTiempo() {
-  const ahora = new Date()
+  // hoyBolivia(): en Render (UTC) `new Date()` va 4h adelantado a Bolivia y los
+  // eventos se "terminaban" a las 8pm de la noche — desaparecían del carrusel.
+  const ahora = hoyBolivia()
   const terminados = await prisma.evento.updateMany({
     where: { fecha_hora_fin: { lt: ahora }, estado: { not: 'terminado' } },
     data: { estado: 'terminado' },

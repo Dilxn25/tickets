@@ -2,7 +2,7 @@
 const fs = require('fs')
 const sharp = require('sharp')
 const Tesseract = require('tesseract.js')
-const ocr = require('./src/utilidades/ocr-comprobantes')
+const ocr = require('../src/utilidades/ocr-comprobantes')
 
 const DIR = 'C:/Users/arauc/Desktop/Tickets/generados/muestras-ocr/'
 // titular REAL configurado en produccion

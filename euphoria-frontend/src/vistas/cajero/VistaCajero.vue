@@ -1,19 +1,15 @@
 <template>
   <div class="vista-cajero">
 
-    <!-- Modal QR Ampliado -->
-    <div v-if="qrAmpliado" class="modal-overlay" @click.self="qrAmpliado = false">
-      <div class="modal-qr-ampliado anim-fade">
-        <button class="modal-qr-cerrar" @click="qrAmpliado = false">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-        <div class="modal-qr-monto" v-if="montoActual">Bs. {{ montoActual }}</div>
-        <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR de pago de Euphoria" class="qr-imagen-grande" />
-        <p class="modal-qr-hint">Muestra este QR al cliente para que lo escanee</p>
+    <!-- QR de pago AMPLIADO: pantalla completa blanca (mismo patrón que el
+         cliente) para que el escáner lo lea sin reflejos ni marcos oscuros -->
+    <Teleport to="body">
+      <div v-if="qrAmpliado" class="qr-fullscreen" @click="qrAmpliado = false">
+        <p class="qr-fs-titulo" v-if="montoActual">Bs. {{ montoActual }}</p>
+        <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR de pago de Euphoria" class="qr-fs-img" />
+        <p class="qr-fs-hint">Muestra la pantalla al cliente · Toca para cerrar</p>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Modal de éxito -->
     <div v-if="modalExito" class="modal-overlay" @click.self="modalExito = null">
@@ -698,15 +694,11 @@
           </p>
         </div>
 
-        <!-- Ampliar imagen (QR del cliente / comprobante) -->
+        <!-- Ampliar imagen (QR del cliente / comprobante) a pantalla completa -->
         <Teleport to="body">
-          <div v-if="imagenAmpliada" class="modal-overlay" @click.self="imagenAmpliada = null">
-            <div class="img-ampliada anim-fade">
-              <button class="modal-qr-cerrar" @click="imagenAmpliada = null">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-              <img :src="imagenAmpliada" alt="Imagen ampliada" />
-            </div>
+          <div v-if="imagenAmpliada" class="qr-fullscreen" @click="imagenAmpliada = null">
+            <img :src="imagenAmpliada" alt="Imagen ampliada" class="img-fs" />
+            <p class="qr-fs-hint">Toca para cerrar</p>
           </div>
         </Teleport>
       </div>
@@ -1414,6 +1406,13 @@ onMounted(() => {
   max-width: 720px;
   margin: 0 auto;
 }
+/* Escritorio: aprovechar el ancho (antes 720px fijos dejaban pasillos muertos
+   a los lados en pantallas grandes) */
+@media (min-width: 1200px) {
+  .vista-cajero { max-width: 1040px; }
+  .tarjeta-modulo { padding: 2rem 2.6rem; }
+  .tabs-cajero { max-width: 1040px; }
+}
 
 /* Halo ambiental sutil detrás del contenido (no captura clicks) */
 .vista-cajero::before {
@@ -1727,6 +1726,9 @@ onMounted(() => {
   width: 100%;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(34,197,94,0.1);
+  /* Centrado real en cualquier pantalla (antes quedaba pegado arriba y "se
+     desplazaba"); si no cabe, el overlay scrollea sin cortarlo. */
+  margin: auto;
 }
 
 .modal-icono-exito {
@@ -2009,18 +2011,16 @@ onMounted(() => {
   background: var(--borde-color);
 }
 
-/* Modal QR ampliado */
-.modal-qr-ampliado {
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-activo);
-  border-radius: var(--radio-xl);
-  padding: 2rem 1.5rem;
-  max-width: 420px;
-  width: 90%;
-  text-align: center;
-  position: relative;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 40px rgba(168,85,247,0.15);
+/* QR de pago ampliado: pantalla completa BLANCA (mismo patrón que el cliente:
+   el escáner del banco lee mejor sin marcos oscuros ni bordes decorativos) */
+.qr-fullscreen {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; background: #fff; cursor: pointer;
 }
+.qr-fs-titulo { margin: 0; color: #1a1030; font-weight: 900; font-size: 1.6rem; font-family: var(--fuente-titulo); font-variant-numeric: tabular-nums; }
+.qr-fs-img { width: min(80vw, 70vh); max-width: 100%; max-height: 70vh; height: auto; object-fit: contain; border-radius: 8px; }
+.qr-fs-hint { margin: 0; color: #6b6484; font-size: 0.85rem; font-weight: 600; }
 
 .modal-qr-cerrar {
   position: absolute;
@@ -2042,28 +2042,6 @@ onMounted(() => {
 .modal-qr-cerrar:hover {
   background: rgba(239,68,68,0.15);
   color: var(--color-error);
-}
-
-.modal-qr-monto {
-  font-size: 2rem;
-  font-weight: 900;
-  color: var(--morado-brillante);
-  margin-bottom: 1rem;
-  letter-spacing: 0.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.qr-imagen-grande {
-  width: 100%;
-  max-width: 320px;
-  border-radius: var(--radio-lg);
-  border: 2px solid rgba(168,85,247,0.3);
-}
-
-.modal-qr-hint {
-  color: var(--texto-secundario);
-  font-size: 0.85rem;
-  margin: 1rem 0 0;
 }
 
 /* Instrucción QR (texto antiguo — mantenido por compatibilidad) */
@@ -2377,6 +2355,18 @@ onMounted(() => {
   border: none;
   background: transparent;
   padding: 0.8rem 1rem 0.8rem 0;
+  /* Sin sombra ni anillo propios: el recuadro lo dibuja SOLO el contenedor
+     (antes el input interno heredaba la sombra inset y el anillo de foco de
+     .grupo-input input y se veía un recuadro dentro de otro al escribir). */
+  box-shadow: none;
+}
+.grupo-input .input-con-icono input:focus,
+.grupo-input .input-con-icono input:focus-visible,
+.input-con-icono input:focus,
+.input-con-icono input:focus-visible {
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .input-con-icono:focus-within {
@@ -2888,9 +2878,8 @@ onMounted(() => {
 .retiro-comp-ok { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 700; color: var(--color-exito); }
 .retiro-comp-quitar { background: none; border: none; color: var(--texto-secundario); font-size: 0.76rem; cursor: pointer; text-decoration: underline; }
 .retiro-rechazado { font-size: 0.84rem; color: var(--color-error); margin-top: 6px; }
-/* Visor de imagen ampliada */
-.img-ampliada { position: relative; max-width: min(92vw, 560px); }
-.img-ampliada img { width: 100%; border-radius: var(--radio-lg); background: #fff; }
+/* Visor de imagen a pantalla completa (QR del cliente / comprobante) */
+.img-fs { max-width: 94vw; max-height: 82vh; object-fit: contain; border-radius: var(--radio-md); }
 .retiro-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .retiro-card-cab strong { display: block; color: var(--texto-principal); }
 .retiro-tel { font-size: 0.78rem; color: var(--texto-secundario); }

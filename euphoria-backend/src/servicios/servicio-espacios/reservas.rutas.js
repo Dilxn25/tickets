@@ -13,6 +13,7 @@ const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { verificarPin } = require('../../utilidades/pin-billetera')
 const { notificar } = require('../../utilidades/notificaciones')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
+const { hoyBolivia } = require('../../utilidades/tiempo')
 
 router.use(verificarToken)
 
@@ -586,7 +587,7 @@ router.post('/pie', async (req, res) => {
 // (misma regla que la puerta): solo el día del evento, con margen de apertura.
 const HORAS_ANTES_ENTRADA = 4
 const HORAS_DESPUES_ENTRADA = 12
-function estadoFechaEntrada(evento, ahora = new Date()) {
+function estadoFechaEntrada(evento, ahora = hoyBolivia()) {
   if (!evento || !evento.fecha_hora_inicio) return 'vigente'
   const inicio = new Date(evento.fecha_hora_inicio)
   const fin = evento.fecha_hora_fin
@@ -1122,9 +1123,11 @@ async function comisionCancelacion() {
   return 10
 }
 // >24 h antes del evento: sin comisión; dentro de 24 h o ya empezado: con comisión.
+// hoyBolivia(): la fecha del evento está en hora boliviana "naive"; comparar
+// contra la hora UTC del servidor corría el umbral de las 24 h por 4 horas.
 function comisionSegunFecha24(fechaEvento, comisionPct) {
   if (!fechaEvento) return comisionPct
-  return (new Date(fechaEvento).getTime() - Date.now()) > 24 * 3600 * 1000 ? 0 : comisionPct
+  return (new Date(fechaEvento).getTime() - hoyBolivia().getTime()) > 24 * 3600 * 1000 ? 0 : comisionPct
 }
 
 // POST /api/reservas/:id/cancelar — el cliente cancela su reserva; se le devuelve a

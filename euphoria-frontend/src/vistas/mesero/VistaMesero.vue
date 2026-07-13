@@ -3191,6 +3191,12 @@ onUnmounted(() => {
     margin: 0;
     flex-shrink: 0;
   }
+  /* El chip del evento es el único que cede espacio: encoge con ellipsis
+     en vez de empujar a la campana o al botón Salir fuera de la pantalla. */
+  .chip-evento {
+    flex: 1 1 auto; min-width: 0; max-width: none;
+    justify-content: center; padding: 6px 10px; font-size: 0.74rem;
+  }
   .cobro-panel {
     padding: 20px 16px;
   }
@@ -3628,8 +3634,17 @@ onUnmounted(() => {
 @keyframes pulso-destino { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.55); } 70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
 .mapa-el.atenuado { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: var(--texto-desactivado); opacity: 0.5; }
 @media (prefers-reduced-motion: reduce) { .mapa-el.destino { animation: none; } }
+/* Celular: los modales de evento y mapa se vuelven hoja inferior a todo el
+   ancho (esta regla vive DESPUÉS de las bases para ganar la cascada). */
 @media (max-width: 480px) {
-  .mapa-body { padding: 14px 16px; }
+  .mapa-body { padding: 14px 12px calc(16px + env(safe-area-inset-bottom)); }
+  .mapa-overlay { padding: 0; align-items: flex-end; }
+  .ev-sheet, .mapa-sheet {
+    max-width: none;
+    border-radius: var(--radio-xl) var(--radio-xl) 0 0;
+    border-left: none; border-right: none; border-bottom: none;
+  }
+  .mapa-sheet { max-height: 92dvh; }
 }
 
 /* Pantallas muy angostas: el badge de rol es decorativo, se oculta para que

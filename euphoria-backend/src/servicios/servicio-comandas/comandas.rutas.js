@@ -18,7 +18,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
-const { analizarComprobante, analizarComprobanteRobusto, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
+const { analizarComprobante, analizarComprobanteRobusto, hoyBolivia, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
 
@@ -97,12 +97,14 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
       const resp = await fetch(req.file.path)
       if (!resp.ok) throw new Error(`descarga ${resp.status}`)
       const bufferImg = Buffer.from(await resp.arrayBuffer())
-      analisis = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, new Date(), { titular })
+      // hoyBolivia(): el servidor corre en UTC y de noche en Bolivia allá ya es
+      // "mañana" — los comprobantes del día se rechazaban por fecha.
+      analisis = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, hoyBolivia(), { titular })
     } catch (e) {
       // Respaldo: si la descarga falla, una sola pasada directa desde la URL
       console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
       const { data: { text } } = await worker.recognize(req.file.path)
-      analisis = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, new Date(), { titular })
+      analisis = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, hoyBolivia(), { titular })
     }
 
     if (process.env.DEBUG_OCR === 'true') {

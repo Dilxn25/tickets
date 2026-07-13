@@ -47,11 +47,17 @@
 
           <div class="separador"><span>o ingresa el código</span></div>
           <form class="form-codigo" @submit.prevent="validarCodigo">
-            <!-- El código siempre se ve y se busca en MAYÚSCULAS aunque el
-                 recepcionista escriba minúsculas -->
-            <input v-model="codigoManual" @input="codigoManual = codigoManual.toUpperCase()" type="text" class="input-codigo" placeholder="Ej: 6ADB2FF8F57C" maxlength="20" autocapitalize="characters" style="text-transform: uppercase;" />
+            <!-- MAYÚSCULAS automáticas + búsqueda INCREMENTAL: las coincidencias
+                 aparecen mientras se escribe; tocar una la valida directo -->
+            <input v-model="codigoManual" @input="codigoManual = codigoManual.toUpperCase(); buscarCodigoIncremental()" type="text" class="input-codigo" placeholder="Ej: 6ADB2FF8F57C" maxlength="20" autocapitalize="characters" style="text-transform: uppercase;" autocomplete="off" />
             <button class="btn-primario" type="submit" :disabled="procesando || !codigoManual.trim()">Validar</button>
           </form>
+          <ul v-if="sugerenciasCodigo.length" class="gest-resultados cod-sugerencias">
+            <li v-for="s in sugerenciasCodigo" :key="s.codigo" @click="elegirCodigoSugerido(s)">
+              <b>{{ s.codigo }}</b>
+              <span>{{ s.cliente }}{{ s.mesa ? ' · Mesa ' + s.mesa : '' }} · quedan {{ s.restantes }}</span>
+            </li>
+          </ul>
 
           <!-- Ingreso por tandas -->
           <transition name="fade">
@@ -142,8 +148,8 @@
             </div>
           </div>
 
-          <!-- Cliente opcional -->
-          <div class="walk-campo">
+          <!-- Cliente opcional (aparece cuando ya hay destino elegido) -->
+          <div v-if="walkBaseLista" class="walk-campo fade-in">
             <label class="walk-lbl">Cliente <span class="walk-opt">(opcional — para vincular sus consumos)</span></label>
             <div v-if="!walkCliente" class="gest-buscar">
               <input v-model="busquedaWalk" @input="buscarClientesWalk" class="input-codigo gest-input" placeholder="Nombre, correo o CI…" autocomplete="off" />
@@ -160,7 +166,7 @@
           </div>
 
           <!-- Método de pago -->
-          <div class="walk-campo">
+          <div v-if="walkBaseLista" class="walk-campo fade-in">
             <label class="walk-lbl">Cobro</label>
             <div class="walk-metodos">
               <button class="wm" :class="{ activo: walkMetodo === 'efectivo' }" @click="walkMetodo = 'efectivo'">Efectivo</button>
@@ -171,7 +177,7 @@
           </div>
 
           <!-- Detalle EFECTIVO: monto recibido + cambio (igual que el POS del mesero) -->
-          <div v-if="walkMetodo === 'efectivo' && montoWalk > 0" class="efe-bloque">
+          <div v-if="walkBaseLista && walkMetodo === 'efectivo' && montoWalk > 0" class="efe-bloque fade-in">
             <div class="efe-display" :class="{ ok: walkSuficiente }">
               <span class="efe-label">Monto recibido</span>
               <div class="efe-monto">
@@ -191,14 +197,14 @@
           </div>
 
           <!-- Detalle QR: comprobante opcional (foto) -->
-          <div v-else-if="walkMetodo === 'qr' && montoWalk > 0" class="efe-bloque">
+          <div v-else-if="walkBaseLista && walkMetodo === 'qr' && montoWalk > 0" class="efe-bloque fade-in">
             <p class="walk-nota">El cliente paga por QR/transferencia. Puedes adjuntar el comprobante como respaldo.</p>
             <CapturaCamara modo="foto" texto-guia="Coloca el comprobante dentro del marco" @archivo="walkComprobante = $event" />
             <p v-if="walkComprobante" class="walk-ok-comp">Comprobante adjuntado.</p>
           </div>
 
           <!-- Total + registrar -->
-          <div class="walk-total">
+          <div v-if="walkBaseLista" class="walk-total fade-in">
             <div class="walk-monto">
               <span>Total a cobrar</span>
               <b :class="{ cero: montoWalk === 0 }">Bs {{ montoWalk.toFixed(2) }}</b>
@@ -538,6 +544,12 @@ const puedeRegistrarWalk = computed(() => {
   return true
 })
 
+// Revelado progresivo: cliente/cobro/total aparecen recién cuando ya se
+// eligió el destino (zona o mesa) — el recepcionista llena UN dato a la vez.
+const walkBaseLista = computed(() =>
+  walkTipo.value === 'general' ? !!walkZonaId.value : !!walkMesaObj.value
+)
+
 const opcionesZona = computed(() => planos.value.map(z => ({
   value: z.id_zona,
   label: `${z.nombre_zona} · Bs ${Number(z.precio_entrada_base).toFixed(0)} p/pers · ${z.disponibles} libres`,
@@ -757,6 +769,25 @@ function validarCodigo() {
   if (!c) return
   consultarEntrada({ codigo: c })
   codigoManual.value = ''
+  sugerenciasCodigo.value = []
+}
+
+// Búsqueda INCREMENTAL del código: coincidencias en vivo mientras se escribe
+const sugerenciasCodigo = ref([])
+let debounceCodigo = null
+function buscarCodigoIncremental() {
+  clearTimeout(debounceCodigo)
+  const q = codigoManual.value.trim()
+  if (q.length < 2) { sugerenciasCodigo.value = []; return }
+  debounceCodigo = setTimeout(async () => {
+    try { sugerenciasCodigo.value = await clienteHttp.get(`/aforo/buscar-codigo?q=${encodeURIComponent(q)}`) }
+    catch { sugerenciasCodigo.value = [] }
+  }, 250)
+}
+function elegirCodigoSugerido(s) {
+  sugerenciasCodigo.value = []
+  codigoManual.value = ''
+  consultarEntrada({ codigo: s.codigo })
 }
 
 function alEscanearEntrada(texto) {
@@ -1125,6 +1156,8 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .gest-input { width: 100%; box-sizing: border-box; }
 .gest-resultados { list-style: none; margin: 6px 0 0; padding: 4px; background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); border-radius: var(--radio-md); position: absolute; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; box-shadow: 0 16px 40px rgba(10,6,26,0.6); }
 .gest-resultados li { display: flex; flex-direction: column; gap: 1px; padding: 9px 11px; border-radius: var(--radio-sm); cursor: pointer; }
+/* Sugerencias del código: en flujo (no flotante), justo bajo el formulario */
+.cod-sugerencias { position: static; margin-top: 8px; }
 .gest-resultados li:hover { background: rgba(168,85,247,0.14); }
 .gest-resultados li b { font-size: 0.9rem; color: var(--texto-principal); }
 .gest-resultados li span { font-size: 0.76rem; color: var(--texto-secundario); }

@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
 const { notificar } = require('../../utilidades/notificaciones')
-const { subirFotoPerfil } = require('../../config/cloudinary')
+const { subirImagenDocumento } = require('../../config/cloudinary')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
@@ -27,7 +27,10 @@ router.get('/buscar-cliente', async (req, res) => {
           { ci_carnet: { contains: q } },
           { nombres: { contains: q } },
           { apellidos: { contains: q } },
-          { correo: { contains: q } }
+          { correo: { contains: q } },
+          // También por el CÓDIGO CORTO de la billetera (ej. "U15-4832"): el
+          // cliente lo dicta y las coincidencias aparecen mientras se escribe.
+          { billetera: { qr_publico: { contains: q } } },
         ]
       },
       select: {
@@ -413,7 +416,7 @@ async function procesarRetiro({ id_cliente, monto_retirado, metodo, id_cajero })
 // Body: { monto_retirado }. En pagos por QR el comprobante del cajero es
 // OBLIGATORIO: es la constancia de que el depósito se hizo (control de caja
 // y respaldo para el cliente).
-router.post('/retiros/:id/pagar', subirFotoPerfil.single('comprobante'), async (req, res) => {
+router.post('/retiros/:id/pagar', subirImagenDocumento.single('comprobante'), async (req, res) => {
   try {
     const id = Number(req.params.id)
     const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })

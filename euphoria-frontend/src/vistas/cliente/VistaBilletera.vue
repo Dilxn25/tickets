@@ -2662,6 +2662,10 @@ button.mov-fila:focus-visible {
 }
 
 .input-field:focus { outline: none; }
+/* El anillo de foco lo dibuja el CONTENEDOR (.input-monto:focus-within): el
+   anillo global :focus-visible sobre el input interno creaba el "recuadro
+   dentro de otro recuadro" al escribir el monto. */
+.input-monto .input-field:focus-visible { box-shadow: none; border-radius: 0; }
 
 .error-mensaje,
 .exito-mensaje {

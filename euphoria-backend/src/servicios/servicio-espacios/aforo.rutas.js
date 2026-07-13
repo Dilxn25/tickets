@@ -10,6 +10,7 @@ const crypto = require('crypto')
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
+const { hoyBolivia } = require('../../utilidades/tiempo')
 
 router.use(verificarToken)
 
@@ -29,7 +30,7 @@ function estadoAforo(porcentaje) {
 // alguien use su entrada en otra fecha u otro evento.
 const HORAS_ANTES = 4   // margen de apertura antes del inicio
 const HORAS_DESPUES = 12 // duración por defecto si el evento no tiene fin
-function ventanaEvento(evento, ahora = new Date()) {
+function ventanaEvento(evento, ahora = hoyBolivia()) {
   if (!evento || !evento.fecha_hora_inicio) {
     return { estado: 'vigente', inicio: null, fin: null } // sin fecha: no bloquear
   }
@@ -219,6 +220,8 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     const aforoNuevo = aforoPrevio + cantidad
     const resumen = resumenZona(entrada.zona, aforoNuevo)
     if (global.io) global.io.emit('aforo_actualizado', resumen)
+    // El cliente ve su ticket actualizarse en vivo ("2 de 4 ya ingresaron")
+    emitirRecurso('reservas', { id_cliente: entrada.id_usuario })
 
     // Asignación de mesero: si la reserva tiene mesa, o ya está asignada (se informa
     // quién) o se sugiere el mesero con menos carga para que recepción confirme.
@@ -471,6 +474,40 @@ router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador'), asyn
   } catch (e) {
     console.error('Error asignando mesero:', e)
     res.status(500).json({ error: 'Error al asignar el mesero' })
+  }
+})
+
+// GET /api/aforo/buscar-codigo?q=6ADB — búsqueda INCREMENTAL del código de
+// ingreso: mientras el recepcionista escribe, aparecen las coincidencias
+// (código + cliente + cupos) de eventos no terminados. Elegir una = validarla.
+router.get('/buscar-codigo', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().toUpperCase()
+    if (q.length < 2) return res.json([])
+    const entradas = await prisma.entrada.findMany({
+      where: {
+        codigo_ingreso: { contains: q },
+        zona: { evento: { estado: { not: 'terminado' } } },
+      },
+      take: 6,
+      orderBy: { fecha_reserva: 'desc' },
+      include: {
+        usuario: { select: { nombres: true, apellidos: true } },
+        mesa_espacio: { select: { numero_nombre: true } },
+        zona: { select: { nombre_zona: true, evento: { select: { nombre_evento: true } } } },
+      },
+    })
+    res.json(entradas.map(e => ({
+      codigo: e.codigo_ingreso,
+      cliente: `${e.usuario.nombres} ${e.usuario.apellidos || ''}`.trim(),
+      mesa: e.mesa_espacio?.numero_nombre || null,
+      zona: e.zona?.nombre_zona || null,
+      evento: e.zona?.evento?.nombre_evento || null,
+      restantes: Math.max(0, (e.cantidad_personas || 0) - (e.cantidad_ingresada || 0)),
+    })))
+  } catch (e) {
+    console.error('Error buscando código:', e)
+    res.status(500).json({ error: 'Error al buscar el código' })
   }
 })
 

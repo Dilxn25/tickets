@@ -39,6 +39,9 @@
             <b>Toca una mesa para ver sus pedidos</b>
             <button class="bmapa-cerrar" @click="mapaAbierto = false" aria-label="Cerrar">×</button>
           </header>
+          <div v-if="eventosMapa.length > 1" class="bmapa-eventos">
+            <button v-for="e in eventosMapa" :key="e.id_evento" class="bf-chip" :class="{ activo: mapaEventoId === e.id_evento }" @click="setEventoMapa(e.id_evento)">{{ e.nombre }}</button>
+          </div>
           <div v-if="!planosMapa.length" class="bmapa-vacia">No hay planos con mesas en este evento.</div>
           <div class="bmapa-scroll">
             <div v-for="z in planosMapa" :key="z.id_zona" class="bmapa-zona">
@@ -219,34 +222,54 @@ async function entregarMesero(c) {
 // Filtro por mapa
 const mapaAbierto = ref(false)
 const planosMapa = ref([])
+const eventosMapa = ref([])       // eventos elegibles dentro del modal
+const mapaEventoId = ref(null)    // evento cuyo plano se está viendo
 async function abrirMapa() {
   mapaAbierto.value = true
   planosMapa.value = []
-  let idEv = eventoFiltro.value || eventos.value[0]?.id_evento
-  // Si no hay evento en el tablero, usa el evento en curso (con zonas)
-  if (!idEv) {
-    try {
-      const evs = await servicioAforo.listarEventos()
-      idEv = (evs || []).find(e => e.estado === 'en_transcurso' || e.estado === 'lleno' || e.estado === 'promocion')?.id_evento || evs?.[0]?.id_evento
-    } catch { /* sin eventos */ }
-  }
-  if (!idEv) return
+  // Eventos elegibles: SIEMPRE los activos del local (el tablero puede tener
+  // pedidos de un solo evento y el bartender igual necesita ver el otro mapa).
+  let lista = []
   try {
-    const r = await servicioAforo.obtenerPlanos(idEv)
+    const evs = await servicioAforo.listarEventos()
+    lista = (evs || []).filter(e => e.estado === 'en_transcurso' || e.estado === 'lleno' || e.estado === 'promocion')
+    if (!lista.length && evs?.length) lista = [evs[0]]
+  } catch { lista = [] }
+  if (!lista.length) lista = eventos.value
+  eventosMapa.value = lista.map(e => ({ ...e, nombre: e.nombre_evento || e.nombre }))
+  mapaEventoId.value = eventoFiltro.value || eventosMapa.value[0]?.id_evento || null
+  await cargarPlanosMapa()
+}
+async function cargarPlanosMapa() {
+  if (!mapaEventoId.value) { planosMapa.value = []; return }
+  try {
+    const r = await servicioAforo.obtenerPlanos(mapaEventoId.value)
     planosMapa.value = (r.zonas || []).filter(z => (z.mesas || []).length)
   } catch { planosMapa.value = [] }
 }
+function setEventoMapa(id) {
+  if (mapaEventoId.value === id) return
+  mapaEventoId.value = id
+  planosMapa.value = []
+  cargarPlanosMapa()
+}
 function estiloMapaElem(m) {
+  // Mismo patrón que mesero/recepción: left/top directos, SIN translate
+  // (el translate corría cada elemento medio ancho y deformaba el plano).
   return {
-    left: (m.posicion_x || 0) + '%', top: (m.posicion_y || 0) + '%',
-    width: (m.ancho || 8) + '%', height: (m.alto || 8) + '%',
-    transform: `translate(-50%, -50%) rotate(${m.rotacion || 0}deg)`,
+    left: `${m.posicion_x || 0}%`, top: `${m.posicion_y || 0}%`,
+    width: `${m.ancho ?? 7}%`, height: `${m.alto ?? 10}%`,
+    transform: `rotate(${m.rotacion || 0}deg)`,
     borderRadius: m.forma === 'redondo' ? '50%' : '8px',
   }
 }
 function filtrarPorMesa(m) {
   if (m.tipo_elemento !== 'mesa' && m.tipo_elemento !== 'silla') return
   busquedaMesa.value = String(m.numero_nombre)
+  // El filtro del tablero sigue al evento elegido en el mapa
+  if (mapaEventoId.value && eventos.value.some(e => e.id_evento === mapaEventoId.value)) {
+    eventoFiltro.value = mapaEventoId.value
+  }
   mapaAbierto.value = false
   recargar()
 }
@@ -421,6 +444,7 @@ onUnmounted(() => {
 .bmapa-cab { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--borde-sutil); }
 .bmapa-cab b { color: var(--texto-principal); }
 .bmapa-cerrar { width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(255,255,255,0.08); color: var(--texto-principal); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.bmapa-eventos { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
 .bmapa-vacia { padding: 2rem; text-align: center; color: var(--texto-desactivado); }
 .bmapa-scroll { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
 .bmapa-zona-tit { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -429,6 +453,12 @@ onUnmounted(() => {
 .bmapa-elem:hover { background: rgba(168,85,247,0.8); }
 .bmapa-elem span { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92%; }
 .bmapa-elem.deco { background: rgba(80,80,100,0.25); border-color: transparent; cursor: default; }
+/* Celular: el modal del mapa aprovecha toda la pantalla */
+@media (max-width: 560px) {
+  .bmapa-overlay { padding: 0; align-items: stretch; }
+  .bmapa-modal { width: 100%; max-height: none; height: 100dvh; border-radius: 0; border: none; }
+  .bmapa-scroll { padding: 12px; }
+}
 
 /* Transición suave entre Tablero e Historial (evita el salto brusco) */
 .fade-tab-enter-active, .fade-tab-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }

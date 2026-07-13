@@ -41,12 +41,26 @@ const storagePerfil = new CloudinaryStorage({
   },
 })
 
+// ---- Storage para DOCUMENTOS (QRs enviados, comprobantes) ----
+// SIN recorte ni gravity: la transformación de perfil (400x400 centrada en
+// "cara") destrozaba el QR que el cliente enviaba para su retiro — quedaba
+// borroso e ilegible. Aquí solo se limita el lado mayor conservando TODO.
+const storageDocumentos = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:         'euphoria/documentos',
+    allowed_formats:['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1600, height: 1600, crop: 'limit', quality: 'auto:best' }],
+  },
+})
+
 // Límite 5MB
 const limites = { fileSize: 5 * 1024 * 1024 }
 
-const subirImagenProducto = multer({ storage: storageProductos, limits: limites })
-const subirImagenEvento   = multer({ storage: storageEventos,   limits: limites })
-const subirFotoPerfil     = multer({ storage: storagePerfil,    limits: limites })
+const subirImagenProducto  = multer({ storage: storageProductos,  limits: limites })
+const subirImagenEvento    = multer({ storage: storageEventos,    limits: limites })
+const subirFotoPerfil      = multer({ storage: storagePerfil,     limits: limites })
+const subirImagenDocumento = multer({ storage: storageDocumentos, limits: limites })
 
 // Eliminar imagen de Cloudinary por URL
 async function eliminarImagen(url) {
@@ -62,4 +76,4 @@ async function eliminarImagen(url) {
   }
 }
 
-module.exports = { cloudinary, subirImagenProducto, subirImagenEvento, subirFotoPerfil, eliminarImagen }
+module.exports = { cloudinary, subirImagenProducto, subirImagenEvento, subirFotoPerfil, subirImagenDocumento, eliminarImagen }

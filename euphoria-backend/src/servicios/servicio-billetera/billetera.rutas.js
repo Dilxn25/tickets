@@ -11,7 +11,7 @@ const QRCode = require('qrcode')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { cifrarPin, descifrarPin, verificarPin } = require('../../utilidades/pin-billetera')
-const { subirFotoPerfil } = require('../../config/cloudinary')
+const { subirImagenDocumento } = require('../../config/cloudinary')
 const { notificar } = require('../../utilidades/notificaciones')
 
 // ============ GET /api/billetera/saldo ============
@@ -795,7 +795,7 @@ router.get('/admin/reporte-completo', verificarToken, soloRoles('Administrador')
 // ============ RETIRO DE BILLETERA (el cliente solicita, el cajero paga) ============
 
 // POST /api/billetera/retiro/solicitar — multipart opcional { imagen (QR) }, body { mensaje, metodo }
-router.post('/retiro/solicitar', verificarToken, subirFotoPerfil.single('imagen'), async (req, res) => {
+router.post('/retiro/solicitar', verificarToken, subirImagenDocumento.single('imagen'), async (req, res) => {
   try {
     const id_cliente = req.usuario.id
     const metodo = req.body.metodo === 'qr' ? 'qr' : 'persona'
