@@ -627,22 +627,35 @@
           <div class="retiros-filtros">
             <button :class="['retiro-filtro', { activo: filtroRetiro === 'pendiente' }]" @click="filtroRetiro = 'pendiente'; cargarRetiros()">Pendientes</button>
             <button :class="['retiro-filtro', { activo: filtroRetiro === 'pagado' }]" @click="filtroRetiro = 'pagado'; cargarRetiros()">Pagados</button>
+            <button :class="['retiro-filtro', { activo: filtroRetiro === 'rechazado' }]" @click="filtroRetiro = 'rechazado'; cargarRetiros()">Rechazados</button>
           </div>
         </div>
 
-        <p v-if="!retiros.length" class="retiros-vacio">No hay solicitudes {{ filtroRetiro === 'pendiente' ? 'pendientes' : 'pagadas' }}.</p>
+        <p v-if="!retiros.length" class="retiros-vacio">Sin solicitudes {{ filtroRetiro === 'pendiente' ? 'pendientes' : filtroRetiro === 'pagado' ? 'pagadas' : 'rechazadas' }}.</p>
 
         <div v-for="r in retiros" :key="r.id_solicitud" class="retiro-card">
           <div class="retiro-card-cab">
-            <div>
-              <strong>{{ r.cliente }}</strong>
-              <span class="retiro-tel">{{ r.telefono ? '+591 ' + String(r.telefono).replace(/\D/g,'').slice(-8) : r.correo }}</span>
+            <div class="retiro-cliente">
+              <!-- Foto del cliente: para identificarlo en caja -->
+              <span class="retiro-avatar">
+                <img v-if="r.foto_cliente" :src="r.foto_cliente" :alt="r.cliente" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              </span>
+              <div>
+                <strong>{{ r.cliente }}</strong>
+                <span class="retiro-tel">{{ r.telefono ? '+591 ' + String(r.telefono).replace(/\D/g,'').slice(-8) : r.correo }}</span>
+              </div>
             </div>
             <span class="retiro-saldo-chip">Saldo: Bs {{ r.saldo_actual.toFixed(2) }}</span>
           </div>
           <p class="retiro-metodo-txt">{{ r.metodo === 'qr' ? 'Prefiere a su QR / cuenta' : 'Pasará por el local' }}</p>
           <p v-if="r.mensaje" class="retiro-msg">“{{ r.mensaje }}”</p>
-          <a v-if="r.qr_imagen" :href="r.qr_imagen" target="_blank" class="retiro-ver-qr">Ver QR del cliente</a>
+
+          <!-- El QR que ENVIÓ el cliente, visible tal cual (toca para ampliar) -->
+          <button v-if="r.qr_imagen" class="retiro-qr-thumb" type="button" @click="imagenAmpliada = r.qr_imagen" title="Ampliar QR del cliente">
+            <img :src="r.qr_imagen" alt="QR del cliente" />
+            <span>QR del cliente</span>
+          </button>
 
           <template v-if="r.estado === 'pendiente'">
             <div class="retiro-montos">
@@ -655,15 +668,51 @@
               <b>Bs {{ entregarRetiro(r).toFixed(2) }}</b>
               <span v-if="redondeoRetiro(r) > 0" class="retiro-redondeo"> · redondeo +Bs {{ redondeoRetiro(r).toFixed(2) }}</span>
             </p>
+
+            <!-- Pago por QR: el comprobante del DEPÓSITO es obligatorio (constancia) -->
+            <div v-if="r.metodo === 'qr'" class="retiro-comp">
+              <p v-if="!r._comprobante" class="retiro-comp-lbl">Haz el depósito y adjunta tu comprobante:</p>
+              <CapturaCamara v-if="!r._comprobante" modo="foto" texto-guia="Coloca tu comprobante del depósito" nombre-archivo="comprobante-retiro.jpg" @archivo="r._comprobante = $event" />
+              <p v-else class="retiro-comp-ok">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Comprobante adjuntado
+                <button class="retiro-comp-quitar" type="button" @click="r._comprobante = null">Cambiar</button>
+              </p>
+            </div>
+
             <div class="retiro-acciones">
-              <button class="btn-pagar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="pagarRetiro(r)">
+              <button class="btn-pagar-retiro" :disabled="procesandoRetiro === r.id_solicitud || (r.metodo === 'qr' && !r._comprobante)" @click="pagarRetiro(r)">
                 {{ procesandoRetiro === r.id_solicitud ? '…' : 'Registrar retiro' }}
               </button>
               <button class="btn-rechazar-retiro" :disabled="procesandoRetiro === r.id_solicitud" @click="rechazarRetiro(r)">Rechazar</button>
             </div>
           </template>
-          <p v-else class="retiro-pagado">Retiró Bs {{ r.monto_retirado }} · recibió Bs {{ r.monto_entregado }}<span v-if="Number(r.diferencia) > 0"> · redondeo +Bs {{ r.diferencia }}</span></p>
+
+          <template v-else-if="r.estado === 'pagado'">
+            <p class="retiro-pagado">Retiró Bs {{ r.monto_retirado }} · recibió Bs {{ r.monto_entregado }}<span v-if="Number(r.diferencia) > 0"> · redondeo +Bs {{ r.diferencia }}</span><span v-if="r.atendido_por"> · atendió {{ r.atendido_por }}</span></p>
+            <!-- Constancia del depósito (control de caja) -->
+            <button v-if="r.comprobante_pago" class="retiro-qr-thumb" type="button" @click="imagenAmpliada = r.comprobante_pago" title="Ver comprobante del depósito">
+              <img :src="r.comprobante_pago" alt="Comprobante del depósito" />
+              <span>Comprobante del depósito</span>
+            </button>
+          </template>
+
+          <p v-else class="retiro-rechazado">
+            Rechazada{{ r.atendido_por ? ' por ' + r.atendido_por : '' }}{{ r.motivo_rechazo ? ' · ' + r.motivo_rechazo : '' }}
+          </p>
         </div>
+
+        <!-- Ampliar imagen (QR del cliente / comprobante) -->
+        <Teleport to="body">
+          <div v-if="imagenAmpliada" class="modal-overlay" @click.self="imagenAmpliada = null">
+            <div class="img-ampliada anim-fade">
+              <button class="modal-qr-cerrar" @click="imagenAmpliada = null">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+              <img :src="imagenAmpliada" alt="Imagen ampliada" />
+            </div>
+          </div>
+        </Teleport>
       </div>
     </div>
 
@@ -835,6 +884,8 @@ const retiros = ref([])
 const retirosPendientes = ref([])
 const filtroRetiro = ref('pendiente')
 const procesandoRetiro = ref(null)
+// Visor de imagen (QR que envió el cliente / comprobante del depósito)
+const imagenAmpliada = ref(null)
 async function cargarRetiros() {
   try {
     const data = await clienteHttp.get(`/cajero/retiros?estado=${filtroRetiro.value}`)
@@ -861,25 +912,39 @@ async function pagarRetiro(r) {
   const retirar = Number(r._retirar)
   if (!(retirar > 0)) { notif.advertencia('El monto a retirar debe ser mayor a 0.'); return }
   if (retirar > r.saldo_actual) { notif.advertencia('No puede retirar más que el saldo del cliente.'); return }
+  // Pago por QR: el comprobante del depósito es OBLIGATORIO (constancia para el
+  // cliente y control de caja).
+  if (r.metodo === 'qr' && !r._comprobante) {
+    notif.advertencia('Haz el depósito y adjunta tu comprobante primero.')
+    return
+  }
   procesandoRetiro.value = r.id_solicitud
   try {
     // El backend calcula lo entregado (efectivo redondea arriba, QR exacto).
-    const res = await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/pagar`, { monto_retirado: retirar })
+    const fd = new FormData()
+    fd.append('monto_retirado', String(retirar))
+    if (r._comprobante) fd.append('comprobante', r._comprobante)
+    const res = await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/pagar`, fd)
     const comoRecibe = r.metodo === 'qr' ? 'Transfiere' : 'Entrega'
     notif.exito(`Retiro registrado. ${comoRecibe} Bs ${res.entregado}${Number(res.diferencia) > 0 ? ` (redondeo +Bs ${res.diferencia})` : ''}.`)
     cargarRetiros()
-  } catch (e) { notif.error(e?.error || 'No se pudo procesar el retiro.') }
+  } catch (e) { notif.error(e?.response?.data?.error || e?.error || 'No se pudo procesar el retiro.') }
   finally { procesandoRetiro.value = null }
 }
 async function rechazarRetiro(r) {
-  const ok = await notif.confirmar({ variante: 'peligro', titulo: 'Rechazar solicitud', mensaje: `¿Rechazar el retiro de ${r.cliente}?`, textoConfirmar: 'Sí, rechazar' })
-  if (!ok) return
+  // El motivo queda en el registro (reporte de rechazados) y se avisa al cliente
+  const motivo = await notif.solicitar({
+    titulo: `Rechazar el retiro de ${r.cliente}`,
+    mensaje: '¿Por qué se rechaza? El cliente verá este motivo.',
+    placeholder: 'Ej: el QR enviado no es válido',
+  })
+  if (motivo === null) return
   procesandoRetiro.value = r.id_solicitud
   try {
-    await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/rechazar`)
+    await clienteHttp.post(`/cajero/retiros/${r.id_solicitud}/rechazar`, { motivo })
     notif.exito('Solicitud rechazada.')
     cargarRetiros()
-  } catch (e) { notif.error(e?.error || 'No se pudo rechazar.') }
+  } catch (e) { notif.error(e?.response?.data?.error || e?.error || 'No se pudo rechazar.') }
   finally { procesandoRetiro.value = null }
 }
 
@@ -2755,6 +2820,30 @@ onMounted(() => {
 .retiro-filtro.activo { border-color: var(--color-primario); color: var(--color-primario); background: color-mix(in srgb, var(--color-primario) 12%, transparent); }
 .retiros-vacio { color: var(--texto-secundario); text-align: center; padding: 20px; }
 .retiro-card { border: 1px solid var(--borde-sutil); border-radius: 14px; padding: 14px; margin-bottom: 12px; background: var(--fondo-tarjeta-alt, rgba(255,255,255,.02)); }
+/* Identidad del solicitante: foto + datos */
+.retiro-cliente { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.retiro-avatar {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(168,85,247,0.12); border: 1px solid var(--borde-sutil); color: var(--morado-hover);
+}
+.retiro-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* El QR que envió el cliente (y el comprobante del cajero): miniatura tocable */
+.retiro-qr-thumb {
+  display: inline-flex; align-items: center; gap: 10px; margin: 8px 0;
+  padding: 8px 12px 8px 8px; border-radius: var(--radio-md); cursor: zoom-in;
+  background: #fff; border: 1px solid var(--borde-sutil); color: #1a1030; font-weight: 700; font-size: 0.78rem;
+}
+.retiro-qr-thumb img { width: 58px; height: 58px; object-fit: contain; image-rendering: pixelated; }
+/* Comprobante del depósito (pago por QR) */
+.retiro-comp { margin: 10px 0; }
+.retiro-comp-lbl { font-size: 0.82rem; color: var(--texto-secundario); margin-bottom: 8px; }
+.retiro-comp-ok { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 700; color: var(--color-exito); }
+.retiro-comp-quitar { background: none; border: none; color: var(--texto-secundario); font-size: 0.76rem; cursor: pointer; text-decoration: underline; }
+.retiro-rechazado { font-size: 0.84rem; color: var(--color-error); margin-top: 6px; }
+/* Visor de imagen ampliada */
+.img-ampliada { position: relative; max-width: min(92vw, 560px); }
+.img-ampliada img { width: 100%; border-radius: var(--radio-lg); background: #fff; }
 .retiro-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .retiro-card-cab strong { display: block; color: var(--texto-principal); }
 .retiro-tel { font-size: 0.78rem; color: var(--texto-secundario); }

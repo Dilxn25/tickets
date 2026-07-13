@@ -844,6 +844,10 @@ router.get('/retiro/mias', verificarToken, async (req, res) => {
       monto_retirado: s.monto_retirado != null ? Number(s.monto_retirado) : null,
       monto_entregado: s.monto_entregado != null ? Number(s.monto_entregado) : null,
       diferencia: s.diferencia != null ? Number(s.diferencia) : null,
+      // Constancia del depósito que subió el cajero (retiros por QR) y motivo
+      // si fue rechazada: el cliente tiene su respaldo.
+      comprobante_pago: s.comprobante_pago || null,
+      motivo_rechazo: s.motivo_rechazo || null,
       fecha: s.fecha,
       fecha_pago: s.fecha_pago,
     })))

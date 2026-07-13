@@ -701,8 +701,11 @@
                 <span class="retiro-hist-estado" :class="'e-' + r.estado">{{ etiquetaRetiro(r.estado) }}</span>
                 <span class="retiro-hist-info">
                   <template v-if="r.estado === 'pagado'">Retiraste Bs {{ r.monto_retirado }} · recibiste Bs {{ r.monto_entregado }}</template>
+                  <template v-else-if="r.estado === 'rechazado' && r.motivo_rechazo">{{ r.motivo_rechazo }}</template>
                   <template v-else>Saldo al pedir: Bs {{ r.saldo_al_solicitar }}</template>
                 </span>
+                <!-- Constancia del depósito que subió el cajero (tu respaldo) -->
+                <a v-if="r.comprobante_pago" :href="r.comprobante_pago" target="_blank" class="retiro-constancia">Ver constancia</a>
                 <button v-if="r.estado === 'pendiente'" class="retiro-cancelar" @click="cancelarRetiro(r)">Cancelar</button>
               </div>
             </div>
@@ -3282,6 +3285,8 @@ button.mov-fila:focus-visible {
   padding: 0.2rem 0.35rem;
 }
 .retiro-cancelar:hover { text-decoration: underline; }
+.retiro-constancia { flex-shrink: 0; font-size: 0.74rem; font-weight: 700; color: var(--color-exito); text-decoration: none; padding: 0.2rem 0.35rem; }
+.retiro-constancia:hover { text-decoration: underline; }
 
 /* Celular: los métodos de retiro se apilan si no caben cómodamente */
 @media (max-width: 380px) {

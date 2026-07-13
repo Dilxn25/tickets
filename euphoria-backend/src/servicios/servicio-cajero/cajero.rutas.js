@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
 const { notificar } = require('../../utilidades/notificaciones')
+const { subirFotoPerfil } = require('../../config/cloudinary')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
@@ -340,19 +341,26 @@ router.get('/retiros', async (req, res) => {
       where: estado === 'todas' ? {} : { estado },
       orderBy: { fecha: 'desc' },
       take: 100,
-      include: { cliente: { select: { id_usuario: true, nombres: true, apellidos: true, telefono: true, correo: true, billetera: { select: { saldo_actual: true } } } } },
+      include: {
+        cliente: { select: { id_usuario: true, nombres: true, apellidos: true, telefono: true, correo: true, url_foto_perfil: true, billetera: { select: { saldo_actual: true } } } },
+        cajero: { select: { nombres: true, apellidos: true } },
+      },
     })
     res.json(solicitudes.map(s => ({
       id_solicitud: s.id_solicitud,
       id_cliente: s.id_cliente,
       cliente: `${s.cliente.nombres} ${s.cliente.apellidos || ''}`.trim(),
+      foto_cliente: s.cliente.url_foto_perfil || null,  // para identificarlo en caja
       telefono: s.cliente.telefono,
       correo: s.cliente.correo,
       saldo_actual: Number(s.cliente.billetera?.saldo_actual || 0),
       saldo_al_solicitar: Number(s.saldo_al_solicitar),
       mensaje: s.mensaje,
       metodo: s.metodo,
-      qr_imagen: s.qr_imagen,
+      qr_imagen: s.qr_imagen,                          // el QR que ENVIÓ el cliente
+      comprobante_pago: s.comprobante_pago || null,    // constancia del cajero
+      motivo_rechazo: s.motivo_rechazo || null,
+      atendido_por: s.cajero ? `${s.cajero.nombres} ${s.cajero.apellidos || ''}`.trim() : null,
       estado: s.estado,
       monto_retirado: s.monto_retirado != null ? Number(s.monto_retirado) : null,
       monto_entregado: s.monto_entregado != null ? Number(s.monto_entregado) : null,
@@ -401,13 +409,19 @@ async function procesarRetiro({ id_cliente, monto_retirado, metodo, id_cajero })
   return { diferencia: redondeo, redondeo, retirado, entregado, esEfectivo, ahora }
 }
 
-// POST /api/cajero/retiros/:id/pagar  Body: { monto_retirado, monto_entregado }
-router.post('/retiros/:id/pagar', async (req, res) => {
+// POST /api/cajero/retiros/:id/pagar — multipart opcional { comprobante }.
+// Body: { monto_retirado }. En pagos por QR el comprobante del cajero es
+// OBLIGATORIO: es la constancia de que el depósito se hizo (control de caja
+// y respaldo para el cliente).
+router.post('/retiros/:id/pagar', subirFotoPerfil.single('comprobante'), async (req, res) => {
   try {
     const id = Number(req.params.id)
     const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })
     if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' })
     if (sol.estado !== 'pendiente') return res.status(409).json({ error: 'Esta solicitud ya fue procesada.' })
+    if (sol.metodo === 'qr' && !req.file) {
+      return res.status(400).json({ error: 'Adjunta el comprobante del depósito para completar el retiro por QR.' })
+    }
 
     const r = await procesarRetiro({
       id_cliente: sol.id_cliente,
@@ -419,13 +433,18 @@ router.post('/retiros/:id/pagar', async (req, res) => {
 
     await prisma.solicitud_retiro.update({
       where: { id_solicitud: id },
-      data: { estado: 'pagado', monto_retirado: r.retirado, monto_entregado: r.entregado, diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora },
+      data: {
+        estado: 'pagado', monto_retirado: r.retirado, monto_entregado: r.entregado,
+        diferencia: r.diferencia, id_cajero: req.usuario.id, fecha_pago: r.ahora,
+        comprobante_pago: req.file ? req.file.path : null,
+      },
     })
     const msgRetiro = r.esEfectivo
       ? `Se retiraron Bs ${r.retirado} de tu billetera. Recibiste Bs ${r.entregado} en efectivo.`
-      : `Se retiraron Bs ${r.retirado} de tu billetera. Se transfirieron Bs ${r.entregado} a tu cuenta/QR.`
+      : `Se retiraron Bs ${r.retirado} de tu billetera. Se transfirieron Bs ${r.entregado} a tu cuenta/QR.${req.file ? ' El comprobante del depósito está en tu billetera.' : ''}`
     await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Retiro procesado', mensaje: msgRetiro, url: '/cliente/billetera' })
-    res.json({ mensaje: 'Retiro pagado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia })
+    if (global.io) global.io.emit('retiro_solicitado', { id_solicitud: id, estado: 'pagado' })
+    res.json({ mensaje: 'Retiro pagado', retirado: r.retirado, entregado: r.entregado, diferencia: r.diferencia, comprobante: req.file ? req.file.path : null })
   } catch (error) {
     if (error.message === 'SALDO_INSUFICIENTE') return res.status(400).json({ error: 'El saldo cambió; el cliente ya no tiene ese monto.' })
     console.error('Error pagando retiro:', error)
@@ -433,15 +452,25 @@ router.post('/retiros/:id/pagar', async (req, res) => {
   }
 })
 
-// POST /api/cajero/retiros/:id/rechazar
+// POST /api/cajero/retiros/:id/rechazar  Body: { motivo? } — el motivo queda en
+// el registro (reporte de rechazados) y se le informa al cliente.
 router.post('/retiros/:id/rechazar', async (req, res) => {
   try {
     const id = Number(req.params.id)
+    const motivo = req.body.motivo ? String(req.body.motivo).slice(0, 255) : null
     const sol = await prisma.solicitud_retiro.findUnique({ where: { id_solicitud: id } })
     if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' })
     if (sol.estado !== 'pendiente') return res.status(409).json({ error: 'Esta solicitud ya fue procesada.' })
-    await prisma.solicitud_retiro.update({ where: { id_solicitud: id }, data: { estado: 'rechazado', id_cajero: req.usuario.id, fecha_pago: new Date() } })
-    await notificar(sol.id_cliente, { tipo: 'billetera', titulo: 'Solicitud de retiro rechazada', mensaje: 'El local no pudo procesar tu retiro. Acércate a caja para más detalles.', url: '/cliente/billetera' })
+    await prisma.solicitud_retiro.update({
+      where: { id_solicitud: id },
+      data: { estado: 'rechazado', motivo_rechazo: motivo, id_cajero: req.usuario.id, fecha_pago: new Date() },
+    })
+    await notificar(sol.id_cliente, {
+      tipo: 'billetera', titulo: 'Solicitud de retiro rechazada',
+      mensaje: motivo ? `Motivo: ${motivo}` : 'El local no pudo procesar tu retiro. Acércate a caja para más detalles.',
+      url: '/cliente/billetera',
+    })
+    if (global.io) global.io.emit('retiro_solicitado', { id_solicitud: id, estado: 'rechazado' })
     res.json({ mensaje: 'Solicitud rechazada' })
   } catch (error) {
     res.status(500).json({ error: 'Error al rechazar la solicitud' })
