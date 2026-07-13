@@ -208,9 +208,9 @@
           <div class="solicitudes">
             <div class="sol-cab">
               <b>Solicitudes de clientes</b>
-              <button class="btn-refrescar-sm" @click="cargarSolicitudes" :disabled="cargandoSol" title="Actualizar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ girar: cargandoSol }"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-              </button>
+              <!-- Sin botón de refrescar: la bandeja se actualiza sola por socket
+                   (solicitud_grupo) apenas un cliente envía una solicitud. -->
+              <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
             </div>
             <div v-if="!solicitudes.length" class="sol-vacia">No hay solicitudes pendientes.</div>
             <div v-else class="sol-lista">

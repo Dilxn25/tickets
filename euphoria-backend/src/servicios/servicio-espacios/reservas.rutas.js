@@ -1033,6 +1033,8 @@ router.post('/solicitudes-grupo/:id/proponer', soloRoles('Recepcionista', 'Admin
       data: { mesas_propuestas: JSON.stringify(mesas), estado: 'propuesta' },
     })
     if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, id_cliente: s.id_cliente, estado: 'propuesta' })
+    // Que la vista "Mis reservas" del cliente muestre la propuesta al instante
+    emitirRecurso('reservas', { id_cliente: s.id_cliente })
     await notificar(s.id_cliente, { tipo: 'propuesta', titulo: 'Tienes una propuesta de reserva', mensaje: 'El local te propuso otros lugares. Ábrela para aceptarla o rechazarla.', url: `/cliente/grupo/${s.id_evento}` })
     res.json({ ok: true, mensaje: 'Propuesta enviada al cliente para que la confirme.' })
   } catch (e) {
@@ -1058,6 +1060,7 @@ router.post('/solicitudes-grupo/:id/responder', soloRoles('Cliente'), async (req
     await crearReservasGrupo(s.id_cliente, prop.map(m => m.id_mesa))
     await prisma.solicitud_grupo.update({ where: { id_solicitud: s.id_solicitud }, data: { estado: 'confirmada' } })
     if (global.io) global.io.emit('solicitud_grupo', { id_solicitud: s.id_solicitud, estado: 'confirmada' })
+    emitirRecurso('reservas', { id_cliente: s.id_cliente })
     res.json({ ok: true, mensaje: 'Aceptaste la propuesta. Tus mesas quedaron reservadas.' })
   } catch (e) {
     if (e.status) return res.status(e.status).json({ error: e.error })

@@ -362,6 +362,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { io } from 'socket.io-client'
 import { useRouter } from 'vue-router'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
@@ -407,6 +408,7 @@ const cargandoProductos = ref(true)
 // Control del Carrusel
 const carruselIndex = ref(0)
 let carruselInterval = null
+let socketInicio = null
 
 // Control del Marquee
 const pausaMarquee = ref(false)
@@ -697,11 +699,24 @@ onMounted(async () => {
   iniciarCarrusel()
   await nextTick()
   iniciarReveals()
+
+  // Tiempo real: el saldo se refresca cuando cambia la billetera del usuario, y
+  // los combos/catálogo cuando el admin los actualiza (sin recargar la página).
+  socketInicio = io({ path: '/socket.io' })
+  socketInicio.on('billetera_actualizada', (d) => {
+    if (!d || d.id_usuario == null || d.id_usuario === tienda.usuario?.id) {
+      servicioBilletera.obtenerSaldo().then(s => { saldoBilletera.value = s.saldo_actual || 0 }).catch(() => {})
+    }
+  })
+  const refrescarCatalogo = () => cargarDatosInicio()
+  socketInicio.on('catalogo_actualizado', refrescarCatalogo)
+  socketInicio.on('config_actualizada', refrescarCatalogo)
 })
 
 onUnmounted(() => {
   if (carruselInterval) clearInterval(carruselInterval)
   if (observadorReveal) observadorReveal.disconnect()
+  if (socketInicio) socketInicio.disconnect()
 })
 </script>
 

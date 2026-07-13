@@ -266,7 +266,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { io } from 'socket.io-client'
 import { useRouter } from 'vue-router'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
@@ -274,6 +275,7 @@ import { formatoMoneda, formatoMonto, formatoFecha } from '@/utilidades/formato.
 
 const router = useRouter()
 const notif = useNotificaciones()
+let socket = null
 
 function volver() {
   router.back()
@@ -284,15 +286,14 @@ const movimientos = ref([])
 const cargando = ref(true)
 const errorCarga = ref(false)
 
-async function cargarMovimientos() {
-  cargando.value = true
-  errorCarga.value = false
+async function cargarMovimientos(silencioso = false) {
+  if (!silencioso) { cargando.value = true; errorCarga.value = false }
   try {
     const res = await servicioBilletera.obtenerMovimientos()
     movimientos.value = res?.movimientos || []
   } catch (error) {
     console.error('Error cargando movimientos:', error)
-    errorCarga.value = true
+    if (!silencioso) errorCarga.value = true
   } finally {
     cargando.value = false
   }
@@ -371,7 +372,18 @@ function cerrarDetalleConsumo() {
 // Moneda, monto con signo y fecha vienen de la utilidad compartida
 // (@/utilidades/formato.js) para que se vean IGUAL en toda la app.
 
-onMounted(cargarMovimientos)
+const idUsuario = JSON.parse(localStorage.getItem('euphoria_usuario') || '{}')?.id
+
+onMounted(() => {
+  cargarMovimientos()
+  // Tiempo real: los movimientos se refrescan solos cuando cambia el saldo
+  // (recarga, consumo, reserva, retiro o devolución del propio usuario).
+  socket = io({ path: '/socket.io' })
+  socket.on('billetera_actualizada', (d) => {
+    if (!d || d.id_usuario == null || d.id_usuario === idUsuario) cargarMovimientos(true)
+  })
+})
+onUnmounted(() => { if (socket) socket.disconnect() })
 </script>
 
 <style scoped>

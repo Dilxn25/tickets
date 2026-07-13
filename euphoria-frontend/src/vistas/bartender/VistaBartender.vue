@@ -4,11 +4,10 @@
     <header class="bar-head">
       <div class="bar-head-txt">
         <h1><span class="bh-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg></span> Estación de barra</h1>
-        <p>Prepara y despacha en tiempo real. Filtra por evento, mesa o cliente para ubicar cualquier pedido.</p>
       </div>
-      <button class="bar-refrescar" :class="{ girando: cargando }" @click="recargar" title="Actualizar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-      </button>
+      <!-- Sin botón de refrescar: el tablero se actualiza solo por socket
+           (nueva_comanda / pedido_listo / pool / tomado). -->
+      <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
     </header>
 
     <!-- Pestañas -->

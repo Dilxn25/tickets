@@ -6,9 +6,8 @@
         <h2><span class="fid-head-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span> Fidelización</h2>
         <p class="fid-sub">Tus clientes que más consumen. Prémialos y conviértelos en habituales.</p>
       </div>
-      <button class="btn-refrescar" @click="cargar" :disabled="cargando" title="Actualizar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" :class="{ girar: cargando }"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-      </button>
+      <!-- El ranking se recalcula solo cuando entra una venta (socket 'ventas'). -->
+      <span class="chip-vivo" title="Se actualiza en vivo"><span class="pulso-vivo"></span>En vivo</span>
     </header>
 
     <div v-if="!cargando && clientes.length" class="fid-kpis">
@@ -147,11 +146,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 
 const notif = useNotificaciones()
+let socket = null
 const clientes = ref([])
 const cargando = ref(true)
 const productos = ref([])
@@ -175,10 +176,10 @@ const maxConsumo = computed(() => Math.max(1, ...clientes.value.map(c => c.consu
 function pct(c) { return Math.round((c.consumo / maxConsumo.value) * 100) }
 function inicial(nombre) { return (nombre || '?').trim().charAt(0).toUpperCase() }
 
-async function cargar() {
-  cargando.value = true
+async function cargar(silencioso = false) {
+  if (!silencioso) cargando.value = true
   try { clientes.value = await clienteHttp.get('/usuarios/recurrentes') }
-  catch { clientes.value = [] }
+  catch { if (!silencioso) clientes.value = [] }
   finally { cargando.value = false }
 }
 async function cargarProductos() {
@@ -219,7 +220,18 @@ async function alternarVip(c) {
   } catch { notif.error('No se pudo actualizar el VIP') }
   finally { c.ocupado = false }
 }
-onMounted(() => { cargar(); cargarProductos() })
+onMounted(() => {
+  cargar()
+  cargarProductos()
+  // Tiempo real: el ranking de recurrentes se recalcula solo cuando entra una
+  // venta nueva (el socket 'ventas' lo emite el backend al crear comandas).
+  socket = io({ path: '/socket.io' })
+  let t = null
+  const refrescar = () => { clearTimeout(t); t = setTimeout(() => cargar(true), 800) }
+  socket.on('ventas', refrescar)
+  socket.on('nueva_comanda', refrescar)
+})
+onUnmounted(() => { if (socket) socket.disconnect() })
 </script>
 
 <style scoped>
