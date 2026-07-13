@@ -63,7 +63,7 @@ const rutas = [
     path: '/bartender',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'bartender' },
-    children: [{ path: '', name: 'Bartender', component: () => import('../vistas/bartender/VistaBartender.vue') }],
+    children: [{ path: '', name: 'Bartender', component: () => import('../vistas/bartender/VistaBartenderV2.vue') }],
   },
 
   // Cliente (Mobile-First UI)

@@ -1003,7 +1003,15 @@ router.get('/tablero', verificarToken, async (req, res) => {
 router.get('/historial-bartender', verificarToken, async (req, res) => {
   try {
     const comandas = await prisma.comanda.findMany({
-      where: { estado_despacho: { in: ['Completada', 'Entregado'] } },
+      // Para la BARRA la entrega termina cuando el pedido sale de sus manos:
+      // también cuentan los recogidos por el mesero (el despacho global puede
+      // seguir 'Listo' mientras viaja a la mesa).
+      where: {
+        OR: [
+          { estado_despacho: { in: ['Completada', 'Entregado'] } },
+          { estado_entrega: { in: ['recogido', 'entregado'] } },
+        ],
+      },
       include: INCLUDE_BARTENDER,
       orderBy: { fecha_registro: 'desc' },
       take: 100,
