@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { emitirRecurso } = require('../../utilidades/config-runtime')
 
 router.use(verificarToken)
 
@@ -470,6 +471,88 @@ router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador'), asyn
   } catch (e) {
     console.error('Error asignando mesero:', e)
     res.status(500).json({ error: 'Error al asignar el mesero' })
+  }
+})
+
+// GET /api/aforo/reparto/:idEvento — reparto de mesas entre los meseros que
+// atienden el evento: total de mesas reservadas, meseros con carga, y el LÍMITE
+// justo por mesero (mesas ÷ meseros presentes). Sirve para que ningún mesero
+// acapare y todos lleven una carga pareja.
+router.get('/reparto/:idEvento', soloRoles('Mesero', 'Bartender', 'Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const idEvento = Number(req.params.idEvento)
+    if (!idEvento) return res.status(400).json({ error: 'Evento inválido' })
+    // Mesas RESERVADAS del evento (las que hay que atender)
+    const mesasAtender = await prisma.mesa_espacio.count({
+      where: { zona: { id_evento: idEvento }, tipo_elemento: 'mesa', estado_ocupacion: { in: ['reservada', 'ocupada'] } },
+    })
+    // Meseros CON al menos una asignación activa en el evento (los presentes)
+    const asignaciones = await prisma.asignacion_mesa.findMany({
+      where: { estado: { in: ['asignada', 'atendiendo'] }, mesa_espacio: { zona: { id_evento: idEvento } } },
+      select: { id_mesero: true },
+    })
+    const cargaPorMesero = new Map()
+    for (const a of asignaciones) cargaPorMesero.set(a.id_mesero, (cargaPorMesero.get(a.id_mesero) || 0) + 1)
+    const meserosPresentes = Math.max(cargaPorMesero.size, 1)
+    // Límite justo (con un piso de 3 para que no sea asfixiante con pocos meseros)
+    const limitePorMesero = Math.max(3, Math.ceil(mesasAtender / meserosPresentes))
+    res.json({
+      mesas_a_atender: mesasAtender,
+      meseros_presentes: meserosPresentes,
+      limite_por_mesero: limitePorMesero,
+      mi_carga: cargaPorMesero.get(req.usuario.id) || 0,
+    })
+  } catch (e) {
+    console.error('Error calculando reparto:', e)
+    res.status(500).json({ error: 'Error al calcular el reparto de mesas' })
+  }
+})
+
+// POST /api/aforo/mesa/:idMesa/cerrar-atencion — el MESERO marca que terminó de
+// atender esa mesa: el grupo se fue, así que la asignación se cierra y la mesa
+// queda LIBRE para el siguiente grupo. Es la rotación de grupos que distingue
+// al grupo de las 21:00 del que llega a la 01:30 (antes nadie liberaba la mesa).
+router.post('/mesa/:idMesa/cerrar-atencion', soloRoles('Mesero', 'Bartender', 'Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const idMesa = Number(req.params.idMesa)
+    if (!idMesa) return res.status(400).json({ error: 'Mesa inválida' })
+    await prisma.asignacion_mesa.updateMany({
+      where: { id_mesa: idMesa, estado: { in: ['asignada', 'atendiendo'] } },
+      data: { estado: 'cerrada' },
+    })
+    const mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa: idMesa }, select: { id_zona: true } })
+    await prisma.mesa_espacio.update({ where: { id_mesa: idMesa }, data: { estado_ocupacion: 'libre' } })
+    if (global.io && mesa) global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa: idMesa, estado: 'libre' })
+    emitirRecurso('reservas', { id_mesa: idMesa })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('Error cerrando atención de mesa:', e)
+    res.status(500).json({ error: 'No se pudo cerrar la atención de la mesa' })
+  }
+})
+
+// POST /api/aforo/salir-evento — el mesero marca su SALIDA del evento: todas sus
+// mesas asignadas de ese evento se liberan al POOL para que otro mesero presente
+// las tome (redistribución al irse). Body: { id_evento }
+router.post('/salir-evento', soloRoles('Mesero', 'Bartender'), async (req, res) => {
+  try {
+    const idEvento = Number(req.body.id_evento)
+    if (!idEvento) return res.status(400).json({ error: 'Falta el evento' })
+    // Se CIERRAN las asignaciones del mesero en ese evento: las mesas quedan sin
+    // mesero y recepción (o el reparto) las reasigna a otro presente. La reserva
+    // del grupo NO se toca — solo cambia quién la atiende.
+    const r = await prisma.asignacion_mesa.updateMany({
+      where: {
+        id_mesero: req.usuario.id, estado: { in: ['asignada', 'atendiendo'] },
+        mesa_espacio: { zona: { id_evento: idEvento } },
+      },
+      data: { estado: 'cerrada' },
+    })
+    if (global.io) global.io.emit('mesas_liberadas', { id_evento: idEvento, cantidad: r.count })
+    res.json({ ok: true, liberadas: r.count })
+  } catch (e) {
+    console.error('Error al salir del evento:', e)
+    res.status(500).json({ error: 'No se pudo registrar tu salida' })
   }
 })
 

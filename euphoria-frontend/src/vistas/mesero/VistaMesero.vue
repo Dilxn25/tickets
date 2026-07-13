@@ -390,23 +390,34 @@
         </div>
 
         <!-- MIS MESAS ASIGNADAS (recepción se las asigna al llegar el cliente) -->
-        <div v-if="misMesas.length" class="mis-mesas">
+        <div v-if="misMesas.length || eventoActivo" class="mis-mesas">
           <div class="mm-titulo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             <span>Tus mesas asignadas</span>
+            <!-- Carga vs límite justo: mesas del evento ÷ meseros presentes -->
+            <span v-if="reparto" class="mm-carga" :class="{ lleno: reparto.mi_carga >= reparto.limite_por_mesero }">
+              {{ reparto.mi_carga }}/{{ reparto.limite_por_mesero }}
+            </span>
+            <button v-if="eventoActivo" class="mm-salir" @click="salirDelEvento" title="Salir del evento: tus mesas pasan a otro mesero">Salir del evento</button>
           </div>
-          <div class="mm-chips">
-            <button
-              v-for="m in misMesas" :key="m.id_asignacion"
-              type="button" class="mm-chip"
-              :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa }"
-              @click="elegirMesaAsignada(m)"
-            >
-              <strong>{{ m.mesa || 'Mesa' }}</strong>
-              <span v-if="m.cliente" class="mm-cli">{{ m.cliente }}</span>
-              <span v-if="m.es_vip" class="mm-vip">VIP</span>
-            </button>
+          <div v-if="misMesas.length" class="mm-chips">
+            <div v-for="m in misMesas" :key="m.id_asignacion" class="mm-chip-wrap">
+              <button
+                type="button" class="mm-chip"
+                :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa }"
+                @click="elegirMesaAsignada(m)"
+              >
+                <strong>{{ m.mesa || 'Mesa' }}</strong>
+                <span v-if="m.cliente" class="mm-cli">{{ m.cliente }}</span>
+                <span v-if="m.es_vip" class="mm-vip">VIP</span>
+              </button>
+              <!-- Cierra la atención: el grupo se fue, la mesa queda libre para el siguiente -->
+              <button class="mm-cerrar" @click="cerrarAtencionMesa(m)" title="Terminé de atender esta mesa (el grupo se fue)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
+            </div>
           </div>
+          <p v-else class="mm-vacia">Aún no tienes mesas asignadas en este evento.</p>
         </div>
 
         <!-- SELECTOR DE MESA -->
@@ -1046,6 +1057,9 @@ async function cargarEventosActivos() {
   if (!eventoActivoId.value) {
     if (eventosActivos.value.length === 1) elegirEvento(eventosActivos.value[0].id_evento)
     else if (eventosActivos.value.length > 1) modalEvento.value = true
+  } else {
+    cargarMisMesas()
+    cargarReparto()
   }
 }
 
@@ -1054,6 +1068,56 @@ function elegirEvento(id) {
   localStorage.setItem('euphoria_mesero_evento', String(id))
   modalEvento.value = false
   cargarMisMesas()
+  cargarReparto()
+}
+
+// Reparto justo: cuántas mesas debería llevar cada mesero del evento
+const reparto = ref(null)
+async function cargarReparto() {
+  if (!eventoActivoId.value) { reparto.value = null; return }
+  try { reparto.value = await clienteHttp.get(`/aforo/reparto/${eventoActivoId.value}`) }
+  catch { reparto.value = null }
+}
+
+// El mesero cierra la atención de una mesa: el grupo se fue, la mesa queda libre
+// para el siguiente (rotación de grupos). Pide confirmación por ser irreversible.
+async function cerrarAtencionMesa(m) {
+  const ok = await notif.confirmar({
+    titulo: `¿Cerrar la ${m.mesa || 'mesa'}?`,
+    mensaje: 'El grupo se fue y la mesa queda libre para el siguiente. Esta acción no se deshace.',
+    textoConfirmar: 'Sí, cerrar mesa',
+  })
+  if (!ok) return
+  try {
+    await clienteHttp.post(`/aforo/mesa/${m.id_mesa}/cerrar-atencion`)
+    if (mesaSeleccionada.value?.id_mesa === m.id_mesa) { mesaSeleccionada.value = null; alCambiarMesa() }
+    await cargarMisMesas()
+    await cargarReparto()
+    notif.exito(`${m.mesa || 'Mesa'} libre para el siguiente grupo`)
+  } catch (e) {
+    notif.error(e?.response?.data?.error || 'No se pudo cerrar la mesa')
+  }
+}
+
+// El mesero marca su SALIDA del evento: sus mesas pasan a otro mesero presente.
+async function salirDelEvento() {
+  const ok = await notif.confirmar({
+    titulo: '¿Salir del evento?',
+    mensaje: 'Tus mesas asignadas quedarán libres para que otro mesero las tome.',
+    textoConfirmar: 'Sí, salir',
+  })
+  if (!ok) return
+  try {
+    const r = await clienteHttp.post('/aforo/salir-evento', { id_evento: eventoActivoId.value })
+    notif.exito(r.liberadas ? `Liberaste ${r.liberadas} mesa(s)` : 'Saliste del evento')
+    eventoActivoId.value = null
+    localStorage.removeItem('euphoria_mesero_evento')
+    misMesas.value = []
+    reparto.value = null
+    await cargarEventosActivos()
+  } catch (e) {
+    notif.error(e?.response?.data?.error || 'No se pudo registrar tu salida')
+  }
 }
 async function abrirMapaMesa() {
   mesaDestino.value = null
@@ -1898,10 +1962,15 @@ onMounted(() => {
   socket.on('catalogo_actualizado', () => { recargarCatalogo() })
   // Recepción me asignó una mesa
   socket.on('mesa_asignada', (data) => {
+    cargarReparto()  // cambió el reparto del evento (afecta a todos)
     if (data?.id_mesero !== tienda.usuario?.id) return
     cargarMisMesas()
     agregarToast('Te asignaron una nueva mesa')
   })
+  // Un compañero salió del evento: sus mesas se liberaron (cambia el reparto)
+  socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas() })
+  // Una mesa se liberó (cierre de atención/reserva): recalcular reparto
+  socket.on('mesa_actualizada', () => { cargarReparto() })
   // Un pedido cayó al pool (alguien lo liberó) — cualquier mesero puede tomarlo
   socket.on('pedido_pool', () => { cargarPool() })
   // Alguien tomó un pedido del pool
@@ -2436,6 +2505,23 @@ onUnmounted(() => {
 .mm-cli { color: var(--texto-secundario); font-size: 0.76rem; }
 .mm-chip.sel .mm-cli { color: rgba(255,255,255,0.85); }
 .mm-vip { font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: var(--radio-full); background: #FBBF24; color: #1a1206; }
+/* Carga vs límite justo del mesero */
+.mm-carga { margin-left: auto; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: var(--radio-full); background: rgba(34,197,94,0.16); color: var(--color-exito); }
+.mm-carga.lleno { background: rgba(245,158,11,0.18); color: var(--color-alerta); }
+.mm-salir { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.28); color: var(--color-error); border-radius: var(--radio-full); font-size: 0.68rem; font-weight: 700; padding: 4px 10px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.mm-salir:hover { background: rgba(239,68,68,0.2); }
+.mm-carga + .mm-salir { margin-left: 8px; }
+/* Cada mesa asignada = chip + botón de cerrar atención */
+.mm-chip-wrap { display: inline-flex; align-items: stretch; }
+.mm-chip-wrap .mm-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.mm-cerrar {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 9px;
+  background: rgba(34,197,94,0.1); border: 1px solid var(--borde-sutil); border-left: none;
+  border-top-right-radius: var(--radio-full); border-bottom-right-radius: var(--radio-full);
+  color: var(--color-exito); cursor: pointer; transition: background var(--trans-rapida);
+}
+.mm-cerrar:hover { background: rgba(34,197,94,0.25); }
+.mm-vacia { font-size: 0.8rem; color: var(--texto-secundario); margin: 2px 0 0; }
 
 .selector-mesa { margin-bottom: 12px; }
 /* Tabs de modo de mesa (lista / buscar / mapa) */
