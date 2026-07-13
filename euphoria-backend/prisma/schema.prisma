@@ -113,23 +113,23 @@ model detalle_comanda {
 }
 
 model entrada {
-  id_entrada        Int              @id @default(autoincrement())
-  id_usuario        Int
-  id_zona           Int
-  id_mesa           Int?
-  qr_acceso         String           @unique(map: "ENTRADA_qr_acceso_key") @db.VarChar(255)
-  codigo_ingreso    String?          @unique @db.VarChar(50)
-  cantidad_personas  Int             @default(1)
-  cantidad_ingresada Int             @default(0)
-  monto_pagado      Decimal?         @db.Decimal(10, 2)
-  estado_validacion Boolean          @default(false)
-  fecha_reserva     DateTime         @default(now())
-  usuario           usuario          @relation(fields: [id_usuario], references: [id_usuario], map: "ENTRADA_id_usuario_fkey")
-  zona              zona             @relation(fields: [id_zona], references: [id_zona], map: "ENTRADA_id_zona_fkey")
-  mesa_espacio      mesa_espacio?    @relation(fields: [id_mesa], references: [id_mesa], map: "ENTRADA_id_mesa_fkey")
-  registro_aforo    registro_aforo[]
-  comanda           comanda[]
-  asignacion_mesa   asignacion_mesa[]
+  id_entrada         Int               @id @default(autoincrement())
+  id_usuario         Int
+  id_zona            Int
+  id_mesa            Int?
+  qr_acceso          String            @unique(map: "ENTRADA_qr_acceso_key") @db.VarChar(255)
+  codigo_ingreso     String?           @unique @db.VarChar(50)
+  cantidad_personas  Int               @default(1)
+  cantidad_ingresada Int               @default(0)
+  monto_pagado       Decimal?          @db.Decimal(10, 2)
+  estado_validacion  Boolean           @default(false)
+  fecha_reserva      DateTime          @default(now())
+  usuario            usuario           @relation(fields: [id_usuario], references: [id_usuario], map: "ENTRADA_id_usuario_fkey")
+  zona               zona              @relation(fields: [id_zona], references: [id_zona], map: "ENTRADA_id_zona_fkey")
+  mesa_espacio       mesa_espacio?     @relation(fields: [id_mesa], references: [id_mesa], map: "ENTRADA_id_mesa_fkey")
+  registro_aforo     registro_aforo[]
+  comanda            comanda[]
+  asignacion_mesa    asignacion_mesa[]
 
   @@index([id_usuario], map: "ENTRADA_id_usuario_fkey")
   @@index([id_zona], map: "ENTRADA_id_zona_fkey")
@@ -137,14 +137,14 @@ model entrada {
 }
 
 model evento {
-  id_evento         Int       @id @default(autoincrement())
-  nombre_evento     String    @db.VarChar(150)
-  descripcion       String?   @db.Text
-  url_portada       String?   @db.VarChar(255)
+  id_evento         Int               @id @default(autoincrement())
+  nombre_evento     String            @db.VarChar(150)
+  descripcion       String?           @db.Text
+  url_portada       String?           @db.VarChar(255)
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime?
-  estado            String    @default("planificacion") @db.VarChar(20)
-  tipo_evento       String    @default("estandar") @db.VarChar(20)
+  estado            String            @default("planificacion") @db.VarChar(20)
+  tipo_evento       String            @default("estandar") @db.VarChar(20)
   aforo_total       Int?
   zona              zona[]
   solicitud_grupo   solicitud_grupo[]
@@ -170,24 +170,24 @@ model solicitud_grupo {
 }
 
 model mesa_espacio {
-  id_mesa          Int       @id @default(autoincrement())
+  id_mesa          Int               @id @default(autoincrement())
   id_zona          Int
-  numero_nombre    String    @db.VarChar(50)
+  numero_nombre    String            @db.VarChar(50)
   posicion_x       Float
   posicion_y       Float
   ancho            Float?
   alto             Float?
   rotacion         Float?
   capacidad_sillas Int
-  precio           Decimal?  @db.Decimal(10, 2)
-  estado_ocupacion String    @db.VarChar(20)
-  tipo_elemento    String    @db.VarChar(20)
-  es_seleccionable Boolean   @default(true)
-  forma            String?   @db.VarChar(20)
+  precio           Decimal?          @db.Decimal(10, 2)
+  estado_ocupacion String            @db.VarChar(20)
+  tipo_elemento    String            @db.VarChar(20)
+  es_seleccionable Boolean           @default(true)
+  forma            String?           @db.VarChar(20)
   comanda          comanda[]
   entrada          entrada[]
   asignacion_mesa  asignacion_mesa[]
-  zona             zona      @relation(fields: [id_zona], references: [id_zona], map: "MESA_ESPACIO_id_zona_fkey")
+  zona             zona              @relation(fields: [id_zona], references: [id_zona], map: "MESA_ESPACIO_id_zona_fkey")
 
   @@index([id_zona], map: "MESA_ESPACIO_id_zona_fkey")
 }
@@ -214,22 +214,22 @@ model prediccion_ia {
 }
 
 model producto {
-  id_producto                                             Int               @id @default(autoincrement())
+  id_producto                                             Int                @id @default(autoincrement())
   id_categoria                                            Int
-  nombre_producto                                         String            @db.VarChar(150)
-  descripcion                                             String?           @db.Text
-  url_imagen                                              String?           @db.VarChar(255)
-  precio_base                                             Decimal           @db.Decimal(10, 2)
-  precio_promocion                                        Decimal?          @db.Decimal(10, 2)
-  estado_promocion                                        Boolean           @default(false)
+  nombre_producto                                         String             @db.VarChar(150)
+  descripcion                                             String?            @db.Text
+  url_imagen                                              String?            @db.VarChar(255)
+  precio_base                                             Decimal            @db.Decimal(10, 2)
+  precio_promocion                                        Decimal?           @db.Decimal(10, 2)
+  estado_promocion                                        Boolean            @default(false)
   stock_actual                                            Int
-  es_combo                                                Boolean           @default(false)
-  combo_detalle_combo_detalle_id_producto_hijoToproducto  combo_detalle[]   @relation("combo_detalle_id_producto_hijoToproducto")
-  combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]   @relation("combo_detalle_id_producto_padreToproducto")
+  es_combo                                                Boolean            @default(false)
+  combo_detalle_combo_detalle_id_producto_hijoToproducto  combo_detalle[]    @relation("combo_detalle_id_producto_hijoToproducto")
+  combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]    @relation("combo_detalle_id_producto_padreToproducto")
   detalle_comanda                                         detalle_comanda[]
   prediccion_ia                                           prediccion_ia[]
   historial_precio                                        historial_precio[]
-  categoria                                               categoria         @relation(fields: [id_categoria], references: [id_categoria], map: "PRODUCTO_id_categoria_fkey")
+  categoria                                               categoria          @relation(fields: [id_categoria], references: [id_categoria], map: "PRODUCTO_id_categoria_fkey")
 
   @@index([id_categoria], map: "PRODUCTO_id_categoria_fkey")
 }
@@ -292,26 +292,26 @@ model transaccion {
 }
 
 model usuario {
-  id_usuario                          Int                 @id @default(autoincrement())
+  id_usuario                          Int                   @id @default(autoincrement())
   id_rol                              Int
-  nombres                             String              @db.VarChar(100)
-  apellidos                           String              @db.VarChar(100)
-  ci_carnet                           String?             @db.VarChar(20)
-  telefono                            String?             @db.VarChar(15)
-  correo                              String              @unique(map: "USUARIO_correo_key") @db.VarChar(100)
-  password_hash                       String              @db.VarChar(255)
-  pregunta_seguridad                  String?             @db.VarChar(150)
-  respuesta_seguridad                 String?             @db.VarChar(255)
-  url_foto_perfil                     String?             @db.VarChar(255)
-  estado_cuenta                       String              @db.VarChar(20)
-  premio_perfil                       String?             @db.VarChar(20)
-  es_vip                              Boolean             @default(false)
-  correo_verificado                   Boolean             @default(false)
+  nombres                             String                @db.VarChar(100)
+  apellidos                           String                @db.VarChar(100)
+  ci_carnet                           String?               @db.VarChar(20)
+  telefono                            String?               @db.VarChar(15)
+  correo                              String                @unique(map: "USUARIO_correo_key") @db.VarChar(100)
+  password_hash                       String                @db.VarChar(255)
+  pregunta_seguridad                  String?               @db.VarChar(150)
+  respuesta_seguridad                 String?               @db.VarChar(255)
+  url_foto_perfil                     String?               @db.VarChar(255)
+  estado_cuenta                       String                @db.VarChar(20)
+  premio_perfil                       String?               @db.VarChar(20)
+  es_vip                              Boolean               @default(false)
+  correo_verificado                   Boolean               @default(false)
   billetera                           billetera?
   codigo_verificacion                 codigo_verificacion[]
   recarga_billetera                   recarga_billetera[]
-  comanda_comanda_id_clienteTousuario comanda[]           @relation("comanda_id_clienteTousuario")
-  comanda_comanda_id_meseroTousuario  comanda[]           @relation("comanda_id_meseroTousuario")
+  comanda_comanda_id_clienteTousuario comanda[]             @relation("comanda_id_clienteTousuario")
+  comanda_comanda_id_meseroTousuario  comanda[]             @relation("comanda_id_meseroTousuario")
   entrada                             entrada[]
   prediccion_ia                       prediccion_ia[]
   registro_aforo                      registro_aforo[]
@@ -320,9 +320,9 @@ model usuario {
   asignacion_mesa                     asignacion_mesa[]
   solicitud_grupo                     solicitud_grupo[]
   notificacion                        notificacion[]
-  retiros_cliente                     solicitud_retiro[]  @relation("retiro_cliente")
-  retiros_cajero                      solicitud_retiro[]  @relation("retiro_cajero")
-  rol                                 rol                 @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
+  retiros_cliente                     solicitud_retiro[]    @relation("retiro_cliente")
+  retiros_cajero                      solicitud_retiro[]    @relation("retiro_cajero")
+  rol                                 rol                   @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")
 }
@@ -386,14 +386,14 @@ model notificacion {
 // Solicitudes "no recuerdo nada" (ni contraseña ni pregunta): el cliente deja
 // sus datos de identidad y el ADMIN las ve en su campana, valida y resetea.
 model solicitud_recuperacion {
-  id_solicitud    Int      @id @default(autoincrement())
-  correo          String   @db.VarChar(100)
-  nombre_contacto String?  @db.VarChar(120)
-  ci_contacto     String?  @db.VarChar(20)
-  telefono        String?  @db.VarChar(20)
-  mensaje         String?  @db.VarChar(400)
-  estado          String   @default("pendiente") @db.VarChar(20)
-  fecha_solicitud DateTime @default(now())
+  id_solicitud    Int       @id @default(autoincrement())
+  correo          String    @db.VarChar(100)
+  nombre_contacto String?   @db.VarChar(120)
+  ci_contacto     String?   @db.VarChar(20)
+  telefono        String?   @db.VarChar(20)
+  mensaje         String?   @db.VarChar(400)
+  estado          String    @default("pendiente") @db.VarChar(20)
+  fecha_solicitud DateTime  @default(now())
   fecha_atencion  DateTime?
 
   @@index([estado])
@@ -451,4 +451,18 @@ model sugerencia_ia {
 
   @@index([fecha_hora])
   @@index([id_producto])
+}
+
+// Depósitos ACH confirmados por el CORREO del banco (vigía IMAP): segunda
+// validación de recargas — el correo de bancounion.com.bo no se puede falsificar.
+model deposito_correo {
+  id_deposito       Int      @id @default(autoincrement())
+  orden_ach         String   @unique @db.VarChar(40)
+  monto             Decimal  @db.Decimal(10, 2)
+  glosa             String?  @db.VarChar(200)
+  originante        String?  @db.VarChar(150)
+  banco_origen      String?  @db.VarChar(100)
+  fecha_transaccion DateTime
+  usado             Boolean  @default(false)
+  fecha_registro    DateTime @default(now())
 }
