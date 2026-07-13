@@ -129,12 +129,8 @@
             </p>
           </div>
 
-          <!-- Escáner QR para Nueva Billetera (captura unificada) -->
-          <div style="margin-bottom:1rem;">
-            <CapturaCamara modo="qr" texto-guia="Apunta al QR del cliente para pre-llenar el CI" @codigo="onQrAbrir" />
-          </div>
-
-
+          <!-- Sin escáner aquí: una billetera NUEVA es de un cliente que aún no
+               tiene QR — el CI/teléfono se escribe a mano. -->
           <div class="grupo-input">
             <label>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -608,7 +604,7 @@
               El PIN es privado y está encriptado. Si el cliente lo olvidó, puedes cambiarlo aquí:
             </p>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
-              <input v-model="nuevoPinReseteo" type="password" maxlength="4" placeholder="Nuevo PIN" style="width: 120px; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); text-align: center;" @input="nuevoPinReseteo = nuevoPinReseteo.replace(/\D/g, '')" />
+              <input v-model="nuevoPinReseteo" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="Nuevo PIN" style="width: 120px; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); text-align: center;" @input="nuevoPinReseteo = nuevoPinReseteo.replace(/\D/g, '')" />
               <button type="button" class="btn-aprobar" @click="resetearPin" :disabled="!nuevoPinReseteo || nuevoPinReseteo.length !== 4 || cargandoPin">
                 {{ cargandoPin ? '...' : 'Cambiar PIN' }}
               </button>
@@ -948,14 +944,6 @@ async function rechazarRetiro(r) {
   finally { procesandoRetiro.value = null }
 }
 
-function esQrClienteValido(texto) {
-  if (!texto) return false;
-  if (texto.startsWith('http://') || texto.startsWith('https://')) return false;
-  if (texto.includes(' ')) return false;
-  if (texto.length > 150) return false;
-  return true;
-}
-
 // ---- Abrir Billetera ----
 const nuevoId = ref('')
 const nuevoPin = ref('')
@@ -1104,15 +1092,6 @@ const resultadoConsulta = ref(null)
 const errorConsulta = ref('')
 const cargandoConsulta = ref(false)
 const qrConsultaBase64 = ref(null)
-
-// Escáner de Nueva Billetera: pre-llena el CI/identificador desde el QR del
-// cliente (misma verificación que hacía el escáner legacy). La captura QR en
-// vivo está unificada en CapturaCamara.
-function onQrAbrir(texto) {
-  if (!esQrClienteValido(texto)) return
-  nuevoId.value = texto
-  verificarIdentificador()
-}
 
 const busquedaConsulta = ref('')
 const resultadosConsulta = ref([])
