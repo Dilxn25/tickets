@@ -333,6 +333,10 @@ model solicitud_retiro {
   mensaje            String?   @db.VarChar(400)
   metodo             String    @db.VarChar(20) // 'qr' | 'persona'
   qr_imagen          String?   @db.VarChar(255)
+  // Comprobante del CAJERO al pagar por QR/transferencia: constancia para el
+  // cliente y control de caja (obligatorio en pagos por QR).
+  comprobante_pago   String?   @db.VarChar(255)
+  motivo_rechazo     String?   @db.VarChar(255)
   estado             String    @default("pendiente") @db.VarChar(20) // pendiente | pagado | rechazado
   saldo_al_solicitar Decimal   @db.Decimal(10, 2)
   monto_retirado     Decimal?  @db.Decimal(10, 2)
