@@ -374,9 +374,20 @@ router.get('/movimientos/comanda/:id', verificarToken, async (req, res) => {
         usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
       },
     })
-    if (!comanda || comanda.id_cliente !== req.usuario.id) {
-      return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (!comanda) return res.status(404).json({ error: 'Pedido no encontrado' })
+    // Es dueño del detalle quien figura como cliente O quien lo PAGÓ con su
+    // billetera: cuando el mesero toma el pedido y cobra escaneando el QR del
+    // cliente, la comanda puede no traer id_cliente — pero la transacción salió
+    // de SU billetera (antes ese caso daba 404 al querer ver el detalle).
+    let esDueno = comanda.id_cliente === req.usuario.id
+    if (!esDueno) {
+      const trx = await prisma.transaccion.findFirst({
+        where: { id_comanda, billetera: { id_usuario: req.usuario.id } },
+        select: { id_transaccion: true },
+      })
+      esDueno = !!trx
     }
+    if (!esDueno) return res.status(404).json({ error: 'Pedido no encontrado' })
 
     const atendio = comanda.usuario_comanda_id_meseroTousuario
     const esAutoservicio = atendio?.rol?.nombre_rol === 'Cliente'

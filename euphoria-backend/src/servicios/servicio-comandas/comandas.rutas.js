@@ -409,6 +409,14 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
         const pinValido = await verificarPin(pin, billetera.pin_transaccional)
         // 400 (no 401): un 401 dispara el refresh de token del front y reintenta el cobro
         if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
+      } else if (pin && billetera.pin_transaccional) {
+        // DEFENSA EN PROFUNDIDAD: si el POS envió un PIN, JAMÁS se ignora.
+        // El flujo del mesero perdía la marca de "QR privado" (reenviaba el
+        // identificador plano en vez del token firmado) y un PIN INCORRECTO
+        // pasaba de largo cobrando igual. Llegó un PIN => se valida, punto.
+        const { verificarPin } = require('../../utilidades/pin-billetera')
+        const pinValido = await verificarPin(pin, billetera.pin_transaccional)
+        if (!pinValido) return res.status(400).json({ error: 'PIN incorrecto', requiere_pin: true })
       }
       
       // PREMIO POR PERFIL COMPLETO: si el dueño de la billetera paga su propio

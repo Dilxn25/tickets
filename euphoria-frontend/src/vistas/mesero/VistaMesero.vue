@@ -631,7 +631,7 @@
               <div v-if="billeteraVerificada" class="pin-zone fade-in">
                 <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito); margin-bottom: 10px;" stroke-width="2" width="40" height="40"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 <p class="pin-titulo">Billetera de: {{ nombreBilleteraVerificada }}</p>
-                <p class="pin-sub" style="margin-bottom: 1rem; color: rgba(255,255,255,0.5);">ID: {{ formCobro.qr_billetera }}</p>
+                <p class="pin-sub" style="margin-bottom: 1rem; color: rgba(255,255,255,0.5);">ID: {{ identificadorMostrado || formCobro.qr_billetera }}</p>
                 
                 <!-- Mostrar saldo actual -->
                 <p style="text-align: center; font-size: 1.1rem; margin-bottom: 0.5rem;" 
@@ -646,14 +646,15 @@
                 <div v-if="saldoBilleteraVerificada >= totalCarrito">
                   <div v-if="requierePin">
                     <p class="pin-sub" style="color: var(--color-alerta); font-weight: bold; margin-bottom: 10px;">Por seguridad, ingresa el PIN de la billetera:</p>
-                    <input type="password" v-model="formCobro.pin" placeholder="••••" maxlength="4" class="input-pin" autofocus @input="verificarPinLleno" />
+                    <!-- El PIN es SIEMPRE de 4 dígitos numéricos: se filtra cualquier letra -->
+                    <input type="password" v-model="formCobro.pin" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="input-pin" autofocus @input="soloDigitosPin" />
                   </div>
                   <div v-else style="margin-top: 15px;">
                     <button class="btn btn-primario btn-full" @click="procesarCobro">Cobrar Bs. {{ totalCarrito.toFixed(2) }}</button>
                   </div>
                 </div>
                 
-                <button class="btn btn-secundario btn-full" style="margin-top: 1rem;" @click="billeteraVerificada = false; formCobro.qr_billetera = ''; errorCobro = ''">Cambiar Cliente</button>
+                <button class="btn btn-secundario btn-full" style="margin-top: 1rem;" @click="billeteraVerificada = false; formCobro.qr_billetera = ''; identificadorMostrado = ''; errorCobro = ''">Cambiar Cliente</button>
               </div>
 
               <!-- Estado inicial (Paso 1) -->
@@ -1119,6 +1120,9 @@ const formCobro = ref({
   url_comprobante_ya_subido: null,
   ocr_transaccion_id: ''
 })
+// Identificador corto SOLO para mostrar (el token escaneado no se pisa: ver
+// verificarBilleteraBackend — es la marca de seguridad del QR privado)
+const identificadorMostrado = ref('')
 
 onMounted(async () => {
   // Verificación extra de rol
@@ -1404,6 +1408,7 @@ function abrirModalCobro() {
   saldoBilleteraVerificada.value = 0
   montoRecibidoTexto.value = ''
   clientesBilletera.value = []
+  identificadorMostrado.value = ''
   formCobro.value = {
     qr_billetera: '',
     pin: '',
@@ -1589,7 +1594,12 @@ async function verificarBilleteraBackend() {
     billeteraVerificada.value = true
     nombreBilleteraVerificada.value = res.nombre_usuario
     requierePin.value = res.requiere_pin
-    formCobro.value.qr_billetera = res.identificador_real
+    // SEGURIDAD: NO reemplazar lo escaneado por el identificador plano. El QR
+    // privado es un token FIRMADO (tipo pago_con_pin): si se reenvía el string
+    // plano al cobrar, el backend pierde la marca de privado y el PIN dejaba
+    // de validarse (se cobró con PIN incorrecto). El token original viaja tal
+    // cual a /comandas/crear; el identificador corto solo se MUESTRA.
+    identificadorMostrado.value = res.identificador_real
     saldoBilleteraVerificada.value = res.saldo_actual
   } catch (err) {
     errorCobro.value = err.response?.data?.error || err.error || 'Billetera no encontrada o dato incorrecto.'
@@ -1606,8 +1616,10 @@ function alDetectarQr(texto) {
   verificarBilleteraBackend()
 }
 
-function verificarPinLleno() {
-  if (formCobro.value.pin && formCobro.value.pin.length === 4) {
+// El PIN solo acepta dígitos (el input aceptaba letras); con 4 dígitos cobra solo
+function soloDigitosPin() {
+  formCobro.value.pin = String(formCobro.value.pin || '').replace(/\D/g, '').slice(0, 4)
+  if (formCobro.value.pin.length === 4) {
     procesarCobro()
   }
 }
