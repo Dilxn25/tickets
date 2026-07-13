@@ -356,15 +356,30 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     // Modo de entrega: SOLO se define si el cliente YA ingresó al evento (recepción
     // validó su QR). Si aún no ingresó, queda null y lo elige al ingresar.
     let modoEntrega = null
+    // Pedido de APP que va a la MESA: se ata a la mesa de la reserva y, si esa
+    // mesa ya tiene un mesero asignado, la comanda nace a su nombre; si no,
+    // caerá al POOL de meseros al quedar Listo. Así deja de aparecer "a nombre
+    // del cliente" (que no es mesero) y el mesero ve "a dónde llevar".
+    let idMesaComanda = id_mesa ? Number(id_mesa) : null
+    let idMeseroComanda = req.usuario.id
     if (origenComanda === 'app' && idEntradaVinculada) {
       const entVinc = await prisma.entrada.findUnique({
         where: { id_entrada: idEntradaVinculada },
-        select: { cantidad_ingresada: true },
+        select: { cantidad_ingresada: true, id_mesa: true },
       })
       // Solo se asigna si el cliente eligió explícitamente (barra/llevar);
       // si no eligió, queda null y lo define después (en Mis pedidos).
       if ((entVinc?.cantidad_ingresada || 0) > 0) {
         modoEntrega = ['barra', 'llevar'].includes(req.body.modo_entrega) ? req.body.modo_entrega : null
+      }
+      if (modoEntrega === 'llevar' && entVinc?.id_mesa) {
+        idMesaComanda = entVinc.id_mesa
+        const asig = await prisma.asignacion_mesa.findFirst({
+          where: { id_mesa: entVinc.id_mesa, estado: { in: ['asignada', 'atendiendo'] } },
+          orderBy: { fecha_asignacion: 'desc' },
+          select: { id_mesero: true },
+        })
+        if (asig) idMeseroComanda = asig.id_mesero  // el mesero de la mesa lo recibe
       }
     }
 
@@ -506,8 +521,8 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           const nuevaComanda = await tx.comanda.create({
             data: {
               id_cliente: id_cliente ? Number(id_cliente) : null,
-              id_mesero: req.usuario.id,
-              id_mesa: id_mesa ? Number(id_mesa) : null,
+              id_mesero: idMeseroComanda,
+              id_mesa: idMesaComanda,
               estado_despacho: 'Pendiente',
               fecha_registro: new Date(),
               metodo_pago: 'Billetera',
@@ -895,13 +910,17 @@ function comandaBartender(c, ahora) {
     minutos_espera,
     minutos_listo,
     puntaje: prioridad_zona * PESO_PRIORIDAD + minutos_espera,
-    items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad })),
+    items: c.detalle_comanda.map(d => ({
+      nombre: d.producto?.nombre_producto || '',
+      cantidad: d.cantidad,
+      imagen: d.producto?.url_imagen || null,  // para que el bartender VEA qué preparar
+    })),
     total_items: c.detalle_comanda.reduce((a, d) => a + d.cantidad, 0),
   }
 }
 
 const INCLUDE_BARTENDER = {
-  detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },
+  detalle_comanda: { include: { producto: { select: { nombre_producto: true, url_imagen: true } } } },
   usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true } },
   usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true, es_vip: true } },
   mesa_espacio: { include: { zona: { select: { prioridad: true, nombre_zona: true, id_evento: true, evento: { select: { nombre_evento: true } } } } } },
@@ -1320,6 +1339,20 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
       },
     })
 
+    // Pedido de APP "que me lo lleven" cuya mesa NO tiene mesero asignado: al
+    // quedar Listo cae al POOL para que CUALQUIER mesero del evento lo tome
+    // (antes quedaba "a nombre del cliente" y ningún mesero lo veía).
+    if (estado === 'Listo' && comanda.origen === 'app' && comanda.modo_entrega === 'llevar') {
+      const tieneMesero = comanda.id_mesa
+        ? await prisma.asignacion_mesa.findFirst({ where: { id_mesa: comanda.id_mesa, estado: { in: ['asignada', 'atendiendo'] } }, select: { id_asignacion: true } })
+        : null
+      if (!tieneMesero) {
+        await prisma.comanda.update({ where: { id_comanda: id }, data: { estado_entrega: 'en_pool' } })
+        comanda.estado_entrega = 'en_pool'
+        if (global.io) global.io.emit('pedido_pool', { id_comanda: id })
+      }
+    }
+
     // Emitir eventos por websocket
     if (global.io) {
       if (estado === 'Listo') {
@@ -1385,19 +1418,108 @@ router.post('/:id/liberar', verificarToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'No se pudo liberar el pedido' }) }
 })
 
-// POST /api/comandas/:id/recogido — el MESERO marca que ya recogió el pedido de
-// la barra (pasa de "en barra" a "recogido"). Sigue Listo hasta entregarlo al cliente.
+// HANDOFF BARRA <-> MESERO (confirmación mutua). El traspaso del pedido de la
+// barra al mesero solo se da por hecho cuando AMBOS lo confirman: así no queda
+// inconsistente que el bartender diga "ya se lo di al mesero" mientras el mesero
+// no lo recogió (o al revés). estado_entrega:
+//   'pendiente'      -> listo en barra, nadie confirmó
+//   'barra_entrego'  -> el bartender confirmó; falta el mesero
+//   'mesero_confirma'-> el mesero confirmó; falta el bartender
+//   'recogido'       -> AMBOS confirmaron; el pedido está con el mesero (lo lleva)
+
+// POST /api/comandas/:id/recogido — el MESERO confirma que recogió de la barra.
 router.post('/:id/recogido', verificarToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id)
-    const r = await prisma.comanda.updateMany({
-      where: { id_comanda: id, estado_despacho: 'Listo', estado_entrega: { notIn: ['recogido', 'entregado', 'reembolsado'] } },
-      data: { estado_entrega: 'recogido', id_mesero: req.usuario.id },
+    const c = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      select: { estado_despacho: true, estado_entrega: true, id_cliente: true },
     })
-    if (r.count === 0) return res.status(409).json({ error: 'Ese pedido ya fue recogido o entregado.' })
-    if (global.io) global.io.emit('pedido_recogido', { id_comanda: id, id_mesero: req.usuario.id })
-    res.json({ ok: true })
+    if (!c) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (c.estado_despacho !== 'Listo') return res.status(409).json({ error: 'Ese pedido no está listo.' })
+    if (['recogido', 'entregado', 'reembolsado'].includes(c.estado_entrega)) {
+      return res.status(409).json({ error: 'Ese pedido ya fue recogido o entregado.' })
+    }
+    // Si el bartender YA confirmó su entrega, ambos coinciden -> queda recogido.
+    const cierra = c.estado_entrega === 'barra_entrego'
+    await prisma.comanda.update({
+      where: { id_comanda: id },
+      data: { estado_entrega: cierra ? 'recogido' : 'mesero_confirma', id_mesero: req.usuario.id },
+    })
+    if (global.io) global.io.emit('pedido_recogido', { id_comanda: id, id_mesero: req.usuario.id, estado_entrega: cierra ? 'recogido' : 'mesero_confirma' })
+    res.json({ ok: true, confirmado: cierra, esperando: cierra ? null : 'bartender' })
   } catch (e) { res.status(500).json({ error: 'No se pudo marcar como recogido' }) }
+})
+
+// POST /api/comandas/:id/barra-entrego — el BARTENDER confirma que le pasó el
+// pedido al mesero (modo LLEVAR). Solo se da por recogido si el mesero ya lo
+// confirmó; si no, queda esperando su confirmación.
+router.post('/:id/barra-entrego', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const c = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      select: { estado_despacho: true, estado_entrega: true, modo_entrega: true, id_mesero: true },
+    })
+    if (!c) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (c.estado_despacho !== 'Listo') return res.status(409).json({ error: 'El pedido aún no está listo.' })
+    if (['recogido', 'entregado', 'reembolsado'].includes(c.estado_entrega)) {
+      return res.status(409).json({ error: 'Ese pedido ya se entregó.' })
+    }
+    const cierra = c.estado_entrega === 'mesero_confirma'
+    await prisma.comanda.update({
+      where: { id_comanda: id },
+      data: { estado_entrega: cierra ? 'recogido' : 'barra_entrego' },
+    })
+    if (global.io) global.io.emit('pedido_entrega', { id_comanda: id, id_mesero: c.id_mesero, estado_entrega: cierra ? 'recogido' : 'barra_entrego' })
+    res.json({ ok: true, confirmado: cierra, esperando: cierra ? null : 'mesero' })
+  } catch (e) {
+    console.error('Error en barra-entrego:', e)
+    res.status(500).json({ error: 'No se pudo registrar la entrega' })
+  }
+})
+
+// POST /api/comandas/:id/entregar-cliente — modo BARRA (el cliente recoge en la
+// barra): el bartender ENTREGA al cliente tras validar su QR (protege al cliente
+// de un "entregado" falso). Body: { qr_cliente }. Cierra el pedido.
+router.post('/:id/entregar-cliente', verificarToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const c = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      select: { estado_despacho: true, estado_entrega: true, id_cliente: true },
+    })
+    if (!c) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (c.estado_despacho !== 'Listo') return res.status(409).json({ error: 'El pedido aún no está listo.' })
+    if (['entregado', 'reembolsado'].includes(c.estado_entrega)) return res.status(409).json({ error: 'Ese pedido ya se entregó.' })
+
+    // Validar que el QR escaneado corresponde al cliente DE ESTE pedido: así el
+    // bartender no puede marcar entregado sin que el cliente esté presente.
+    if (c.id_cliente) {
+      const qr = String(req.body.qr_cliente || '').trim()
+      if (!qr) return res.status(400).json({ error: 'Escanea el QR del cliente para confirmar la entrega.' })
+      let ident = qr
+      try {
+        const jwt = require('jsonwebtoken')
+        const payload = jwt.verify(qr, process.env.JWT_SECRETO_QR)
+        ident = payload.identificador || payload.qr_publico || qr
+      } catch { /* string crudo */ }
+      const bill = await prisma.billetera.findFirst({
+        where: { OR: [{ qr_publico: ident }, { qr_publico: { endsWith: `-${ident}` } }, { usuario: { ci_carnet: ident } }, { usuario: { telefono: ident } }] },
+        select: { id_usuario: true },
+      })
+      if (!bill || bill.id_usuario !== c.id_cliente) {
+        return res.status(400).json({ error: 'Ese QR no es del cliente de este pedido.' })
+      }
+    }
+    await prisma.comanda.update({ where: { id_comanda: id }, data: { estado_despacho: 'Completada', estado_entrega: 'entregado' } })
+    if (global.io) global.io.emit('pedido_entrega', { id_comanda: id, estado_entrega: 'entregado' })
+    emitirRecurso('ventas', { id })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('Error en entregar-cliente:', e)
+    res.status(500).json({ error: 'No se pudo registrar la entrega' })
+  }
 })
 
 // POST /api/comandas/:id/tomar — otro mesero toma un pedido del pool (atómico)

@@ -92,7 +92,14 @@
               </div>
 
               <ul class="kb-items">
-                <li v-for="(it, i) in c.items" :key="i"><span class="kb-cant">{{ it.cantidad }}×</span> {{ it.nombre }}</li>
+                <li v-for="(it, i) in c.items" :key="i" class="kb-item">
+                  <span class="kb-item-foto">
+                    <img v-if="it.imagen" :src="it.imagen" :alt="it.nombre" loading="lazy" />
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="20" height="20"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
+                  </span>
+                  <span class="kb-cant">{{ it.cantidad }}×</span>
+                  <span class="kb-item-nom">{{ it.nombre }}</span>
+                </li>
               </ul>
 
               <div class="kb-dest">
@@ -105,9 +112,26 @@
                 <span class="kb-hora">{{ formatoHora(c.fecha_registro) }}</span>
               </div>
 
-              <button v-if="col.accion" class="kb-btn" :class="col.key.toLowerCase()" :disabled="procesando === c.id_comanda" @click="avanzar(c, col.accion)">
+              <!-- Pendiente / Preparando: avanzar normal -->
+              <button v-if="col.accion && col.key !== 'Listo'" class="kb-btn" :class="col.key.toLowerCase()" :disabled="procesando === c.id_comanda" @click="avanzar(c, col.accion)">
                 {{ procesando === c.id_comanda ? '…' : col.accionTexto }}
               </button>
+              <!-- Listo: la entrega depende de cómo lo recibe el pedido -->
+              <template v-else-if="col.key === 'Listo'">
+                <!-- El cliente recoge en barra: se confirma escaneando SU QR -->
+                <button v-if="c.modo_entrega === 'barra'" class="kb-btn listo" :disabled="procesando === c.id_comanda" @click="entregarCliente(c)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="3" y1="12" x2="21" y2="12"></line></svg>
+                  Entregar al cliente
+                </button>
+                <!-- Va a la mesa (mesero): handoff con confirmación mutua -->
+                <template v-else>
+                  <div v-if="c.estado_entrega === 'barra_entrego'" class="kb-espera">Esperando que el mesero confirme…</div>
+                  <div v-else-if="c.estado_entrega === 'mesero_confirma'" class="kb-espera ok">El mesero recogió · confirma la entrega</div>
+                  <button class="kb-btn listo" :disabled="procesando === c.id_comanda || c.estado_entrega === 'barra_entrego'" @click="entregarMesero(c)">
+                    {{ c.estado_entrega === 'mesero_confirma' ? 'Confirmar entrega' : 'Entregué al mesero' }}
+                  </button>
+                </template>
+              </template>
             </article>
           </transition-group>
         </div>
@@ -137,6 +161,20 @@
       </div>
     </div>
     </transition>
+
+    <!-- Entregar al cliente: escanear SU QR para confirmar (protege al cliente) -->
+    <Teleport to="body">
+      <div v-if="modalQrCliente" class="bmapa-overlay" @click.self="modalQrCliente = false">
+        <div class="qrcli-modal">
+          <header class="qrcli-cab">
+            <b>Escanea el QR del cliente</b>
+            <button class="bmapa-cerrar" @click="modalQrCliente = false" aria-label="Cerrar">×</button>
+          </header>
+          <p class="qrcli-sub">Pídele al cliente su QR para confirmar que él recibe el pedido #{{ comandaEntrega?.id_comanda }}.</p>
+          <CapturaCamara modo="qr" texto-guia="Apunta al QR del cliente" @codigo="alEscanearQrCliente" />
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -146,8 +184,39 @@ import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 
 const notif = useNotificaciones()
+
+// Entrega al CLIENTE (modo barra): se confirma escaneando SU QR
+const modalQrCliente = ref(false)
+const comandaEntrega = ref(null)
+function entregarCliente(c) { comandaEntrega.value = c; modalQrCliente.value = true }
+async function alEscanearQrCliente(qr) {
+  const c = comandaEntrega.value
+  modalQrCliente.value = false
+  if (!c) return
+  procesando.value = c.id_comanda
+  try {
+    await clienteHttp.post(`/comandas/${c.id_comanda}/entregar-cliente`, { qr_cliente: qr })
+    await cargarTablero()
+    notif.exito('Entregado al cliente')
+  } catch (e) {
+    notif.error(e?.response?.data?.error || e?.error || 'No se pudo confirmar la entrega')
+  } finally { procesando.value = null; comandaEntrega.value = null }
+}
+
+// Entrega al MESERO (modo llevar): handoff con confirmación mutua
+async function entregarMesero(c) {
+  procesando.value = c.id_comanda
+  try {
+    const r = await clienteHttp.post(`/comandas/${c.id_comanda}/barra-entrego`)
+    await cargarTablero()
+    notif.exito(r.confirmado ? 'Pedido entregado al mesero' : 'Marcado. Esperando que el mesero confirme.')
+  } catch (e) {
+    notif.error(e?.response?.data?.error || e?.error || 'No se pudo registrar la entrega')
+  } finally { procesando.value = null }
+}
 
 // Filtro por mapa
 const mapaAbierto = ref(false)
@@ -302,6 +371,9 @@ onMounted(() => {
   socket.on('pedido_listo', () => cargarTablero())
   socket.on('pedido_pool', () => cargarTablero())
   socket.on('pedido_tomado', () => cargarTablero())
+  // Handoff: el mesero recogió/confirmó -> refrescar para ver el estado de espera
+  socket.on('pedido_recogido', () => cargarTablero())
+  socket.on('pedido_entrega', () => cargarTablero())
 })
 onUnmounted(() => {
   if (intervalo) clearInterval(intervalo)
@@ -318,6 +390,14 @@ onUnmounted(() => {
 .bar-head p { color: var(--texto-secundario); font-size: 0.9rem; margin-top: 6px; max-width: 60ch; }
 .bar-refrescar { flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: rgba(168,85,247,0.1); color: var(--texto-principal); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .bar-refrescar:hover { background: rgba(168,85,247,0.2); }
+/* Handoff: aviso de "esperando confirmación" del otro lado */
+.kb-espera { font-size: 0.74rem; font-weight: 700; text-align: center; padding: 6px 8px; border-radius: var(--radio-md); margin-bottom: 6px; background: rgba(245,158,11,0.14); color: var(--color-alerta); }
+.kb-espera.ok { background: rgba(34,197,94,0.14); color: var(--color-exito); }
+/* Modal QR del cliente */
+.qrcli-modal { width: 100%; max-width: 460px; background: var(--fondo-tarjeta); border: 1px solid var(--glass-borde, rgba(168,85,247,0.3)); border-radius: var(--radio-xl); box-shadow: 0 30px 70px rgba(0,0,0,0.6); padding: 18px; }
+.qrcli-cab { display: flex; align-items: center; justify-content: space-between; }
+.qrcli-cab b { font-family: var(--fuente-titulo); font-size: 1.1rem; }
+.qrcli-sub { font-size: 0.82rem; color: var(--texto-secundario); margin: 6px 0 14px; }
 .girando svg { animation: girar 1s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
 
@@ -389,9 +469,16 @@ onUnmounted(() => {
 .kb-chip.alta { background: rgba(168,85,247,0.2); color: #E9D5FF; }
 .kb-chip.cvip { background: rgba(236,72,153,0.16); color: #F9A8D4; }
 .kb-chip.entrega { background: rgba(255,255,255,0.06); color: var(--texto-secundario); border: 1px solid var(--borde-sutil); }
-.kb-items { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.kb-items li { font-size: 0.88rem; color: var(--texto-principal); }
-.kb-cant { color: var(--morado-hover); font-weight: 800; }
+.kb-items { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kb-item { display: flex; align-items: center; gap: 9px; }
+.kb-item-foto {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: var(--radio-md); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(168,85,247,0.1); border: 1px solid var(--borde-sutil); color: var(--morado-hover);
+}
+.kb-item-foto img { width: 100%; height: 100%; object-fit: cover; }
+.kb-cant { color: var(--morado-hover); font-weight: 800; font-size: 1.05rem; flex-shrink: 0; }
+.kb-item-nom { font-size: 0.9rem; color: var(--texto-principal); line-height: 1.2; }
 .kb-dest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
 .kb-mesa { background: var(--gradiente-marca); color: #fff; font-weight: 700; font-size: 0.72rem; padding: 2px 9px; border-radius: 999px; }
 .kb-ev { background: rgba(99,102,241,0.16); color: #C7D2FE; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }

@@ -141,6 +141,29 @@
         </div>
       </div>
 
+      <!-- APARTADO INTERMEDIO: ESPERANDO QUE LA BARRA CONFIRME (handoff) -->
+      <div v-if="pedidosEsperando.length" class="apartado-listos">
+        <h4 class="apartado-tit espera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Esperando que la barra confirme
+          <span class="apartado-n">{{ pedidosEsperando.length }}</span>
+        </h4>
+        <div class="grid-listos escalonar">
+          <div v-for="ped in pedidosEsperando" :key="ped.id_comanda" class="card-listo-full esperando">
+            <div class="clf-header">
+              <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
+              <span class="clf-espera-chip">Confirmaste · falta la barra</span>
+            </div>
+            <div class="clf-prods">
+              <div v-for="det in ped.detalle_comanda" :key="det.id_detalle" class="clf-prod-item">
+                <span class="clf-cant">{{ det.cantidad }}x</span>
+                <span class="clf-nom">{{ det.producto?.nombre_producto }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- APARTADO 2: RECOGIDOS (por entregar al cliente) -->
       <div v-if="pedidosRecogidos.length" class="apartado-listos">
         <h4 class="apartado-tit recog">
@@ -1883,15 +1906,20 @@ function cronoClase(fecha) {
   return ''
 }
 // Apartados: "en barra" (por recoger) vs "recogidos" (por entregar al cliente)
-const pedidosEnBarra = computed(() => pedidosListos.value.filter(p => p.estado_entrega !== 'recogido'))
+// Por recoger: aún no confirmé. "Esperando barra": confirmé pero el bartender
+// no. "Recogidos": ambos confirmaron -> a entregar al cliente.
+const pedidosEnBarra = computed(() => pedidosListos.value.filter(p => !['recogido', 'mesero_confirma'].includes(p.estado_entrega)))
+const pedidosEsperando = computed(() => pedidosListos.value.filter(p => p.estado_entrega === 'mesero_confirma'))
 const pedidosRecogidos = computed(() => pedidosListos.value.filter(p => p.estado_entrega === 'recogido'))
 async function marcarRecogido(id) {
   try {
-    await clienteHttp.post(`/comandas/${id}/recogido`)
+    const r = await clienteHttp.post(`/comandas/${id}/recogido`)
     const p = pedidosListos.value.find(x => x.id_comanda === id)
-    if (p) p.estado_entrega = 'recogido'
-    notif.exito('Pedido recogido de la barra. Ahora entrégalo al cliente.')
-  } catch (e) { notif.error(e?.error || 'No se pudo marcar como recogido.') }
+    // El pedido solo se da por recogido cuando el bartender también confirma:
+    // si no, queda "esperando que la barra confirme" (handoff bidireccional).
+    if (p) p.estado_entrega = r.confirmado ? 'recogido' : 'mesero_confirma'
+    notif.exito(r.confirmado ? 'Pedido recogido. Ahora entrégalo al cliente.' : 'Listo. Esperando que la barra confirme la entrega.')
+  } catch (e) { notif.error(e?.response?.data?.error || e?.error || 'No se pudo marcar como recogido.') }
 }
 async function cargarPool() {
   try { pedidosPool.value = await clienteHttp.get('/comandas/pool') }
@@ -1971,6 +1999,10 @@ onMounted(() => {
   socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas() })
   // Una mesa se liberó (cierre de atención/reserva): recalcular reparto
   socket.on('mesa_actualizada', () => { cargarReparto() })
+  // La barra confirmó la entrega de un pedido mío (handoff): refrescar estado
+  socket.on('pedido_entrega', (data) => {
+    if (data?.id_mesero === tienda.usuario?.id || data?.id_mesero == null) cargarPedidosListos()
+  })
   // Un pedido cayó al pool (alguien lo liberó) — cualquier mesero puede tomarlo
   socket.on('pedido_pool', () => { cargarPool() })
   // Alguien tomó un pedido del pool
@@ -3404,8 +3436,12 @@ onUnmounted(() => {
 .apartado-tit.barra svg { color: #FBBF24; }
 .apartado-tit.recog { color: #86EFAC; }
 .apartado-tit.recog svg { color: #4ADE80; }
+.apartado-tit.espera { color: var(--color-alerta); }
+.apartado-tit.espera svg { color: var(--color-alerta); }
 .apartado-n { background: rgba(168,85,247,0.2); color: var(--morado-hover); font-size: 0.72rem; font-weight: 800; border-radius: 999px; padding: 1px 9px; }
 .card-listo-full.recogido { border-color: rgba(34,197,94,0.4); }
+.card-listo-full.esperando { border-color: rgba(245,158,11,0.4); opacity: 0.92; }
+.clf-espera-chip { font-size: 0.7rem; font-weight: 700; color: var(--color-alerta); background: rgba(245,158,11,0.14); padding: 3px 9px; border-radius: 999px; }
 .btn-recogido { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: var(--radio-md); border: 1px solid rgba(251,191,36,0.5); background: rgba(251,191,36,0.14); color: #FCD34D; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.15s ease; }
 .btn-recogido:hover { background: rgba(251,191,36,0.25); color: #fff; }
 .btn-liberar { width: 100%; padding: 10px; border-radius: var(--radio-md); cursor: pointer; font-weight: 700; font-size: 0.9rem; background: rgba(251,191,36,0.14); color: #FCD34D; border: 1px solid rgba(251,191,36,0.4); transition: background var(--trans-normal); }
