@@ -705,7 +705,15 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
     if (ventana.estado === 'finalizada') return res.status(409).json({ error: 'Este evento ya terminó.' })
     if (ventana.estado === 'proxima') return res.status(409).json({ error: 'Este evento aún no abre sus puertas.' })
 
-    // Aforo: no exceder la capacidad de la zona.
+    // Cuántos entran AHORA MISMO (el resto del grupo entra después por tandas
+    // con el código de la entrada — antes todos quedaban "adentro" de golpe y
+    // el aforo no reflejaba la realidad).
+    let ingresanAhora = req.body.cantidad_ahora != null
+      ? Math.max(0, Math.min(parseInt(req.body.cantidad_ahora) || 0, cantidadFinal))
+      : cantidadFinal
+
+    // Aforo: no exceder la capacidad de la zona (se reserva el GRUPO completo:
+    // los que faltan van a llegar).
     const capacidad = zona.capacidad_maxima || 0
     const aforoPrevio = await aforoActualZona(zona.id_zona)
     if (capacidad > 0 && aforoPrevio + cantidadFinal > capacidad) {
@@ -747,22 +755,24 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
             qr_acceso: codigo,
             codigo_ingreso: codigo.slice(-12).toUpperCase(),
             cantidad_personas: cantidadFinal,
-            cantidad_ingresada: cantidadFinal, // ingreso inmediato
+            cantidad_ingresada: ingresanAhora, // los que faltan entran por tandas con el código
             monto_pagado: monto,
-            estado_validacion: true,
+            estado_validacion: ingresanAhora > 0,
             fecha_reserva: new Date(),
           },
         })
-        await tx.registro_aforo.create({
-          data: {
-            id_zona: zona.id_zona,
-            id_entrada: ent.id_entrada,
-            id_recepcionista: req.usuario.id,
-            tipo_movimiento: 'ingreso',
-            cantidad: cantidadFinal,
-            fecha_hora: new Date(),
-          },
-        })
+        if (ingresanAhora > 0) {
+          await tx.registro_aforo.create({
+            data: {
+              id_zona: zona.id_zona,
+              id_entrada: ent.id_entrada,
+              id_recepcionista: req.usuario.id,
+              tipo_movimiento: 'ingreso',
+              cantidad: ingresanAhora,
+              fecha_hora: new Date(),
+            },
+          })
+        }
         return ent
       })
     } catch (e) {
@@ -770,7 +780,7 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
       throw e
     }
 
-    const aforoNuevo = aforoPrevio + cantidadFinal
+    const aforoNuevo = aforoPrevio + ingresanAhora
     const resumen = resumenZona(zona, aforoNuevo)
     if (global.io) {
       global.io.emit('aforo_actualizado', resumen)
@@ -793,6 +803,10 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
       personas: cantidadFinal,
       monto,
       metodo_pago: metodo,
+      ingresaron_ahora: ingresanAhora,
+      faltan: cantidadFinal - ingresanAhora,
+      // Los que faltan del grupo entran después con este código (por tandas)
+      codigo_ingreso: entradaCreada.codigo_ingreso,
       mesero_sugerido,
       aforo: resumen,
     })

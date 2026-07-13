@@ -120,6 +120,26 @@
           <div v-else class="walk-campo">
             <label class="walk-lbl">Mesa</label>
             <SelectorMesa :zonas="planos" v-model="walkMesaId" @cambio="walkMesaObj = $event" />
+            <!-- El grupo real de la mesa: cuántos son y cuántos entran YA. Los que
+                 faltan entran después con el código (tandas) — así el aforo es real. -->
+            <div v-if="walkMesaObj" class="walk-grupo">
+              <div class="walk-cant">
+                <span class="walk-lbl">Personas del grupo</span>
+                <div class="stepper">
+                  <button type="button" @click="walkGrupo = Math.max(1, walkGrupo - 1)" aria-label="Menos">−</button>
+                  <span>{{ walkGrupo }}</span>
+                  <button type="button" @click="walkGrupo++" aria-label="Más">+</button>
+                </div>
+              </div>
+              <div class="walk-cant">
+                <span class="walk-lbl">Entran ahora</span>
+                <div class="stepper">
+                  <button type="button" @click="walkAhora = Math.max(0, walkAhora - 1)" aria-label="Menos">−</button>
+                  <span>{{ walkAhora }}</span>
+                  <button type="button" @click="walkAhora = Math.min(walkGrupo, walkAhora + 1)" aria-label="Más">+</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Cliente opcional -->
@@ -417,7 +437,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
@@ -471,6 +491,17 @@ const walkZonaId = ref(null)
 const walkMesaId = ref(null)
 const walkMesaObj = ref(null)
 const walkCantidad = ref(1)
+// Grupo de la mesa comprada en puerta: cuántos son y cuántos entran ya
+const walkGrupo = ref(1)
+const walkAhora = ref(1)
+// Al elegir mesa, el grupo arranca en su capacidad (y todos entrando)
+watch(walkMesaObj, (m) => {
+  if (!m) return
+  const cap = Math.max(1, m.capacidad_sillas || 1)
+  walkGrupo.value = cap
+  walkAhora.value = cap
+})
+watch(walkGrupo, (g) => { if (walkAhora.value > g) walkAhora.value = g })
 const walkMetodo = ref('efectivo')
 const walkCliente = ref(null)
 const busquedaWalk = ref('')
@@ -788,18 +819,24 @@ async function registrarWalkIn() {
   registrandoWalk.value = true
   resultadoWalk.value = null
   try {
+    const esMesa = walkTipo.value === 'mesa'
     const datos = {
-      cantidad: walkCantidad.value,
+      // Mesa: el GRUPO completo (el aforo reserva a todos); general: las personas en puerta
+      cantidad: esMesa ? walkGrupo.value : walkCantidad.value,
+      // Mesa: cuántos cruzan la puerta YA (el resto entra por tandas con el código)
+      ...(esMesa ? { cantidad_ahora: walkAhora.value } : {}),
       metodo_pago: walkMetodo.value,
       id_cliente: walkCliente.value?.id_usuario || null,
     }
-    if (walkTipo.value === 'mesa') datos.id_mesa = walkMesaId.value
+    if (esMesa) datos.id_mesa = walkMesaId.value
     else datos.id_zona = walkZonaId.value
     const r = await servicioAforo.walkIn(datos)
+    const faltan = r.faltan > 0 ? ` · faltan ${r.faltan} (entran con el código ${r.codigo_ingreso})` : ''
     mostrarResultado(resultadoWalk, 'ok', 'Ingreso registrado',
-      `${r.personas} pers · ${r.mesa ? 'Mesa ' + r.mesa + ' · ' : ''}${r.zona} · ${r.metodo_pago === 'cortesia' ? 'Cortesía' : 'Bs ' + Number(r.monto).toFixed(2)} · aforo ${r.aforo.aforo_actual}/${r.aforo.capacidad}`)
+      `${r.personas} pers · ${r.mesa ? 'Mesa ' + r.mesa + ' · ' : ''}${r.zona} · ${r.metodo_pago === 'cortesia' ? 'Cortesía' : 'Bs ' + Number(r.monto).toFixed(2)} · aforo ${r.aforo.aforo_actual}/${r.aforo.capacidad}${faltan}`)
     // Reset campos
     walkMesaId.value = null; walkMesaObj.value = null; walkCantidad.value = 1; walkCliente.value = null
+    walkGrupo.value = 1; walkAhora.value = 1
     walkRecibidoTexto.value = ''; walkComprobante.value = null
     await Promise.all([cargarAforo(), cargarPlanos()])
     // Si entró a una mesa, ofrecer asignar mesero
@@ -1002,6 +1039,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .walk-lbl { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--texto-desactivado); }
 .walk-opt { text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--texto-desactivado); }
 .walk-cant { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); }
+.walk-grupo { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px 14px; border-radius: var(--radio-lg); background: rgba(168,85,247,0.06); border: 1px solid var(--borde-sutil); }
 .walk-metodos { display: flex; gap: 8px; flex-wrap: wrap; }
 .wm { flex: 1; min-width: 90px; padding: 10px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: var(--fondo-app); color: var(--texto-secundario); font-weight: 700; font-size: 0.82rem; cursor: pointer; }
 .wm.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.14); color: var(--texto-principal); }
