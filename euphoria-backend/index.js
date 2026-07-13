@@ -15,6 +15,12 @@ const app    = express()
 // Render (y otros hosts) inyectan el puerto en process.env.PORT.
 const PUERTO = process.env.PORT || process.env.PUERTO || 3000
 
+// Render pone la app detrás de su proxy (X-Forwarded-For). Sin esto,
+// express-rate-limit LANZA ValidationError en cada login (error 500 para
+// todos) y además vería a todos los usuarios con la IP del proxy, o sea que
+// 10 intentos ENTRE TODOS bloqueaban el login del local entero.
+app.set('trust proxy', 1)
+
 // ---- Seguridad y CORS ----
 // En produccion se restringe a los origenes de ORIGEN_FRONTEND (lista separada por comas).
 // En desarrollo se permite cualquier origen para poder probar desde el celular en la red local.

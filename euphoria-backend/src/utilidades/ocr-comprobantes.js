@@ -518,11 +518,13 @@ function fabricasDeVariantes(ancho) {
       fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().normalize().threshold(215).jpeg({ quality: 95 }).toBuffer(),
     },
   ]
-  if (ancho > 0 && ancho < 1700) {
+  // Ampliar SOLO fotos realmente chicas (lejanas): con el techo de análisis en
+  // 1600px, re-agrandar imágenes ya capadas desharía el ahorro de memoria.
+  if (ancho > 0 && ancho < 1100) {
     fabricas.push({
       nombre: 'ampliada',
       fabrica: (buf) => sharp(buf, { failOn: 'none' })
-        .resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1700), 2600), kernel: 'lanczos3' })
+        .resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1300), 1600), kernel: 'lanczos3' })
         .grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer(),
     })
   }
@@ -591,17 +593,23 @@ function fusionarAnalisis(resultados) {
  * @param {object} [opciones] { titular }
  */
 async function analizarComprobanteRobusto(entrada, montoEsperado, worker, hoy = new Date(), opciones = {}) {
-  // Techo de tamaño SOLO para el análisis: fotos de 4000px por varias pasadas
-  // reventaban los 512MB de Render (el proceso se reiniciaba a mitad de la
-  // validación). 2200px de ancho dejan el texto del comprobante de sobra
-  // legible para el OCR; la foto original guardada no se toca.
+  // Techo de tamaño SOLO para el análisis (la imagen guardada no se toca).
+  // OJO: el techo es por ANCHO *Y* ALTO — capar solo el ancho dejaba pasar
+  // capturas de pantalla largas (1080x4000+, comprobante con scroll) que
+  // Tesseract expandía en memoria y mataban los 512MB de Render.
+  // 1600x2400 deja el texto de un comprobante de sobra legible.
+  const MAX_ANCHO = 1600, MAX_ALTO = 2400
   let ancho = 0
   try {
     const meta = await sharp(entrada, { failOn: 'none' }).metadata()
     ancho = meta.width || 0
-    if (ancho > 2200) {
-      entrada = await sharp(entrada, { failOn: 'none' }).resize({ width: 2200, kernel: 'lanczos3' }).jpeg({ quality: 95 }).toBuffer()
-      ancho = 2200
+    const alto = meta.height || 0
+    if (ancho > MAX_ANCHO || alto > MAX_ALTO) {
+      entrada = await sharp(entrada, { failOn: 'none' })
+        .resize({ width: MAX_ANCHO, height: MAX_ALTO, fit: 'inside', kernel: 'lanczos3' })
+        .jpeg({ quality: 95 }).toBuffer()
+      const m2 = await sharp(entrada, { failOn: 'none' }).metadata()
+      ancho = m2.width || ancho
     }
   } catch { /* sin metadata seguimos con la imagen tal cual */ }
 

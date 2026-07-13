@@ -57,6 +57,32 @@ async function obtenerWorkerOCR() {
   return _ocrWorkerPromise
 }
 
+// El heap WASM de Tesseract crece con cada imagen grande y no se devuelve al
+// sistema. En Render (512MB) eso acumulaba hasta el reinicio: si tras un
+// análisis la memoria del proceso pasa el umbral, se desecha el worker y el
+// siguiente comprobante crea uno nuevo (tarda unos segundos más, pero vive).
+const UMBRAL_RECICLAR_MB = 300
+async function reciclarWorkerSiPesa() {
+  const rssMB = Math.round(process.memoryUsage().rss / 1024 / 1024)
+  if (rssMB < UMBRAL_RECICLAR_MB) return
+  console.warn(`[OCR] RSS ${rssMB}MB > ${UMBRAL_RECICLAR_MB}MB: reciclando worker de Tesseract`)
+  const w = _ocrWorker
+  _ocrWorker = null
+  _ocrWorkerPromise = null
+  try { if (w) await w.terminate() } catch { /* ya muerto */ }
+  if (global.gc) { try { global.gc() } catch { /* sin --expose-gc */ } }
+}
+
+// UN análisis a la vez: dos comprobantes simultáneos duplican los picos de
+// memoria (sharp + Tesseract) y en 512MB eso es reinicio seguro. El segundo
+// espera en cola; el cliente solo percibe unos segundos más.
+let _colaOCR = Promise.resolve()
+function encolarOCR(tarea) {
+  const turno = _colaOCR.then(tarea, tarea)
+  _colaOCR = turno.catch(() => {})
+  return turno
+}
+
 // Distancia de edición (Levenshtein) para tolerar 1-2 errores del OCR al comparar
 // números de transacción (ej. 0/O, 8/B, 1/I) y no dejar reusar el MISMO comprobante.
 function distanciaEdicion(a, b) {
@@ -90,22 +116,27 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
     //    ampliada) y fusión de campos entre pasadas. Prioridad del negocio:
     //    que FUNCIONE aunque tarde. La imagen se descarga UNA vez de Cloudinary
     //    (multer la subió ahí) porque el preprocesamiento necesita los bytes.
-    const worker = await obtenerWorkerOCR()
     const titular = await obtenerTitularDestino()
-    let analisis
-    try {
-      const resp = await fetch(req.file.path)
-      if (!resp.ok) throw new Error(`descarga ${resp.status}`)
-      const bufferImg = Buffer.from(await resp.arrayBuffer())
-      // hoyBolivia(): el servidor corre en UTC y de noche en Bolivia allá ya es
-      // "mañana" — los comprobantes del día se rechazaban por fecha.
-      analisis = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, hoyBolivia(), { titular })
-    } catch (e) {
-      // Respaldo: si la descarga falla, una sola pasada directa desde la URL
-      console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
-      const { data: { text } } = await worker.recognize(req.file.path)
-      analisis = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, hoyBolivia(), { titular })
-    }
+    // En cola: UN análisis a la vez (dos a la vez duplican los picos de memoria)
+    const analisis = await encolarOCR(async () => {
+      const worker = await obtenerWorkerOCR()
+      let r
+      try {
+        const resp = await fetch(req.file.path)
+        if (!resp.ok) throw new Error(`descarga ${resp.status}`)
+        const bufferImg = Buffer.from(await resp.arrayBuffer())
+        // hoyBolivia(): el servidor corre en UTC y de noche en Bolivia allá ya es
+        // "mañana" — los comprobantes del día se rechazaban por fecha.
+        r = await analizarComprobanteRobusto(bufferImg, montoEsperado, worker, hoyBolivia(), { titular })
+      } catch (e) {
+        // Respaldo: si la descarga falla, una sola pasada directa desde la URL
+        console.warn('[OCR] sin bytes para multi-pasada, pasada única:', e.message)
+        const { data: { text } } = await worker.recognize(req.file.path)
+        r = analizarComprobante(text.replace(/\s+/g, ' '), montoEsperado, hoyBolivia(), { titular })
+      }
+      await reciclarWorkerSiPesa()
+      return r
+    })
 
     if (process.env.DEBUG_OCR === 'true') {
       console.log(`[OCR] Monto esperado: Bs. ${montoEsperado} · pasada: ${analisis.pasada || 'única'} · fusionado: ${!!analisis.fusionado}`)
