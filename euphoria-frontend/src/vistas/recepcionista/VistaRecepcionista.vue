@@ -308,12 +308,11 @@
         </div>
       </section>
 
-      <!-- Columna derecha: aforo en vivo -->
+      <!-- Columna derecha: aforo + MAPA EN VIVO -->
       <section class="panel col-aforo">
         <div class="aforo-cab">
           <div class="aforo-cab-txt">
-            <h2 class="panel-titulo">Aforo en vivo</h2>
-            <span class="live"><span class="live-dot"></span>En vivo</span>
+            <h2 class="panel-titulo">Aforo</h2>
           </div>
           <div class="total-badge" :class="estadoTotal">
             <span class="total-num">{{ aforoTotal }}</span>
@@ -342,6 +341,62 @@
               <span class="zona-pct" :class="z.estado">{{ z.porcentaje }}%</span>
             </div>
           </div>
+        </div>
+
+        <!-- ===== MAPA EN VIVO: quién está en cada mesa, cuántos entraron ===== -->
+        <div v-if="planosVivo.length" class="mv">
+          <div class="mv-cab">
+            <h2 class="panel-titulo">Mapa en vivo</h2>
+            <div class="mv-leyenda">
+              <span class="mv-ley lib">Libre</span>
+              <span class="mv-ley res">Reservada</span>
+              <span class="mv-ley ocu">Ocupada</span>
+            </div>
+          </div>
+          <!-- Buscar por mesa o cliente: resalta las coincidencias en el plano -->
+          <input v-model="mvBusqueda" class="input-codigo mv-buscar" placeholder="Buscar mesa o cliente…" />
+
+          <div v-for="z in planosVivo" :key="z.id_zona" class="mv-zona">
+            <p class="mv-zona-nombre">{{ z.nombre_zona }}</p>
+            <div class="mv-plano" :style="{ aspectRatio: String(z.proporcion || 1.6) }">
+              <button
+                v-for="m in z.mesas" :key="m.id_mesa" type="button"
+                class="mv-el"
+                :class="[claseMesaVivo(m), { busca: coincideBusquedaVivo(m), apagado: mvBusqueda && !coincideBusquedaVivo(m) }]"
+                :style="estiloMesaVivo(m)"
+                @click="abrirDetalleMesa(m, z)"
+              >
+                <span class="mv-el-txt">{{ m.numero_nombre }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Detalle de la mesa tocada -->
+          <transition name="fade">
+            <div v-if="mesaVivoSel" class="mv-detalle" :class="claseMesaVivo(mesaVivoSel)">
+              <div class="mv-det-cab">
+                <b>{{ mesaVivoSel.tipo_elemento === 'silla' ? 'Silla' : 'Mesa' }} {{ mesaVivoSel.numero_nombre }}</b>
+                <span class="mv-det-estado">{{ etiquetaEstadoMesa(mesaVivoSel) }}</span>
+                <button class="mv-det-x" @click="mesaVivoSel = null" aria-label="Cerrar">×</button>
+              </div>
+              <div v-if="mesaVivoSel.cliente" class="mv-det-datos">
+                <span class="mv-det-cli">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  {{ mesaVivoSel.cliente }}
+                  <em v-if="mesaVivoSel.es_vip" class="mv-vip">VIP</em>
+                </span>
+                <span v-if="mesaVivoSel.reservados != null" class="mv-det-cupos">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+                  {{ mesaVivoSel.ingresados || 0 }}/{{ mesaVivoSel.reservados }} adentro
+                </span>
+                <span v-if="mesaVivoSel.mesero" class="mv-det-mesero">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
+                  Atiende {{ mesaVivoSel.mesero }}
+                </span>
+              </div>
+              <p v-else class="mv-det-libre">Sin reserva: lista para venderse.</p>
+            </div>
+          </transition>
         </div>
       </section>
     </div>
@@ -514,7 +569,53 @@ async function cargarPlanos() {
   try {
     const r = await servicioAforo.obtenerPlanos(idEventoSel.value)
     planos.value = (r.zonas || []).map(z => ({ ...z, mesas: z.mesas || [] }))
+    // Si hay una mesa abierta en el detalle del mapa, refrescar sus datos en vivo
+    if (mesaVivoSel.value) {
+      for (const z of planos.value) {
+        const m = (z.mesas || []).find(x => x.id_mesa === mesaVivoSel.value.id_mesa)
+        if (m) { mesaVivoSel.value = m; break }
+      }
+    }
   } catch { planos.value = [] }
+}
+
+// ===== MAPA EN VIVO (columna derecha) =====
+// El recepcionista ve el evento completo: colores por estado, y al tocar una
+// mesa sabe quién la reservó, cuántos entraron y qué mesero la atiende.
+const mvBusqueda = ref('')
+const mesaVivoSel = ref(null)
+const planosVivo = computed(() => planos.value.filter(z => (z.mesas || []).length))
+
+function claseMesaVivo(m) {
+  const esLugar = (m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && m.es_seleccionable
+  if (!esLugar) return 'deco'
+  if (m.estado_ocupacion === 'ocupada') return 'ocu'
+  if (m.estado_ocupacion === 'reservada') return (m.ingresados || 0) > 0 ? 'ocu' : 'res'
+  return 'lib'
+}
+function etiquetaEstadoMesa(m) {
+  const c = claseMesaVivo(m)
+  return c === 'ocu' ? 'Ocupada' : c === 'res' ? 'Reservada' : 'Libre'
+}
+function estiloMesaVivo(m) {
+  return {
+    left: `${m.posicion_x}%`,
+    top: `${m.posicion_y}%`,
+    width: `${m.ancho ?? 7}%`,
+    height: `${m.alto ?? 10}%`,
+    transform: `rotate(${m.rotacion || 0}deg)`,
+    borderRadius: m.forma === 'redondo' ? '50%' : '6px',
+  }
+}
+function coincideBusquedaVivo(m) {
+  const q = mvBusqueda.value.trim().toLowerCase()
+  if (!q) return false
+  return String(m.numero_nombre || '').toLowerCase().includes(q)
+    || String(m.cliente || '').toLowerCase().includes(q)
+}
+function abrirDetalleMesa(m) {
+  if (m.tipo_elemento !== 'mesa' && m.tipo_elemento !== 'silla') return
+  mesaVivoSel.value = mesaVivoSel.value?.id_mesa === m.id_mesa ? null : m
 }
 
 async function cambiarEvento() {
@@ -770,8 +871,12 @@ onMounted(async () => {
     const i = zonas.value.findIndex(z => z.id_zona === resumen.id_zona)
     if (i >= 0) zonas.value[i] = { ...zonas.value[i], ...resumen }
     recomputarTotales()
+    // Un check-in cambia los "x/y adentro" de la mesa: refrescar el mapa en vivo
+    cargarPlanos()
   })
   socket.on('mesa_actualizada', () => { if (idEventoSel.value) cargarPlanos() })
+  // Recepción asignó/cambió un mesero: el mapa muestra quién atiende cada mesa
+  socket.on('mesa_asignada', () => { if (idEventoSel.value) cargarPlanos() })
   socket.on('solicitud_grupo', (d) => {
     cargarSolicitudes()
     // Aviso activo cuando entra una solicitud NUEVA (no en respuesta a confirmada/propuesta)
@@ -997,6 +1102,56 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ===== Mapa en vivo (columna derecha) ===== */
+.mv { margin-top: var(--esp-5); display: flex; flex-direction: column; gap: 10px; }
+.mv-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.mv-leyenda { display: flex; gap: 6px; }
+.mv-ley { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px; border-radius: var(--radio-full); }
+.mv-ley.lib { background: rgba(34,197,94,0.14); color: var(--color-exito); }
+.mv-ley.res { background: rgba(245,158,11,0.14); color: var(--color-alerta); }
+.mv-ley.ocu { background: rgba(239,68,68,0.14); color: var(--color-error); }
+.mv-buscar { width: 100%; }
+.mv-zona-nombre { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-desactivado); margin: 4px 0; }
+.mv-plano {
+  position: relative; width: 100%; border-radius: var(--radio-lg); overflow: hidden;
+  background:
+    linear-gradient(rgba(168,85,247,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168,85,247,0.05) 1px, transparent 1px),
+    rgba(10,6,26,0.55);
+  background-size: 9% 9%, 9% 9%, auto;
+  border: 1px solid var(--borde-sutil);
+}
+.mv-el {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid; padding: 0; cursor: pointer; overflow: hidden;
+  transition: filter 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.mv-el-txt { font-size: clamp(0.5rem, 1.4vw, 0.68rem); font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); pointer-events: none; }
+.mv-el.lib { background: rgba(34,197,94,0.28); border-color: rgba(34,197,94,0.75); }
+.mv-el.res { background: rgba(245,158,11,0.3); border-color: rgba(245,158,11,0.8); }
+.mv-el.ocu { background: rgba(239,68,68,0.32); border-color: rgba(239,68,68,0.85); }
+.mv-el.deco { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); cursor: default; }
+.mv-el:hover:not(.deco) { filter: brightness(1.25); }
+.mv-el.busca { box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(168,85,247,0.9); z-index: 2; }
+.mv-el.apagado { opacity: 0.25; }
+/* Detalle de la mesa tocada */
+.mv-detalle { border-radius: var(--radio-lg); border: 1px solid var(--borde-sutil); padding: 12px 14px; background: var(--gradiente-sutil); }
+.mv-detalle.res { border-color: rgba(245,158,11,0.45); }
+.mv-detalle.ocu { border-color: rgba(239,68,68,0.5); }
+.mv-detalle.lib { border-color: rgba(34,197,94,0.45); }
+.mv-det-cab { display: flex; align-items: center; gap: 8px; }
+.mv-det-cab b { font-family: var(--fuente-titulo); font-size: 1rem; }
+.mv-det-estado { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: var(--radio-full); background: rgba(255,255,255,0.08); color: var(--texto-secundario); }
+.mv-detalle.ocu .mv-det-estado { background: rgba(239,68,68,0.16); color: var(--color-error); }
+.mv-detalle.res .mv-det-estado { background: rgba(245,158,11,0.16); color: var(--color-alerta); }
+.mv-detalle.lib .mv-det-estado { background: rgba(34,197,94,0.16); color: var(--color-exito); }
+.mv-det-x { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(255,255,255,0.07); color: var(--texto-secundario); cursor: pointer; font-size: 1rem; line-height: 1; }
+.mv-det-datos { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.mv-det-datos > span { display: inline-flex; align-items: center; gap: 7px; font-size: 0.85rem; color: var(--texto-principal); }
+.mv-det-datos svg { color: var(--morado-hover); flex-shrink: 0; }
+.mv-vip { font-style: normal; font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: var(--radio-full); background: #FBBF24; color: #1a1206; }
+.mv-det-libre { margin-top: 8px; font-size: 0.82rem; color: var(--texto-secundario); }
 
 @media (max-width: 520px) {
   .panel { padding: var(--esp-4); }

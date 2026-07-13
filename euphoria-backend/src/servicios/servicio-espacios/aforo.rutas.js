@@ -598,6 +598,32 @@ router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bar
       orderBy: { id_zona: 'asc' },
       include: { mesa_espacio: true },
     })
+
+    // VIVO por mesa: la reserva (cliente, cupos, cuántos ya entraron) y el
+    // mesero asignado — el recepcionista debe poder decir "en la M5 está
+    // Dilan con reserva de 10 y solo ingresaron 4, lo atiende Alan".
+    const idsMesas = zonas.flatMap(z => (z.mesa_espacio || []).map(m => m.id_mesa))
+    const [entradas, asignaciones] = await Promise.all([
+      prisma.entrada.findMany({
+        where: { id_mesa: { in: idsMesas } },
+        orderBy: [{ estado_validacion: 'desc' }, { fecha_reserva: 'desc' }],
+        select: {
+          id_entrada: true, id_mesa: true, cantidad_personas: true, cantidad_ingresada: true,
+          usuario: { select: { nombres: true, apellidos: true, es_vip: true } },
+        },
+      }),
+      prisma.asignacion_mesa.findMany({
+        where: { id_mesa: { in: idsMesas }, estado: { in: ['asignada', 'atendiendo'] } },
+        orderBy: { fecha_asignacion: 'desc' },
+        select: { id_mesa: true, usuario: { select: { nombres: true, apellidos: true } } },
+      }),
+    ])
+    // La primera fila por mesa es la vigente (por el orden del query)
+    const reservaPorMesa = new Map()
+    for (const e of entradas) if (!reservaPorMesa.has(e.id_mesa)) reservaPorMesa.set(e.id_mesa, e)
+    const meseroPorMesa = new Map()
+    for (const a of asignaciones) if (!meseroPorMesa.has(a.id_mesa)) meseroPorMesa.set(a.id_mesa, a)
+
     const detalle = await Promise.all(zonas.map(async (z) => {
       const ocupado = await aforoActualZona(z.id_zona)
       const capacidad = z.capacidad_maxima || 0
@@ -610,17 +636,28 @@ router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bar
         ocupado,
         disponibles: Math.max(0, capacidad - ocupado),
         proporcion: z.proporcion || 1.6,
-        mesas: (z.mesa_espacio || []).map(m => ({
-          id_mesa: m.id_mesa,
-          tipo_elemento: m.tipo_elemento,
-          numero_nombre: m.numero_nombre,
-          posicion_x: m.posicion_x, posicion_y: m.posicion_y,
-          ancho: m.ancho, alto: m.alto, rotacion: m.rotacion, forma: m.forma,
-          capacidad_sillas: m.capacidad_sillas,
-          precio: m.precio != null ? Number(m.precio) : null,
-          estado_ocupacion: m.estado_ocupacion,
-          es_seleccionable: m.es_seleccionable,
-        })),
+        mesas: (z.mesa_espacio || []).map(m => {
+          const rsv = reservaPorMesa.get(m.id_mesa)
+          const asg = meseroPorMesa.get(m.id_mesa)
+          const enMesa = m.estado_ocupacion !== 'libre' && rsv ? rsv : null
+          return {
+            id_mesa: m.id_mesa,
+            tipo_elemento: m.tipo_elemento,
+            numero_nombre: m.numero_nombre,
+            posicion_x: m.posicion_x, posicion_y: m.posicion_y,
+            ancho: m.ancho, alto: m.alto, rotacion: m.rotacion, forma: m.forma,
+            capacidad_sillas: m.capacidad_sillas,
+            precio: m.precio != null ? Number(m.precio) : null,
+            estado_ocupacion: m.estado_ocupacion,
+            es_seleccionable: m.es_seleccionable,
+            // — datos EN VIVO de la mesa (solo si no está libre) —
+            cliente: enMesa?.usuario ? `${enMesa.usuario.nombres} ${enMesa.usuario.apellidos || ''}`.trim() : null,
+            es_vip: enMesa?.usuario?.es_vip || false,
+            reservados: enMesa?.cantidad_personas ?? null,
+            ingresados: enMesa?.cantidad_ingresada ?? null,
+            mesero: asg?.usuario ? `${asg.usuario.nombres} ${asg.usuario.apellidos || ''}`.trim() : null,
+          }
+        }),
       }
     }))
     res.json({ id_evento, zonas: detalle })
