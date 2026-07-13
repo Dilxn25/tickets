@@ -119,15 +119,38 @@ const io = new Server(servidorHttp, {
 })
 global.io = io
 
+// Interesados EN VIVO por evento: cuántos clientes tienen abierto el mapa de
+// reserva ahora mismo (señal de demanda para recepción). Solo memoria.
+const interesadosMapa = new Map() // id_evento -> Set<socketId>
+function emitirInteresados(idEvento) {
+  const set = interesadosMapa.get(idEvento)
+  io.to(`mapa_${idEvento}`).emit('interesados_evento', { id_evento: idEvento, total: set ? set.size : 0 })
+}
+function quitarInteresado(socket) {
+  const idEv = socket.data.id_evento
+  if (idEv == null) return
+  const set = interesadosMapa.get(idEv)
+  if (set && set.delete(socket.id)) emitirInteresados(idEv)
+}
+
 io.on('connection', socket => {
   console.log(`WebSocket conectado: ${socket.id}`)
 
   // ---- Presencia en el mapa de reservas (quién está viendo qué lugar) ----
   // El cliente entra a la "sala" del evento para recibir/emitir presencia en vivo.
-  socket.on('entrar_mapa', ({ id_evento } = {}) => {
+  // observador:true = personal del local (recepción): escucha pero NO cuenta
+  // como interesado.
+  socket.on('entrar_mapa', ({ id_evento, observador } = {}) => {
     if (id_evento == null) return
+    quitarInteresado(socket) // por si cambió de evento
     socket.data.sala = `mapa_${id_evento}`
+    socket.data.id_evento = observador ? null : id_evento
     socket.join(socket.data.sala)
+    if (!observador) {
+      if (!interesadosMapa.has(id_evento)) interesadosMapa.set(id_evento, new Set())
+      interesadosMapa.get(id_evento).add(socket.id)
+    }
+    emitirInteresados(id_evento)
   })
   // Está MIRANDO una mesa (aún no reserva): se avisa a los demás de la sala.
   socket.on('viendo_mesa', ({ id_zona, id_mesa, nombre } = {}) => {
@@ -151,6 +174,7 @@ io.on('connection', socket => {
     if (socket.data.sala && socket.data.viendo) {
       socket.to(socket.data.sala).emit('dejar_mesa', { ...socket.data.viendo, socketId: socket.id })
     }
+    quitarInteresado(socket)
     console.log(`WebSocket desconectado: ${socket.id}`)
   })
 })

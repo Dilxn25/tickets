@@ -57,7 +57,7 @@ const rutas = [
     path: '/recepcionista',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'recepcionista' },
-    children: [{ path: '', name: 'Recepcionista', component: () => import('../vistas/recepcionista/VistaRecepcionista.vue') }],
+    children: [{ path: '', name: 'Recepcionista', component: () => import('../vistas/recepcionista/VistaRecepcionV2.vue') }],
   },
   {
     path: '/bartender',
