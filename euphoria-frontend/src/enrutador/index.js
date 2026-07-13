@@ -45,7 +45,7 @@ const rutas = [
     path: '/cajero',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'cajero' },
-    children: [{ path: '', name: 'Cajero', component: () => import('../vistas/cajero/VistaCajero.vue') }],
+    children: [{ path: '', name: 'Cajero', component: () => import('../vistas/cajero/VistaCajeroV2.vue') }],
   },
   {
     path: '/mesero',

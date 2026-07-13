@@ -7,12 +7,42 @@ const jwt = require('jsonwebtoken')
 const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
 const { notificar } = require('../../utilidades/notificaciones')
 const { subirImagenDocumento } = require('../../config/cloudinary')
+const { hoyBolivia } = require('../../utilidades/tiempo')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
 router.use(soloRoles('Cajero', 'Administrador'))
 
 // GET /api/cajero/buscar-cliente?q=87 - Autocompletado por teléfono o CI
+// GET /api/cajero/pulso — cifras del turno de HOY (hora boliviana): cuánto se
+// recargó, cuánto se retiró y cuántas billeteras nuevas. Solo números.
+router.get('/pulso', async (req, res) => {
+  try {
+    const hoy = hoyBolivia()
+    const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+    const [recargas, retiros] = await Promise.all([
+      prisma.recarga_billetera.aggregate({
+        where: { fecha_solicitud: { gte: inicioDia } },
+        _sum: { monto_recarga: true },
+        _count: true,
+      }),
+      prisma.solicitud_retiro.aggregate({
+        where: { estado: 'pagado', fecha_pago: { gte: inicioDia } },
+        _sum: { monto_entregado: true },
+        _count: true,
+      }),
+    ])
+    res.json({
+      recargado: Number(recargas._sum.monto_recarga) || 0,
+      retirado: Number(retiros._sum.monto_entregado) || 0,
+      operaciones: (recargas._count || 0) + (retiros._count || 0),
+    })
+  } catch (error) {
+    console.error('Error en pulso de caja:', error)
+    res.status(500).json({ error: 'Error al calcular el pulso' })
+  }
+})
+
 router.get('/buscar-cliente', async (req, res) => {
   try {
     const { q } = req.query
@@ -98,7 +128,9 @@ router.get('/consultar-billetera/:identificador', async (req, res) => {
           { telefono: identificador },
           { ci_carnet: identificador },
           { correo: { equals: identificador } },
-          { correo: { equals: `${identificador}@euphoria.com` } }
+          { correo: { equals: `${identificador}@euphoria.com` } },
+          // Código corto de la billetera (U15-4832): el identificador natural en caja
+          { billetera: { qr_publico: identificador } },
         ]
       },
       include: {
