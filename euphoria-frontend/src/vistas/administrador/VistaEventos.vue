@@ -240,7 +240,7 @@
             <button class="btn-x" @click="modalPlanos=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div class="modal-form">
-            <p class="pl-ayuda">Un evento puede tener varios planos (ej. Primer piso, Segundo piso). Cada plano trae su mapa; las áreas VIP/Campo se marcan con recuadros dentro del plano.</p>
+            <p class="pl-ayuda">Un plano por piso o ambiente; cada uno trae su propio mapa.</p>
 
             <!-- Lista de planos ya agregados -->
             <div v-if="planosDelEvento.length" class="pl-lista">

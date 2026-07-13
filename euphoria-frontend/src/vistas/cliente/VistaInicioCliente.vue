@@ -187,6 +187,26 @@
       </p>
     </section>
 
+    <!-- Elegir a qué evento va la reserva (cuando hay más de uno) -->
+    <Teleport to="body">
+      <div v-if="eligiendoEventoPara" class="sel-ev-overlay" @click.self="eligiendoEventoPara = null">
+        <div class="sel-ev-sheet fade-in">
+          <h3>¿Para qué evento?</h3>
+          <button v-for="ev in eventos" :key="ev.id_evento" class="sel-ev-item" @click="elegirEventoDestino(ev)">
+            <img v-if="ev.url_portada" :src="ev.url_portada" class="sel-ev-img" alt="" />
+            <div v-else class="sel-ev-img sel-ev-img-vacia">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="20" height="20"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div class="sel-ev-txt">
+              <b>{{ ev.nombre_evento }}</b>
+              <span>{{ fechaCortaEvento(ev) }}</span>
+            </div>
+            <svg class="sel-ev-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Accesos Rápidos estilo bento -->
     <section class="seccion-accesos reveal">
       <h3 class="bloque-titulo">Tu noche, a un toque</h3>
@@ -389,17 +409,30 @@ const modalCancelado = ref(false)
 const eventos = ref([])
 const cargandoEventos = ref(true)
 
-// Reserva: elige el evento destino (actual, o el primero disponible)
-function eventoDestino() {
-  return eventoActual.value?.id_evento || eventos.value[0]?.id_evento || null
+// Reserva: si el cliente ya está en un evento se va directo; si hay varios
+// eventos disponibles, primero elige a CUÁL (antes iba al primero sin preguntar).
+const eligiendoEventoPara = ref(null) // 'reservar' | 'grupo' | null
+function destinoDirecto() {
+  if (eventoActual.value?.id_evento) return eventoActual.value.id_evento
+  return eventos.value.length === 1 ? eventos.value[0].id_evento : null
 }
-function irReservar() {
-  const id = eventoDestino()
-  router.push(id ? `/cliente/reservar/${id}` : '/cliente/eventos')
+function irReservar() { irConEvento('reservar') }
+function irGrupo() { irConEvento('grupo') }
+function irConEvento(modo) {
+  const id = destinoDirecto()
+  if (id) return router.push(`/cliente/${modo}/${id}`)
+  if (!eventos.value.length) return router.push('/cliente/eventos')
+  eligiendoEventoPara.value = modo
 }
-function irGrupo() {
-  const id = eventoDestino()
-  router.push(id ? `/cliente/grupo/${id}` : '/cliente/eventos')
+function elegirEventoDestino(ev) {
+  const modo = eligiendoEventoPara.value
+  eligiendoEventoPara.value = null
+  router.push(`/cliente/${modo}/${ev.id_evento}`)
+}
+function fechaCortaEvento(ev) {
+  const f = ev.fecha_hora_inicio ? new Date(ev.fecha_hora_inicio) : null
+  if (!f) return ''
+  return f.toLocaleDateString('es-BO', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 const productos = ref([])
@@ -767,6 +800,36 @@ onUnmounted(() => {
 .rmodo-txt span { color: var(--texto-secundario); font-size: 0.78rem; line-height: 1.35; }
 .rmodo-flecha { width: 18px; height: 18px; flex-shrink: 0; color: var(--texto-desactivado); transition: transform 0.2s ease, color 0.2s ease; }
 .rmodo:hover .rmodo-flecha { color: var(--morado-hover); transform: translateX(3px); }
+
+/* Selector "¿Para qué evento?" (aparece solo con 2+ eventos disponibles) */
+.sel-ev-overlay {
+  position: fixed; inset: 0; z-index: 1300;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(6,3,18,0.72); backdrop-filter: blur(2px);
+}
+.sel-ev-sheet {
+  width: 100%; max-width: 480px; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--fondo-tarjeta); border: 1px solid var(--glass-borde, rgba(168,85,247,0.3));
+  border-radius: 24px 24px 0 0; display: flex; flex-direction: column; gap: 10px;
+}
+.sel-ev-sheet h3 { font-family: var(--fuente-titulo); font-size: 1.15rem; font-weight: 800; color: var(--texto-principal); margin: 0 0 4px; }
+.sel-ev-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px; border-radius: 16px; cursor: pointer;
+  background: var(--gradiente-sutil, rgba(255,255,255,0.03)); border: 1px solid var(--borde-sutil);
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.sel-ev-item:hover { border-color: var(--borde-activo); transform: translateY(-1px); }
+.sel-ev-img { width: 54px; height: 54px; border-radius: 12px; object-fit: cover; flex-shrink: 0; }
+.sel-ev-img-vacia { display: flex; align-items: center; justify-content: center; background: rgba(168,85,247,0.12); color: var(--morado-hover); }
+.sel-ev-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sel-ev-txt b { color: var(--texto-principal); font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-ev-txt span { color: var(--texto-secundario); font-size: 0.78rem; text-transform: capitalize; }
+.sel-ev-flecha { flex-shrink: 0; color: var(--texto-desactivado); }
+@media (min-width: 600px) {
+  .sel-ev-overlay { align-items: center; padding: 16px; }
+  .sel-ev-sheet { border-radius: 24px; }
+}
 .reserva-nota { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; font-size: 0.78rem; color: var(--texto-secundario); line-height: 1.4; }
 .reserva-nota svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--morado-hover); margin-top: 1px; }
 

@@ -196,7 +196,7 @@
                     </div>
                   </div>
 
-                  <p v-if="solicitudesRec.length" class="sol-pie">El veredicto compara lo que dejó el cliente con lo registrado. Si coincide, «Restablecer» pone su clave temporal en 123456 y te da los botones para avisarle. Si no coincide, pídele el CI físico o «Rechazar».</p>
+                  <p v-if="solicitudesRec.length" class="sol-pie">Si los datos coinciden, «Restablecer» deja la clave temporal 123456; si no, pide el CI físico o «Rechazar».</p>
                 </div>
 
                 <div class="notif-sec">

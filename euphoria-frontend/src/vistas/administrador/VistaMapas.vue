@@ -220,7 +220,7 @@
         </template>
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
-          <p class="prop-ayuda">Las áreas son recuadros con nombre y precio (Lounge, VIP, Campo…) para marcar y cotizar secciones. Mesas y sillas suman aforo y llevan su precio. Barra, escenario y paredes son decorativos.</p>
+          <p class="prop-ayuda">Áreas = secciones con precio · Mesas y sillas = aforo · Barra, escenario y paredes = decorativos.</p>
         </template>
       </div>
     </div>

@@ -292,7 +292,7 @@
             <div v-if="!cargandoIngresos && !tieneReserva" class="gate-evento">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
               <b>Primero reserva tu lugar</b>
-              <p>Para pedir desde la app necesitas una reserva en un evento. Reserva tu mesa o espacio y luego podrás pedir lo que quieras.</p>
+              <p>Con tu reserva lista podrás pedir desde la app.</p>
               <RouterLink to="/cliente/eventos" class="gate-btn">Ver eventos y reservar</RouterLink>
             </div>
 
@@ -331,7 +331,7 @@
       <div v-if="pidiendoPin" class="modal-pin-overlay">
         <div class="modal-pin-caja">
           <h3>Confirma con tu PIN</h3>
-          <p>Tu billetera está protegida. Ingresa tu PIN de 4 dígitos para autorizar el pago de Bs. {{ formatoMoneda(total) }}.</p>
+          <p>Autoriza el pago de Bs. {{ formatoMoneda(total) }} con tu PIN.</p>
           <input
             v-model="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
             class="input-pin-carrito" placeholder="••••" @input="pin = pin.replace(/\D/g, '').slice(0, 4)" @keyup.enter="pin.length === 4 && irAPagar()" />
