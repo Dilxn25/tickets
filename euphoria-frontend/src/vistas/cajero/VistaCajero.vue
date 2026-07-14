@@ -105,6 +105,9 @@
 </template>
 
 <script setup>
+// Vista del CAJERO: caja centrada en el cliente. Un buscador identifica al
+// cliente (QR, CI, teléfono, código) y desde su ficha se recarga, retira,
+// consulta saldo, se ven sus QR y se crea una billetera nueva.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'

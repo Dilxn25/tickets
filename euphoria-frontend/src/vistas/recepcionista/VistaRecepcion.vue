@@ -119,6 +119,9 @@
 </template>
 
 <script setup>
+// Vista de RECEPCIÓN: el mapa en vivo del evento ES la interfaz. Tocando el
+// plano se reserva una mesa, se registra el ingreso (tandas), se atienden
+// solicitudes de grupo y se ve aforo, ocupación e interesados en tiempo real.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'

@@ -4,7 +4,7 @@ const sharp = require('sharp')
 const Tesseract = require('tesseract.js')
 const ocr = require('../src/utilidades/ocr-comprobantes')
 
-const DIR = 'C:/Users/arauc/Desktop/Tickets/generados/muestras-ocr/'
+const DIR = 'C:/Users/arauc/Desktop/Tickets/recursos/generados/muestras-ocr/'
 // titular REAL configurado en produccion
 const TITULAR = 'Dilan Rafael Arauco Paniagua'
 const CASOS = [

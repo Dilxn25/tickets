@@ -28,11 +28,11 @@ env/
 .ipynb_checkpoints/
 
 # ---- Backups de base de datos (datos sensibles, NO subir) ----
-generados/backups/
-generados/backups-bd/
+recursos/generados/backups/
+recursos/generados/backups-bd/
 
 # ---- Credenciales de prueba (contrasenas, NO subir) ----
-generados/CREDENCIALES*.txt
+recursos/generados/CREDENCIALES*.txt
 **/CREDENCIALES*.txt
 
 # ---- Logs y temporales ----
@@ -63,12 +63,12 @@ Thumbs.db
 **/comprobante.txt
 
 # ---- Capturas de verificacion y muestras (temporales / datos personales) ----
-generados/capturas-*/
-generados/muestras-ocr/
+recursos/generados/capturas-*/
+recursos/generados/muestras-ocr/
 
 # Dump para restaurar en Aiven (datos reales, no subir a git)
-generados/*aiven*.sql
-generados/iniciador-*.sql
+recursos/generados/*aiven*.sql
+recursos/generados/iniciador-*.sql
 
 # Copia del frontend que genera el build en Render (no versionar)
 euphoria-backend/dist-frontend/

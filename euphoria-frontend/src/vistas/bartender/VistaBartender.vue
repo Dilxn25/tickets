@@ -152,6 +152,9 @@
 </template>
 
 <script setup>
+// Vista del BARTENDER: la barra en dos carriles — PREPARAR (qué hacer ahora,
+// con cronómetro) y ENTREGAR (a quién, con confirmación por QR del cliente o
+// handoff con el mesero). Filtra por evento y por mesa desde el mapa.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import clienteHttp from '@/servicios-api/cliente-http.js'

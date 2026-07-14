@@ -45,7 +45,7 @@ const rutas = [
     path: '/cajero',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'cajero' },
-    children: [{ path: '', name: 'Cajero', component: () => import('../vistas/cajero/VistaCajeroV2.vue') }],
+    children: [{ path: '', name: 'Cajero', component: () => import('../vistas/cajero/VistaCajero.vue') }],
   },
   {
     path: '/mesero',
@@ -57,13 +57,13 @@ const rutas = [
     path: '/recepcionista',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'recepcionista' },
-    children: [{ path: '', name: 'Recepcionista', component: () => import('../vistas/recepcionista/VistaRecepcionV2.vue') }],
+    children: [{ path: '', name: 'Recepcionista', component: () => import('../vistas/recepcionista/VistaRecepcion.vue') }],
   },
   {
     path: '/bartender',
     component: Disposicion.Simple,
     meta: { requiereAuth: true, rolPermitido: 'bartender' },
-    children: [{ path: '', name: 'Bartender', component: () => import('../vistas/bartender/VistaBartenderV2.vue') }],
+    children: [{ path: '', name: 'Bartender', component: () => import('../vistas/bartender/VistaBartender.vue') }],
   },
 
   // Cliente (Mobile-First UI)
