@@ -26,10 +26,23 @@ const ESTADOS_PUBLICOS = ['promocion', 'en_transcurso', 'lleno']
 // adelantado y nunca reclamado) de un evento que terminó, con su transacción
 // de devolución y notificación al cliente.
 async function devolverProgramadosDeEvento(idEvento) {
+  // Un pedido Programado pertenece al evento por su entrada vinculada O, si no
+  // la tiene (autoservicio que no persistió el vínculo), por CUALQUIER entrada
+  // del cliente en este evento. Sin este segundo caso el dinero quedaba
+  // atrapado: los Programados con id_entrada null nunca se devolvían.
+  const idsClientesDelEvento = (await prisma.entrada.findMany({
+    where: { zona: { id_evento: idEvento } },
+    select: { id_usuario: true },
+    distinct: ['id_usuario'],
+  })).map(e => e.id_usuario).filter(Boolean)
+
   const programados = await prisma.comanda.findMany({
     where: {
       estado_despacho: 'Programado',
-      entrada: { zona: { id_evento: idEvento } },
+      OR: [
+        { entrada: { zona: { id_evento: idEvento } } },
+        { id_entrada: null, id_cliente: { in: idsClientesDelEvento.length ? idsClientesDelEvento : [-1] } },
+      ],
     },
     select: {
       id_comanda: true, id_cliente: true,

@@ -319,7 +319,11 @@ router.post('/verificar-billetera', verificarToken, async (req, res) => {
 // POST /api/comandas/crear
 router.post('/crear', verificarToken, upload.single('comprobante'), async (req, res) => {
   try {
-    const { metodo_pago, qr_billetera, pin, monto_recibido, cambio_dado, id_cliente, id_mesa } = req.body
+    let { metodo_pago, qr_billetera, pin, monto_recibido, cambio_dado, id_cliente, id_mesa } = req.body
+    // El método se normaliza a 'Billetera' capitalizada: si un cliente llega
+    // como 'billetera' (o el front cambia), NO debe caer en otra rama que
+    // crearía la comanda SIN cobrar ni pedir PIN. Regla dura de dinero.
+    if (String(metodo_pago).toLowerCase() === 'billetera') metodo_pago = 'Billetera'
     const productosJSON = JSON.parse(req.body.productos || '[]')
     
     if (!productosJSON.length) return res.status(400).json({ error: 'La orden está vacía' })
@@ -627,10 +631,13 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
             throw new Error('SALDO_INSUFICIENTE')
           }
 
-          // Crear comanda
+          // Crear comanda — el cliente del pedido es SIEMPRE el dueño de la
+          // billetera que paga (trazabilidad R2.5): sin esto, un pedido pagado
+          // por el propio cliente quedaba con id_cliente null y no se podía
+          // saber de quién era ni devolvérselo si el evento terminaba.
           const nuevaComanda = await tx.comanda.create({
             data: {
-              id_cliente: id_cliente ? Number(id_cliente) : null,
+              id_cliente: (id_cliente ? Number(id_cliente) : null) || billetera.id_usuario,
               id_mesero: idMeseroComanda,
               id_mesa: idMesaComanda,
               estado_despacho: estadoInicial,
@@ -694,6 +701,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
 
       return res.status(201).json({
         mensaje: 'Cobro de billetera exitoso',
+        id_comanda: idComandaBilletera, // el front necesita el id del pedido creado
         saldo_restante: saldo_nuevo,
         nombres_cliente: billetera.usuario.nombres,
         ...(premioDescuento > 0 && {
