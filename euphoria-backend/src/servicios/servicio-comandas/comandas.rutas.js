@@ -220,7 +220,18 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
             })
             return
           }
-          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: analisis.error, pasos } })
+          // Mensaje ESPECÍFICO según el primer paso que falló: así el cliente
+          // sabe QUÉ re-tomar (no un genérico "imagen no clara"). El monto/
+          // fecha son fallos de negocio; el resto suele ser mala lectura.
+          const fallo = pasos.find(p => !p.ok)
+          const MENSAJES = {
+            monto: 'El monto del comprobante no coincide con lo que vas a recargar.',
+            transaccion: 'No pude leer el N° de transacción. Acércate más al comprobante y que salga completo y nítido.',
+            fecha: 'El comprobante no es de hoy. Sube el de tu depósito de hoy.',
+            destino: 'El comprobante no muestra el pago a Euphoria. Revisa que sea el correcto.',
+          }
+          const error = (fallo && MENSAJES[fallo.clave]) || analisis.error
+          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error, pasos } })
           return
         }
 
