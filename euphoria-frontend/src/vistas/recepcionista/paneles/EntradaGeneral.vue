@@ -29,27 +29,12 @@
 
         <BuscadorCliente v-model="cliente" placeholder="Cliente (opcional)" />
 
-        <!-- Cobro -->
-        <div class="eg-metodos">
-          <button v-for="mp in metodos" :key="mp.v" type="button" :class="['eg-metodo', { activo: metodo === mp.v }]" @click="metodo = mp.v">
-            <span v-html="mp.icono"></span>
-            {{ mp.t }}
-          </button>
-        </div>
-        <div v-if="metodo === 'efectivo' && total > 0" class="eg-efectivo">
-          <div class="eg-recibido">
-            <span>Recibí Bs.</span>
-            <input v-model="recibidoTexto" @input="limpiarRecibido" type="text" inputmode="decimal" :placeholder="total.toFixed(2)" />
-            <button type="button" class="eg-chip" @click="recibidoTexto = total.toFixed(2)">Exacto</button>
-          </div>
-          <p v-if="recibido > 0" :class="['eg-cambio', cambio >= 0 ? 'ok' : 'falta']">
-            {{ cambio >= 0 ? 'Cambio' : 'Falta' }} <b>Bs {{ Math.abs(cambio).toFixed(2) }}</b>
-          </p>
-        </div>
+        <!-- Cobro ESTÁNDAR del sistema (R8.1) -->
+        <CobroPago :total="total" :metodos="['efectivo', 'qr', 'cortesia']" @cambio="pago = $event" />
 
         <p v-if="error" class="eg-error">{{ error }}</p>
         <button class="eg-cta" :disabled="!puede || trabajando" @click="registrar">
-          {{ trabajando ? '…' : (total > 0 && metodo !== 'cortesia' ? `Cobrar Bs ${total.toFixed(2)} y registrar` : `Registrar ${cantidad}`) }}
+          {{ trabajando ? '…' : (total > 0 && pago.metodo !== 'cortesia' ? `Cobrar Bs ${total.toFixed(2)} y registrar` : `Registrar ${cantidad}`) }}
         </button>
       </div>
     </div>
@@ -60,6 +45,7 @@
 import { ref, computed } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
+import CobroPago from '@/componentes/comunes/CobroPago.vue'
 
 const props = defineProps({ zonas: { type: Array, default: () => [] } })
 const emit = defineEmits(['cerrar', 'hecho'])
@@ -68,26 +54,12 @@ const zonasGenerales = computed(() => props.zonas.filter(z => z.es_general || z.
 const zonaId = ref(zonasGenerales.value[0]?.id_zona || null)
 const cantidad = ref(1)
 const cliente = ref(null)
-const metodo = ref('efectivo')
-const metodos = [
-  { v: 'efectivo', t: 'Efectivo', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle></svg>' },
-  { v: 'qr', t: 'QR', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>' },
-  { v: 'cortesia', t: 'Cortesía', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>' },
-]
+const pago = ref({ metodo: 'efectivo', valido: false })
 const total = computed(() => {
-  if (metodo.value === 'cortesia') return 0
   const z = zonasGenerales.value.find(x => x.id_zona === zonaId.value)
   return (Number(z?.precio_entrada_base) || 0) * cantidad.value
 })
-const recibidoTexto = ref('')
-const recibido = computed(() => { const n = parseFloat(recibidoTexto.value); return Number.isFinite(n) && n > 0 ? n : 0 })
-const cambio = computed(() => recibido.value - total.value)
-function limpiarRecibido() { recibidoTexto.value = (recibidoTexto.value || '').replace(/[^0-9.]/g, '').match(/^\d*\.?\d{0,2}/)?.[0] || '' }
-const puede = computed(() => {
-  if (!zonaId.value) return false
-  if (metodo.value === 'efectivo' && total.value > 0) return recibido.value >= total.value
-  return true
-})
+const puede = computed(() => !!zonaId.value && pago.value.valido)
 
 const trabajando = ref(false)
 const error = ref('')
@@ -100,7 +72,7 @@ async function registrar() {
       id_zona: zonaId.value,
       cantidad: cantidad.value,
       cantidad_ahora: cantidad.value, // en general todos entran ya
-      metodo_pago: metodo.value,
+      metodo_pago: pago.value.metodo,
       id_cliente: cliente.value?.id_usuario || null,
     })
     emit('hecho')

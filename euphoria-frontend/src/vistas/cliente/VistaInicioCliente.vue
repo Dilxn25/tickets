@@ -133,9 +133,14 @@
             class="carrusel-slide"
             @click="router.push(`/cliente/eventos/${evento.id_evento}`)"
           >
-            <img v-if="evento.url_portada" :src="evento.url_portada" class="slide-img" />
-            <div v-else class="slide-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect></svg>
+            <!-- Nunca un slide negro (I-13): si la portada falta O falla al
+                 cargar, fondo de marca con el nombre del evento en grande -->
+            <img
+              v-if="evento.url_portada && !portadasRotas[evento.id_evento]"
+              :src="evento.url_portada" class="slide-img"
+              @error="portadasRotas[evento.id_evento] = true" />
+            <div v-else class="slide-placeholder marca">
+              <span class="slide-placeholder-nombre">{{ evento.nombre_evento }}</span>
             </div>
             <div class="slide-overlay">
               <span class="slide-tag">Próximo evento</span>
@@ -440,6 +445,7 @@ const cargandoProductos = ref(true)
 
 // Control del Carrusel
 const carruselIndex = ref(0)
+const portadasRotas = ref({})
 let carruselInterval = null
 let socketInicio = null
 
@@ -1217,6 +1223,17 @@ onUnmounted(() => {
 .slide-img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .slide-placeholder { width: 100%; height: 100%; background: var(--gradiente-sutil); display: flex; align-items: center; justify-content: center; }
 .slide-placeholder svg { width: 64px; height: 64px; }
+.slide-placeholder.marca {
+  background:
+    radial-gradient(80% 90% at 15% 0%, rgba(139,92,246,0.5), transparent 65%),
+    radial-gradient(70% 80% at 90% 100%, rgba(236,72,153,0.4), transparent 65%),
+    #1a0b33;
+}
+.slide-placeholder-nombre {
+  font-family: var(--fuente-titulo); font-weight: 800; text-align: center;
+  font-size: clamp(1.4rem, 5vw, 2.4rem); color: #fff; padding: 0 8%;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.5); letter-spacing: -0.02em;
+}
 .slide-overlay {
   position: absolute;
   inset: 0;

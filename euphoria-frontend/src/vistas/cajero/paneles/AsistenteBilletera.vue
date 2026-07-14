@@ -23,43 +23,28 @@
       <button class="a-cta" :disabled="!identificador.trim() || duplicado || (pin && pin.length !== 4)" @click="paso = 2">Siguiente</button>
     </div>
 
-    <!-- PASO 2: ubicación (reutiliza el selector con buscador/lista/mapa) -->
+    <!-- PASO 2: dónde estará — SIEMPRE en el mapa (decisión del dueño):
+         General (pista/zona) o mesa concreta, todo desde el selector -->
     <div v-else-if="paso === 2" class="a-paso fade-in">
-      <div class="a-ubic">
-        <button v-for="u in ubicaciones" :key="u.valor" type="button" :class="['a-ubic-btn', { activo: ubicacion === u.valor }]" @click="elegirUbicacion(u.valor)">
-          <span v-html="u.icono"></span>
-          {{ u.nombre }}
-        </button>
-      </div>
-      <div v-if="ubicacion !== 'general'" class="a-mesa fade-in">
-        <p v-if="cargandoPlanos" class="a-nota">Cargando el mapa…</p>
-        <SelectorMesa v-else-if="planos.length" :zonas="planos" v-model="mesaId" @cambio="mesaObj = $event" />
-        <p v-else class="a-nota">Sin evento activo con mapa.</p>
-      </div>
+      <p v-if="cargandoPlanos" class="a-nota">Cargando el mapa…</p>
+      <template v-else-if="planos.length">
+        <SelectorMesa :zonas="planos" v-model="mesaId" @cambio="mesaObj = $event" />
+        <p class="a-nota">Sin mesa elegida entra como <b>general</b>.</p>
+      </template>
+      <p v-else class="a-nota">Sin evento activo con mapa: entrará como general.</p>
       <button class="a-cta" @click="paso = 3">Siguiente</button>
     </div>
 
-    <!-- PASO 3: saldo inicial + cobro -->
+    <!-- PASO 3: saldo inicial + cobro ESTÁNDAR (R8.1) -->
     <div v-else-if="paso === 3 && !credenciales" class="a-paso fade-in">
       <div class="a-monto">
         <span>Bs.</span>
         <input v-model="montoTexto" @input="limpiarMonto" type="text" inputmode="decimal" placeholder="0.00" />
       </div>
-      <div class="a-metodos" v-if="monto > 0">
-        <button type="button" :class="['metodo-card', { seleccionado: metodo === 'efectivo' }]" @click="metodo = 'efectivo'">
-          <span class="metodo-ic efectivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle></svg></span>
-          <span class="metodo-txt"><b>Efectivo</b></span>
-          <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </button>
-        <button type="button" :class="['metodo-card', { seleccionado: metodo === 'qr' }]" @click="metodo = 'qr'">
-          <span class="metodo-ic qr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg></span>
-          <span class="metodo-txt"><b>QR</b></span>
-          <svg class="metodo-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </button>
-      </div>
+      <CobroPago v-if="monto > 0" :total="monto" :metodos="['efectivo', 'qr']" @cambio="pago = $event" />
       <p class="a-nota" v-else>Puede empezar en Bs 0 y recargar después.</p>
       <p v-if="error" class="a-error">{{ error }}</p>
-      <button class="a-cta" :disabled="creando" @click="crear">
+      <button class="a-cta" :disabled="creando || (monto > 0 && !pago.valido)" @click="crear">
         {{ creando ? 'Creando…' : (monto > 0 ? `Crear y cobrar Bs ${monto.toFixed(2)}` : 'Crear billetera') }}
       </button>
     </div>
@@ -91,6 +76,7 @@ import { ref, computed, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import SelectorMesa from '@/componentes/comunes/SelectorMesa.vue'
+import CobroPago from '@/componentes/comunes/CobroPago.vue'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 
 const props = defineProps({ identificadorInicial: { type: String, default: '' } })
@@ -114,22 +100,12 @@ function verificarDuplicado() {
   }, 300)
 }
 
-// Paso 2: ubicación
-const ubicaciones = [
-  { valor: 'general', nombre: 'General', icono: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' },
-  { valor: 'mesa', nombre: 'Mesa', icono: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"></rect><line x1="6" y1="12" x2="6" y2="19"></line><line x1="18" y1="12" x2="18" y2="19"></line></svg>' },
-  { valor: 'reserva', nombre: 'VIP', icono: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>' },
-]
-const ubicacion = ref('general')
+// Paso 2: SOLO el mapa (decisión del dueño) — sin mesa elegida = general
 const planos = ref([])
 const cargandoPlanos = ref(false)
 const mesaId = ref(null)
 const mesaObj = ref(null)
-async function elegirUbicacion(u) {
-  ubicacion.value = u
-  mesaId.value = null
-  mesaObj.value = null
-  if (u === 'general' || planos.value.length || cargandoPlanos.value) return
+async function cargarPlanosAsistente() {
   cargandoPlanos.value = true
   try {
     const evs = await servicioAforo.listarEventos()
@@ -141,9 +117,9 @@ async function elegirUbicacion(u) {
   } catch { planos.value = [] } finally { cargandoPlanos.value = false }
 }
 
-// Paso 3: saldo + cobro
+// Paso 3: saldo + cobro estándar (CobroPago)
 const montoTexto = ref('')
-const metodo = ref('efectivo')
+const pago = ref({ metodo: 'efectivo', valido: true })
 const monto = computed(() => { const n = parseFloat(montoTexto.value); return Number.isFinite(n) && n > 0 ? n : 0 })
 function limpiarMonto() { montoTexto.value = (montoTexto.value || '').replace(/[^0-9.]/g, '').match(/^\d*\.?\d{0,2}/)?.[0] || '' }
 
@@ -158,15 +134,15 @@ async function crear() {
   error.value = ''
   try {
     const etiqueta = mesaObj.value
-      ? `${ubicacion.value === 'reserva' ? 'VIP' : 'Mesa'} ${mesaObj.value.numero_nombre}`
-      : ubicacion.value
+      ? `${mesaObj.value.tipo_elemento === 'silla' ? 'Silla' : 'Mesa'} ${mesaObj.value.numero_nombre}`
+      : 'general'
     const r = await clienteHttp.post('/cajero/abrir-billetera', {
       identificador: identificador.value.trim(),
       pin: pin.value || undefined,
       ubicacion: etiqueta,
       id_mesa: mesaObj.value?.id_mesa || null,
       monto_inicial: monto.value,
-      metodo_pago: metodo.value,
+      metodo_pago: pago.value.metodo,
     })
     credenciales.value = r
     const opts = { width: 400, margin: 1, color: { dark: '#10002b', light: '#ffffff' } }
@@ -211,7 +187,10 @@ function imprimir() {
   setTimeout(() => iframe.remove(), 2000)
 }
 
-onMounted(() => { if (identificador.value) verificarDuplicado() })
+onMounted(() => {
+  if (identificador.value) verificarDuplicado()
+  cargarPlanosAsistente()
+})
 </script>
 
 <style scoped>

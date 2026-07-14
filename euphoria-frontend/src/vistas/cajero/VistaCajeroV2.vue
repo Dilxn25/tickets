@@ -96,7 +96,8 @@
       <div v-if="escanerAbierto" class="c2-overlay" @click.self="escanerAbierto = false">
         <div class="c2-modal-escaner">
           <CapturaCamara modo="qr" texto-guia="Apunta al QR del cliente" @codigo="alEscanear" />
-          <button class="c2-cerrar-escaner" @click="escanerAbierto = false">Cancelar</button>
+          <p v-if="errorEscaner" class="c2-error-escaner">{{ errorEscaner }}</p>
+          <button class="c2-cerrar-escaner" @click="escanerAbierto = false; errorEscaner = ''">Cancelar</button>
         </div>
       </div>
     </Teleport>
@@ -174,18 +175,18 @@ function alCrearBilletera() {
 
 // ---- Escáner ----
 const escanerAbierto = ref(false)
+// R1.1: el contenido del QR JAMÁS se muestra crudo — se resuelve en el
+// backend (token firmado o código corto) y se abre la ficha del cliente.
+const errorEscaner = ref('')
 async function alEscanear(codigo) {
-  escanerAbierto.value = false
   if (!codigo) return
+  errorEscaner.value = ''
   try {
-    const r = await clienteHttp.post('/cajero/resolver-qr', { qr: codigo })
-    if (r?.qr_publico || r?.id_usuario) {
-      busqueda.value = r.qr_publico || ''
-      await abrirCliente({ id_usuario: r.id_usuario, nombres: r.nombres, apellidos: r.apellidos, billetera: { qr_publico: r.qr_publico, saldo_actual: r.saldo } })
-    }
-  } catch {
-    busqueda.value = String(codigo).slice(0, 24)
-    buscarDebounce()
+    const r = await clienteHttp.post('/cajero/resolver-qr', { texto: String(codigo) })
+    escanerAbierto.value = false
+    await abrirCliente(r)
+  } catch (e) {
+    errorEscaner.value = e?.error || 'Ese QR no corresponde a una billetera.'
   }
 }
 
@@ -315,6 +316,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .c2-overlay { position: fixed; inset: 0; z-index: 1400; background: rgba(6,3,18,0.85); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .c2-modal-escaner { width: min(480px, 94vw); display: flex; flex-direction: column; gap: 12px; }
 .c2-cerrar-escaner { padding: 12px; border-radius: 14px; border: 1px solid var(--borde-sutil); background: rgba(255,255,255,0.05); color: var(--texto-principal); font-weight: 700; cursor: pointer; }
+.c2-error-escaner { margin: 0; text-align: center; font-size: 0.84rem; color: var(--color-error); }
 
 @media (max-width: 560px) {
   .c2-top { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }

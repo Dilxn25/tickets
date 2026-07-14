@@ -183,8 +183,14 @@ const coincideFiltro = (m) => {
   if (!q) return true
   return String(m.numero_nombre).toLowerCase().includes(q) || (m.cliente || '').toLowerCase().includes(q)
 }
+// R4.2: la pista (y los elementos de zona general) SÍ se tocan — son la
+// entrada general. Solo escenario/barra/paredes quedan decorativos.
+function esGeneral(m) {
+  return ['pista', 'area', 'zona'].includes(String(m.tipo_elemento || '').toLowerCase())
+}
 function claseMesa(m) {
   const esLugar = (m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && m.es_seleccionable
+  if (esGeneral(m)) return 'general'
   if (!esLugar) return 'deco'
   if (modoPropuesta.value) {
     if (idsPropuesta.value.includes(m.id_mesa)) return 'prop-elegida'
@@ -198,6 +204,8 @@ function claseMesa(m) {
 // ---- Tocar mesa ----
 const mesaTocada = ref(null)
 function tocarMesa(m, z) {
+  // Tocar la pista/zona general = registrar entrada general en esa zona
+  if (esGeneral(m) && !modoPropuesta.value) { panelGeneral.value = true; return }
   const esLugar = (m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && m.es_seleccionable
   if (!esLugar) return
   if (modoPropuesta.value) {
@@ -392,6 +400,8 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .r2-el.vip { box-shadow: 0 0 10px rgba(250,204,21,0.5); }
 .r2-el.atenuada { opacity: 0.22; }
 .r2-el.deco { background: rgba(80,80,100,0.22); border-color: transparent; cursor: default; color: var(--texto-desactivado); }
+.r2-el.general { background: rgba(99,102,241,0.18); border: 1.5px dashed rgba(99,102,241,0.6); color: #C7D2FE; cursor: pointer; }
+.r2-el.general:hover { background: rgba(99,102,241,0.32); }
 .r2-el.prop-libre { background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.55); }
 .r2-el.prop-elegida { background: var(--gradiente-marca); border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
 .r2-el.prop-bloqueada { background: rgba(80,80,100,0.25); border-color: transparent; cursor: not-allowed; opacity: 0.4; }

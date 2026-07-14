@@ -352,6 +352,7 @@ import { io } from 'socket.io-client'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
+import { servicioReservas } from '@/servicios-api/servicio-reservas.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import ComboImagen from '@/componentes/comunes/ComboImagen.vue'
 
@@ -592,9 +593,27 @@ function conImagenParaCarrito(prod) {
   }
 }
 
+// R5.3 (pedido anticipado): basta tener una RESERVA activa — aunque el evento
+// sea en 2 días. Si no está "en vivo", se busca su reserva vigente y se usa
+// su evento; el pedido quedará Programado hasta que ingrese. Solo sin
+// ninguna reserva se muestra la alerta.
+async function asegurarEventoParaPedir() {
+  if (eventoActivoId.value) return true
+  try {
+    const resp = await servicioReservas.misReservas()
+    const lista = Array.isArray(resp) ? resp : (resp?.reservas || [])
+    const activa = lista.find(r => !r.completo && r.estado_fecha !== 'finalizada')
+    if (activa?.id_evento) {
+      tiendaCarrito.setEventoActivo(String(activa.id_evento))
+      return true
+    }
+  } catch { /* sin reservas */ }
+  return false
+}
+
 async function agregarAlCarrito(producto) {
-  // Para pedir hay que estar en un evento; si no, mostramos la alerta.
-  if (!eventoActivoId.value) {
+  // Para pedir hay que tener una reserva (en vivo o futura); si no, alerta.
+  if (!(await asegurarEventoParaPedir())) {
     alertaActiva.value = true
     return
   }

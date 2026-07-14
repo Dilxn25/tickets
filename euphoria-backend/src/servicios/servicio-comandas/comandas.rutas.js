@@ -91,15 +91,19 @@ setInterval(() => {
   for (const [id, a] of analisisEnCurso) if (a.creado < limite) analisisEnCurso.delete(id)
 }, 5 * 60e3).unref()
 
-// SEGUNDA VALIDACIÓN: depósito ACH registrado por el vigía del correo del
-// banco. Debe coincidir el monto EXACTO, tener glosa de Euphoria, ser de HOY
-// (hora boliviana) y no haberse usado para otra recarga. Se marca usado de
-// forma atómica para que dos análisis no cobren el mismo depósito.
-async function validarPorCorreo(monto) {
+// SEGUNDA VALIDACIÓN (R2.2, decisión D-2 del dueño): el N° DE TRANSACCIÓN
+// que el OCR leyó del comprobante debe COINCIDIR con la orden ACH de un
+// depósito del correo del banco (tolerancia de 2 errores de lectura), además
+// de monto exacto, fecha de HOY y no usado. Con solo el monto NO se valida
+// (dos clientes con el mismo monto serían indistinguibles). Se marca usado
+// de forma atómica para que dos análisis no cobren el mismo depósito.
+async function validarPorCorreo(monto, transaccionLeida) {
   try {
+    const tx = String(transaccionLeida || '').trim().toUpperCase()
+    if (!tx || tx.length < 6) return null // sin número legible no hay 2ª vía
     const hoy = hoyBolivia()
     const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
-    const dep = await prisma.deposito_correo.findFirst({
+    const candidatos = await prisma.deposito_correo.findMany({
       where: {
         usado: false,
         monto: monto,
@@ -107,6 +111,11 @@ async function validarPorCorreo(monto) {
         glosa: { contains: 'euphoria' },
       },
       orderBy: { fecha_transaccion: 'desc' },
+      take: 20,
+    })
+    const dep = candidatos.find(c => {
+      const orden = String(c.orden_ach).toUpperCase()
+      return orden.includes(tx) || tx.includes(orden) || distanciaEdicion(orden, tx) <= 2
     })
     if (!dep) return null
     const upd = await prisma.deposito_correo.updateMany({
@@ -197,7 +206,7 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
         // monto, glosa de Euphoria, de hoy y sin usar. El correo del banco no
         // se puede falsificar: si existe, el dinero llegó.
         if (!analisis.ok) {
-          const porCorreo = await validarPorCorreo(montoEsperado)
+          const porCorreo = await validarPorCorreo(montoEsperado, analisis.transaccionId)
           if (porCorreo) {
             pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
             analisisEnCurso.set(idAnalisis, {
@@ -455,11 +464,19 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
     // del cliente" (que no es mesero) y el mesero ve "a dónde llevar".
     let idMesaComanda = id_mesa ? Number(id_mesa) : null
     let idMeseroComanda = req.usuario.id
+    // R5.3 (pedido anticipado): si el cliente aún NO ingresó al evento (o el
+    // evento no está en curso), el pedido nace PROGRAMADO — pagado, pero la
+    // barra no lo ve hasta el check-in. Al terminar el evento sin reclamarse,
+    // se devuelve completo a la billetera.
+    let estadoInicial = 'Pendiente'
     if (origenComanda === 'app' && idEntradaVinculada) {
       const entVinc = await prisma.entrada.findUnique({
         where: { id_entrada: idEntradaVinculada },
-        select: { cantidad_ingresada: true, id_mesa: true },
+        select: { cantidad_ingresada: true, id_mesa: true, zona: { select: { evento: { select: { estado: true } } } } },
       })
+      if ((entVinc?.cantidad_ingresada || 0) === 0 || entVinc?.zona?.evento?.estado !== 'en_transcurso') {
+        estadoInicial = 'Programado'
+      }
       // Solo se asigna si el cliente eligió explícitamente (barra/llevar);
       // si no eligió, queda null y lo define después (en Mis pedidos).
       if ((entVinc?.cantidad_ingresada || 0) > 0) {
@@ -616,7 +633,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
               id_cliente: id_cliente ? Number(id_cliente) : null,
               id_mesero: idMeseroComanda,
               id_mesa: idMesaComanda,
-              estado_despacho: 'Pendiente',
+              estado_despacho: estadoInicial,
               fecha_registro: new Date(),
               metodo_pago: 'Billetera',
               id_entrada: idEntradaVinculada,
@@ -698,7 +715,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
           id_cliente: id_cliente ? Number(id_cliente) : null,
           id_mesero: req.usuario.id,
           id_mesa: id_mesa ? Number(id_mesa) : null,
-          estado_despacho: 'Pendiente',
+          estado_despacho: estadoInicial,
           fecha_registro: new Date(),
           metodo_pago: metodo_pago,
           monto_recibido: monto_recibido ? Number(monto_recibido) : null,
@@ -1032,8 +1049,15 @@ router.get('/tablero', verificarToken, async (req, res) => {
     // Filtros opcionales
     if (req.query.evento) lista = lista.filter(c => c.id_evento === Number(req.query.evento))
     if (req.query.mesa) {
+      // Matching flexible (I-9): 'S5' encuentra '5', 's5' o 'S5' — compara el
+      // texto completo Y solo los dígitos, para que tocar la silla del mapa
+      // siempre encuentre sus pedidos.
       const q = String(req.query.mesa).toLowerCase()
-      lista = lista.filter(c => (c.mesa || '').toLowerCase().includes(q))
+      const qDig = q.replace(/D/g, '')
+      lista = lista.filter(c => {
+        const m = (c.mesa || '').toLowerCase()
+        return m.includes(q) || (qDig && m.replace(/D/g, '') === qDig)
+      })
     }
     if (req.query.cliente) {
       const q = String(req.query.cliente).toLowerCase()

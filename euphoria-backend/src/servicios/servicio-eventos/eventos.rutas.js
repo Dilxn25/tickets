@@ -22,6 +22,55 @@ const ESTADOS_EVENTO = ['planificacion', 'promocion', 'en_transcurso', 'lleno', 
 // Estados en que un evento es visible/reservable para el cliente.
 const ESTADOS_PUBLICOS = ['promocion', 'en_transcurso', 'lleno']
 
+// R5.3: devuelve COMPLETO a la billetera cada pedido Programado (pagado por
+// adelantado y nunca reclamado) de un evento que terminó, con su transacción
+// de devolución y notificación al cliente.
+async function devolverProgramadosDeEvento(idEvento) {
+  const programados = await prisma.comanda.findMany({
+    where: {
+      estado_despacho: 'Programado',
+      entrada: { zona: { id_evento: idEvento } },
+    },
+    select: {
+      id_comanda: true, id_cliente: true,
+      transaccion: { where: { tipo_operacion: 'Consumo' }, select: { monto: true, id_billetera: true }, take: 1 },
+    },
+  })
+  for (const c of programados) {
+    const trx = c.transaccion?.[0]
+    if (!trx || !c.id_cliente) continue
+    const monto = Number(trx.monto)
+    await prisma.$transaction(async (tx) => {
+      const upd = await tx.comanda.updateMany({
+        where: { id_comanda: c.id_comanda, estado_despacho: 'Programado' },
+        data: { estado_despacho: 'Reembolsada' },
+      })
+      if (upd.count === 0) return // otro proceso ya la devolvió
+      await tx.billetera.update({
+        where: { id_billetera: trx.id_billetera },
+        data: { saldo_actual: { increment: monto } },
+      })
+      await tx.transaccion.create({
+        data: {
+          id_billetera: trx.id_billetera,
+          id_comanda: c.id_comanda,
+          id_responsable: c.id_cliente, // devolución automática del sistema
+          tipo_operacion: 'Devolucion',
+          monto,
+          fecha_hora: new Date(),
+        },
+      })
+    })
+    if (global.io) global.io.emit('billetera_actualizada', { id_usuario: c.id_cliente })
+    await notificar(c.id_cliente, {
+      tipo: 'billetera', titulo: 'Te devolvimos tu pedido',
+      mensaje: `El evento terminó y tu pedido anticipado no se entregó: te devolvimos Bs ${monto.toFixed(2)} completos a tu billetera.`,
+      url: '/cliente/billetera',
+    }).catch(() => {})
+  }
+  return programados.length
+}
+
 // Mueve los estados que dependen del reloj, sin intervención del admin:
 //  - "En transcurso": eventos ya publicados (Promoción/Lleno) que ya iniciaron y siguen vigentes.
 //  - "Terminado": eventos cuya fecha de fin ya pasó.
@@ -30,10 +79,21 @@ async function sincronizarEstadosPorTiempo() {
   // hoyBolivia(): en Render (UTC) `new Date()` va 4h adelantado a Bolivia y los
   // eventos se "terminaban" a las 8pm de la noche — desaparecían del carrusel.
   const ahora = hoyBolivia()
+  // Antes de terminar eventos, capturar cuáles van a cerrar (para R3.4/R5.3)
+  const porTerminar = await prisma.evento.findMany({
+    where: { fecha_hora_fin: { lt: ahora }, estado: { not: 'terminado' } },
+    select: { id_evento: true },
+  })
   const terminados = await prisma.evento.updateMany({
     where: { fecha_hora_fin: { lt: ahora }, estado: { not: 'terminado' } },
     data: { estado: 'terminado' },
   })
+  // R5.3: pedidos PROGRAMADOS de eventos que acaban de terminar → devolución
+  // AUTOMÁTICA Y COMPLETA a la billetera (no se preparó nada) + notificación.
+  for (const ev of porTerminar) {
+    try { await devolverProgramadosDeEvento(ev.id_evento) }
+    catch (e) { console.error(`Devolución de programados del evento ${ev.id_evento}:`, e.message) }
+  }
   await prisma.evento.updateMany({
     where: {
       fecha_hora_inicio: { lte: ahora },

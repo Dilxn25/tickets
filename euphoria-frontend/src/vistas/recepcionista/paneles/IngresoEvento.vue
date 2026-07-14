@@ -113,6 +113,14 @@ function buscarIncremental() {
   }, 220)
 }
 
+// R1.1: lo escaneado puede ser el TOKEN firmado del QR de la entrada (tres
+// bloques separados por puntos) o el código corto dictable — cada uno viaja
+// en su campo y el backend lo resuelve. Nunca se trata un token como código.
+function claveEntrada(valor) {
+  const v = String(valor).trim()
+  return /^[\w-]+\.[\w-]+\.[\w-]+$/.test(v) ? { token: v } : { codigo: v.toUpperCase() }
+}
+
 // Primer paso: CONSULTA (no admite a nadie) — muestra los cupos y el
 // recepcionista elige cuántos entran. "Registrar N" hace la admisión real.
 async function validar(cod) {
@@ -122,13 +130,13 @@ async function validar(cod) {
   try {
     const codigo_ = String(cod).trim()
     if (!entrada.value) {
-      const c = await clienteHttp.post('/aforo/validar', { codigo: codigo_, consultar: true })
+      const c = await clienteHttp.post('/aforo/validar', { ...claveEntrada(codigo_), consultar: true })
       if (c.completo) { entrada.value = { ...c, codigo: codigo_ }; return }
       entrada.value = { ...c, codigo: codigo_ }
       cantidad.value = Math.max(1, c.restantes || 1) // por defecto entran todos los que faltan
       return
     }
-    const r = await clienteHttp.post('/aforo/validar', { codigo: codigo_, cantidad: cantidad.value })
+    const r = await clienteHttp.post('/aforo/validar', { ...claveEntrada(codigo_), cantidad: cantidad.value })
     entrada.value = { ...entrada.value, ...r, codigo: codigo_ }
     cantidad.value = Math.max(1, Math.min(cantidad.value, r.restantes || 1))
     meseroAsignado.value = r.mesa_ya_asignada?.nombre || null

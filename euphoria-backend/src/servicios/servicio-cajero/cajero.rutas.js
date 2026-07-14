@@ -14,6 +14,29 @@ router.use(verificarToken)
 router.use(soloRoles('Cajero', 'Administrador'))
 
 // GET /api/cajero/buscar-cliente?q=87 - Autocompletado por teléfono o CI
+// GET /api/cajero/qrs-cliente/:id — los MISMOS QRs que el cliente ve en su
+// perfil (R1.2): mismos payloads y misma vigencia de 15 min, firmados igual
+// que en GET /billetera/mis-qr. El cajero nunca genera QRs "propios".
+router.get('/qrs-cliente/:id', async (req, res) => {
+  try {
+    const idUsuario = Number(req.params.id)
+    const billetera = await prisma.billetera.findUnique({
+      where: { id_usuario: idUsuario },
+      include: { usuario: { select: { correo: true } } },
+    })
+    if (!billetera) return res.status(404).json({ error: 'El cliente no tiene billetera.' })
+    const firmaSecreta = process.env.JWT_SECRETO_QR
+    const base = { qr_publico: billetera.qr_publico, usuario: billetera.usuario.correo }
+    res.json({
+      qr_sin_pin: { token: jwt.sign({ tipo: 'pago_sin_pin', ...base }, firmaSecreta, { expiresIn: '15m' }), identificador: billetera.qr_publico },
+      qr_con_pin: { token: jwt.sign({ tipo: 'pago_con_pin', requiere_pin: true, ...base }, firmaSecreta, { expiresIn: '15m' }), identificador: billetera.qr_publico },
+    })
+  } catch (error) {
+    console.error('Error generando QRs del cliente:', error)
+    res.status(500).json({ error: 'No se pudieron generar los QRs.' })
+  }
+})
+
 // GET /api/cajero/pulso — cifras del turno de HOY (hora boliviana): cuánto se
 // recargó, cuánto se retiró y cuántas billeteras nuevas. Solo números.
 router.get('/pulso', async (req, res) => {
@@ -358,7 +381,7 @@ router.post('/resolver-qr', async (req, res) => {
     res.json({
       id_usuario: u.id_usuario, nombres: u.nombres, apellidos: u.apellidos,
       telefono: u.telefono, ci_carnet: u.ci_carnet, correo: u.correo,
-      billetera: { saldo_actual: Number(billetera.saldo_actual) },
+      billetera: { saldo_actual: Number(billetera.saldo_actual), qr_publico: billetera.qr_publico },
     })
   } catch (error) {
     console.error('Error resolviendo QR:', error)

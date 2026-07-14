@@ -25,14 +25,20 @@
               <span class="tm-avatar mesero">{{ mesa.mesero[0] }}</span>
               <div class="tm-fila-txt"><b>{{ mesa.mesero }}</b><small>mesero asignado</small></div>
             </div>
-            <div class="tm-fila" v-else>
-              <div class="tm-asignar">
-                <select v-model="meseroElegido" class="tm-select">
-                  <option :value="null" disabled>Asignar mesero…</option>
-                  <option v-for="m in meseros" :key="m.id_usuario" :value="m.id_usuario">{{ m.nombre }} ({{ m.carga }})</option>
-                </select>
-                <button class="tm-cta chica" :disabled="!meseroElegido || trabajando" @click="asignarMesero">Asignar</button>
-              </div>
+            <!-- Asignar mesero: tarjetas con carga (I-16, fuera el select nativo) -->
+            <div class="tm-meseros" v-else>
+              <p class="tm-meseros-lbl">Asignar mesero</p>
+              <button
+                v-for="m in meseros" :key="m.id_usuario" type="button"
+                :class="['tm-mesero-card', { activo: meseroElegido === m.id_usuario }]"
+                @click="meseroElegido = m.id_usuario"
+              >
+                <span class="tm-avatar mesero chica">{{ (m.nombre || '?')[0] }}</span>
+                <b>{{ m.nombre }}</b>
+                <small>{{ m.carga }} {{ m.carga === 1 ? 'mesa' : 'mesas' }}</small>
+              </button>
+              <p v-if="!meseros.length" class="tm-meseros-lbl">Sin meseros en turno.</p>
+              <button class="tm-cta chica" :disabled="!meseroElegido || trabajando" @click="asignarMesero">Asignar</button>
             </div>
           </div>
         </template>
@@ -59,28 +65,13 @@
 
             <BuscadorCliente v-model="cliente" placeholder="Cliente (opcional)" />
 
-            <div class="tm-metodos">
-              <button v-for="mp in metodos" :key="mp.v" type="button" :class="['tm-metodo', { activo: metodo === mp.v }]" @click="metodo = mp.v">
-                <span v-html="mp.icono"></span>
-                {{ mp.t }}
-              </button>
-            </div>
-
-            <div v-if="metodo === 'efectivo' && precioTotal > 0" class="tm-efectivo">
-              <div class="tm-recibido">
-                <span>Recibí Bs.</span>
-                <input v-model="recibidoTexto" @input="limpiarRecibido" type="text" inputmode="decimal" :placeholder="precioTotal.toFixed(2)" />
-                <button type="button" class="tm-chip" @click="recibidoTexto = precioTotal.toFixed(2)">Exacto</button>
-              </div>
-              <p v-if="recibido > 0" :class="['tm-cambio', cambio >= 0 ? 'ok' : 'falta']">
-                {{ cambio >= 0 ? 'Cambio' : 'Falta' }} <b>Bs {{ Math.abs(cambio).toFixed(2) }}</b>
-              </p>
-            </div>
+            <!-- Cobro ESTÁNDAR del sistema (R8.1) -->
+            <CobroPago :total="precioMesa" :metodos="['efectivo', 'qr', 'cortesia']" @cambio="pago = $event" />
 
             <p v-if="error" class="tm-error">{{ error }}</p>
 
-            <button class="tm-cta" :disabled="!puedeReservar || trabajando" @click="reservar">
-              {{ trabajando ? '…' : (precioTotal > 0 && metodo !== 'cortesia' ? `Reservar y cobrar Bs ${precioTotal.toFixed(2)}` : 'Reservar') }}
+            <button class="tm-cta" :disabled="!pago.valido || trabajando" @click="reservar">
+              {{ trabajando ? '…' : (precioMesa > 0 && pago.metodo !== 'cortesia' ? `Reservar y cobrar Bs ${precioMesa.toFixed(2)}` : 'Reservar') }}
             </button>
           </div>
         </template>
@@ -109,6 +100,7 @@
 import { ref, computed, onMounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
+import CobroPago from '@/componentes/comunes/CobroPago.vue'
 
 const props = defineProps({
   mesa: { type: Object, required: true },
@@ -123,30 +115,16 @@ const estado = computed(() => props.mesa.estado_ocupacion === 'libre' ? 'libre' 
 const grupo = ref(Math.max(1, props.mesa.capacidad_sillas || 1))
 const ahora = ref(Math.max(1, props.mesa.capacidad_sillas || 1))
 const cliente = ref(null)
-const metodo = ref('efectivo')
-const metodos = [
-  { v: 'efectivo', t: 'Efectivo', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle></svg>' },
-  { v: 'qr', t: 'QR', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>' },
-  { v: 'cortesia', t: 'Cortesía', icono: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>' },
-]
-// La mesa se cobra completa (regla del walk-in del backend)
-const precioTotal = computed(() => metodo.value === 'cortesia' ? 0 : Number(props.mesa.precio) || 0)
-
-const recibidoTexto = ref('')
-const recibido = computed(() => { const n = parseFloat(recibidoTexto.value); return Number.isFinite(n) && n > 0 ? n : 0 })
-const cambio = computed(() => recibido.value - precioTotal.value)
-function limpiarRecibido() { recibidoTexto.value = (recibidoTexto.value || '').replace(/[^0-9.]/g, '').match(/^\d*\.?\d{0,2}/)?.[0] || '' }
-
-const puedeReservar = computed(() => {
-  if (metodo.value === 'efectivo' && precioTotal.value > 0) return recibido.value >= precioTotal.value
-  return true
-})
+// La mesa se cobra completa (regla del walk-in del backend); el cobro es el
+// componente estándar CobroPago (R8.1).
+const precioMesa = computed(() => Number(props.mesa.precio) || 0)
+const pago = ref({ metodo: 'efectivo', valido: false })
 
 const trabajando = ref(false)
 const error = ref('')
 const hecho = ref(null)
 async function reservar() {
-  if (!puedeReservar.value || trabajando.value) return
+  if (!pago.value.valido || trabajando.value) return
   trabajando.value = true
   error.value = ''
   try {
@@ -154,7 +132,7 @@ async function reservar() {
       id_mesa: props.mesa.id_mesa,
       cantidad: grupo.value,
       cantidad_ahora: ahora.value,
-      metodo_pago: metodo.value,
+      metodo_pago: pago.value.metodo,
       id_cliente: cliente.value?.id_usuario || null,
     })
     hecho.value = r
@@ -206,8 +184,17 @@ onMounted(async () => {
 .tm-fila-txt b { color: var(--texto-principal); font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
 .tm-fila-txt small { color: var(--texto-desactivado); font-size: 0.76rem; }
 .tm-vip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; color: #FACC15; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.4); padding: 1px 7px; border-radius: 999px; }
-.tm-asignar { display: flex; gap: 8px; width: 100%; }
-.tm-select { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--fondo-input, rgba(255,255,255,0.04)); border: 1px solid var(--borde-sutil); color: var(--texto-principal); outline: none; }
+.tm-meseros { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.tm-meseros-lbl { margin: 0; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; color: var(--texto-secundario); }
+.tm-mesero-card {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 10px 12px; border-radius: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.02); border: 1.5px solid var(--borde-sutil);
+}
+.tm-mesero-card b { flex: 1; min-width: 0; color: var(--texto-principal); font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-mesero-card small { flex-shrink: 0; color: var(--texto-desactivado); font-size: 0.74rem; }
+.tm-mesero-card.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.1); }
+.tm-avatar.chica { width: 32px; height: 32px; font-size: 0.85rem; }
 
 .tm-reserva { display: flex; flex-direction: column; gap: 13px; }
 .tm-cupos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

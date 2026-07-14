@@ -223,6 +223,16 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     // El cliente ve su ticket actualizarse en vivo ("2 de 4 ya ingresaron")
     emitirRecurso('reservas', { id_cliente: entrada.id_usuario })
 
+    // R5.3: al ingresar, sus pedidos PROGRAMADOS de esta entrada despiertan y
+    // recién entran al tablero de la barra.
+    try {
+      const activados = await prisma.comanda.updateMany({
+        where: { id_entrada: entrada.id_entrada, estado_despacho: 'Programado' },
+        data: { estado_despacho: 'Pendiente' },
+      })
+      if (activados.count > 0 && global.io) global.io.emit('nueva_comanda', { id_cliente: entrada.id_usuario })
+    } catch (e) { console.warn('No se pudieron activar pedidos programados:', e.message) }
+
     // Asignación de mesero: si la reserva tiene mesa, o ya está asignada (se informa
     // quién) o se sugiere el mesero con menos carga para que recepción confirme.
     let mesero_sugerido = null
@@ -664,6 +674,12 @@ router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bar
     const detalle = await Promise.all(zonas.map(async (z) => {
       const ocupado = await aforoActualZona(z.id_zona)
       const capacidad = z.capacidad_maxima || 0
+      // R4.1: "libres" = cupos de VENTA (capacidad − reservado), no capacidad
+      // menos ingresados — los reservados que aún no llegan también ocupan cupo.
+      const reservado = (await prisma.entrada.aggregate({
+        where: { id_zona: z.id_zona },
+        _sum: { cantidad_personas: true },
+      }))._sum.cantidad_personas || 0
       return {
         id_zona: z.id_zona,
         nombre_zona: z.nombre_zona,
@@ -671,7 +687,8 @@ router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bar
         precio_entrada_base: Number(z.precio_entrada_base),
         capacidad,
         ocupado,
-        disponibles: Math.max(0, capacidad - ocupado),
+        reservado,
+        disponibles: Math.max(0, capacidad - reservado),
         proporcion: z.proporcion || 1.6,
         mesas: (z.mesa_espacio || []).map(m => {
           const rsv = reservaPorMesa.get(m.id_mesa)
@@ -749,13 +766,19 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
       ? Math.max(0, Math.min(parseInt(req.body.cantidad_ahora) || 0, cantidadFinal))
       : cantidadFinal
 
-    // Aforo: no exceder la capacidad de la zona (se reserva el GRUPO completo:
-    // los que faltan van a llegar).
+    // R4.1 — Cupo de venta = capacidad − RESERVADO (cupos vendidos de TODA la
+    // zona, mesas incluidas, hayan entrado o no). Antes se validaba contra los
+    // INGRESADOS y se podía sobrevender: con 270 lugares reservados en mesas y
+    // 0 adentro, aceptaba 300 generales en una zona de 300.
     const capacidad = zona.capacidad_maxima || 0
+    const reservadoPrevio = (await prisma.entrada.aggregate({
+      where: { id_zona: zona.id_zona },
+      _sum: { cantidad_personas: true },
+    }))._sum.cantidad_personas || 0
     const aforoPrevio = await aforoActualZona(zona.id_zona)
-    if (capacidad > 0 && aforoPrevio + cantidadFinal > capacidad) {
+    if (capacidad > 0 && reservadoPrevio + cantidadFinal > capacidad) {
       return res.status(409).json({
-        error: `Aforo lleno en ${zona.nombre_zona} (${aforoPrevio}/${capacidad}).`,
+        error: `Sin cupo en ${zona.nombre_zona}: ${reservadoPrevio} de ${capacidad} lugares ya están vendidos (quedan ${Math.max(0, capacidad - reservadoPrevio)}).`,
         aforo_lleno: true,
       })
     }

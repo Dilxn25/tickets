@@ -31,7 +31,7 @@ function parsearNotificacionACH(texto) {
   if (!esDeposito) return null // egreso u otro tipo: no es un depósito al local
 
   const campo = (etiqueta) => {
-    const m = t.match(new RegExp(`${etiqueta}\\s*:?\\s*([^:]+?)(?=\\s+[A-ZÑ][^:]{2,40}:|\\s*$)`, 'i'))
+    const m = t.match(new RegExp(`${etiqueta}\\s*:?\\s*([^:¿]+?)(?=\\s+[A-ZÑ¿][^:]{2,40}:|\\s*¿|\\s*$)`, 'i'))
     return m ? m[1].trim() : null
   }
   // Nº de orden: primero el explícito, si no el del encabezado "ACH NRO: xxxx"
@@ -61,8 +61,10 @@ function parsearNotificacionACH(texto) {
 async function revisarBandeja(cliente) {
   const lock = await cliente.getMailboxLock('INBOX')
   try {
-    // Solo correos del banco sin leer (el vigía los marca al procesarlos)
-    const ids = await cliente.search({ seen: false, from: 'bancounion.com.bo' })
+    // Solo correos del banco, sin leer y de las ÚLTIMAS 48 HORAS: el vigía no
+    // debe barrer el histórico personal de la bandeja (R2.2).
+    const desde = new Date(Date.now() - 48 * 3600 * 1000)
+    const ids = await cliente.search({ seen: false, from: 'bancounion.com.bo', since: desde })
     if (!ids || !ids.length) return 0
     let nuevos = 0
     for (const id of ids) {
@@ -73,6 +75,9 @@ async function revisarBandeja(cliente) {
         const dep = parsearNotificacionACH(texto)
         await cliente.messageFlagsAdd(id, ['\\Seen'])
         if (!dep) continue
+        // Solo depósitos DEL NEGOCIO: la glosa debe mencionar a Euphoria.
+        // Los depósitos personales del dueño no se registran (R2.2).
+        if (!/euphoria/i.test(dep.glosa || '')) continue
         await prisma.deposito_correo.upsert({
           where: { orden_ach: dep.orden_ach },
           update: {}, // ya registrado: no tocar (protege el flag `usado`)
@@ -109,6 +114,12 @@ function iniciarVigiaCorreo() {
     console.log('[correo] vigía desactivado (faltan CORREO_IMAP_USUARIO / CORREO_IMAP_CLAVE)')
     return
   }
+  // Higiene al arrancar: si quedaron registrados depósitos personales (de
+  // antes del filtro por glosa), se eliminan — jamás deben estar en la tabla.
+  prisma.deposito_correo.deleteMany({ where: { NOT: { glosa: { contains: 'euphoria' } } } })
+    .then(r => { if (r.count) console.log(`[correo] limpieza: ${r.count} depósitos ajenos al negocio eliminados`) })
+    .catch(() => {})
+
   const tick = async () => {
     if (corriendo) return
     corriendo = true

@@ -30,6 +30,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import QRCode from 'qrcode'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 
 const props = defineProps({ cliente: { type: Object, required: true } })
 const qrPublico = ref('')
@@ -37,9 +38,14 @@ const qrPrivado = ref('')
 const grande = ref(null)
 
 onMounted(async () => {
+  // R1.2: los MISMOS QRs que el cliente ve en su perfil (mismo endpoint de
+  // firma, misma vigencia) — nunca generados "a mano" por el cajero.
   const opts = { width: 400, margin: 1, color: { dark: '#10002b', light: '#ffffff' } }
-  if (props.cliente.qr_publico) qrPublico.value = await QRCode.toDataURL(props.cliente.qr_publico, opts)
-  if (props.cliente.token_qr) qrPrivado.value = await QRCode.toDataURL(props.cliente.token_qr, opts)
+  try {
+    const r = await clienteHttp.get(`/cajero/qrs-cliente/${props.cliente.id_usuario}`)
+    if (r?.qr_sin_pin?.token) qrPublico.value = await QRCode.toDataURL(r.qr_sin_pin.token, opts)
+    if (r?.qr_con_pin?.token) qrPrivado.value = await QRCode.toDataURL(r.qr_con_pin.token, opts)
+  } catch { /* sin billetera no hay QRs */ }
 })
 
 // Tarjeta imprimible: iframe aislado (mismo patrón aprobado de credenciales)

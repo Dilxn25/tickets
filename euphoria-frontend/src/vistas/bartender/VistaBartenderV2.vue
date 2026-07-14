@@ -39,7 +39,7 @@
         <article v-if="alFrente" class="b2-ahora" :class="claseEdad(alFrente)">
           <header class="b2-ahora-cab">
             <b>#{{ alFrente.id_comanda }}</b>
-            <span class="b2-crono">{{ minutos(alFrente) }} min</span>
+            <span class="b2-crono">{{ crono(alFrente) }}</span>
           </header>
           <ul class="b2-items">
             <li v-for="(it, i) in alFrente.items" :key="i">
@@ -68,7 +68,7 @@
           <button v-for="c in siguientes" :key="c.id_comanda" class="b2-cola-item" :class="claseEdad(c)" @click="ponerAlFrente(c)">
             <b>#{{ c.id_comanda }}</b>
             <span>{{ resumenItems(c) }}</span>
-            <small>{{ minutos(c) }}m</small>
+            <small>{{ crono(c) }}</small>
           </button>
         </div>
       </section>
@@ -211,6 +211,12 @@ const esperaMax = computed(() => {
 function minutos(c) {
   return Math.max(0, Math.floor((ahoraTick.value - new Date(c.fecha_registro).getTime()) / 60000))
 }
+// Cronómetro mm:ss en vivo (pedido del dueño: minutos Y segundos)
+function crono(c) {
+  const seg = Math.max(0, Math.floor((ahoraTick.value - new Date(c.fecha_registro).getTime()) / 1000))
+  const m = Math.floor(seg / 60), s = seg % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 function claseEdad(c) {
   const m = minutos(c)
   return m >= 10 ? 'critico' : m >= 5 ? 'alerta' : ''
@@ -307,7 +313,7 @@ let socket = null, tick = null
 onMounted(() => {
   recargar()
   prepararMapa()
-  tick = setInterval(() => { ahoraTick.value = Date.now() }, 15000)
+  tick = setInterval(() => { ahoraTick.value = Date.now() }, 1000)
   socket = io({ path: '/socket.io' })
   for (const ev of ['nueva_comanda', 'pedido_listo', 'pedido_pool', 'pedido_tomado', 'pedido_recogido', 'pedido_entrega']) socket.on(ev, recargar)
 })
