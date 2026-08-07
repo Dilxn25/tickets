@@ -105,6 +105,11 @@ async function cicloVigia() {
     auth: { user: usuario, pass: clave },
     logger: false,
   })
+  // Un timeout o corte del socket IMAP (frecuente en el hosting) hace que imapflow
+  // EMITA un evento 'error'. Ese evento NO viaja por la promesa, así que el try/catch
+  // del ciclo no lo atrapa: sin este manejador Node lanza "Unhandled 'error' event" y
+  // TUMBA todo el backend. Con el listener, el fallo solo se registra y el ciclo termina.
+  cliente.on('error', (e) => console.warn('[correo] conexión IMAP con problema:', e && e.message))
   await cliente.connect()
   try { await revisarBandeja(cliente) } finally { await cliente.logout().catch(() => {}) }
 }
