@@ -104,6 +104,12 @@ async function cicloVigia() {
     secure: true,
     auth: { user: usuario, pass: clave },
     logger: false,
+    // Render (red lenta / arranque en frío) a veces tarda en establecer el
+    // socket TLS y el saludo del servidor. Timeouts holgados evitan que un
+    // ciclo lento se corte por tiempo. (Si el login FALLA por credenciales
+    // revocadas, ningún timeout ayuda: hay que renovar la clave de aplicación.)
+    connectionTimeout: 45000,
+    greetingTimeout: 30000,
   })
   // Un timeout o corte del socket IMAP (frecuente en el hosting) hace que imapflow
   // EMITA un evento 'error'. Ese evento NO viaja por la promesa, así que el try/catch
