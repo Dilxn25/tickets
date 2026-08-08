@@ -30,15 +30,22 @@ class Recomendador:
         self.meta = b["meta_productos"]
         self.all_items = b["all_items"]
         self.info = b.get("info", {})
+        # FC del artefacto: si incluye las variables de cliente, es el modelo
+        # PERSONALIZADO (aprende el gusto de cada cliente). Si no, es el real (9 vars).
+        self.FC = b.get("FC", nucleo.FC)
+        self.personalizado = "cli_freq" in self.FC
         with open(os.path.join(AQUI, ruta_reglas), encoding="utf-8") as f:
             self.reglas = json.load(f)
 
-    def _score_modelo(self, pre, cands, ts):
-        Xc = pd.DataFrame([nucleo.features(pre, c, ts, self.est, self.meta) for c in cands],
-                          columns=nucleo.FC)
+    def _score_modelo(self, pre, cands, ts, afin=None):
+        if self.personalizado:
+            filas = [nucleo.features_cliente(pre, c, ts, self.est, self.meta, afin or {}) for c in cands]
+        else:
+            filas = [nucleo.features(pre, c, ts, self.est, self.meta) for c in cands]
+        Xc = pd.DataFrame(filas, columns=self.FC)
         return dict(zip(cands, self.modelo.predict_proba(Xc)[:, 1]))
 
-    def recomendar(self, productos_en_mesa, fecha_hora, k=3, stock=None, incluir_promos=True):
+    def recomendar(self, productos_en_mesa, fecha_hora, k=3, stock=None, incluir_promos=True, historial_cliente=None):
         meta, cfg = self.meta, self.reglas
         # el stock recibido es un OVERRIDE PARCIAL sobre el inventario conocido (no lo reemplaza)
         stock_efectivo = dict(meta["stock"])
@@ -46,6 +53,10 @@ class Recomendador:
             stock_efectivo.update(stock)
         stock = stock_efectivo
         pset = set(productos_en_mesa)
+        # PERSONALIZACION: si el modelo es personalizado, se calcula la afinidad del
+        # cliente (freq por producto y por categoria) desde SU historial. Con historial
+        # vacio -> afinidad vacia -> el modelo cae a las senales globales (arranque en frio).
+        afin = nucleo.afinidad_cliente(historial_cliente, meta) if self.personalizado else {}
 
         # 1) filtro DURO de stock
         cands = [c for c in self.all_items
@@ -53,7 +64,7 @@ class Recomendador:
 
         recomendaciones = []
         if cands:
-            crudo = self._score_modelo(productos_en_mesa, cands, fecha_hora)
+            crudo = self._score_modelo(productos_en_mesa, cands, fecha_hora, afin)
             filas = []
             for c in cands:
                 s = float(crudo[c])
@@ -90,7 +101,8 @@ class Recomendador:
                 "productos_en_mesa": [int(p) for p in productos_en_mesa],
             },
             "recomendaciones": recomendaciones,
-            "modelo": {"version": self.info.get("version"), "auc_test": self.info.get("auc_test")},
+            "modelo": {"version": self.info.get("version"), "auc_test": self.info.get("auc_test"),
+                       "personalizado": self.personalizado},
         }
         if incluir_promos:
             salida["promociones"] = R.combos_sugeridos(self.est, self.meta)

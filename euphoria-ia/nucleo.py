@@ -11,6 +11,26 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # Orden EXACTO de las variables que consume el modelo. No cambiar sin reentrenar.
 FC = ["coocc", "simax", "pop", "precio", "cat", "catmatch", "tam", "finde", "hora"]
+# Version PERSONALIZADA (modelo demo): agrega dos variables que el modelo APRENDE
+# sobre el CLIENTE — cli_freq (cuanto pide ESE cliente el candidato) y cli_cat (su
+# afinidad a la categoria del candidato). Con cliente nuevo/sin historial valen 0,
+# y el modelo cae a las 9 senales globales (arranque en frio).
+FC_CLIENTE = FC + ["cli_freq", "cli_cat"]
+
+
+def afinidad_cliente(cli_hist, meta):
+    """Precalcula, del historial de UN cliente (lista de product_id ya consumidos),
+    su frecuencia por producto y por categoria, normalizadas a 0..1. Se calcula una
+    sola vez por cliente (entrenamiento) o por peticion (servicio)."""
+    if not cli_hist:
+        return {"freq": {}, "cat": {}}
+    cf = Counter(int(p) for p in cli_hist)
+    mx = max(cf.values())
+    freq = {p: c / mx for p, c in cf.items()}
+    catc = Counter(meta["cat"][int(p)] for p in cli_hist if int(p) in meta["cat"])
+    n = sum(catc.values())
+    catn = {k: v / n for k, v in catc.items()} if n else {}
+    return {"freq": freq, "cat": catn}
 
 
 def es_finde(ts):
@@ -53,3 +73,13 @@ def features(pre, c, ts, est, meta):
     catmatch = int(cat[c] in {cat[p] for p in pre})
     return [coocc, simax, pop.get(c, 0), precio[c], cat[c],
             catmatch, len(pre), int(es_finde(ts)), ts.hour]
+
+
+def features_cliente(pre, c, ts, est, meta, afin):
+    """Las 9 variables base + las 2 del cliente. 'afin' viene de afinidad_cliente().
+    Con afin vacio (cliente sin historial) las dos ultimas son 0."""
+    base = features(pre, c, ts, est, meta)
+    ci = int(c)
+    cli_freq = afin["freq"].get(ci, 0.0) if afin else 0.0
+    cli_cat = afin["cat"].get(meta["cat"].get(ci), 0.0) if afin else 0.0
+    return base + [cli_freq, cli_cat]

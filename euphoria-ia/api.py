@@ -11,6 +11,7 @@ PROBAR (curl):
       -H "Content-Type: application/json" ^
       -d "{\"productos_en_mesa\":[6],\"fecha_hora\":\"2025-11-08 23:30:00\",\"k\":3}"
 """
+import os
 from typing import List, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -20,17 +21,43 @@ from recomendador import Recomendador
 app = FastAPI(title="Recomendador Euphoria", version="1.0")
 rec = Recomendador()   # carga el artefacto una sola vez al arrancar
 
+# ---- Modelos disponibles y conmutacion real/demo (para la DEMOSTRACION) ----
+# 'real' = modelo de produccion (sin cliente). 'demo' = modelo PERSONALIZADO
+# entrenado con consumo por cliente (solo existe en local; en produccion no se
+# despliega). El boton del panel de IA conmuta entre ambos.
+ARTEFACTOS = {"real": "artefacto_modelo.pkl", "demo": "artefacto_modelo_demo.pkl"}
+_modo_actual = "real"
+
+
+def _existe(modo: str) -> bool:
+    ruta = ARTEFACTOS.get(modo)
+    return bool(ruta) and os.path.exists(os.path.join(os.path.dirname(__file__), ruta))
+
+
+def _cargar_modelo(modo: str) -> bool:
+    global rec, _modo_actual
+    if not _existe(modo):
+        return False
+    rec = Recomendador(ruta_artefacto=ARTEFACTOS[modo])
+    _modo_actual = modo
+    return True
+
 
 class Peticion(BaseModel):
     productos_en_mesa: List[int] = []
     fecha_hora: str
     k: int = 3
     stock: Optional[dict] = None   # opcional: {"9": 0} para marcar agotados en vivo
+    historial_cliente: Optional[List[int]] = None  # ids que ESE cliente ya consumio (personalizacion)
+
+
+class ModeloReq(BaseModel):
+    modo: str
 
 
 @app.get("/salud")
 def salud():
-    return {"estado": "ok", "modelo": rec.info}
+    return {"estado": "ok", "modelo": rec.info, "modo": _modo_actual}
 
 
 @app.post("/recomendar")
@@ -38,7 +65,21 @@ def recomendar(p: Peticion):
     stock = None
     if p.stock:
         stock = {int(k): int(v) for k, v in p.stock.items()}
-    return rec.recomendar(p.productos_en_mesa, p.fecha_hora, k=p.k, stock=stock)
+    return rec.recomendar(p.productos_en_mesa, p.fecha_hora, k=p.k, stock=stock,
+                          historial_cliente=p.historial_cliente)
+
+
+@app.get("/modelo/estado")
+def modelo_estado():
+    return {"modo": _modo_actual, "personalizado": rec.personalizado,
+            "disponibles": [m for m in ARTEFACTOS if _existe(m)]}
+
+
+@app.post("/modelo/activar")
+def modelo_activar(r: ModeloReq):
+    if _cargar_modelo(r.modo):
+        return {"ok": True, "modo": _modo_actual, "personalizado": rec.personalizado}
+    return {"ok": False, "error": f"Modelo '{r.modo}' no disponible en este entorno"}
 
 
 # ---------------------------------------------------------------------------

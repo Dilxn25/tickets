@@ -267,6 +267,27 @@
             </div>
           </div>
 
+          <!-- Interruptor real/demo + cliente: para demostrar la personalización -->
+          <div class="demo-ia">
+            <div class="demo-fila">
+              <span class="demo-label">Modelo:
+                <strong>{{ modeloIA.modo === 'demo' ? 'Demostración (personalizado)' : 'Real (producción)' }}</strong>
+              </span>
+              <button type="button" class="btn-demo" :class="{ activo: modeloIA.modo === 'demo' }"
+                      :disabled="conmutandoModelo || (modeloIA.modo !== 'demo' && !(modeloIA.disponibles || []).includes('demo'))"
+                      @click="conmutarModelo(modeloIA.modo === 'demo' ? 'real' : 'demo')">
+                {{ conmutandoModelo ? 'Cambiando…' : (modeloIA.modo === 'demo' ? 'Volver al modelo real' : 'Usar datos para la demostración') }}
+              </button>
+            </div>
+            <div v-if="modeloIA.modo === 'demo'" class="demo-fila">
+              <span class="demo-label">Cliente:</span>
+              <BaseSelect v-model="clienteProbador" :opciones="opcionesClientes" />
+            </div>
+            <p v-if="modeloIA.modo === 'demo'" class="demo-nota">
+              Elige un cliente con historial y verás sus recomendaciones personalizadas; "Nuevo" cae a lo popular (arranque en frío).
+            </p>
+          </div>
+
           <!-- Cuadrícula visual: toca un producto para ponerlo/quitarlo de la mesa -->
           <div class="probador-grid">
             <button v-for="p in productosProbador" :key="p.id_producto" class="prod-mini"
@@ -431,6 +452,35 @@ const productoSel = ref('')
 const mesa = ref([])
 const probando = ref(false)
 const resultado = ref(null)
+
+// Modelo real/demo + cliente (demostración de personalización)
+const modeloIA = ref({ modo: 'real', personalizado: false, disponibles: ['real'] })
+const conmutandoModelo = ref(false)
+const clienteProbador = ref('')
+const clientesDemo = ref([])
+const opcionesClientes = computed(() => [
+  { value: '', label: 'Nuevo (sin historial)' },
+  ...clientesDemo.value.map(c => ({ value: c.id, label: `${c.nombre} · ${c.comandas} pedidos` })),
+])
+
+async function cargarModelo() {
+  try { modeloIA.value = await clienteHttp.get('/recomendaciones/modelo') } catch { /* queda en real */ }
+}
+async function cargarClientesProbador() {
+  try { clientesDemo.value = await clienteHttp.get('/recomendaciones/clientes-demo') } catch { clientesDemo.value = [] }
+}
+async function conmutarModelo(modo) {
+  conmutandoModelo.value = true
+  try {
+    const r = await clienteHttp.put('/recomendaciones/modelo', { modo })
+    if (r && r.ok === false) notif.advertencia(r.error || 'El modelo de demostración no está disponible en este entorno.')
+    await cargarModelo()
+    if (modeloIA.value.modo === 'demo') await cargarClientesProbador()
+    else clienteProbador.value = ''
+    resultado.value = null
+  } catch { notif.error('No se pudo cambiar el modelo de IA.') }
+  finally { conmutandoModelo.value = false }
+}
 const opcionesProductos = computed(() =>
   productos.value
     .filter(p => !mesa.value.some(m => m.id_producto === p.id_producto))
@@ -536,7 +586,8 @@ async function probarSugerencias() {
     resultado.value = await clienteHttp.post('/recomendaciones', {
       productos_en_mesa: mesa.value.map(p => p.id_producto),
       k: 4,
-      probador: true // no contamina las métricas de efectividad real
+      probador: true, // no contamina las métricas de efectividad real
+      id_cliente: clienteProbador.value || null, // personalización (modelo demo)
     })
   } catch {
     resultado.value = { recomendaciones: [], error: 'No se pudo consultar la IA.' }
@@ -558,6 +609,7 @@ onActivated(() => {
     cargarEfectividad()
     cargarPacks()
     cargarEventos()
+    cargarModelo()
   } else {
     // Refresco silencioso al volver a la vista: lo dinámico se mantiene fresco
     // (los datos previos siguen visibles mientras llegan los nuevos)
@@ -1264,4 +1316,33 @@ onActivated(() => {
   .switch-combos { justify-content: flex-start; }
   .toggle-tam { align-self: flex-start; }
 }
+
+/* Bloque de demostración (interruptor real/demo + cliente) */
+.demo-ia {
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.demo-fila { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.demo-label { font-size: 0.86rem; opacity: 0.85; }
+.demo-label strong { opacity: 1; }
+.btn-demo {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.btn-demo:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.btn-demo.activo { background: var(--rosa-acento, #e0378b); border-color: transparent; color: #fff; }
+.btn-demo:disabled { opacity: 0.45; cursor: not-allowed; }
+.demo-nota { font-size: 0.78rem; opacity: 0.6; margin: 0; line-height: 1.4; }
 </style>

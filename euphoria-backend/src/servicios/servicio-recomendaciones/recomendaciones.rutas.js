@@ -128,6 +128,53 @@ router.get('/estado', verificarToken, soloRoles('Administrador', 'Cajero', 'Mese
   }
 })
 
+// GET /api/recomendaciones/modelo — estado del modelo activo (real/demo) [admin]
+// Sirve para el interruptor "Usar datos para la demostración" del Panel de IA.
+router.get('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  try {
+    const r = await fetch(`${urlIA}/modelo/estado`, { signal: AbortSignal.timeout(2500) })
+    res.json(await r.json())
+  } catch {
+    res.json({ modo: 'real', personalizado: false, disponibles: ['real'], sin_conexion: true })
+  }
+})
+
+// PUT /api/recomendaciones/modelo {modo:'real'|'demo'} — conmutar el modelo [admin]
+// 'demo' = modelo PERSONALIZADO (aprende el gusto de cada cliente); solo existe en
+// local. En producción no se despliega el pkl demo, así que responde "no disponible".
+router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  const modo = req.body?.modo === 'demo' ? 'demo' : 'real'
+  try {
+    const r = await fetch(`${urlIA}/modelo/activar`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modo }), signal: AbortSignal.timeout(4000),
+    })
+    res.json(await r.json())
+  } catch {
+    res.status(502).json({ ok: false, error: 'Servicio de IA no disponible' })
+  }
+})
+
+// GET /api/recomendaciones/clientes-demo — clientes CON historial (para el probador) [admin]
+router.get('/clientes-demo', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const filas = await prisma.$queryRawUnsafe(`
+      SELECT u.id_usuario id, CONCAT(u.nombres, ' ', u.apellidos) nombre, u.correo,
+             COUNT(c.id_comanda) comandas
+      FROM usuario u
+      JOIN comanda c ON c.id_cliente = u.id_usuario AND c.estado_despacho <> 'Cancelada'
+      GROUP BY u.id_usuario, nombre, u.correo
+      HAVING comandas > 0
+      ORDER BY comandas DESC LIMIT 20`)
+    res.json(filas.map(f => ({ id: Number(f.id), nombre: f.nombre, correo: f.correo, comandas: Number(f.comandas) })))
+  } catch (e) {
+    console.warn('clientes-demo:', e.message)
+    res.json([])
+  }
+})
+
 // POST /api/recomendaciones/reportar-caida — el mesero avisa a caja/admin que la IA está caída.
 // Reenvía el aviso en tiempo real a todas las pantallas conectadas (caja, panel del admin).
 router.post('/reportar-caida', verificarToken, soloRoles('Administrador', 'Cajero', 'Mesero', 'Bartender'), (req, res) => {
@@ -271,8 +318,30 @@ router.post('/', verificarToken, async (req, res) => {
 
     // probador=true → consulta desde el Panel de IA: NO se registra en efectividad
     // (solo cuentan las sugerencias mostradas a meseros en pedidos reales)
-    const { productos_en_mesa = [], k = 3, probador = false } = req.body
+    // id_cliente → PERSONALIZACION: se le pasa al modelo el historial de ESE cliente
+    // (el modelo demo lo usa para recomendar a su gusto; el real lo ignora sin efecto).
+    const { productos_en_mesa = [], k = 3, probador = false, id_cliente = null } = req.body
     const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+
+    // Historial del cliente (lista con repetición por frecuencia; el modelo pesa el gusto).
+    // Cap de 30 por producto para no mandar payloads enormes de clientes muy activos.
+    let historial_cliente = null
+    if (id_cliente) {
+      try {
+        const filas = await prisma.$queryRawUnsafe(
+          `SELECT d.id_producto pid, COUNT(*) n
+           FROM detalle_comanda d
+           JOIN comanda c ON c.id_comanda = d.id_comanda
+           WHERE c.id_cliente = ${Number(id_cliente)} AND c.estado_despacho <> 'Cancelada'
+           GROUP BY d.id_producto`)
+        historial_cliente = []
+        for (const f of filas) {
+          const veces = Math.min(Number(f.n), 30)
+          for (let i = 0; i < veces; i++) historial_cliente.push(Number(f.pid))
+        }
+        if (!historial_cliente.length) historial_cliente = null // cliente nuevo: arranque en frío
+      } catch (e) { console.warn('No se pudo leer historial del cliente:', e.message) }
+    }
 
     // Fecha/hora actual en formato "YYYY-MM-DD HH:mm:ss" (contexto del modelo)
     const ahora = new Date()
@@ -283,7 +352,7 @@ router.post('/', verificarToken, async (req, res) => {
     const respuesta = await fetch(`${urlIA}/recomendar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productos_en_mesa, fecha_hora, k }),
+      body: JSON.stringify({ productos_en_mesa, fecha_hora, k, historial_cliente }),
       signal: AbortSignal.timeout(4000), // no bloquear la toma de pedidos si la IA tarda
     })
 
