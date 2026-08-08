@@ -94,23 +94,22 @@ router.post('/login', limiteLogin, async (req, res) => {
       include: { rol: true },
     })
 
-    // Mensajes DIFERENCIADOS por caso (decisión de UX del dueño), para que la
-    // persona sepa exactamente qué corregir:
-    //   1. El correo no existe  -> no hay cuenta con ese correo
-    //   2. La cuenta está inactiva/desactivada por el admin
-    //   3. El correo existe pero la contraseña no coincide
-    if (!usuario) {
-      return res.status(401).json({ error: 'No encontramos ninguna cuenta con ese correo. Revisa que esté bien escrito o crea una cuenta nueva.' })
+    // SEGURIDAD (anti-enumeración de usuarios): NO revelamos si el correo existe.
+    // "Correo inexistente" y "contraseña incorrecta" dan el MISMO mensaje. Aunque el
+    // usuario no exista, igual corremos un bcrypt.compare contra un hash señuelo para
+    // gastar el mismo tiempo y no filtrar la existencia por la velocidad de respuesta.
+    const MENSAJE_GENERICO = 'El correo o la contraseña son incorrectos.'
+    const HASH_SENUELO = '$2a$12$sJvpVN7v/4KWqssxnB1qNe0XP6SAJpSYLvOkdO3P4bjw0Ao5vDAm6'
+    const passwordValida = await bcrypt.compare(password, usuario ? usuario.password_hash : HASH_SENUELO)
+    if (!usuario || !passwordValida) {
+      return res.status(401).json({ error: MENSAJE_GENERICO })
     }
 
+    // Recién con la contraseña CORRECTA avisamos si la cuenta está inactiva, así solo
+    // el verdadero dueño ve ese mensaje (un atacante no puede distinguir inactiva de
+    // "contraseña incorrecta"). Este es el único caso diferenciado.
     if (usuario.estado_cuenta !== 'activo') {
       return res.status(403).json({ error: 'Tu cuenta está inactiva. El administrador la desactivó; contáctalo para reactivarla.' })
-    }
-
-    // Verificar contraseña
-    const passwordValida = await bcrypt.compare(password, usuario.password_hash)
-    if (!passwordValida) {
-      return res.status(401).json({ error: 'La contraseña es incorrecta. Vuelve a intentar o usa "¿Olvidaste tu contraseña?".' })
     }
 
     const tokens = generarTokens(usuario)
