@@ -94,18 +94,23 @@ router.post('/login', limiteLogin, async (req, res) => {
       include: { rol: true },
     })
 
+    // Mensajes DIFERENCIADOS por caso (decisión de UX del dueño), para que la
+    // persona sepa exactamente qué corregir:
+    //   1. El correo no existe  -> no hay cuenta con ese correo
+    //   2. La cuenta está inactiva/desactivada por el admin
+    //   3. El correo existe pero la contraseña no coincide
     if (!usuario) {
-      return res.status(401).json({ error: 'Credenciales incorrectas' })
+      return res.status(401).json({ error: 'No encontramos ninguna cuenta con ese correo. Revisa que esté bien escrito o crea una cuenta nueva.' })
     }
 
     if (usuario.estado_cuenta !== 'activo') {
-      return res.status(403).json({ error: 'Tu cuenta está inactiva. Contacta al administrador.' })
+      return res.status(403).json({ error: 'Tu cuenta está inactiva. El administrador la desactivó; contáctalo para reactivarla.' })
     }
 
     // Verificar contraseña
     const passwordValida = await bcrypt.compare(password, usuario.password_hash)
     if (!passwordValida) {
-      return res.status(401).json({ error: 'Credenciales incorrectas' })
+      return res.status(401).json({ error: 'La contraseña es incorrecta. Vuelve a intentar o usa "¿Olvidaste tu contraseña?".' })
     }
 
     const tokens = generarTokens(usuario)
