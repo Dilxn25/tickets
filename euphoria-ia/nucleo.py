@@ -68,10 +68,14 @@ def features(pre, c, ts, est, meta):
     ts = pd.Timestamp(ts)
     idx, S, pop, co = est["idx"], est["S"], est["pop"], est["co"]
     cat, precio = meta["cat"], meta["precio"]
-    coocc = sum(co.get(p, {}).get(c, 0) for p in pre)
-    simax = max((S[idx[p], idx[c]] for p in pre if p in idx and c in idx), default=0.0)
-    catmatch = int(cat[c] in {cat[p] for p in pre})
-    return [coocc, simax, pop.get(c, 0), precio[c], cat[c],
+    # La mesa puede traer productos que el modelo NO conoce (productos nuevos del menú
+    # que no existían al entrenar): se ignoran para las señales, en vez de reventar con
+    # KeyError. 'tam' (len) sigue reflejando el tamaño real de la mesa.
+    pre_ok = [p for p in pre if p in cat]
+    coocc = sum(co.get(p, {}).get(c, 0) for p in pre_ok)
+    simax = max((S[idx[p], idx[c]] for p in pre_ok if p in idx and c in idx), default=0.0)
+    catmatch = int(cat.get(c) in {cat[p] for p in pre_ok})
+    return [coocc, simax, pop.get(c, 0), precio.get(c, 0), cat.get(c, 0),
             catmatch, len(pre), int(es_finde(ts)), ts.hour]
 
 
