@@ -249,6 +249,19 @@
           <button class="btn-guardar" :disabled="guardando || !hayCambios" @click="guardarConfig">
             {{ guardando ? 'Guardando...' : 'Guardar cambios' }}
           </button>
+
+          <!-- Diagnóstico del vigía del correo del banco (2ª validación de depósitos) -->
+          <div class="vigia-box">
+            <div class="vigia-head">
+              <span class="demo-label">Vigía del correo del banco</span>
+              <button type="button" class="btn-demo" :disabled="probandoVigia" @click="probarVigia">
+                {{ probandoVigia ? 'Probando…' : 'Probar conexión' }}
+              </button>
+            </div>
+            <p v-if="vigiaResultado" class="vigia-msg" :class="vigiaResultado.ok ? 'ok' : 'mal'">
+              {{ vigiaResultado.mensaje }}
+            </p>
+          </div>
         </div>
 
         <div class="tarjeta-ia">
@@ -281,7 +294,7 @@
             </div>
             <div v-if="modeloIA.modo === 'demo'" class="demo-fila">
               <span class="demo-label">Cliente:</span>
-              <BaseSelect v-model="clienteProbador" :opciones="opcionesClientes" />
+              <BaseSelect v-model="clienteProbador" :options="opcionesClientes" placeholder="Nuevo (sin historial)" />
             </div>
             <p v-if="modeloIA.modo === 'demo'" class="demo-nota">
               Elige un cliente con historial y verás sus recomendaciones personalizadas; "Nuevo" cae a lo popular (arranque en frío).
@@ -298,10 +311,10 @@
             </button>
           </div>
           <p class="probador-conteo">
-            {{ mesa.length ? mesa.length + ' producto(s) en la mesa' : 'Toca productos para armar la mesa' }}
+            {{ mesa.length ? mesa.length + ' producto(s) en la mesa' : 'Mesa vacía: muestra lo personalizado del cliente o lo popular (arranque en frío)' }}
           </p>
 
-          <button class="btn-guardar" :disabled="!mesa.length || probando" @click="probarSugerencias">
+          <button class="btn-guardar" :disabled="probando" @click="probarSugerencias">
             {{ probando ? 'Consultando IA...' : 'Pedir sugerencias' }}
           </button>
 
@@ -313,7 +326,7 @@
               <div v-for="r in resultado.recomendaciones" :key="r.id_producto" class="bloque-sugerencia">
                 <div class="fila-sugerencia">
                   <span class="sug-nombre">{{ r.nombre }}</span>
-                  <span v-if="r.probabilidad != null" class="sug-prob">{{ (r.probabilidad * 100).toFixed(0) }}%</span>
+                  <span v-if="r.probabilidad != null && r.probabilidad >= 0.005" class="sug-prob">{{ (r.probabilidad * 100).toFixed(0) }}%</span>
                 </div>
                 <ul v-if="(r.razones || []).length" class="sug-razones">
                   <li v-for="(rz, i) in r.razones" :key="i">{{ rz }}</li>
@@ -458,13 +471,31 @@ const modeloIA = ref({ modo: 'real', personalizado: false, disponibles: ['real']
 const conmutandoModelo = ref(false)
 const clienteProbador = ref('')
 const clientesDemo = ref([])
+// Diagnóstico del vigía del correo del banco
+const probandoVigia = ref(false)
+const vigiaResultado = ref(null)
+async function probarVigia() {
+  probandoVigia.value = true
+  vigiaResultado.value = null
+  try {
+    vigiaResultado.value = await clienteHttp.get('/comandas/vigia-estado')
+  } catch {
+    vigiaResultado.value = { ok: false, mensaje: 'No se pudo probar el vigía (revisá que el backend esté arriba).' }
+  } finally {
+    probandoVigia.value = false
+  }
+}
 const opcionesClientes = computed(() => [
   { value: '', label: 'Nuevo (sin historial)' },
   ...clientesDemo.value.map(c => ({ value: c.id, label: `${c.nombre} · ${c.comandas} pedidos` })),
 ])
 
 async function cargarModelo() {
-  try { modeloIA.value = await clienteHttp.get('/recomendaciones/modelo') } catch { /* queda en real */ }
+  try {
+    modeloIA.value = await clienteHttp.get('/recomendaciones/modelo')
+    // Si ya está en demo al cargar, traer los clientes para el selector.
+    if (modeloIA.value.modo === 'demo') await cargarClientesProbador()
+  } catch { /* queda en real */ }
 }
 async function cargarClientesProbador() {
   try { clientesDemo.value = await clienteHttp.get('/recomendaciones/clientes-demo') } catch { clientesDemo.value = [] }
@@ -1345,4 +1376,11 @@ onActivated(() => {
 .btn-demo.activo { background: var(--rosa-acento, #e0378b); border-color: transparent; color: #fff; }
 .btn-demo:disabled { opacity: 0.45; cursor: not-allowed; }
 .demo-nota { font-size: 0.78rem; opacity: 0.6; margin: 0; line-height: 1.4; }
+
+/* Diagnóstico del vigía del correo */
+.vigia-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+.vigia-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.vigia-msg { font-size: 0.82rem; margin: 10px 0 0; line-height: 1.4; }
+.vigia-msg.ok { color: #34c759; }
+.vigia-msg.mal { color: #ff6b6b; }
 </style>

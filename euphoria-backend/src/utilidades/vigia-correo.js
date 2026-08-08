@@ -142,4 +142,31 @@ function iniciarVigiaCorreo() {
   console.log(`[correo] vigía activo: revisa ${process.env.CORREO_IMAP_USUARIO} cada ${INTERVALO_MS / 1000}s`)
 }
 
-module.exports = { iniciarVigiaCorreo, parsearNotificacionACH }
+// Prueba puntual de conexión IMAP (para el botón "Probar vigía" del admin): intenta
+// conectar y abrir INBOX con las credenciales actuales. Así se confirma que la clave
+// de aplicación es válida SIN esperar a que llegue un depósito real.
+async function probarConexionCorreo() {
+  const usuario = process.env.CORREO_IMAP_USUARIO
+  const clave = process.env.CORREO_IMAP_CLAVE
+  if (!usuario || !clave) {
+    return { ok: false, configurado: false, mensaje: 'El vigía no está configurado (faltan CORREO_IMAP_USUARIO / CORREO_IMAP_CLAVE).' }
+  }
+  const cliente = new ImapFlow({
+    host: process.env.CORREO_IMAP_HOST || 'imap.gmail.com',
+    port: 993, secure: true, auth: { user: usuario, pass: clave }, logger: false,
+    connectionTimeout: 15000, greetingTimeout: 10000,
+  })
+  cliente.on('error', () => {})
+  try {
+    await cliente.connect()
+    const lock = await cliente.getMailboxLock('INBOX')
+    lock.release()
+    await cliente.logout().catch(() => {})
+    return { ok: true, configurado: true, usuario, mensaje: `Conexión correcta con ${usuario}: el vigía puede leer el correo del banco.` }
+  } catch (e) {
+    try { await cliente.logout() } catch { /* nada */ }
+    return { ok: false, configurado: true, usuario, mensaje: `No se pudo conectar con ${usuario}: ${e && e.message}. Revisá la contraseña de aplicación.` }
+  }
+}
+
+module.exports = { iniciarVigiaCorreo, parsearNotificacionACH, probarConexionCorreo }

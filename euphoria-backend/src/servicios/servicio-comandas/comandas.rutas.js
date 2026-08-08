@@ -8,6 +8,7 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const cloudinary = require('cloudinary').v2
 const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
+const { probarConexionCorreo } = require('../../utilidades/vigia-correo')
 const { emitirConfigActualizada, emitirRecurso } = require('../../utilidades/config-runtime')
 
 // Configuración de Multer para comprobantes
@@ -353,6 +354,16 @@ router.get('/validar-comprobante/:id/estado', verificarToken, (req, res) => {
 })
 
 // POST /api/comandas/verificar-billetera
+// GET /api/comandas/vigia-estado — prueba la conexión IMAP del vigía del banco [admin]
+// Confirma que la contraseña de aplicación funciona SIN esperar un depósito real.
+router.get('/vigia-estado', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    res.json(await probarConexionCorreo())
+  } catch (e) {
+    res.json({ ok: false, configurado: true, mensaje: 'Error al probar el vigía: ' + (e && e.message) })
+  }
+})
+
 router.post('/verificar-billetera', verificarToken, async (req, res) => {
   try {
     const { qr_billetera } = req.body
