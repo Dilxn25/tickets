@@ -184,6 +184,20 @@ io.on('connection', socket => {
 const { iniciarVigiaCorreo } = require('./src/utilidades/vigia-correo')
 iniciarVigiaCorreo()
 
+// Mantener DESPIERTO el microservicio de IA. En Render (plan gratuito) el servicio
+// se DUERME tras ~15 min sin uso y tarda ~40s en despertar; como la toma de pedidos
+// solo espera unos segundos, las recomendaciones fallaban con "servicio no disponible".
+// Mientras el backend corra, le hace ping cada 10 min para que no se enfríe.
+function mantenerIACaliente() {
+  const url = (process.env.URL_SERVICIO_IA || 'http://localhost:8000') + '/salud'
+  const ping = () => fetch(url, { signal: AbortSignal.timeout(60000) })
+    .then(() => console.log('[ia] servicio de IA despierto'))
+    .catch(() => { /* dormido o aún arrancando: el próximo ping reintenta */ })
+  setTimeout(ping, 8000)                       // al arrancar (deja que el otro servicio suba)
+  setInterval(ping, 10 * 60 * 1000).unref()    // cada 10 minutos
+}
+mantenerIACaliente()
+
 servidorHttp.listen(PUERTO, () => {
   console.log('\n EUPHORIA Backend corriendo')
   console.log(`   API:     http://localhost:${PUERTO}/api/estado`)

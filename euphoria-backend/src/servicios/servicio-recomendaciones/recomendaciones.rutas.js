@@ -133,7 +133,7 @@ router.get('/estado', verificarToken, soloRoles('Administrador', 'Cajero', 'Mese
 router.get('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
   try {
-    const r = await fetch(`${urlIA}/modelo/estado`, { signal: AbortSignal.timeout(2500) })
+    const r = await fetch(`${urlIA}/modelo/estado`, { signal: AbortSignal.timeout(6000) })
     res.json(await r.json())
   } catch {
     res.json({ modo: 'real', personalizado: false, disponibles: ['real'], sin_conexion: true })
@@ -149,7 +149,7 @@ router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, re
   try {
     const r = await fetch(`${urlIA}/modelo/activar`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modo }), signal: AbortSignal.timeout(4000),
+      body: JSON.stringify({ modo }), signal: AbortSignal.timeout(9000),
     })
     res.json(await r.json())
   } catch {
@@ -353,7 +353,7 @@ router.post('/', verificarToken, async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ productos_en_mesa, fecha_hora, k, historial_cliente }),
-      signal: AbortSignal.timeout(4000), // no bloquear la toma de pedidos si la IA tarda
+      signal: AbortSignal.timeout(8000), // tolera un arranque lento de la IA sin bloquear demasiado
     })
 
     if (!respuesta.ok) throw new Error(`IA respondió ${respuesta.status}`)
