@@ -134,7 +134,8 @@ function quitarInteresado(socket) {
 }
 
 io.on('connection', socket => {
-  console.log(`WebSocket conectado: ${socket.id}`)
+  // (Sin log de conexión/desconexión: los sockets se reconectan solos al cambiar
+  //  de red o al despertar Render — imprimirlo llenaba los logs de ruido inofensivo.)
 
   // ---- Presencia en el mapa de reservas (quién está viendo qué lugar) ----
   // El cliente entra a la "sala" del evento para recibir/emitir presencia en vivo.
@@ -175,7 +176,6 @@ io.on('connection', socket => {
       socket.to(socket.data.sala).emit('dejar_mesa', { ...socket.data.viendo, socketId: socket.id })
     }
     quitarInteresado(socket)
-    console.log(`WebSocket desconectado: ${socket.id}`)
   })
 })
 

@@ -129,6 +129,42 @@ async function validarPorCorreo(monto, transaccionLeida) {
   }
 }
 
+// REFUERZO por correo SIN número de transacción (comprobante "COMPROBANTE DE PAGO"
+// de Unión por QR). Empareja el depósito del correo con la CLAVE COMPUESTA que el
+// cliente sí tiene: monto exacto + día de hoy + glosa de Euphoria, desambiguando por
+// CERCANÍA DE HORA (±20 min) cuando hay varios depósitos del mismo monto. Marca el
+// depósito como usado de forma atómica y devuelve su orden_ach. Es refuerzo: si el
+// correo no llegó, devuelve null y la recarga vale igual por la clave única.
+async function validarPorCorreoComposite(monto, horaLeida) {
+  try {
+    const hoy = hoyBolivia()
+    const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+    const candidatos = await prisma.deposito_correo.findMany({
+      where: { usado: false, monto, fecha_transaccion: { gte: inicioDia }, glosa: { contains: 'euphoria' } },
+      orderBy: { fecha_transaccion: 'desc' },
+      take: 20,
+    })
+    if (!candidatos.length) return null
+    let dep = candidatos[0]
+    if (candidatos.length > 1 && horaLeida) {
+      const [hh, mm] = String(horaLeida).split(':').map(Number)
+      const objetivo = (hh || 0) * 60 + (mm || 0)
+      const cerca = candidatos
+        .map(c => { const d = new Date(c.fecha_transaccion); return { c, diff: Math.abs((d.getHours() * 60 + d.getMinutes()) - objetivo) } })
+        .sort((a, b) => a.diff - b.diff)[0]
+      if (!cerca || cerca.diff > 20) return null // ninguno cerca en hora: no arriesgar
+      dep = cerca.c
+    }
+    const upd = await prisma.deposito_correo.updateMany({
+      where: { id_deposito: dep.id_deposito, usado: false },
+      data: { usado: true },
+    })
+    return upd.count === 1 ? dep : null
+  } catch (e) {
+    return null
+  }
+}
+
 // Distancia de edición (Levenshtein) para tolerar 1-2 errores del OCR al comparar
 // números de transacción (ej. 0/O, 8/B, 1/I) y no dejar reusar el MISMO comprobante.
 function distanciaEdicion(a, b) {
@@ -164,6 +200,9 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
     // pregunta el estado cada 2s (GET /validar-comprobante/:id/estado).
     const idAnalisis = require('crypto').randomUUID()
     const urlArchivo = req.file.path
+    // Remitente = el usuario logueado que está pagando. Forma parte de la clave
+    // única (día+hora+monto+usuario) para los comprobantes SIN N° de transacción.
+    const idRemitente = req.usuario?.id || 0
     analisisEnCurso.set(idAnalisis, { estado: 'procesando', etapa: 'Identificando banco…', creado: Date.now() })
     res.status(202).json({ id_analisis: idAnalisis, pendiente: true })
 
@@ -206,7 +245,11 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
         // monto, glosa de Euphoria, de hoy y sin usar. El correo del banco no
         // se puede falsificar: si existe, el dinero llegó.
         if (!analisis.ok) {
-          const porCorreo = await validarPorCorreo(montoEsperado, analisis.transaccionId)
+          // Con N° de transacción legible: se cruza por ese N°. Sin N° (comprobante
+          // de pago por QR de Unión): se cruza por clave compuesta monto+día+hora.
+          const porCorreo = analisis.transaccionId
+            ? await validarPorCorreo(montoEsperado, analisis.transaccionId)
+            : (analisis.sinTransaccion ? await validarPorCorreoComposite(montoEsperado, analisis.horaLeida) : null)
           if (porCorreo) {
             pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
             analisisEnCurso.set(idAnalisis, {
@@ -235,8 +278,20 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
           return
         }
 
-        const transaccionId = analisis.transaccionId
-        // NO reusar el mismo comprobante (tolera 2 errores de lectura del N°)
+        // Identificador ANTI-REUSO. Con N° de transacción: ese N° (tolera 2 errores
+        // de lectura). Sin N° (comprobante de pago por QR de Unión): la CLAVE ÚNICA
+        // día+hora+remitente+monto — esa combinación no se repite.
+        let transaccionId = analisis.transaccionId
+        let claveCompuesta = false
+        if (!transaccionId && analisis.sinTransaccion && analisis.horaLeida) {
+          const hoy = hoyBolivia()
+          const dia = `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`
+          transaccionId = `NOTX-${dia}-${analisis.horaLeida.replace(':', '')}-U${idRemitente}-M${montoEsperado}`
+          claveCompuesta = true
+        }
+
+        // NO reusar el mismo comprobante. Con N°: distancia de edición ≤2. Con clave
+        // compuesta: coincidencia EXACTA (un minuto distinto = otro pago distinto).
         const marcaMonto = `|M:${montoEsperado}`
         const [comSim, recSim] = await Promise.all([
           prisma.comanda.findMany({ where: { comprobante_url: { contains: marcaMonto } }, select: { comprobante_url: true } }),
@@ -245,7 +300,10 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
         const txDeUrl = (url) => (String(url || '').match(/\|TX:([^|]+)/)?.[1] || '')
         const duplicado = [...comSim, ...recSim].some(r => {
           const otro = txDeUrl(r.comprobante_url)
-          return otro && distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 2
+          if (!otro) return false
+          return claveCompuesta
+            ? otro.toUpperCase() === transaccionId.toUpperCase()
+            : distanciaEdicion(otro.toUpperCase(), transaccionId.toUpperCase()) <= 2
         })
         pasos.push({ clave: 'no_repetido', etiqueta: 'Comprobante no repetido', ok: !duplicado })
         if (duplicado) {
@@ -253,12 +311,24 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
           return
         }
 
+        // REFUERZO por correo (no bloquea): si el comprobante no traía N° y ya llegó
+        // la notificación del banco que coincide (monto+día+hora), se marca ese
+        // depósito como usado y se muestra el sello "confirmado por el banco".
+        let banco = analisis.banco
+        if (claveCompuesta) {
+          const dep = await validarPorCorreoComposite(montoEsperado, analisis.horaLeida)
+          if (dep) {
+            pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
+            banco = analisis.banco || 'UNION'
+          }
+        }
+
         analisisEnCurso.set(idAnalisis, {
           estado: 'terminado', creado: Date.now(),
           resultado: {
-            valido: true, banco: analisis.banco, monto: analisis.monto,
+            valido: true, banco, monto: analisis.monto,
             mensaje: 'Comprobante verificado correctamente',
-            url_comprobante: `${urlArchivo}|TX:${transaccionId}|M:${montoEsperado}|B:${analisis.banco || 'OTRO'}`,
+            url_comprobante: `${urlArchivo}|TX:${transaccionId}|M:${montoEsperado}|B:${banco || 'OTRO'}`,
             transaccionId, pasos,
           },
         })

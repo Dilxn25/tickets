@@ -130,7 +130,14 @@ const PLANTILLAS = [
     // El OCR parte el N° en dos ("...2566 03799"): se capturan dígitos con
     // espacios internos y el análisis los junta (transaccionId sin espacios).
     transaccion: /transacci[oó]n\s+n?[e°ºo]?\s*:?\s*(\d[\d\s]{6,30}\d)/i,
+    // El "COMPROBANTE DE PAGO" simple de la app de Unión (el de pagos por QR) NO
+    // imprime N° de transacción: solo fecha+hora, monto, destinatario y referencia.
+    // En ese caso NO se exige el N°: la unicidad se arma con día+hora+monto+usuario
+    // (ver la ruta). Se necesita leer la HORA para esa clave.
+    transaccionOpcional: true,
     fecha: /comprobante\s+de\s+pago\s+(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i,
+    // La hora va justo después de la fecha en el encabezado: "... 07/08/2026 19:20".
+    hora: /comprobante\s+de\s+pago\s+\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\s+(\d{1,2}):(\d{2})/i,
     motivo: /referencia\s*:?\s*(.{2,45}?)(?:\s{2,}|$)/i,
     // "Pagó Bs. 20.00 A: NOMBRE  BANCO ..." -> el nombre va entre el monto y el banco.
     destinatario: /pag[oó]\s+bs\.?\s*[\d.,]+\s*a\s*:?\s*(.{4,50}?)\s+banco\s+/i,
@@ -231,6 +238,7 @@ function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
   const r = {
     campos: { monto: false, transaccion: false, fecha: false, destino: false },
     monto: null, transaccionId: null, destinatario: '', fechaLeida: null, motivoEuphoria: false,
+    horaLeida: null, sinTransaccion: false,
   }
 
   // Monto anclado a la etiqueta del banco, con tolerancia de centavo por el OCR.
@@ -289,6 +297,27 @@ function evaluarPlantilla(p, texto, montoEsperado, hoy, titulares) {
     }
   }
 
+  // Hora de la operación: sirve de clave única (día+hora+monto+usuario) cuando el
+  // comprobante NO trae N° de transacción. Primero la etiquetada del banco; si no,
+  // la primera HH:MM del texto (los comprobantes imprimen la hora de la operación).
+  if (p.hora) {
+    const h = texto.match(p.hora)
+    if (h) r.horaLeida = `${String(h[1]).padStart(2, '0')}:${h[2]}`
+  }
+  if (!r.horaLeida) {
+    const hg = texto.match(/(\d{1,2}):(\d{2})(?::\d{2})?/)
+    if (hg) r.horaLeida = `${String(hg[1]).padStart(2, '0')}:${hg[2]}`
+  }
+
+  // N° de transacción OPCIONAL: hay comprobantes (Unión "COMPROBANTE DE PAGO" por QR)
+  // que no lo imprimen. Si el banco lo permite y no se leyó ninguno, NO es un fallo:
+  // la unicidad se arma con día+hora+monto+usuario (en la ruta). Se exige la HORA —
+  // sin ella no hay clave única, así que se pide una mejor foto.
+  if (!r.campos.transaccion && p.transaccionOpcional) {
+    r.sinTransaccion = true
+    r.campos.transaccion = r.horaLeida ? null : false
+  }
+
   // Destino: el pago debe ser A NUESTRA CUENTA. Pasa si el motivo/referencia
   // dice "Consumo Euphoria" o si el destinatario es el titular configurado.
   // En bancos SIN motivo (Yape) solo cuenta el destinatario. Sin esto,
@@ -319,7 +348,9 @@ function describirFallo(p, ev, montoEsperado, hoy) {
       : `El monto del comprobante ${p.nombre} es Bs. ${ev.monto.toFixed(2)} y no coincide con el monto ingresado (Bs. ${Number(montoEsperado).toFixed(2)}).`
   }
   if (ev.campos.transaccion === false) {
-    return `No pudimos leer el número de transacción del comprobante ${p.nombre}. Sube la captura original completa, sin recortes.`
+    return ev.sinTransaccion
+      ? `No pudimos leer la fecha y hora del comprobante ${p.nombre}. Sube la captura completa donde se vea la hora de la operación.`
+      : `No pudimos leer el número de transacción del comprobante ${p.nombre}. Sube la captura original completa, sin recortes.`
   }
   if (ev.campos.fecha === false) {
     if (!ev.fechaLeida) return `No pudimos leer la fecha del comprobante ${p.nombre}. Sube la captura completa donde se vea la fecha de la operación.`
@@ -381,6 +412,8 @@ function analizarComprobante(textoOCR, montoEsperado, hoy = new Date(), opciones
     monto: ev.monto ?? undefined,
     transaccionId: ev.transaccionId || undefined,
     destinatario: ev.destinatario || undefined,
+    horaLeida: ev.horaLeida || undefined,
+    sinTransaccion: ev.sinTransaccion || false,
     sinMotivo: !p.motivo, // el front etiqueta 'destino' como "Destinatario correcto" en bancos sin motivo (Yape)
   }
   if (resultado.ok) resultado.validadoPor = ev.motivoEuphoria ? 'motivo' : 'destinatario'
@@ -518,13 +551,15 @@ function fabricasDeVariantes(ancho) {
       fabrica: (buf) => sharp(buf, { failOn: 'none' }).grayscale().normalize().threshold(215).jpeg({ quality: 95 }).toBuffer(),
     },
   ]
-  // Ampliar SOLO fotos realmente chicas (lejanas): con el techo de análisis en
-  // 1600px, re-agrandar imágenes ya capadas desharía el ahorro de memoria.
-  if (ancho > 0 && ancho < 1100) {
+  // Ampliar fotos con texto CHICO o AMONTONADO (el tamaño depende del dispositivo
+  // del cliente, no lo controlamos). Tesseract lee mejor el texto grande. El umbral
+  // sube a 1300px: muchas capturas de celular caen ahí con la letra apretada. El
+  // techo de 1600px sigue cuidando la memoria de Render (no re-agranda lo ya capado).
+  if (ancho > 0 && ancho < 1300) {
     fabricas.push({
       nombre: 'ampliada',
       fabrica: (buf) => sharp(buf, { failOn: 'none' })
-        .resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1300), 1600), kernel: 'lanczos3' })
+        .resize({ width: Math.min(Math.max(Math.round(ancho * 1.8), 1400), 1600), kernel: 'lanczos3' })
         .grayscale().normalize().sharpen().jpeg({ quality: 95 }).toBuffer(),
     })
   }
@@ -568,6 +603,9 @@ function fusionarAnalisis(resultados) {
           }
         }
       }
+      // La hora y la marca "sin N° de transacción" también se completan entre pasadas.
+      if (!base.horaLeida && r.horaLeida) base.horaLeida = r.horaLeida
+      if (r.sinTransaccion) base.sinTransaccion = true
     }
     const c = base.campos || {}
     const completo = ['monto', 'transaccion', 'fecha', 'destino']
