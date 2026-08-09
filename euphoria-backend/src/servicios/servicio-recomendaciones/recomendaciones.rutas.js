@@ -403,7 +403,14 @@ router.post('/', verificarToken, async (req, res) => {
       else if (f.temporal && f.temporal <= 0.95) razones.push('Fuera de su horario más fuerte')
       if (f.margen >= 1.03) razones.push('Deja buen margen al local')
       if (r.en_promocion) razones.push('Está en promoción (más fácil de aceptar)')
-      razones.push(`El modelo estima ${(r.probabilidad * 100).toFixed(0)}% de probabilidad de que lo acepten`)
+      // La probabilidad ABSOLUTA es diminuta con la mesa vacía (arranque en frío): el
+      // modelo no tiene con qué "engancharlo" todavía. Solo se muestra cuando es
+      // significativa (>=0.5%); en frío, una razón honesta en su lugar.
+      if (r.probabilidad >= 0.005) {
+        razones.push(`El modelo estima ${(r.probabilidad * 100).toFixed(0)}% de probabilidad de que lo acepten`)
+      } else if (!razones.length) {
+        razones.push('Sugerido para empezar la mesa, por el momento y su popularidad')
+      }
       r.razones = razones
 
       // 3) Registrar la sugerencia mostrada (para el reporte de efectividad)
