@@ -157,18 +157,15 @@ router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, re
   }
 })
 
-// GET /api/recomendaciones/clientes-demo — clientes CON historial (para el probador) [admin]
+// GET /api/recomendaciones/clientes-demo — clientes DEMO para el probador [admin]
+// Salen del pkl demo (embebidos), NO de la base de datos: la demostración es
+// self-contained. Con el modelo real la lista viene vacía.
 router.get('/clientes-demo', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
   try {
-    const filas = await prisma.$queryRawUnsafe(`
-      SELECT u.id_usuario id, CONCAT(u.nombres, ' ', u.apellidos) nombre, u.correo,
-             COUNT(c.id_comanda) comandas
-      FROM usuario u
-      JOIN comanda c ON c.id_cliente = u.id_usuario AND c.estado_despacho <> 'Cancelada'
-      GROUP BY u.id_usuario, nombre, u.correo
-      HAVING comandas > 0
-      ORDER BY comandas DESC LIMIT 20`)
-    res.json(filas.map(f => ({ id: Number(f.id), nombre: f.nombre, correo: f.correo, comandas: Number(f.comandas) })))
+    const r = await fetch(`${urlIA}/clientes`, { signal: AbortSignal.timeout(6000) })
+    const lista = await r.json()
+    res.json((Array.isArray(lista) ? lista : []).map(c => ({ id: c.id, nombre: c.nombre, comandas: c.n })))
   } catch (e) {
     console.warn('clientes-demo:', e.message)
     res.json([])
@@ -325,8 +322,10 @@ router.post('/', verificarToken, async (req, res) => {
 
     // Historial del cliente (lista con repetición por frecuencia; el modelo pesa el gusto).
     // Cap de 30 por producto para no mandar payloads enormes de clientes muy activos.
+    // Clientes DEMO (clave tipo "carla") NO están en la base: su historial lo resuelve
+    // el servicio de IA desde el pkl. Solo se consulta la base para clientes REALES (id numérico).
     let historial_cliente = null
-    if (id_cliente) {
+    if (id_cliente && Number.isFinite(Number(id_cliente))) {
       try {
         const filas = await prisma.$queryRawUnsafe(
           `SELECT d.id_producto pid, COUNT(*) n
@@ -352,7 +351,7 @@ router.post('/', verificarToken, async (req, res) => {
     const respuesta = await fetch(`${urlIA}/recomendar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productos_en_mesa, fecha_hora, k, historial_cliente }),
+      body: JSON.stringify({ productos_en_mesa, fecha_hora, k, historial_cliente, cliente: id_cliente || null }),
       signal: AbortSignal.timeout(8000), // tolera un arranque lento de la IA sin bloquear demasiado
     })
 

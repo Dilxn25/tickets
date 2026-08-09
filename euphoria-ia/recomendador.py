@@ -34,6 +34,9 @@ class Recomendador:
         # PERSONALIZADO (aprende el gusto de cada cliente). Si no, es el real (9 vars).
         self.FC = b.get("FC", nucleo.FC)
         self.personalizado = "cli_freq" in self.FC
+        # Clientes DEMO embebidos en el pkl (para la demostración self-contained: su
+        # historial viaja DENTRO del pkl, no hace falta cargar nada a la base de datos).
+        self.clientes_demo = b.get("clientes_demo", {})
         with open(os.path.join(AQUI, ruta_reglas), encoding="utf-8") as f:
             self.reglas = json.load(f)
 

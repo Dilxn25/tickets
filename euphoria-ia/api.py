@@ -49,6 +49,7 @@ class Peticion(BaseModel):
     k: int = 3
     stock: Optional[dict] = None   # opcional: {"9": 0} para marcar agotados en vivo
     historial_cliente: Optional[List[int]] = None  # ids que ESE cliente ya consumio (personalizacion)
+    cliente: Optional[str] = None  # clave de un CLIENTE DEMO embebido en el pkl (su historial sale del pkl)
 
 
 class ModeloReq(BaseModel):
@@ -65,8 +66,22 @@ def recomendar(p: Peticion):
     stock = None
     if p.stock:
         stock = {int(k): int(v) for k, v in p.stock.items()}
+    # Historial del cliente: si viene la CLAVE de un cliente demo, su historial sale
+    # del pkl (self-contained, sin base). Si no, se usa el historial que mande el
+    # backend (clientes reales, tomado de la base en producción).
+    historial = p.historial_cliente
+    if p.cliente and p.cliente in rec.clientes_demo:
+        historial = rec.clientes_demo[p.cliente]["historial"]
     return rec.recomendar(p.productos_en_mesa, p.fecha_hora, k=p.k, stock=stock,
-                          historial_cliente=p.historial_cliente)
+                          historial_cliente=historial)
+
+
+@app.get("/clientes")
+def clientes():
+    """Clientes DEMO embebidos en el pkl activo (self-contained). Vacío si el modelo
+    activo no es el de demostración."""
+    return [{"id": k, "nombre": v.get("nombre", k), "n": len(v.get("historial", []))}
+            for k, v in rec.clientes_demo.items()]
 
 
 @app.get("/modelo/estado")
