@@ -569,6 +569,7 @@
               <span class="chip-nombre">{{ s.nombre }}</span>
               <span class="chip-meta">
                 <span v-if="s.probabilidad >= 0.005" class="chip-prob">{{ (s.probabilidad * 100).toFixed(0) }}%</span>
+                <span v-else-if="s.afinidad_cliente >= 0.15" class="chip-prob" title="Coincide con lo que suele pedir el cliente">{{ (s.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
                 <span class="chip-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
               </span>
               <span class="chip-mas">+</span>

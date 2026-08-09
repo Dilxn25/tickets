@@ -86,6 +86,10 @@ class Recomendador:
                     "score_final": round(sf, 4),
                     "margen_pct": round(R.margen(c, meta) * 100, 1),
                     "en_promocion": meta["precio_promo"].get(c) is not None,
+                    # Cuánto coincide con el gusto del cliente (0..1). En arranque en frío
+                    # la probabilidad absoluta es ~0, pero ESTA sí es coherente: mide qué
+                    # tanto ESE cliente suele pedir el producto.
+                    "afinidad_cliente": round(float(afin["freq"].get(int(c), 0.0)), 3) if afin else 0.0,
                     # Factores del ranking (para explicar el "porqué" en el panel):
                     # >1 empuja al producto, <1 lo castiga
                     "factores": {

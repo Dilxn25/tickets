@@ -397,6 +397,10 @@ router.post('/', verificarToken, async (req, res) => {
           razones.push(`Acompañó a ${nombreMesa} en ${juntos} pedidos reales (${Math.round(juntos / total * 100)}% de sus mesas)`)
         }
       }
+      // 1.5) PERSONALIZACIÓN: si es un producto que ESE cliente suele pedir, ese es el
+      // motivo más relevante (y da un número coherente aunque la mesa esté vacía).
+      const afc = Number(r.afinidad_cliente || 0)
+      if (afc >= 0.15) razones.unshift(`Es de lo que este cliente más pide (coincide ${Math.round(afc * 100)}% con su gusto)`)
       // 2) Factores del modelo (hora, margen, promoción)
       const f = r.factores || {}
       if (f.temporal >= 1.05) razones.push('Se vende fuerte a esta hora del día')

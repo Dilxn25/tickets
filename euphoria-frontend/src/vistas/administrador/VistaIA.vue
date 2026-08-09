@@ -327,6 +327,7 @@
                 <div class="fila-sugerencia">
                   <span class="sug-nombre">{{ r.nombre }}</span>
                   <span v-if="r.probabilidad != null && r.probabilidad >= 0.005" class="sug-prob">{{ (r.probabilidad * 100).toFixed(0) }}%</span>
+                  <span v-else-if="r.afinidad_cliente >= 0.15" class="sug-prob afin" title="Coincide con lo que suele pedir el cliente">{{ (r.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
                 </div>
                 <ul v-if="(r.razones || []).length" class="sug-razones">
                   <li v-for="(rz, i) in r.razones" :key="i">{{ rz }}</li>
@@ -1149,6 +1150,7 @@ onActivated(() => {
 }
 .sug-nombre { font-size: 0.86rem; font-weight: 600; color: var(--texto-principal); }
 .sug-prob { font-size: 0.8rem; font-weight: 800; color: var(--color-exito); font-variant-numeric: tabular-nums; }
+.sug-prob.afin { color: var(--rosa-acento, #e0378b); }
 
 .vacio {
   padding: 26px 10px;
