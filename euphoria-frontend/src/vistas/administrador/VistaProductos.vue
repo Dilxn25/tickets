@@ -107,46 +107,129 @@
       <div v-if="modalAbierto" class="modal-fondo" @click.self="cerrarModal">
         <div class="modal fade-in">
           <div class="modal-cabecera">
-            <h3>{{ productoEditando ? 'Editar producto' : 'Nuevo producto' }}</h3>
-            <button class="btn-x" @click="cerrarModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+            <div class="mc-titulo">
+              <span class="mc-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="21" height="21" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
+              </span>
+              <div class="mc-textos">
+                <h3>{{ productoEditando ? 'Editar producto' : 'Nuevo producto' }}</h3>
+                <p class="mc-sub">{{ productoEditando ? 'Actualizá los datos y la imagen del producto' : 'Completá los datos para crear un producto nuevo' }}</p>
+              </div>
+            </div>
+            <button class="btn-x" @click="cerrarModal" aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <form class="modal-form" @submit.prevent="guardarProducto">
-            <div class="grupo-campo">
-              <label class="etiqueta">Nombre del producto *</label>
-              <input v-model="form.nombre_producto" class="campo" required placeholder="Ej. Whisky Premium" />
-            </div>
-            <div class="form-fila">
+            <!-- Sección: datos básicos -->
+            <section class="form-seccion">
+              <p class="seccion-titulo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6"/></svg>
+                Datos básicos
+              </p>
               <div class="grupo-campo">
-                <label class="etiqueta">Categoría *</label>
-                <BaseSelect v-model="form.id_categoria" :options="opcionesCategoria" placeholder="Seleccionar categoría…" />
+                <label class="etiqueta">Nombre del producto *</label>
+                <input v-model="form.nombre_producto" class="campo" required placeholder="Ej. Whisky Premium" />
+              </div>
+              <div class="form-fila">
+                <div class="grupo-campo">
+                  <label class="etiqueta">Categoría *</label>
+                  <BaseSelect v-model="form.id_categoria" :options="opcionesCategoria" placeholder="Seleccionar categoría…" />
+                </div>
+                <div class="grupo-campo">
+                  <label class="etiqueta">Stock actual *</label>
+                  <div class="campo-adorno">
+                    <input v-model.number="form.stock_actual" type="number" class="campo campo--sufijo" min="0" required />
+                    <span class="adorno adorno--der">u.</span>
+                  </div>
+                </div>
               </div>
               <div class="grupo-campo">
-                <label class="etiqueta">Stock actual *</label>
-                <input v-model.number="form.stock_actual" type="number" class="campo" min="0" required />
+                <label class="etiqueta">Descripción</label>
+                <textarea v-model="form.descripcion" class="campo" rows="2" placeholder="Descripción opcional..."></textarea>
               </div>
-            </div>
-            <div class="form-fila">
+            </section>
+
+            <!-- Sección: precios -->
+            <section class="form-seccion">
+              <p class="seccion-titulo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V7a2 2 0 0 0-2-2h-5L3 15l6 6 10-10Z"/><circle cx="9" cy="9" r="1.4"/></svg>
+                Precios
+              </p>
+              <div class="form-fila">
+                <div class="grupo-campo">
+                  <label class="etiqueta">Precio base *</label>
+                  <div class="campo-adorno">
+                    <span class="adorno">Bs.</span>
+                    <input v-model.number="form.precio_base" type="number" step="0.01" class="campo campo--prefijo" required min="0" />
+                  </div>
+                </div>
+                <div class="grupo-campo">
+                  <label class="etiqueta">Precio promoción</label>
+                  <div class="campo-adorno">
+                    <span class="adorno">Bs.</span>
+                    <input v-model.number="form.precio_promocion" type="number" step="0.01" class="campo campo--prefijo" min="0" />
+                  </div>
+                </div>
+              </div>
+              <div class="switches-fila">
+                <label class="switch-row">
+                  <span class="switch"><input type="checkbox" v-model="form.estado_promocion" /><span class="switch-track"><span class="switch-thumb"></span></span></span>
+                  <span class="switch-info"><span class="switch-txt">En promoción</span><span class="switch-desc">Muestra el precio rebajado</span></span>
+                </label>
+                <label class="switch-row">
+                  <span class="switch"><input type="checkbox" v-model="form.es_combo" /><span class="switch-track"><span class="switch-thumb"></span></span></span>
+                  <span class="switch-info"><span class="switch-txt">Es combo</span><span class="switch-desc">Agrupa varios productos</span></span>
+                </label>
+              </div>
+            </section>
+
+            <!-- Sección: imagen -->
+            <section class="form-seccion">
+              <p class="seccion-titulo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m21 16-5-5L5 20"/></svg>
+                Imagen del producto
+              </p>
               <div class="grupo-campo">
-                <label class="etiqueta">Precio base (Bs.) *</label>
-                <input v-model.number="form.precio_base" type="number" step="0.01" class="campo" required min="0" />
+              <div
+                class="dropzone"
+                :class="{ 'dropzone--arrastrando': arrastrando, 'dropzone--lleno': !!imagenPreview }"
+                role="button"
+                tabindex="0"
+                @click="dispararSelector"
+                @keydown.enter.prevent="dispararSelector"
+                @keydown.space.prevent="dispararSelector"
+                @dragover.prevent="arrastrando = true"
+                @dragenter.prevent="arrastrando = true"
+                @dragleave.prevent="arrastrando = false"
+                @drop.prevent="onSoltar"
+              >
+                <input ref="inputArchivo" type="file" accept="image/*" class="dropzone-input" @change="manejarArchivo" />
+
+                <template v-if="imagenPreview">
+                  <img :src="imagenPreview" alt="Vista previa de la imagen" class="dropzone-preview" />
+                  <div class="dropzone-velo">
+                    <span class="dropzone-cambiar">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                      Cambiar imagen
+                    </span>
+                  </div>
+                  <button v-if="archivoImagen" type="button" class="dropzone-quitar" aria-label="Quitar la imagen seleccionada" @click.stop="quitarImagen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="15" height="15" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                  <span v-if="archivoImagen" class="dropzone-nombre">{{ archivoImagen.name }}</span>
+                </template>
+
+                <template v-else>
+                  <span class="dropzone-icono" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="30" height="30" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                  </span>
+                  <p class="dropzone-titulo">Arrastrá una imagen aquí</p>
+                  <p class="dropzone-sub">o <span class="dropzone-link">hacé clic para elegir</span></p>
+                  <p class="dropzone-formatos">PNG, JPG o WEBP · hasta 5&nbsp;MB</p>
+                </template>
               </div>
-              <div class="grupo-campo">
-                <label class="etiqueta">Precio promoción (Bs.)</label>
-                <input v-model.number="form.precio_promocion" type="number" step="0.01" class="campo" min="0" />
+              <p v-if="errorImagen" class="dropzone-error">{{ errorImagen }}</p>
               </div>
-            </div>
-            <div class="grupo-campo">
-              <label class="etiqueta">Descripción</label>
-              <textarea v-model="form.descripcion" class="campo" rows="2" placeholder="Descripción opcional..."></textarea>
-            </div>
-            <div class="grupo-campo">
-              <label class="etiqueta">Imagen (Cloudinary)</label>
-              <input type="file" accept="image/*" @change="manejarArchivo" class="campo" />
-            </div>
-            <div class="toggles-fila">
-              <label class="toggle-label"><input type="checkbox" v-model="form.estado_promocion" /> En promoción</label>
-              <label class="toggle-label"><input type="checkbox" v-model="form.es_combo" /> Es combo</label>
-            </div>
+            </section>
 
             <!-- Editor de combo: qué productos lo componen -->
             <div v-if="form.es_combo" class="combo-editor">
@@ -386,13 +469,46 @@ const listaPaginada = computed(() => {
 
 watch([busqueda, filtroCategoria, soloPromos], () => { pagina.value = 1 })
 
-function manejarArchivo(e) {
-  archivoImagen.value = e.target.files[0]
+// ── Dropzone de imagen (arrastrar-y-soltar + clic) ───────────────────────────
+const inputArchivo = ref(null)
+const arrastrando = ref(false)
+const previewImagen = ref('')   // data URL del archivo recién elegido
+const errorImagen = ref('')
+
+// Qué mostrar: el archivo nuevo si lo hay; si no, la imagen actual (al editar)
+const imagenPreview = computed(() => previewImagen.value || productoEditando.value?.url_imagen || '')
+
+function dispararSelector() { inputArchivo.value?.click() }
+
+function manejarArchivo(e) { procesarArchivo(e.target.files?.[0]) }
+
+function onSoltar(e) {
+  arrastrando.value = false
+  procesarArchivo(e.dataTransfer?.files?.[0])
+}
+
+function procesarArchivo(file) {
+  if (!file) return
+  if (!file.type.startsWith('image/')) { errorImagen.value = 'El archivo debe ser una imagen (PNG, JPG o WEBP).'; return }
+  if (file.size > 5 * 1024 * 1024) { errorImagen.value = 'La imagen no debe pesar más de 5 MB.'; return }
+  errorImagen.value = ''
+  archivoImagen.value = file
+  const lector = new FileReader()
+  lector.onload = () => { previewImagen.value = lector.result }
+  lector.readAsDataURL(file)
+}
+
+function quitarImagen() {
+  archivoImagen.value = null
+  previewImagen.value = ''
+  errorImagen.value = ''
+  if (inputArchivo.value) inputArchivo.value.value = ''
 }
 
 async function abrirModal(p=null){
   productoEditando.value=p;
   archivoImagen.value=null;
+  previewImagen.value=''; errorImagen.value=''; arrastrando.value=false;
   componentesCombo.value = []
   comboSel.value = ''
   comboCant.value = 1
@@ -729,7 +845,102 @@ async function eliminarCategoria(cat) {
 .grupo-campo{display:flex;flex-direction:column;gap:6px}
 .etiqueta{font-size:.8rem;color:var(--texto-secundario);font-weight:500;letter-spacing:.01em}
 .toggles-fila{display:flex;gap:1.5rem;flex-wrap:wrap;padding:.25rem 0}
-.modal-footer{display:flex;justify-content:flex-end;gap:.75rem;padding-top:.75rem;border-top:1px solid var(--borde-sutil);margin-top:.25rem}
+.modal-footer{display:flex;justify-content:flex-end;gap:.75rem;padding-top:1rem;border-top:1px solid var(--borde-sutil);margin-top:.1rem}
+.modal-footer .btn{min-width:118px;justify-content:center;padding-top:11px;padding-bottom:11px}
+
+/* Cabecera con icono + subtítulo */
+.mc-titulo{display:flex;align-items:center;gap:12px;min-width:0}
+.mc-icono{flex-shrink:0;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--radio-md);color:#fff;background:var(--gradiente-marca);box-shadow:0 4px 14px rgba(168,85,247,.35)}
+.mc-textos{min-width:0}
+.mc-sub{margin:2px 0 0;font-size:.78rem;color:var(--texto-secundario);font-weight:400;line-height:1.2}
+
+/* Secciones del formulario */
+.form-seccion{display:flex;flex-direction:column;gap:.8rem;padding:1rem 1.05rem 1.1rem;border:1px solid var(--borde-sutil);border-radius:var(--radio-lg);background:rgba(255,255,255,.018)}
+.seccion-titulo{display:flex;align-items:center;gap:7px;margin:0 0 .1rem;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--morado-hover)}
+.seccion-titulo svg{opacity:.9}
+
+/* Campos con adorno (Bs. / u.) */
+.campo-adorno{position:relative;display:flex;align-items:center}
+.campo-adorno .campo{width:100%}
+.adorno{position:absolute;top:50%;transform:translateY(-50%);left:14px;font-size:.85rem;font-weight:600;color:var(--texto-desactivado);pointer-events:none;font-variant-numeric:tabular-nums}
+.adorno--der{left:auto;right:14px}
+.campo--prefijo{padding-left:44px}
+.campo--sufijo{padding-right:34px}
+
+/* Switches modernos (reemplazan los checkboxes) */
+.switches-fila{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.switch-row{display:flex;align-items:center;gap:.65rem;padding:.65rem .75rem;border:1px solid var(--borde-sutil);border-radius:var(--radio-md);background:var(--fondo-tarjeta-alt);cursor:pointer;user-select:none;transition:border-color var(--trans-rapida),background var(--trans-rapida)}
+.switch-row:hover{border-color:var(--borde-activo)}
+.switch-row:has(input:checked){border-color:var(--morado-brillante);background:rgba(168,85,247,.09)}
+.switch{position:relative;flex-shrink:0;width:40px;height:22px}
+.switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
+.switch-track{position:absolute;inset:0;border-radius:var(--radio-full);background:rgba(255,255,255,.14);transition:background var(--trans-rapida)}
+.switch-thumb{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:var(--radio-full);background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform .22s cubic-bezier(.34,1.56,.64,1)}
+.switch input:checked+.switch-track{background:var(--gradiente-marca)}
+.switch input:checked+.switch-track .switch-thumb{transform:translateX(18px)}
+.switch input:focus-visible+.switch-track{box-shadow:0 0 0 3px var(--rosa-suave)}
+.switch-info{display:flex;flex-direction:column;gap:1px;line-height:1.15;min-width:0}
+.switch-txt{font-size:.85rem;font-weight:600;color:var(--texto-principal)}
+.switch-desc{font-size:.7rem;color:var(--texto-desactivado)}
+@media(max-width:480px){.switches-fila{grid-template-columns:1fr}}
+
+/* Dropzone de imagen: arrastrar-y-soltar + clic */
+.dropzone{
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;min-height:150px;padding:1.1rem;text-align:center;cursor:pointer;overflow:hidden;
+  border:1.5px dashed var(--borde-sutil);border-radius:var(--radio-lg);
+  background:var(--fondo-tarjeta-alt);
+  transition:border-color var(--trans-rapida),background var(--trans-rapida),box-shadow var(--trans-rapida),transform var(--trans-rapida);
+}
+.dropzone:hover{border-color:var(--morado-brillante);background:var(--fondo-tarjeta)}
+.dropzone:focus-visible{outline:none;border-color:var(--morado-brillante);box-shadow:0 0 0 3px var(--rosa-suave)}
+.dropzone--arrastrando{
+  border-color:var(--morado-brillante);border-style:solid;background:var(--fondo-tarjeta);
+  box-shadow:0 0 0 3px var(--rosa-suave);transform:scale(1.01);
+}
+.dropzone--lleno{border-style:solid;padding:0;background:#000}
+.dropzone-input{display:none}
+
+.dropzone-icono{
+  display:grid;place-items:center;width:52px;height:52px;border-radius:var(--radio-full);
+  color:var(--morado-brillante);background:var(--gradiente-sutil);
+  transition:transform var(--trans-normal);
+}
+.dropzone:hover .dropzone-icono{transform:translateY(-2px)}
+.dropzone--arrastrando .dropzone-icono{transform:translateY(-3px) scale(1.06)}
+.dropzone-titulo{margin:2px 0 0;font-size:.92rem;font-weight:600;color:var(--texto-principal)}
+.dropzone-sub{margin:0;font-size:.82rem;color:var(--texto-secundario)}
+.dropzone-link{color:var(--morado-brillante);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.dropzone-formatos{margin:4px 0 0;font-size:.72rem;color:var(--texto-desactivado);letter-spacing:.02em}
+
+/* Con imagen cargada: preview a pantalla completa del dropzone + velo al hover */
+.dropzone-preview{width:100%;height:220px;object-fit:contain;display:block;background:
+  repeating-conic-gradient(var(--fondo-tarjeta-alt) 0% 25%, var(--fondo-tarjeta) 0% 50%) 50%/22px 22px}
+.dropzone-velo{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(0deg,rgba(14,8,33,.55),rgba(14,8,33,.25));
+  opacity:0;transition:opacity var(--trans-rapida);
+}
+.dropzone--lleno:hover .dropzone-velo,.dropzone--arrastrando .dropzone-velo{opacity:1}
+.dropzone-cambiar{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:var(--radio-full);
+  font-size:.85rem;font-weight:600;color:#fff;background:var(--gradiente-marca);
+  box-shadow:var(--sombra-modal);
+}
+.dropzone-quitar{
+  position:absolute;top:9px;right:9px;z-index:2;display:grid;place-items:center;
+  width:30px;height:30px;border:none;border-radius:var(--radio-full);cursor:pointer;
+  color:#fff;background:rgba(14,8,33,.6);backdrop-filter:blur(4px);
+  transition:background var(--trans-rapida),transform var(--trans-rapida);
+}
+.dropzone-quitar:hover{background:var(--color-error);transform:scale(1.08)}
+.dropzone-nombre{
+  position:absolute;left:9px;bottom:9px;max-width:calc(100% - 54px);z-index:2;
+  padding:4px 10px;border-radius:var(--radio-full);font-size:.72rem;color:#fff;
+  background:rgba(14,8,33,.6);backdrop-filter:blur(4px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.dropzone-error{margin:2px 0 0;font-size:.78rem;color:var(--color-error);font-weight:500}
 
 /* Gestión de categorías */
 .categorias-cuerpo{padding:1.5rem}
