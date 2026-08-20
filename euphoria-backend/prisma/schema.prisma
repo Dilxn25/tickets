@@ -229,6 +229,7 @@ model producto {
   detalle_comanda                                         detalle_comanda[]
   prediccion_ia                                           prediccion_ia[]
   historial_precio                                        historial_precio[]
+  reposicion                                              reposicion[]
   categoria                                               categoria          @relation(fields: [id_categoria], references: [id_categoria], map: "PRODUCTO_id_categoria_fkey")
 
   @@index([id_categoria], map: "PRODUCTO_id_categoria_fkey")
@@ -322,6 +323,8 @@ model usuario {
   notificacion                        notificacion[]
   retiros_cliente                     solicitud_retiro[]    @relation("retiro_cliente")
   retiros_cajero                      solicitud_retiro[]    @relation("retiro_cajero")
+  reposiciones_como_responsable       reposicion[]          @relation("reposicion_responsable")
+  reposiciones_registradas            reposicion[]          @relation("reposicion_registrador")
   rol                                 rol                   @relation(fields: [id_rol], references: [id_rol], map: "USUARIO_id_rol_fkey")
 
   @@index([id_rol], map: "USUARIO_id_rol_fkey")
@@ -424,6 +427,10 @@ model asignacion_mesa {
   id_mesero        Int
   estado           String       @default("asignada") @db.VarChar(20)
   fecha_asignacion DateTime
+  // Trazabilidad de la rotación: cuándo se cerró la atención y quién la cerró
+  // (el historial dice: esta mesa estaba asignada a este cliente, de tal hora a tal hora).
+  fecha_cierre     DateTime?
+  cerrada_por      Int?
   mesa_espacio     mesa_espacio @relation(fields: [id_mesa], references: [id_mesa], map: "ASIGNACION_id_mesa_fkey")
   usuario          usuario      @relation(fields: [id_mesero], references: [id_usuario], map: "ASIGNACION_id_mesero_fkey")
   entrada          entrada?     @relation(fields: [id_entrada], references: [id_entrada], map: "ASIGNACION_id_entrada_fkey")
@@ -431,6 +438,28 @@ model asignacion_mesa {
   @@index([id_mesa], map: "ASIGNACION_id_mesa_fkey")
   @@index([id_mesero], map: "ASIGNACION_id_mesero_fkey")
   @@index([id_entrada], map: "ASIGNACION_id_entrada_fkey")
+}
+
+// Reposición por accidente/merma: NO es una venta. El bartender registra qué
+// producto se repuso, cuántas unidades y QUIÉN cometió el error (para el
+// reporte de personal del admin). Descuenta stock sin generar transacción.
+model reposicion {
+  id_reposicion  Int      @id @default(autoincrement())
+  id_producto    Int
+  cantidad       Int      @default(1)
+  id_responsable Int
+  id_registrador Int
+  motivo         String?  @db.VarChar(200)
+  id_evento      Int?
+  fecha_hora     DateTime @default(now())
+  producto       producto @relation(fields: [id_producto], references: [id_producto], map: "REPOSICION_id_producto_fkey")
+  responsable    usuario  @relation("reposicion_responsable", fields: [id_responsable], references: [id_usuario], map: "REPOSICION_id_responsable_fkey")
+  registrador    usuario  @relation("reposicion_registrador", fields: [id_registrador], references: [id_usuario], map: "REPOSICION_id_registrador_fkey")
+
+  @@index([id_producto], map: "REPOSICION_id_producto_fkey")
+  @@index([id_responsable], map: "REPOSICION_id_responsable_fkey")
+  @@index([id_registrador], map: "REPOSICION_id_registrador_fkey")
+  @@index([fecha_hora])
 }
 
 model configuracion {
