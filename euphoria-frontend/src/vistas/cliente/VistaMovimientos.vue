@@ -26,22 +26,23 @@
     </div>
 
     <!-- Filtro por evento: SOLO los eventos a los que este cliente asistió -->
-    <div v-if="misEventos.length && !cargando && !errorCarga" class="filtros-movimientos filtros-eventos" role="group" aria-label="Filtrar por evento">
-      <span class="lbl-eventos">
+    <div v-if="misEventos.length && !cargando && !errorCarga" class="selector-evento">
+      <label class="lbl-eventos" for="sel-evento">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-        Tus eventos
-      </span>
-      <button type="button" class="chip-filtro" :class="{ activo: eventoActivo === null }" @click="setEvento(null)">Todos</button>
-      <button
-        v-for="ev in misEventos"
-        :key="ev.id_evento"
-        type="button"
-        class="chip-filtro"
-        :class="{ activo: eventoActivo === ev.id_evento }"
-        @click="setEvento(ev.id_evento)"
-      >
-        {{ ev.nombre }}
-      </button>
+        Ver movimientos de
+      </label>
+      <div class="sel-caja">
+        <BaseSelect
+          id="sel-evento"
+          :model-value="eventoActivo ?? ''"
+          :options="opcionesEvento"
+          placeholder="Todos tus eventos"
+          @update:model-value="setEvento($event === '' ? null : Number($event))"
+        />
+      </div>
+      <p v-if="eventoActivo !== null" class="nota-evento">
+        Las recargas y los retiros no aparecen aquí: son dinero que entra o sale de tu billetera, no pertenecen a un evento.
+      </p>
     </div>
 
     <!-- Skeleton mientras carga -->
@@ -294,6 +295,7 @@ import { io } from 'socket.io-client'
 import { useRouter } from 'vue-router'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { servicioBilletera } from '@/servicios-api/servicio-billetera.js'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { formatoMoneda, formatoMonto, formatoFecha } from '@/utilidades/formato.js'
 
 const router = useRouter()
@@ -333,8 +335,17 @@ async function cargarMisEventos() {
 }
 function setEvento(id) {
   eventoActivo.value = id
+  // Al mirar un evento, los filtros que no le pertenecen dejarían la lista vacía
+  // sin explicación, así que se vuelve a "Todos".
+  if (id !== null && ['recarga', 'retiro'].includes(filtroActivo.value)) filtroActivo.value = 'todos'
   cargarMovimientos()
 }
+
+// Opciones del desplegable: primero "todos", después cada evento asistido.
+const opcionesEvento = computed(() => [
+  { value: '', label: 'Todos tus eventos' },
+  ...misEventos.value.map(ev => ({ value: ev.id_evento, label: ev.nombre })),
+])
 
 // Filtros rápidos por tipo
 const FILTROS = [
@@ -650,13 +661,22 @@ button.mov-fila:focus-visible {
 }
 .mov-saldos b { color: var(--texto-secundario); font-weight: 700; }
 
-/* Fila de eventos asistidos */
-.filtros-eventos { align-items: center; }
+/* Selector del evento asistido */
+.selector-evento {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 1rem; max-width: 340px;
+}
 .lbl-eventos {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--texto-desactivado); margin-right: 2px;
+  letter-spacing: 0.06em; color: var(--texto-desactivado);
 }
+.sel-caja { width: 100%; }
+.nota-evento {
+  margin: 0; font-size: 0.74rem; line-height: 1.4;
+  color: var(--texto-desactivado);
+}
+@media (max-width: 560px) { .selector-evento { max-width: 100%; } }
 
 .mov-ver {
   display: inline-flex;

@@ -243,7 +243,9 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         where: { id_billetera: billetera.id_billetera, tipo_operacion: { in: ['Consumo', 'Reserva', 'reembolso', 'retiro', 'Retiro'] } },
         include: {
           usuario: { select: { nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
-          comanda: { select: { id_comanda: true, metodo_pago: true, origen: true, modo_entrega: true, detalle_comanda: { select: { subtotal: true } }, _count: { select: { detalle_comanda: true } } } },
+          comanda: { select: { id_comanda: true, metodo_pago: true, origen: true, modo_entrega: true, detalle_comanda: { select: { subtotal: true } }, _count: { select: { detalle_comanda: true } },
+            // Evento al que pertenece el pedido (vía la entrada que lo originó)
+            entrada: { select: { zona: { select: { evento: { select: { id_evento: true } } } } } } } },
         },
         orderBy: { fecha_hora: 'desc' },
         take: 100,
@@ -251,7 +253,7 @@ router.get('/movimientos', verificarToken, async (req, res) => {
       prisma.entrada.findMany({
         where: { id_usuario },
         include: {
-          zona: { select: { nombre_zona: true, evento: { select: { nombre_evento: true } } } },
+          zona: { select: { nombre_zona: true, evento: { select: { id_evento: true, nombre_evento: true } } } },
           mesa_espacio: { select: { numero_nombre: true, tipo_elemento: true } },
         },
         orderBy: { fecha_reserva: 'desc' },
@@ -273,6 +275,8 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         fecha: r.fecha_solicitud,
         estado: r.estado,
         numero_transaccion: r.numero_transaccion,
+        // Una recarga es dinero que entra a la billetera: no pertenece a ningún evento.
+        id_evento: null,
       })
     }
 
@@ -304,6 +308,7 @@ router.get('/movimientos', verificarToken, async (req, res) => {
           comision_retenida: comisionRetenida,
           comision_pct: comisionPct,
           devuelto: Math.round(devuelto * 100) / 100,
+          id_evento: t.comanda?.entrada?.zona?.evento?.id_evento ?? null,
         })
         continue
       }
@@ -313,6 +318,8 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         movimientos.push({
           id: `T-${t.id_transaccion}`, tipo: 'retiro', titulo: 'Retiro de saldo',
           detalle: 'Retiraste tu dinero en caja', monto: -parseFloat(t.monto), fecha: t.fecha_hora, estado: 'completada',
+          // Un retiro es dinero que sale de la billetera: tampoco pertenece a un evento.
+          id_evento: null,
         })
         continue
       }
@@ -351,6 +358,11 @@ router.get('/movimientos', verificarToken, async (req, res) => {
         estado: 'completada',
         id_comanda: esConsumo ? t.id_comanda : null,
         items: esConsumo ? (t.comanda?._count?.detalle_comanda ?? null) : null,
+        // El pedido hereda el evento de la entrada que lo originó; la reserva,
+        // el de la zona donde se reservó.
+        id_evento: esConsumo
+          ? (t.comanda?.entrada?.zona?.evento?.id_evento ?? null)
+          : (entradaAsociada?.zona?.evento?.id_evento ?? null),
       })
     }
 
@@ -371,17 +383,24 @@ router.get('/movimientos', verificarToken, async (req, res) => {
       saldoCorriente = m.saldo_antes
     }
 
-    // ---- Filtro por evento asistido (?evento=id): la ventana horaria del ----
-    // evento delimita qué movimientos le pertenecen (recargas, consumos y
-    // reservas hechos durante esa noche).
+    // ---- Filtro por evento asistido (?evento=id) ----------------------------
+    // Un movimiento pertenece a un evento por su RELACIÓN, no por la hora en que
+    // ocurrió: la reserva por su zona, el pedido y la devolución por la entrada
+    // que los originó. Las recargas y los retiros quedan siempre fuera, porque
+    // son dinero que entra o sale de la billetera y no dependen de ningún evento.
+    // Si un pedido no tiene entrada asociada (se pidió en barra sin reserva), se
+    // resuelve por la ventana horaria del evento para no dejarlo huérfano.
     let lista = movimientos
     const idEvento = Number(req.query.evento) || null
     if (idEvento) {
       const ev = await prisma.evento.findUnique({ where: { id_evento: idEvento } })
       if (ev) {
+        const SIN_EVENTO = new Set(['recarga', 'retiro'])
         const ini = new Date(ev.fecha_hora_inicio)
         const fin = ev.fecha_hora_fin ? new Date(ev.fecha_hora_fin) : new Date(ini.getTime() + 24 * 3600 * 1000)
         lista = movimientos.filter(m => {
+          if (SIN_EVENTO.has(m.tipo)) return false
+          if (m.id_evento != null) return m.id_evento === idEvento
           const f = new Date(m.fecha)
           return f >= ini && f <= fin
         })
