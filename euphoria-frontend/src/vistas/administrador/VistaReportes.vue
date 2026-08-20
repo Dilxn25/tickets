@@ -525,6 +525,31 @@
               <button class="btn-ver-historial" @click="abrirModal('personal')">Ver todo el personal</button>
             </div>
           </div>
+
+          <!-- Incidentes de reposición: quiénes rompen/derraman más y cuánto cuesta -->
+          <div class="tarjeta-grafico" style="margin-top: 16px;">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Incidentes de reposición</h3>
+                <span class="subtexto-grafico">Productos repuestos por descuido (no son ventas)</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M12 2.7 6.2 8.5a8 8 0 1 0 11.6 0z"></path><path d="M12 12v4"></path><path d="M12 19h.01"></path></svg>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-admin">
+                <thead><tr><th>Responsable</th><th>Incidentes</th><th>Unidades</th><th>Costo est.</th></tr></thead>
+                <tbody>
+                  <tr v-for="r in resumenReposiciones" :key="r.id_usuario">
+                    <td style="font-weight:600;">{{ r.nombre }} <span class="texto-sutil" style="font-size:0.72rem">{{ r.rol }}</span></td>
+                    <td>{{ r.incidentes }}</td>
+                    <td>{{ r.unidades }}</td>
+                    <td>Bs. {{ r.costo_estimado.toFixed(2) }}</td>
+                  </tr>
+                  <tr v-if="resumenReposiciones.length === 0"><td colspan="4" class="texto-centro">Sin reposiciones registradas. Buena señal: nadie rompió nada.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1464,6 +1489,8 @@ const modalActivo = ref(null)
 const listadoClientes = ref([])
 const listadoPersonal = ref([])
 const listadoEventos = ref([])
+// Incidentes de reposición (mermas) agrupados por responsable
+const resumenReposiciones = ref([])
 
 // Pestaña activa del dashboard (híbrido: pestañas + denso + dos columnas)
 const pestana = ref('general')
@@ -2016,6 +2043,11 @@ async function cargarReportes(silencioso = false) {
       stats.value.clientes = listadoClientes.value.length
       stats.value.personal = listadoPersonal.value.length
     } catch (e) { console.warn(e) }
+
+    // 2.b Incidentes de reposición (mermas por descuido, agrupadas por responsable)
+    try {
+      resumenReposiciones.value = await clienteHttp.get('/productos/reposiciones/resumen')
+    } catch { resumenReposiciones.value = [] }
 
     // 3. Eventos y Asistencia real
     try {

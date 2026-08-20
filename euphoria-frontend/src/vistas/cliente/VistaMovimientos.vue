@@ -25,6 +25,25 @@
       </button>
     </div>
 
+    <!-- Filtro por evento: SOLO los eventos a los que este cliente asistió -->
+    <div v-if="misEventos.length && !cargando && !errorCarga" class="filtros-movimientos filtros-eventos" role="group" aria-label="Filtrar por evento">
+      <span class="lbl-eventos">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Tus eventos
+      </span>
+      <button type="button" class="chip-filtro" :class="{ activo: eventoActivo === null }" @click="setEvento(null)">Todos</button>
+      <button
+        v-for="ev in misEventos"
+        :key="ev.id_evento"
+        type="button"
+        class="chip-filtro"
+        :class="{ activo: eventoActivo === ev.id_evento }"
+        @click="setEvento(ev.id_evento)"
+      >
+        {{ ev.nombre }}
+      </button>
+    </div>
+
     <!-- Skeleton mientras carga -->
     <div v-if="cargando" class="lista-movimientos" aria-hidden="true">
       <div v-for="n in 6" :key="n" class="mov-fila mov-esqueleto">
@@ -132,6 +151,10 @@
 
         <span class="mov-lado">
           <span class="mov-monto" :class="{ 'mov-monto-positivo': Number(mov.monto) > 0 }">{{ formatoMonto(mov.monto) }}</span>
+          <!-- Historial de saldo: cuánto tenía antes y cuánto quedó después -->
+          <span v-if="mov.saldo_antes != null" class="mov-saldos" title="Saldo antes y después de este movimiento">
+            Bs {{ formatoMoneda(mov.saldo_antes) }} → <b>Bs {{ formatoMoneda(mov.saldo_despues) }}</b>
+          </span>
           <span v-if="mov.estado && mov.estado !== 'completada'" :class="['badge', `badge-${mov.estado}`]">{{ mov.estado }}</span>
           <span v-if="esTocable(mov)" class="mov-ver">Ver detalle
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -289,7 +312,8 @@ const errorCarga = ref(false)
 async function cargarMovimientos(silencioso = false) {
   if (!silencioso) { cargando.value = true; errorCarga.value = false }
   try {
-    const res = await servicioBilletera.obtenerMovimientos()
+    const params = eventoActivo.value ? { evento: eventoActivo.value } : {}
+    const res = await servicioBilletera.obtenerMovimientos(params)
     movimientos.value = res?.movimientos || []
   } catch (error) {
     console.error('Error cargando movimientos:', error)
@@ -297,6 +321,19 @@ async function cargarMovimientos(silencioso = false) {
   } finally {
     cargando.value = false
   }
+}
+
+// ===== Filtro por evento asistido =====
+// Solo salen los eventos donde ESTE cliente tuvo una reserva/entrada.
+const misEventos = ref([])
+const eventoActivo = ref(null)
+async function cargarMisEventos() {
+  try { misEventos.value = await servicioBilletera.misEventos() }
+  catch { misEventos.value = [] }
+}
+function setEvento(id) {
+  eventoActivo.value = id
+  cargarMovimientos()
 }
 
 // Filtros rápidos por tipo
@@ -376,6 +413,7 @@ const idUsuario = JSON.parse(localStorage.getItem('euphoria_usuario') || '{}')?.
 
 onMounted(() => {
   cargarMovimientos()
+  cargarMisEventos()
   // Tiempo real: los movimientos se refrescan solos cuando cambia el saldo
   // (recarga, consumo, reserva, retiro o devolución del propio usuario).
   socket = io({ path: '/socket.io' })
@@ -602,6 +640,23 @@ button.mov-fila:focus-visible {
 }
 
 .mov-monto-positivo { color: var(--color-exito); }
+
+/* Historial de saldo: "tenía → quedó" en cada movimiento */
+.mov-saldos {
+  font-size: 0.7rem;
+  color: var(--texto-desactivado);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mov-saldos b { color: var(--texto-secundario); font-weight: 700; }
+
+/* Fila de eventos asistidos */
+.filtros-eventos { align-items: center; }
+.lbl-eventos {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--texto-desactivado); margin-right: 2px;
+}
 
 .mov-ver {
   display: inline-flex;

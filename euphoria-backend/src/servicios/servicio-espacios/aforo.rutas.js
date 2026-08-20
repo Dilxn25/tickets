@@ -417,7 +417,10 @@ router.get('/eventos', soloRoles('Recepcionista', 'Administrador', 'Bartender', 
 // ============================================
 // Asignación de meseros a mesas (Fase B)
 // ============================================
-const ROLES_MESERO = ['Mesero', 'Bartender']
+// SOLO los usuarios con rol Mesero atienden mesas. (Antes incluía 'Bartender'
+// y recepción terminaba asignándole mesas al bartender — eso estaba mal:
+// el bartender prepara en barra, no atiende mesas.)
+const ROLES_MESERO = ['Mesero']
 
 // Mesero activo con menos mesas asignadas (para sugerir al hacer check-in)
 async function meseroConMenosCarga() {
@@ -436,8 +439,10 @@ async function meseroConMenosCarga() {
   return cargas[0]
 }
 
-// GET /api/aforo/meseros — meseros activos con su carga (para elegir/cambiar)
-router.get('/meseros', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+// GET /api/aforo/meseros — meseros activos con su carga (para elegir/cambiar).
+// El bartender también puede consultar: él asigna mesero cuando recibe gente
+// directo en barra. Orden: los MÁS LIBRES arriba (menos mesas primero).
+router.get('/meseros', soloRoles('Recepcionista', 'Administrador', 'Bartender'), async (req, res) => {
   try {
     const meseros = await prisma.usuario.findMany({
       where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
@@ -451,6 +456,8 @@ router.get('/meseros', soloRoles('Recepcionista', 'Administrador'), async (req, 
         where: { id_mesero: m.id_usuario, estado: { in: ['asignada', 'atendiendo'] } },
       }),
     })))
+    // Los más libres arriba; a igual carga, alfabético
+    conCarga.sort((a, b) => a.carga - b.carga || a.nombre.localeCompare(b.nombre))
     res.json(conCarga)
   } catch (e) {
     console.error('Error listando meseros:', e)
@@ -458,16 +465,25 @@ router.get('/meseros', soloRoles('Recepcionista', 'Administrador'), async (req, 
   }
 })
 
-// POST /api/aforo/asignar-mesero — recepción asigna (o cambia) el mesero de una mesa
+// POST /api/aforo/asignar-mesero — recepción (o el bartender, cuando recibe
+// gente en barra) asigna o cambia el mesero de una mesa.
 // Body: { id_mesa, id_entrada?, id_mesero }
-router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador', 'Bartender'), async (req, res) => {
   try {
     const { id_mesa, id_entrada, id_mesero } = req.body
     if (!id_mesa || !id_mesero) return res.status(400).json({ error: 'Faltan datos (mesa y mesero)' })
-    // Cerrar la asignación activa previa de esa mesa (si la había)
+    // Validación dura: el asignado debe ser un MESERO real y activo. (Evita que
+    // por error se asigne al bartender, a un cajero o a una cuenta desactivada.)
+    const mesero = await prisma.usuario.findFirst({
+      where: { id_usuario: Number(id_mesero), estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
+      select: { id_usuario: true },
+    })
+    if (!mesero) return res.status(400).json({ error: 'Ese usuario no es un mesero activo. Solo se puede asignar a meseros.' })
+    // Cerrar la asignación activa previa de esa mesa (si la había), con rastro
+    // de cuándo y quién la cerró (fue un cambio de mesero, no una salida).
     await prisma.asignacion_mesa.updateMany({
       where: { id_mesa: Number(id_mesa), estado: { in: ['asignada', 'atendiendo'] } },
-      data: { estado: 'cerrada' },
+      data: { estado: 'cerrada', fecha_cierre: new Date(), cerrada_por: req.usuario.id },
     })
     const asignacion = await prisma.asignacion_mesa.create({
       data: {
@@ -563,18 +579,106 @@ router.post('/mesa/:idMesa/cerrar-atencion', soloRoles('Mesero', 'Bartender', 'R
   try {
     const idMesa = Number(req.params.idMesa)
     if (!idMesa) return res.status(400).json({ error: 'Mesa inválida' })
-    await prisma.asignacion_mesa.updateMany({
+
+    // Asignaciones activas de la mesa (con su entrada: quién estaba sentado ahí)
+    const activas = await prisma.asignacion_mesa.findMany({
       where: { id_mesa: idMesa, estado: { in: ['asignada', 'atendiendo'] } },
-      data: { estado: 'cerrada' },
+      include: { entrada: { select: { id_entrada: true, id_zona: true, cantidad_ingresada: true } } },
     })
+
+    const ahora = new Date()
+    const zonasTocadas = new Set()
+
+    await prisma.$transaction(async (tx) => {
+      // 1) Cerrar la asignación con rastro completo: fecha/hora de cierre y quién
+      //    la cerró. El registro dice: esta mesa ESTUVO asignada a este cliente
+      //    (id_entrada) con este mesero, de fecha_asignacion a fecha_cierre.
+      //    Que el grupo se haya ido no borra que estuvo: eso es el historial.
+      await tx.asignacion_mesa.updateMany({
+        where: { id_mesa: idMesa, estado: { in: ['asignada', 'atendiendo'] } },
+        data: { estado: 'cerrada', fecha_cierre: ahora, cerrada_por: req.usuario.id },
+      })
+
+      // 2) Registrar la SALIDA en el aforo: las personas de esa entrada ya no
+      //    están dentro, así el contador del recepcionista baja en vivo.
+      for (const a of activas) {
+        const dentro = a.entrada?.cantidad_ingresada || 0
+        if (!a.entrada || dentro <= 0) continue
+        await tx.entrada.updateMany({
+          where: { id_entrada: a.entrada.id_entrada, cantidad_ingresada: { gt: 0 } },
+          data: { cantidad_ingresada: 0, estado_validacion: false },
+        })
+        await tx.registro_aforo.create({
+          data: {
+            id_zona: a.entrada.id_zona,
+            id_entrada: a.entrada.id_entrada,
+            id_recepcionista: req.usuario.id, // quién registró la salida (aquí: el mesero)
+            tipo_movimiento: 'salida',
+            cantidad: dentro,
+            fecha_hora: ahora,
+          },
+        })
+        zonasTocadas.add(a.entrada.id_zona)
+      }
+
+      // 3) La mesa queda libre para el siguiente grupo
+      await tx.mesa_espacio.update({ where: { id_mesa: idMesa }, data: { estado_ocupacion: 'libre' } })
+    })
+
+    // Avisos en tiempo real: mesa libre + aforo actualizado por zona
     const mesa = await prisma.mesa_espacio.findUnique({ where: { id_mesa: idMesa }, select: { id_zona: true } })
-    await prisma.mesa_espacio.update({ where: { id_mesa: idMesa }, data: { estado_ocupacion: 'libre' } })
     if (global.io && mesa) global.io.emit('mesa_actualizada', { id_zona: mesa.id_zona, id_mesa: idMesa, estado: 'libre' })
+    for (const idZona of zonasTocadas) {
+      const zona = await prisma.zona.findUnique({ where: { id_zona: idZona } })
+      if (zona && global.io) {
+        const aforoNuevo = await aforoActualZona(idZona)
+        global.io.emit('aforo_actualizado', resumenZona(zona, aforoNuevo))
+      }
+    }
     emitirRecurso('reservas', { id_mesa: idMesa })
-    res.json({ ok: true })
+    emitirRecurso('aforo', { id_mesa: idMesa })
+    res.json({ ok: true, salidas_registradas: zonasTocadas.size > 0 })
   } catch (e) {
     console.error('Error cerrando atención de mesa:', e)
     res.status(500).json({ error: 'No se pudo cerrar la atención de la mesa' })
+  }
+})
+
+// GET /api/aforo/historial-atenciones?evento=&mesero= — control estricto de qué
+// pasó con cada mesa: quién estaba (cliente de la entrada), qué mesero atendió,
+// en qué evento, cuándo se asignó y cuándo se marcó la salida.
+router.get('/historial-atenciones', soloRoles('Recepcionista', 'Administrador', 'Mesero', 'Bartender'), async (req, res) => {
+  try {
+    const idEvento = Number(req.query.evento) || null
+    const idMesero = Number(req.query.mesero) || null
+    const filas = await prisma.asignacion_mesa.findMany({
+      where: {
+        ...(idMesero ? { id_mesero: idMesero } : {}),
+        ...(idEvento ? { mesa_espacio: { zona: { id_evento: idEvento } } } : {}),
+      },
+      orderBy: { fecha_asignacion: 'desc' },
+      take: 120,
+      include: {
+        mesa_espacio: { select: { numero_nombre: true, zona: { select: { nombre_zona: true, evento: { select: { id_evento: true, nombre_evento: true } } } } } },
+        usuario: { select: { nombres: true, apellidos: true } },
+        entrada: { select: { usuario: { select: { nombres: true, apellidos: true } } } },
+      },
+    })
+    res.json(filas.map(a => ({
+      id_asignacion: a.id_asignacion,
+      mesa: a.mesa_espacio?.numero_nombre || null,
+      zona: a.mesa_espacio?.zona?.nombre_zona || null,
+      evento: a.mesa_espacio?.zona?.evento?.nombre_evento || null,
+      id_evento: a.mesa_espacio?.zona?.evento?.id_evento || null,
+      mesero: `${a.usuario.nombres} ${a.usuario.apellidos || ''}`.trim(),
+      cliente: a.entrada?.usuario ? `${a.entrada.usuario.nombres} ${a.entrada.usuario.apellidos || ''}`.trim() : null,
+      estado: a.estado,
+      fecha_asignacion: a.fecha_asignacion,
+      fecha_cierre: a.fecha_cierre,
+    })))
+  } catch (e) {
+    console.error('Error en historial de atenciones:', e)
+    res.status(500).json({ error: 'Error al obtener el historial de atenciones' })
   }
 })
 
@@ -709,6 +813,7 @@ router.get('/planos/:idEvento', soloRoles('Recepcionista', 'Administrador', 'Bar
             es_vip: enMesa?.usuario?.es_vip || false,
             reservados: enMesa?.cantidad_personas ?? null,
             ingresados: enMesa?.cantidad_ingresada ?? null,
+            id_entrada: enMesa?.id_entrada ?? null,
             mesero: asg?.usuario ? `${asg.usuario.nombres} ${asg.usuario.apellidos || ''}`.trim() : null,
           }
         }),

@@ -8,8 +8,14 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </header>
+        <!-- Filtro por evento: sin esto todas las entregas salen mezcladas y no
+             se sabe de qué noche son. -->
+        <div v-if="eventos.length > 1" class="hb-filtros" role="group" aria-label="Filtrar por evento">
+          <button :class="['hb-chip', { activo: eventoSel === null }]" @click="setEvento(null)">Todos</button>
+          <button v-for="e in eventos" :key="e.id_evento" :class="['hb-chip', { activo: eventoSel === e.id_evento }]" @click="setEvento(e.id_evento)">{{ e.nombre }}</button>
+        </div>
         <p v-if="cargando" class="hb-estado">Cargando…</p>
-        <p v-else-if="!items.length" class="hb-estado">Sin entregas todavía.</p>
+        <p v-else-if="!items.length" class="hb-estado">Sin entregas{{ eventoSel ? ' en este evento' : ' todavía' }}.</p>
         <article v-for="c in items" :key="c.id_comanda" class="hb-card">
           <div class="hb-top">
             <b>#{{ c.id_comanda }}</b>
@@ -31,18 +37,31 @@
 import { ref, onMounted } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 
-const props = defineProps({ filtro: { type: Object, default: () => ({}) } })
+const props = defineProps({
+  filtro: { type: Object, default: () => ({}) },
+  eventos: { type: Array, default: () => [] },
+})
 defineEmits(['cerrar'])
 
 const items = ref([])
 const cargando = ref(true)
+// Arranca con el evento que la barra ya tenía filtrado (si lo había)
+const eventoSel = ref(props.filtro?.evento ? Number(props.filtro.evento) : null)
+
 function hora(f) {
   return new Date(f).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
-onMounted(async () => {
-  try { items.value = await clienteHttp.get('/comandas/historial-bartender', { params: props.filtro }) }
-  catch { items.value = [] } finally { cargando.value = false }
-})
+async function cargar() {
+  cargando.value = true
+  try {
+    const params = { ...props.filtro }
+    if (eventoSel.value) params.evento = eventoSel.value
+    else delete params.evento
+    items.value = await clienteHttp.get('/comandas/historial-bartender', { params })
+  } catch { items.value = [] } finally { cargando.value = false }
+}
+function setEvento(id) { eventoSel.value = id; cargar() }
+onMounted(cargar)
 </script>
 
 <style scoped>
@@ -51,6 +70,15 @@ onMounted(async () => {
 .hb-cab { display: flex; align-items: center; justify-content: space-between; }
 .hb-cab b { color: var(--texto-principal); font-size: 1.05rem; font-family: var(--fuente-titulo); }
 .hb-x { width: 34px; height: 34px; border-radius: 50%; border: none; background: rgba(255,255,255,0.07); color: var(--texto-principal); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.hb-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.hb-chip {
+  padding: 6px 13px; border-radius: 999px; border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,0.03); color: var(--texto-secundario);
+  font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.hb-chip:hover { border-color: var(--borde-activo); color: var(--texto-principal); }
+.hb-chip.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.16); color: var(--morado-hover); }
 .hb-estado { margin: 0; text-align: center; padding: 1.8rem 0; font-size: 0.86rem; color: var(--texto-desactivado); }
 .hb-card { border: 1px solid var(--borde-sutil); border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 6px; }
 .hb-top { display: flex; align-items: center; justify-content: space-between; }

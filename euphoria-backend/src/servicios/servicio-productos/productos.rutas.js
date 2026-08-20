@@ -114,6 +114,143 @@ router.delete('/categorias/:id', soloRoles('Administrador'), async (req, res) =>
   } catch { res.status(500).json({ error: 'Error al eliminar categoría' }) }
 })
 
+// ============================================
+// REPOSICIONES (mermas por accidente): NO son ventas.
+// El bartender repone un producto que se cayó/derramó, descuenta stock y deja
+// registrado QUIÉN cometió el error, para el reporte de personal del admin.
+// (Estas rutas van ANTES de /:id para que "reposiciones" no se lea como un id.)
+// ============================================
+
+// ---- POST /api/productos/reposiciones — registrar una reposición ----
+// Body: { id_producto, cantidad, id_responsable, motivo?, id_evento? }
+router.post('/reposiciones', soloRoles('Bartender', 'Administrador'), async (req, res) => {
+  try {
+    const id_producto = Number(req.body.id_producto)
+    const cantidad = Number(req.body.cantidad) || 1
+    const id_responsable = Number(req.body.id_responsable)
+    const motivo = (req.body.motivo || '').toString().slice(0, 200) || null
+    const id_evento = Number(req.body.id_evento) || null
+    if (!id_producto || !id_responsable) return res.status(400).json({ error: 'Faltan datos: producto y responsable.' })
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 99) return res.status(400).json({ error: 'La cantidad debe ser un entero entre 1 y 99.' })
+
+    // El responsable debe ser personal operativo real (mesero o bartender activo)
+    const responsable = await prisma.usuario.findFirst({
+      where: { id_usuario: id_responsable, estado_cuenta: 'activo', rol: { nombre_rol: { in: ['Mesero', 'Bartender'] } } },
+      select: { id_usuario: true },
+    })
+    if (!responsable) return res.status(400).json({ error: 'El responsable debe ser un mesero o bartender activo.' })
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      // Descuento de stock atómico: solo si alcanza (no dejamos stock negativo)
+      const desc = await tx.producto.updateMany({
+        where: { id_producto, stock_actual: { gte: cantidad } },
+        data: { stock_actual: { decrement: cantidad } },
+      })
+      if (desc.count === 0) throw { status: 409, error: 'No hay stock suficiente para reponer esa cantidad.' }
+      return tx.reposicion.create({
+        data: { id_producto, cantidad, id_responsable, id_registrador: req.usuario.id, motivo, id_evento },
+      })
+    })
+
+    emitirCatalogoActualizado('stock-reposicion')
+    res.status(201).json({ ok: true, id_reposicion: resultado.id_reposicion })
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.error })
+    console.error('Error registrando reposición:', e)
+    res.status(500).json({ error: 'No se pudo registrar la reposición.' })
+  }
+})
+
+// ---- GET /api/productos/reposiciones?evento=&responsable= — listar ----
+router.get('/reposiciones', soloRoles('Bartender', 'Administrador'), async (req, res) => {
+  try {
+    const idEvento = Number(req.query.evento) || null
+    const idResp = Number(req.query.responsable) || null
+    const filas = await prisma.reposicion.findMany({
+      where: {
+        ...(idEvento ? { id_evento: idEvento } : {}),
+        ...(idResp ? { id_responsable: idResp } : {}),
+      },
+      orderBy: { fecha_hora: 'desc' },
+      take: 100,
+      include: {
+        producto: { select: { nombre_producto: true, precio_base: true, url_imagen: true } },
+        responsable: { select: { nombres: true, apellidos: true } },
+        registrador: { select: { nombres: true, apellidos: true } },
+      },
+    })
+    res.json(filas.map(r => ({
+      id_reposicion: r.id_reposicion,
+      producto: r.producto?.nombre_producto || 'Producto',
+      imagen: r.producto?.url_imagen || null,
+      cantidad: r.cantidad,
+      costo_estimado: Math.round(Number(r.producto?.precio_base || 0) * r.cantidad * 100) / 100,
+      responsable: `${r.responsable.nombres} ${r.responsable.apellidos || ''}`.trim(),
+      registrado_por: `${r.registrador.nombres} ${r.registrador.apellidos || ''}`.trim(),
+      motivo: r.motivo,
+      fecha: r.fecha_hora,
+    })))
+  } catch (e) {
+    console.error('Error listando reposiciones:', e)
+    res.status(500).json({ error: 'Error al listar las reposiciones' })
+  }
+})
+
+// ---- GET /api/productos/reposiciones/resumen — incidentes por responsable ----
+// Para el reporte de personal del admin: quiénes acumulan más descuidos y
+// cuánto le costaron al local (a precio base del producto repuesto).
+router.get('/reposiciones/resumen', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const filas = await prisma.reposicion.findMany({
+      include: {
+        producto: { select: { precio_base: true } },
+        responsable: { select: { id_usuario: true, nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } } },
+      },
+    })
+    const porResponsable = new Map()
+    for (const r of filas) {
+      const clave = r.responsable.id_usuario
+      const previo = porResponsable.get(clave) || {
+        id_usuario: clave,
+        nombre: `${r.responsable.nombres} ${r.responsable.apellidos || ''}`.trim(),
+        rol: r.responsable.rol?.nombre_rol || '',
+        incidentes: 0, unidades: 0, costo_estimado: 0,
+      }
+      previo.incidentes += 1
+      previo.unidades += r.cantidad
+      previo.costo_estimado += Number(r.producto?.precio_base || 0) * r.cantidad
+      porResponsable.set(clave, previo)
+    }
+    const lista = [...porResponsable.values()]
+      .map(x => ({ ...x, costo_estimado: Math.round(x.costo_estimado * 100) / 100 }))
+      .sort((a, b) => b.incidentes - a.incidentes || b.costo_estimado - a.costo_estimado)
+    res.json(lista)
+  } catch (e) {
+    console.error('Error en resumen de reposiciones:', e)
+    res.status(500).json({ error: 'Error al generar el resumen de reposiciones' })
+  }
+})
+
+// ---- GET /api/productos/personal-operativo — meseros y bartenders activos ----
+// (para el selector de "quién cometió el error" en la reposición)
+router.get('/personal-operativo', soloRoles('Bartender', 'Administrador'), async (req, res) => {
+  try {
+    const personal = await prisma.usuario.findMany({
+      where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ['Mesero', 'Bartender'] } } },
+      select: { id_usuario: true, nombres: true, apellidos: true, rol: { select: { nombre_rol: true } } },
+      orderBy: { nombres: 'asc' },
+    })
+    res.json(personal.map(p => ({
+      id_usuario: p.id_usuario,
+      nombre: `${p.nombres} ${p.apellidos || ''}`.trim(),
+      rol: p.rol?.nombre_rol || '',
+    })))
+  } catch (e) {
+    console.error('Error listando personal operativo:', e)
+    res.status(500).json({ error: 'Error al listar el personal' })
+  }
+})
+
 // ---- GET /api/productos — Listar ----
 router.get('/', async (req, res) => {
   try {

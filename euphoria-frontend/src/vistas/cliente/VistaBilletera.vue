@@ -202,6 +202,10 @@
 
               <span class="mov-lado">
                 <span class="mov-monto" :class="{ 'mov-monto-positivo': Number(mov.monto) > 0 }">{{ formatoMonto(mov.monto) }}</span>
+                <!-- Historial de saldo: tenía → quedó -->
+                <span v-if="mov.saldo_antes != null" class="mov-saldos" title="Saldo antes y después de este movimiento">
+                  Bs {{ formatoMoneda(mov.saldo_antes) }} → <b>Bs {{ formatoMoneda(mov.saldo_despues) }}</b>
+                </span>
                 <span v-if="mov.estado && mov.estado !== 'completada'" :class="['badge', `badge-${mov.estado}`]">{{ mov.estado }}</span>
                 <span v-if="esConsumoTocable(mov)" class="mov-ver">Ver detalle
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -2037,6 +2041,15 @@ button.mov-fila:focus-visible {
 }
 
 .mov-monto-positivo { color: var(--color-exito); }
+
+/* Historial de saldo: "tenía → quedó" en cada movimiento */
+.mov-saldos {
+  font-size: 0.7rem;
+  color: var(--texto-desactivado);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mov-saldos b { color: var(--texto-secundario); font-weight: 700; }
 
 .mov-ver {
   display: inline-flex;

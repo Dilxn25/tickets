@@ -50,10 +50,18 @@ export const servicioBilletera = {
   },
 
   /**
-   * Movimientos unificados (recargas + consumos + reservas), más recientes primero
+   * Movimientos unificados (recargas + consumos + reservas), más recientes primero.
+   * Con { evento: id } trae solo los de esa noche (ventana horaria del evento).
    */
-  async obtenerMovimientos() {
-    return api.get('/billetera/movimientos')
+  async obtenerMovimientos(params = {}) {
+    return api.get('/billetera/movimientos', { params })
+  },
+
+  /**
+   * Eventos a los que ESTE cliente asistió (para el filtro por evento del historial)
+   */
+  async misEventos() {
+    return api.get('/billetera/mis-eventos')
   },
 
   /**

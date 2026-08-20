@@ -355,10 +355,70 @@ router.get('/movimientos', verificarToken, async (req, res) => {
     }
 
     movimientos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-    res.json({ movimientos: movimientos.slice(0, 120) })
+
+    // ---- Historial de SALDO: cuánto tenía antes y cuánto quedó después ----
+    // Se reconstruye desde el saldo actual hacia atrás: el movimiento más
+    // reciente terminó en el saldo de hoy; el anterior, en el "antes" de ese.
+    // Solo mueven saldo los completados (una recarga pendiente aún no suma).
+    const mueveSaldo = (m) =>
+      (m.tipo === 'recarga' && m.estado === 'completada') ||
+      ['consumo', 'reserva', 'reembolso', 'retiro'].includes(m.tipo)
+    let saldoCorriente = parseFloat(billetera.saldo_actual)
+    for (const m of movimientos) {
+      if (!mueveSaldo(m)) continue
+      m.saldo_despues = Math.round(saldoCorriente * 100) / 100
+      m.saldo_antes = Math.round((saldoCorriente - Number(m.monto)) * 100) / 100
+      saldoCorriente = m.saldo_antes
+    }
+
+    // ---- Filtro por evento asistido (?evento=id): la ventana horaria del ----
+    // evento delimita qué movimientos le pertenecen (recargas, consumos y
+    // reservas hechos durante esa noche).
+    let lista = movimientos
+    const idEvento = Number(req.query.evento) || null
+    if (idEvento) {
+      const ev = await prisma.evento.findUnique({ where: { id_evento: idEvento } })
+      if (ev) {
+        const ini = new Date(ev.fecha_hora_inicio)
+        const fin = ev.fecha_hora_fin ? new Date(ev.fecha_hora_fin) : new Date(ini.getTime() + 24 * 3600 * 1000)
+        lista = movimientos.filter(m => {
+          const f = new Date(m.fecha)
+          return f >= ini && f <= fin
+        })
+      }
+    }
+
+    res.json({ movimientos: lista.slice(0, 120) })
   } catch (error) {
     console.error('Error obteniendo movimientos:', error)
     res.status(500).json({ error: 'Error al obtener los movimientos' })
+  }
+})
+
+// ============ GET /api/billetera/mis-eventos ============
+// Eventos a los que ESTE cliente asistió (tiene una entrada/reserva): alimenta
+// el filtro por evento del historial — solo sus eventos, no todos los del local.
+router.get('/mis-eventos', verificarToken, async (req, res) => {
+  try {
+    const entradas = await prisma.entrada.findMany({
+      where: { id_usuario: req.usuario.id },
+      select: { zona: { select: { evento: { select: { id_evento: true, nombre_evento: true, fecha_hora_inicio: true } } } } },
+      orderBy: { fecha_reserva: 'desc' },
+      take: 200,
+    })
+    const vistos = new Map()
+    for (const e of entradas) {
+      const ev = e.zona?.evento
+      if (ev && !vistos.has(ev.id_evento)) vistos.set(ev.id_evento, ev)
+    }
+    res.json([...vistos.values()].map(ev => ({
+      id_evento: ev.id_evento,
+      nombre: ev.nombre_evento,
+      fecha: ev.fecha_hora_inicio,
+    })))
+  } catch (error) {
+    console.error('Error obteniendo mis eventos:', error)
+    res.status(500).json({ error: 'Error al obtener tus eventos' })
   }
 })
 

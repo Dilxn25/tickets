@@ -19,6 +19,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21"></polygon><line x1="8" y1="3" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="21"></line></svg>
           Mapa
         </button>
+        <button class="b2-kpi" @click="abrirAsignar" title="Asignar mesero a una mesa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+          Meseros
+        </button>
+        <button class="b2-kpi" @click="abrirRepo" title="Registrar una reposición (accidente / merma)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2.7 6.2 8.5a8 8 0 1 0 11.6 0z"></path><path d="M12 12v4"></path><path d="M12 19h.01"></path></svg>
+          Merma
+        </button>
         <button class="b2-kpi" @click="historialAbierto = true" title="Historial de entregas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         </button>
@@ -146,8 +154,110 @@
       </div>
     </Teleport>
 
-    <!-- Historial -->
-    <HistorialBarra v-if="historialAbierto" :filtro="paramsFiltro()" @cerrar="historialAbierto = false" />
+    <!-- Asignar mesero (el bartender también asigna, p. ej. cuando recibe gente en barra) -->
+    <Teleport to="body">
+      <div v-if="asignarAbierto" class="b2-overlay" @click.self="asignarAbierto = false">
+        <div class="b2-modal mapa">
+          <header class="b2-modal-cab">
+            <b>Asignar mesero</b>
+            <button class="b2-cerrar-x" @click="asignarAbierto = false" aria-label="Cerrar">×</button>
+          </header>
+          <div v-if="eventosMapa.length > 1" class="b2-filtros" style="padding: 0 4px;">
+            <button v-for="e in eventosMapa" :key="e.id_evento" :class="['b2-chip', { activo: mapaEventoId === e.id_evento }]" @click="setEventoMapa(e.id_evento)">{{ e.nombre }}</button>
+          </div>
+          <div class="b2-asig-lista">
+            <p v-if="!mesasAtencion.length" class="b2-vacio">No hay mesas ocupadas o reservadas en este evento.</p>
+            <article v-for="m in mesasAtencion" :key="m.id_mesa" class="b2-asig-mesa">
+              <div class="b2-asig-fila">
+                <div class="b2-asig-info">
+                  <b>{{ m.zona }} · {{ m.numero_nombre }}</b>
+                  <small v-if="m.cliente">{{ m.cliente }}<span v-if="m.es_vip" class="b2-vip">VIP</span></small>
+                  <span v-if="m.mesero" class="b2-asig-actual">Atiende {{ m.mesero }}</span>
+                  <span v-else class="b2-asig-actual sin">Sin mesero</span>
+                </div>
+                <button class="b2-accion chica" type="button" @click="mesaAsignar = (mesaAsignar?.id_mesa === m.id_mesa ? null : m)">
+                  {{ m.mesero ? 'Cambiar' : 'Asignar' }}
+                </button>
+              </div>
+              <!-- Meseros ordenados por carga: los más libres arriba -->
+              <div v-if="mesaAsignar?.id_mesa === m.id_mesa" class="b2-asig-meseros">
+                <button v-for="w in meserosLista" :key="w.id_usuario" type="button" class="b2-asig-mesero" :disabled="asignando" @click="asignarMeseroA(m, w.id_usuario)">
+                  <b>{{ w.nombre }}</b>
+                  <small>{{ w.carga }} {{ w.carga === 1 ? 'mesa' : 'mesas' }}</small>
+                </button>
+                <p v-if="!meserosLista.length" class="b2-vacio">Sin meseros activos en turno.</p>
+              </div>
+            </article>
+            <p v-if="errorAsignar" class="b2-error">{{ errorAsignar }}</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Reposición por accidente (merma): descuenta stock SIN venta y registra al responsable -->
+    <Teleport to="body">
+      <div v-if="repoAbierto" class="b2-overlay" @click.self="repoAbierto = false">
+        <div class="b2-modal mapa">
+          <header class="b2-modal-cab">
+            <b>Registrar reposición</b>
+            <button class="b2-cerrar-x" @click="repoAbierto = false" aria-label="Cerrar">×</button>
+          </header>
+          <p class="b2-repo-hint">Un producto se cayó o derramó y hubo que reponerlo. No es una venta: descuenta stock y deja registrado quién fue el descuido.</p>
+
+          <div class="b2-repo-cuerpo">
+            <template v-if="!repoProducto">
+              <input v-model="repoBusqueda" class="b2-repo-buscar" type="text" placeholder="Buscar el producto repuesto…" @input="buscarRepo" />
+              <div class="b2-repo-lista">
+                <button v-for="p in repoProductos" :key="p.id_producto" type="button" class="b2-repo-prod" @click="repoProducto = p">
+                  <img v-if="p.url_imagen" :src="p.url_imagen" alt="" />
+                  <span v-else class="b2-repo-ph"></span>
+                  <span class="b2-repo-nom">{{ p.nombre_producto }}</span>
+                  <small>stock {{ p.stock_actual }}</small>
+                </button>
+                <p v-if="!repoProductos.length" class="b2-vacio">Sin coincidencias.</p>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="b2-repo-sel">
+                <img v-if="repoProducto.url_imagen" :src="repoProducto.url_imagen" alt="" />
+                <span v-else class="b2-repo-ph"></span>
+                <b>{{ repoProducto.nombre_producto }}</b>
+                <button type="button" class="b2-cerrar-x" @click="repoProducto = null" aria-label="Cambiar producto">×</button>
+              </div>
+
+              <div class="b2-repo-cant">
+                <span>Unidades repuestas</span>
+                <div class="b2-repo-step">
+                  <button type="button" @click="repoCantidad = Math.max(1, repoCantidad - 1)">−</button>
+                  <b>{{ repoCantidad }}</b>
+                  <button type="button" @click="repoCantidad = Math.min(99, repoCantidad + 1)">+</button>
+                </div>
+              </div>
+
+              <div class="b2-repo-resp">
+                <span>¿Quién cometió el error?</span>
+                <div class="b2-repo-personas">
+                  <button v-for="p in repoPersonal" :key="p.id_usuario" type="button" class="b2-repo-persona" :class="{ activo: repoResponsable === p.id_usuario }" @click="repoResponsable = p.id_usuario">
+                    <b>{{ p.nombre }}</b><small>{{ p.rol }}</small>
+                  </button>
+                </div>
+              </div>
+
+              <input v-model="repoMotivo" class="b2-repo-buscar" type="text" maxlength="200" placeholder="Motivo (opcional): se cayó al servir, se derramó…" />
+
+              <p v-if="repoError" class="b2-error">{{ repoError }}</p>
+              <button class="b2-accion" :disabled="!repoResponsable || repoGuardando" @click="guardarRepo">
+                {{ repoGuardando ? 'Registrando…' : 'Registrar reposición' }}
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Historial (con su propio filtro por evento) -->
+    <HistorialBarra v-if="historialAbierto" :filtro="paramsFiltro()" :eventos="eventos" @cerrar="historialAbierto = false" />
   </div>
 </template>
 
@@ -312,6 +422,103 @@ function filtrarPorMesa(m) {
 // ---- Historial ----
 const historialAbierto = ref(false)
 
+// ---- Asignar mesero (desde barra) ----
+// El bartender ve las mesas ocupadas/reservadas del evento con su mesero, y
+// puede asignar o cambiar. La lista viene ordenada: los MÁS LIBRES arriba.
+const asignarAbierto = ref(false)
+const meserosLista = ref([])
+const mesaAsignar = ref(null)
+const asignando = ref(false)
+const errorAsignar = ref('')
+
+const mesasAtencion = computed(() =>
+  planosMapa.value.flatMap(z => (z.mesas || [])
+    .filter(m => m.tipo_elemento === 'mesa' && m.estado_ocupacion !== 'libre')
+    .map(m => ({ ...m, zona: z.nombre_zona })))
+)
+
+async function cargarMeseros() {
+  try { meserosLista.value = await clienteHttp.get('/aforo/meseros') }
+  catch { meserosLista.value = [] }
+}
+async function abrirAsignar() {
+  asignarAbierto.value = true
+  errorAsignar.value = ''
+  mesaAsignar.value = null
+  if (!eventosMapa.value.length) await prepararMapa()
+  else if (!planosMapa.value.length) await cargarPlanosMapa()
+  cargarMeseros()
+}
+async function asignarMeseroA(mesa, idMesero) {
+  if (asignando.value) return
+  asignando.value = true
+  errorAsignar.value = ''
+  try {
+    await clienteHttp.post('/aforo/asignar-mesero', {
+      id_mesa: mesa.id_mesa,
+      id_entrada: mesa.id_entrada || undefined,
+      id_mesero: idMesero,
+    })
+    mesaAsignar.value = null
+    await Promise.all([cargarPlanosMapa(), cargarMeseros()])
+  } catch (e) {
+    errorAsignar.value = e?.error || 'No se pudo asignar el mesero.'
+  } finally { asignando.value = false }
+}
+
+// ---- Reposición por accidente (merma) ----
+const repoAbierto = ref(false)
+const repoBusqueda = ref('')
+const repoProductos = ref([])
+const repoProducto = ref(null)
+const repoCantidad = ref(1)
+const repoPersonal = ref([])
+const repoResponsable = ref(null)
+const repoMotivo = ref('')
+const repoGuardando = ref(false)
+const repoError = ref('')
+let repoTimer = null
+
+async function abrirRepo() {
+  repoAbierto.value = true
+  repoProducto.value = null
+  repoCantidad.value = 1
+  repoResponsable.value = null
+  repoMotivo.value = ''
+  repoError.value = ''
+  repoBusqueda.value = ''
+  buscarRepoAhora()
+  try { repoPersonal.value = await clienteHttp.get('/productos/personal-operativo') }
+  catch { repoPersonal.value = [] }
+}
+function buscarRepo() {
+  clearTimeout(repoTimer)
+  repoTimer = setTimeout(buscarRepoAhora, 250)
+}
+async function buscarRepoAhora() {
+  try {
+    const r = await clienteHttp.get('/productos', { params: { busqueda: repoBusqueda.value || undefined } })
+    repoProductos.value = (Array.isArray(r) ? r : (r?.productos || [])).slice(0, 8)
+  } catch { repoProductos.value = [] }
+}
+async function guardarRepo() {
+  if (!repoProducto.value || !repoResponsable.value || repoGuardando.value) return
+  repoGuardando.value = true
+  repoError.value = ''
+  try {
+    await clienteHttp.post('/productos/reposiciones', {
+      id_producto: repoProducto.value.id_producto,
+      cantidad: repoCantidad.value,
+      id_responsable: repoResponsable.value,
+      motivo: repoMotivo.value || undefined,
+      id_evento: eventoFiltro.value || mapaEventoId.value || undefined,
+    })
+    repoAbierto.value = false
+  } catch (e) {
+    repoError.value = e?.error || 'No se pudo registrar la reposición.'
+  } finally { repoGuardando.value = false }
+}
+
 let socket = null, tick = null
 onMounted(() => {
   recargar()
@@ -435,6 +642,71 @@ onUnmounted(() => { if (socket) socket.disconnect(); clearInterval(tick) })
 .b2-el:hover { background: rgba(168,85,247,0.8); }
 .b2-el span { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92%; }
 .b2-el.deco { background: rgba(80,80,100,0.25); border-color: transparent; cursor: default; }
+
+/* ---- Asignar mesero desde barra ---- */
+.b2-asig-lista { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.b2-asig-mesa { border: 1px solid var(--borde-sutil); border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 10px; }
+.b2-asig-fila { display: flex; align-items: center; gap: 10px; }
+.b2-asig-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.b2-asig-info b { color: var(--texto-principal); font-size: 0.9rem; }
+.b2-asig-info small { color: var(--texto-secundario); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b2-asig-actual { font-size: 0.7rem; font-weight: 800; color: var(--color-exito, #34d399); }
+.b2-asig-actual.sin { color: var(--color-alerta, #f59e0b); }
+.b2-accion.chica { padding: 8px 14px; font-size: 0.8rem; flex-shrink: 0; }
+.b2-asig-meseros { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--borde-sutil); padding-top: 10px; }
+.b2-asig-mesero {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 11px; border: 1px solid var(--borde-sutil);
+  background: rgba(168,85,247,0.06); color: var(--texto-principal); cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.b2-asig-mesero:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,0.14); }
+.b2-asig-mesero:disabled { opacity: 0.5; cursor: wait; }
+.b2-asig-mesero b { font-size: 0.86rem; }
+.b2-asig-mesero small { color: var(--texto-secundario); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+
+/* ---- Reposición (merma) ---- */
+.b2-repo-hint { margin: 0; font-size: 0.8rem; color: var(--texto-secundario); line-height: 1.45; }
+.b2-repo-cuerpo { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.b2-repo-buscar {
+  width: 100%; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,0.04); color: var(--texto-principal); font-size: 0.9rem; outline: none;
+}
+.b2-repo-buscar:focus { border-color: var(--morado-brillante); }
+.b2-repo-lista { display: flex; flex-direction: column; gap: 6px; }
+.b2-repo-prod {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+  border: 1px solid var(--borde-sutil); background: rgba(255,255,255,0.02);
+  color: var(--texto-principal); cursor: pointer; text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.b2-repo-prod:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,0.1); }
+.b2-repo-prod img, .b2-repo-sel img { width: 38px; height: 38px; border-radius: 9px; object-fit: cover; flex-shrink: 0; }
+.b2-repo-ph { width: 38px; height: 38px; border-radius: 9px; background: rgba(168,85,247,0.15); flex-shrink: 0; }
+.b2-repo-nom { flex: 1; min-width: 0; font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b2-repo-prod small { color: var(--texto-desactivado); font-size: 0.72rem; flex-shrink: 0; }
+.b2-repo-sel { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--morado-brillante); background: rgba(168,85,247,0.1); }
+.b2-repo-sel b { flex: 1; min-width: 0; font-size: 0.88rem; color: var(--texto-principal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b2-repo-cant { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.b2-repo-cant > span, .b2-repo-resp > span { font-size: 0.8rem; font-weight: 700; color: var(--texto-secundario); }
+.b2-repo-step { display: flex; align-items: center; gap: 4px; }
+.b2-repo-step button {
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,0.05); color: var(--texto-principal); font-size: 1.1rem; font-weight: 800; cursor: pointer;
+}
+.b2-repo-step button:hover { border-color: var(--morado-brillante); }
+.b2-repo-step b { min-width: 34px; text-align: center; font-size: 1rem; color: var(--texto-principal); font-variant-numeric: tabular-nums; }
+.b2-repo-resp { display: flex; flex-direction: column; gap: 8px; }
+.b2-repo-personas { display: flex; flex-wrap: wrap; gap: 8px; }
+.b2-repo-persona {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 8px 14px; border-radius: 12px; border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,0.03); color: var(--texto-principal); cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.b2-repo-persona.activo { border-color: var(--morado-brillante); background: rgba(168,85,247,0.16); }
+.b2-repo-persona b { font-size: 0.84rem; }
+.b2-repo-persona small { color: var(--texto-secundario); font-size: 0.7rem; }
 
 @media (max-width: 900px) {
   .b2-carriles { grid-template-columns: minmax(0, 1fr); }
