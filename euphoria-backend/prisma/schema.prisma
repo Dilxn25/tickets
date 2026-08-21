@@ -79,6 +79,7 @@ model comanda {
   entrada                             entrada?          @relation(fields: [id_entrada], references: [id_entrada], map: "COMANDA_id_entrada_fkey")
   detalle_comanda                     detalle_comanda[]
   transaccion                         transaccion[]
+  cortesia_reserva                    cortesia_reserva[]
 
   @@index([id_cliente], map: "COMANDA_id_cliente_fkey")
   @@index([id_mesa], map: "COMANDA_id_mesa_fkey")
@@ -130,6 +131,7 @@ model entrada {
   registro_aforo     registro_aforo[]
   comanda            comanda[]
   asignacion_mesa    asignacion_mesa[]
+  cortesia_reserva   cortesia_reserva?
 
   @@index([id_usuario], map: "ENTRADA_id_usuario_fkey")
   @@index([id_zona], map: "ENTRADA_id_zona_fkey")
@@ -146,6 +148,9 @@ model evento {
   estado            String            @default("planificacion") @db.VarChar(20)
   tipo_evento       String            @default("estandar") @db.VarChar(20)
   aforo_total       Int?
+  // Monto mínimo de reserva (Bs) desde el que se regala el combo de cortesía.
+  // null = este evento no regala cortesía.
+  cortesia_desde    Decimal?          @db.Decimal(10, 2)
   zona              zona[]
   solicitud_grupo   solicitud_grupo[]
 }
@@ -184,6 +189,8 @@ model mesa_espacio {
   tipo_elemento    String            @db.VarChar(20)
   es_seleccionable Boolean           @default(true)
   forma            String?           @db.VarChar(20)
+  // Área del plano a la que pertenece (para reajustar precios sin quitar el plano)
+  area_ref         String?           @db.VarChar(40)
   comanda          comanda[]
   entrada          entrada[]
   asignacion_mesa  asignacion_mesa[]
@@ -224,6 +231,9 @@ model producto {
   estado_promocion                                        Boolean            @default(false)
   stock_actual                                            Int
   es_combo                                                Boolean            @default(false)
+  // Combo que se REGALA por una reserva (no se vende en el catálogo)
+  es_cortesia                                             Boolean            @default(false)
+  cortesia_reserva                                        cortesia_reserva[]
   combo_detalle_combo_detalle_id_producto_hijoToproducto  combo_detalle[]    @relation("combo_detalle_id_producto_hijoToproducto")
   combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]    @relation("combo_detalle_id_producto_padreToproducto")
   detalle_comanda                                         detalle_comanda[]
@@ -480,6 +490,25 @@ model sugerencia_ia {
 
   @@index([fecha_hora])
   @@index([id_producto])
+}
+
+// Combo de CORTESÍA que le corresponde a una reserva (el dueño regala un combo a
+// las reservas desde cierto monto). Nace 'pendiente'; cuando el cliente elige
+// su combo pasa a 'elegida' y se crea la comanda a Bs 0 que va a la barra.
+model cortesia_reserva {
+  id_cortesia    Int       @id @default(autoincrement())
+  id_entrada     Int       @unique(map: "CORTESIA_id_entrada_key")
+  id_producto    Int?
+  id_comanda     Int?
+  estado         String    @default("pendiente") @db.VarChar(20) // pendiente | elegida
+  fecha_creacion DateTime  @default(now())
+  fecha_eleccion DateTime?
+  entrada        entrada   @relation(fields: [id_entrada], references: [id_entrada], onDelete: Cascade, map: "CORTESIA_id_entrada_fkey")
+  producto       producto? @relation(fields: [id_producto], references: [id_producto], onDelete: SetNull, map: "CORTESIA_id_producto_fkey")
+  comanda        comanda?  @relation(fields: [id_comanda], references: [id_comanda], onDelete: SetNull, map: "CORTESIA_id_comanda_fkey")
+
+  @@index([id_producto], map: "CORTESIA_id_producto_fkey")
+  @@index([id_comanda], map: "CORTESIA_id_comanda_fkey")
 }
 
 // Depósitos ACH confirmados por el CORREO del banco (vigía IMAP): segunda
