@@ -199,7 +199,7 @@ const circunferencia = 2 * Math.PI * 52
 let socket = null
 
 function textoEstado(e) {
-  if (e === 'lleno') return 'Lleno'
+  if (e === 'lleno') return 'En curso · aforo completo'
   if (e === 'alerta') return 'Casi lleno'
   return 'Disponible'
 }

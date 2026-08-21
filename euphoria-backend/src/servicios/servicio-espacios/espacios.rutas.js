@@ -429,17 +429,25 @@ router.get('/eventos/:idEvento/planos', soloRoles('Administrador'), async (req, 
     const zonas = await prisma.zona.findMany({
       where: { id_evento },
       orderBy: { id_zona: 'asc' },
-      include: { mesa_espacio: { select: { tipo_elemento: true, capacidad_sillas: true } } },
+      // numero_nombre / precio / area_ref hacen falta para listar las áreas con su precio
+      include: { mesa_espacio: { select: { tipo_elemento: true, capacidad_sillas: true, numero_nombre: true, precio: true, area_ref: true } } },
     })
     res.json(zonas.map(z => ({
       id_zona: z.id_zona,
       nombre: z.nombre_zona,
       precio_entrada_base: z.precio_entrada_base,
+      prioridad: z.prioridad,
       proporcion: z.proporcion,
       aforo: z.mesa_espacio
         .filter(m => m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla')
         .reduce((a, m) => a + (m.capacidad_sillas || 0), 0),
       elementos_total: z.mesa_espacio.length,
+      // Precio por ÁREA del plano en este evento (la única fuente de precio).
+      areas: z.mesa_espacio
+        .filter(m => m.tipo_elemento === 'area')
+        .map(a => ({ clave: a.area_ref, nombre: a.numero_nombre || 'Área', precio: a.precio != null ? Number(a.precio) : null, parados: a.capacidad_sillas || 0 })),
+      // ¿Hay mesas/sillas sin área? Su precio es el "general" (precio_entrada_base)
+      tiene_general: z.mesa_espacio.some(m => (m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla') && !m.area_ref),
     })))
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener los planos del evento' })
@@ -472,18 +480,46 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
       .filter(e => e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla' || e.tipo_elemento === 'area')
       .reduce((a, e) => a + (Number(e.capacidad_sillas) || 0), 0)
 
-    // Precio por área: cada mesa/silla asignada a un área hereda su precio
-    // (Lounge 800, VIP 1500…) salvo que el elemento tenga precio propio.
+    // REGLA ÚNICA DE PRECIO: el precio es por ÁREA. El plano trae el precio de
+    // cada área como punto de partida y el evento puede ajustarlo para esa noche
+    // (body.precios_areas = { clave: precio }). Mesas y sillas NO tienen precio
+    // propio: heredan el de su área; las que no pertenecen a ninguna usan el
+    // precio general de la zona (body.precio_general → precio_entrada_base).
     const precioArea = {}
     for (const el of elementos) {
       if (el.tipo_elemento === 'area' && el.clave && el.precio != null && el.precio !== '') {
         precioArea[el.clave] = Number(el.precio)
       }
     }
+    const ajustes = (req.body.precios_areas && typeof req.body.precios_areas === 'object') ? req.body.precios_areas : {}
+    for (const [clave, p] of Object.entries(ajustes)) {
+      const n = Number(p)
+      if (Number.isFinite(n) && n >= 0) precioArea[clave] = n
+    }
     const precioElemento = (el) => {
-      if (el.precio != null && el.precio !== '') return Number(el.precio)
+      if (el.tipo_elemento === 'area') return precioArea[el.clave] ?? null
       if (el.area_ref && precioArea[el.area_ref] != null) return precioArea[el.area_ref]
-      return null // sin precio propio ni de área → usa el precio base de la zona
+      return null // sin área → usa el precio general de la zona
+    }
+    const areaDe = (el) => el.tipo_elemento === 'area' ? (el.clave || null) : (el.area_ref || null)
+    // Precio general: el que mande el admin; si no, el menor de las áreas; si no, el legado precio_base.
+    const preciosAreas = Object.values(precioArea)
+    const precioGeneralBody = Number(req.body.precio_general)
+    const precioGeneral = Number.isFinite(precioGeneralBody) && req.body.precio_general !== '' && req.body.precio_general != null
+      ? precioGeneralBody
+      : (preciosAreas.length ? Math.min(...preciosAreas) : precio_base)
+
+    // NADIE ENTRA GRATIS: toda área reservable y el precio general deben ser > 0.
+    // Un área sin precio (o a 0) dejaría reservar sin pagar, así que se rechaza.
+    const areasSinPrecio = elementos
+      .filter(el => el.tipo_elemento === 'area' && el.clave && !(precioArea[el.clave] > 0))
+      .map(el => el.numero_nombre || 'Área')
+    if (areasSinPrecio.length) {
+      return res.status(400).json({ error: `Falta el precio (mayor a 0) de: ${areasSinPrecio.join(', ')}. Nadie puede reservar gratis.` })
+    }
+    const hayGeneral = elementos.some(el => (el.tipo_elemento === 'mesa' || el.tipo_elemento === 'silla') && !el.area_ref)
+    if (hayGeneral && !(precioGeneral > 0)) {
+      return res.status(400).json({ error: 'Hay mesas sin área: el precio general debe ser mayor a 0.' })
     }
 
     await prisma.$transaction(async (tx) => {
@@ -492,7 +528,7 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
           id_evento,
           nombre_zona: (nombre || String(plantilla.nombre)).substring(0, 50),
           capacidad_maxima: capacidad,
-          precio_entrada_base: precio_base,
+          precio_entrada_base: precioGeneral,
           proporcion: proporcion,
           es_general: false,
           prioridad, // 0=normal, 1=alta, 2=vip (orden del bartender)
@@ -511,8 +547,10 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
             alto: el.alto != null ? Number(el.alto) : null,
             rotacion: el.rotacion != null ? Number(el.rotacion) : null,
             capacidad_sillas: Number(el.capacidad_sillas) || 0,
-            // Precio efectivo: propio, o heredado del área a la que pertenece.
+            // Precio efectivo: el del área a la que pertenece (las mesas no tienen precio propio).
             precio: precioElemento(el),
+            // Se guarda el área para poder reajustar precios sin quitar el plano
+            area_ref: areaDe(el) ? String(areaDe(el)).substring(0, 40) : null,
             tipo_elemento: String(el.tipo_elemento || 'mesa').substring(0, 20),
             es_seleccionable: el.es_seleccionable !== false,
             forma: el.forma ? String(el.forma).substring(0, 20) : null,
@@ -523,8 +561,46 @@ router.post('/eventos/:idEvento/asignar-plano', soloRoles('Administrador'), asyn
     emitirRecurso('eventos', { id: id_evento })
     res.json({ mensaje: 'Plano agregado al evento' })
   } catch (error) {
-    console.error('Error agregando plano al evento:', error)
-    res.status(500).json({ error: 'Error al agregar el plano al evento' })
+    console.error('Error asignando plano:', error)
+    return res.status(500).json({ error: 'Error al agregar el plano al evento' })
+  }
+})
+
+// PUT /api/espacios/zonas/:id/precios — reajusta los precios por ÁREA de un plano
+// YA asignado, sin quitarlo (quitarlo devuelve el dinero a los clientes).
+// Body: { precios_areas: { clave: precio }, precio_general?: number, prioridad?: number }
+router.put('/zonas/:id/precios', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id_zona = Number(req.params.id)
+    const zona = await prisma.zona.findUnique({ where: { id_zona } })
+    if (!zona) return res.status(404).json({ error: 'Plano del evento no encontrado' })
+    const ajustes = (req.body.precios_areas && typeof req.body.precios_areas === 'object') ? req.body.precios_areas : {}
+
+    // NADIE ENTRA GRATIS: no se acepta ningún precio en 0 o vacío.
+    const invalidos = Object.entries(ajustes).filter(([, p]) => !(Number(p) > 0)).map(([k]) => k)
+    if (invalidos.length) return res.status(400).json({ error: 'Todas las áreas deben tener un precio mayor a 0. Nadie puede reservar gratis.' })
+    if (req.body.precio_general !== undefined && req.body.precio_general !== null && req.body.precio_general !== '' && !(Number(req.body.precio_general) > 0)) {
+      return res.status(400).json({ error: 'El precio general debe ser mayor a 0.' })
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const [clave, p] of Object.entries(ajustes)) {
+        const n = Number(p)
+        if (!Number.isFinite(n) || n <= 0) continue
+        // El área y todo lo que pertenece a ella toman el nuevo precio
+        await tx.mesa_espacio.updateMany({ where: { id_zona, area_ref: String(clave) }, data: { precio: n } })
+      }
+      const data = {}
+      const pg = Number(req.body.precio_general)
+      if (req.body.precio_general !== undefined && req.body.precio_general !== '' && Number.isFinite(pg) && pg >= 0) data.precio_entrada_base = pg
+      if (req.body.prioridad !== undefined) data.prioridad = Number(req.body.prioridad) || 0
+      if (Object.keys(data).length) await tx.zona.update({ where: { id_zona }, data })
+    })
+    emitirRecurso('eventos', { id: zona.id_evento })
+    res.json({ mensaje: 'Precios actualizados' })
+  } catch (error) {
+    console.error('Error actualizando precios del plano:', error)
+    res.status(500).json({ error: 'No se pudieron actualizar los precios' })
   }
 })
 

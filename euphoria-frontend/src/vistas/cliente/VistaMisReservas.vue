@@ -123,6 +123,21 @@
 
               <p class="codigo">Código de ingreso<b>{{ r.codigo_ingreso }}</b></p>
 
+              <!-- Combo de cortesía de la reserva (regalo de la casa) -->
+              <div v-if="r.cortesia" class="cortesia" :class="r.cortesia.estado">
+                <span class="cortesia-ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13M5 12v9h14v-9"></path><path d="M12 8a3 3 0 1 1 3-3c0 2-3 3-3 3zM12 8a3 3 0 1 0-3-3c0 2 3 3 3 3z"></path></svg>
+                </span>
+                <template v-if="r.cortesia.estado === 'pendiente'">
+                  <span class="cortesia-txt"><b>Tienes un combo de cortesía</b><small>Todavía no lo elegiste. Es gratis y te lo llevamos a la mesa.</small></span>
+                  <button v-if="r.estado_fecha !== 'finalizada'" class="cortesia-btn brillo-hover" type="button" @click="abrirCortesia(r)">Elegir mi combo</button>
+                </template>
+                <template v-else>
+                  <span class="cortesia-txt"><b>Cortesía: {{ r.cortesia.combo }}</b><small>{{ textoCortesia(r.cortesia) }}</small></span>
+                  <PuntoEstado :pedido="{ estado_despacho: r.cortesia.pedido_estado, estado_entrega: r.cortesia.pedido_entrega }" grande />
+                </template>
+              </div>
+
               <!-- Historial de ingresos (colapsable) -->
               <button v-if="r.ingresos && r.ingresos.length" class="btn-historial" @click="alternarHistorial(r.id_entrada)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ girar: historialAbierto === r.id_entrada }"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -171,6 +186,40 @@
       </template>
     </div>
 
+    <!-- Elegir el combo de cortesía -->
+    <Teleport to="body">
+      <div v-if="cortesiaAbierta" class="cort-overlay" @click.self="cortesiaAbierta = null">
+        <div class="cort-modal">
+          <header class="cort-cab">
+            <div>
+              <h3>Elige tu combo de cortesía</h3>
+              <p>{{ cortesiaAbierta.evento || 'Tu reserva' }}<template v-if="cortesiaAbierta.mesa"> · Mesa {{ cortesiaAbierta.mesa }}</template> · es gratis, lo regala la casa</p>
+            </div>
+            <button class="cort-x" type="button" aria-label="Cerrar" @click="cortesiaAbierta = null">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </header>
+          <p v-if="cargandoOpciones" class="cort-cargando">Cargando combos…</p>
+          <div v-else class="cort-grid">
+            <button
+              v-for="op in opcionesCortesia" :key="op.id_producto"
+              class="cort-op" type="button"
+              :disabled="eligiendo || !op.disponible"
+              @click="elegirCortesia(op)">
+              <span class="cort-op-img">
+                <img v-if="op.url_imagen" :src="op.url_imagen" :alt="op.nombre" @error="$event.target.style.visibility = 'hidden'" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="28" height="28"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
+              </span>
+              <b>{{ op.nombre.replace('Cortesía ', '') }}</b>
+              <small>{{ op.componentes.map(c => `${c.cantidad}× ${c.nombre}`).join(' · ') }}</small>
+              <em v-if="!op.disponible">Sin stock ahora</em>
+            </button>
+          </div>
+          <p v-if="errorCortesia" class="cort-error">{{ errorCortesia }}</p>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- QR a pantalla completa: fondo blanco y brillo alto para el escáner -->
     <Teleport to="body">
       <div v-if="qrAmpliado" class="qr-fullscreen" @click="qrAmpliado = null">
@@ -191,11 +240,50 @@ import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { useTiendaCarrito } from '@/tiendas/tienda-carrito.js'
 import { useTiempoReal } from '@/composables/useTiempoReal'
 import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
+import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
 
 const notif = useNotificaciones()
 const router = useRouter()
 const tiendaCarrito = useTiendaCarrito()
 const reservas = ref([])
+
+// ---- Combo de cortesía: elegirlo desde la reserva ----
+const cortesiaAbierta = ref(null)     // reserva cuya cortesía se está eligiendo
+const opcionesCortesia = ref([])
+const cargandoOpciones = ref(false)
+const eligiendo = ref(false)
+const errorCortesia = ref('')
+async function abrirCortesia(r) {
+  cortesiaAbierta.value = r
+  errorCortesia.value = ''
+  cargandoOpciones.value = true
+  try {
+    const d = await servicioReservas.misCortesias()
+    opcionesCortesia.value = d.opciones || []
+  } catch { opcionesCortesia.value = [] }
+  finally { cargandoOpciones.value = false }
+}
+async function elegirCortesia(op) {
+  const r = cortesiaAbierta.value
+  if (!r?.cortesia || eligiendo.value) return
+  eligiendo.value = true
+  errorCortesia.value = ''
+  try {
+    const res = await servicioReservas.elegirCortesia(r.cortesia.id_cortesia, op.id_producto)
+    notif.exito(res.mensaje || 'Combo elegido')
+    cortesiaAbierta.value = null
+    await cargar()
+  } catch (e) {
+    errorCortesia.value = (e?.response?.data || e)?.error || 'No se pudo registrar tu combo'
+  } finally { eligiendo.value = false }
+}
+function textoCortesia(c) {
+  if (c.pedido_entrega === 'entregado' || c.pedido_estado === 'Completada') return 'Ya lo recibiste en tu mesa.'
+  if (c.pedido_estado === 'Listo') return 'Listo: va en camino a tu mesa.'
+  if (c.pedido_estado === 'Preparando') return 'La barra lo está preparando.'
+  if (c.pedido_estado === 'Programado') return 'Te lo llevan a la mesa cuando ingreses.'
+  return 'En cola de la barra.'
+}
 // Color por zona (según lo pagado): la reserva más cara = dorado (VIP).
 const mapaColores = computed(() => mapaColorPorPrecio(reservas.value.map(r => r.monto_pagado)))
 function colorReserva(r) { return colorPorPrecio(r.monto_pagado, mapaColores.value) }
@@ -624,4 +712,36 @@ useTiempoReal(['reservas', 'eventos'], () => cargar())
   .estado-punto, .sk { animation: none; }
   .btn-volver:hover, .qr-marco:hover { transform: none; }
 }
+</style>
+
+<style scoped>
+/* ===== Combo de cortesía en el ticket ===== */
+.cortesia { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(236,72,153,0.4); background: linear-gradient(135deg, rgba(236,72,153,0.14), rgba(168,85,247,0.06)); }
+.cortesia.elegida { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); }
+.cortesia-ic { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #A855F7, #EC4899); }
+.cortesia.elegida .cortesia-ic { background: linear-gradient(135deg, #16a34a, #22c55e); }
+.cortesia-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cortesia-txt b { font-size: 0.86rem; color: var(--texto-principal); }
+.cortesia-txt small { font-size: 0.72rem; color: var(--texto-secundario); line-height: 1.3; }
+.cortesia-btn { flex: none; border: none; cursor: pointer; color: #fff; font-weight: 700; font-size: 0.78rem; padding: 8px 13px; border-radius: 999px; background: linear-gradient(135deg, #A855F7, #EC4899); box-shadow: 0 6px 16px rgba(236,72,153,0.35); }
+/* Modal para elegir */
+.cort-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(6,3,16,0.72); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.cort-modal { width: 100%; max-width: 480px; border-radius: 20px; padding: 18px; background: var(--gradiente-sutil); border: 1px solid var(--borde-activo); box-shadow: var(--sombra-modal); }
+.cort-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.cort-cab h3 { margin: 0; font-size: 1.05rem; }
+.cort-cab p { margin: 3px 0 0; font-size: 0.78rem; color: var(--texto-secundario); }
+.cort-x { background: none; border: none; color: var(--texto-secundario); cursor: pointer; padding: 6px; border-radius: 8px; }
+.cort-x:hover { color: var(--color-error); background: rgba(239,68,68,0.12); }
+.cort-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cort-op { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 12px 10px; border-radius: 14px; cursor: pointer; border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta-alt); color: var(--texto-principal); transition: border-color .15s ease, transform .15s ease; }
+.cort-op:hover:not(:disabled) { border-color: #EC4899; transform: translateY(-2px); }
+.cort-op:disabled { opacity: 0.5; cursor: not-allowed; }
+.cort-op-img { width: 64px; height: 64px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; background: rgba(255,255,255,0.06); color: var(--morado-hover); }
+.cort-op-img img { width: 100%; height: 100%; object-fit: cover; }
+.cort-op b { font-size: 0.95rem; }
+.cort-op small { font-size: 0.7rem; color: var(--texto-secundario); line-height: 1.3; }
+.cort-op em { font-size: 0.68rem; color: var(--color-alerta); font-style: normal; font-weight: 700; }
+.cort-cargando, .cort-error { margin: 8px 0 0; font-size: 0.8rem; color: var(--texto-secundario); text-align: center; }
+.cort-error { color: var(--color-error); font-weight: 600; }
+@media (max-width: 420px) { .cort-grid { grid-template-columns: 1fr; } .cortesia { flex-wrap: wrap; } .cortesia-btn { width: 100%; } }
 </style>

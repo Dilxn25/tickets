@@ -54,6 +54,8 @@
           Volver a Tomar Órdenes
         </button>
       </div>
+      <!-- Semáforo: el mesero mira el color, no lee el estado -->
+      <LeyendaEstados class="vpl-leyenda" :solo="['pendiente', 'preparando', 'listo', 'entregado']" />
 
       <!-- Pedidos libres (pool): los liberó otro mesero, cualquiera puede llevarlos -->
       <div v-if="pedidosPool.length" class="pool-libres">
@@ -101,9 +103,9 @@
         </h4>
         <div class="grid-listos escalonar">
           <transition-group name="list">
-            <div v-for="ped in pedidosEnBarra" :key="ped.id_comanda" class="card-listo-full">
+            <div v-for="ped in pedidosEnBarra" :key="ped.id_comanda" class="card-listo-full" :class="{ cortesia: ped.metodo_pago === 'Cortesía' }" :style="{ '--sem-color': semaforoDe(ped).color }">
               <div class="clf-header">
-                <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
+                <span class="clf-orden"><PuntoEstado :pedido="ped" /> Orden #{{ ped.id_comanda }}<span v-if="ped.metodo_pago === 'Cortesía'" class="clf-cortesia">Cortesía</span></span>
                 <span class="clf-crono" :class="cronoClase(ped.fecha_listo)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   {{ cronoTexto(ped.fecha_listo) }}
@@ -149,9 +151,9 @@
           <span class="apartado-n">{{ pedidosEsperando.length }}</span>
         </h4>
         <div class="grid-listos escalonar">
-          <div v-for="ped in pedidosEsperando" :key="ped.id_comanda" class="card-listo-full esperando">
+          <div v-for="ped in pedidosEsperando" :key="ped.id_comanda" class="card-listo-full esperando" :style="{ '--sem-color': semaforoDe(ped).color }">
             <div class="clf-header">
-              <span class="clf-orden">Orden #{{ ped.id_comanda }}</span>
+              <span class="clf-orden"><PuntoEstado :pedido="ped" /> Orden #{{ ped.id_comanda }}</span>
               <span class="clf-espera-chip">Confirmaste · falta la barra</span>
             </div>
             <div class="clf-prods">
@@ -970,6 +972,9 @@ import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
+import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
+import { semaforoDe } from '@/utilidades/estado-pedido.js'
 const notif = useNotificaciones()
 
 const router = useRouter()
@@ -3662,4 +3667,13 @@ onUnmounted(() => {
 @media (max-width: 360px) {
   .badge-rol { display: none; }
 }
+</style>
+
+<style scoped>
+/* ===== Semáforo de estados (color en vez de texto) ===== */
+.vpl-leyenda { margin: -6px 0 14px 2px; }
+.card-listo-full { border-left: 4px solid var(--sem-color, transparent); }
+.clf-orden { display: inline-flex; align-items: center; gap: 8px; }
+.clf-cortesia { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #F9A8D4; background: rgba(236,72,153,0.18); border: 1px solid rgba(236,72,153,0.4); padding: 2px 8px; border-radius: 999px; margin-left: 2px; }
+.card-listo-full.cortesia { background: linear-gradient(135deg, rgba(236,72,153,0.08), transparent 55%); }
 </style>

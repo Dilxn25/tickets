@@ -84,7 +84,7 @@
             {{ etiquetaTipo(evento.tipo_evento) }}
           </span>
           <span class="badge-estado" :style="estiloBadge(colorEstado(evento.estado))">
-            <i class="badge-punto" aria-hidden="true"></i>{{ etiquetaEstado(evento.estado) }}
+            <i class="badge-punto" aria-hidden="true"></i>{{ etiquetaEstado(evento.estado) }}<template v-if="ESTADOS[evento.estado]?.sub"> · {{ ESTADOS[evento.estado].sub }}</template>
           </span>
         </div>
 
@@ -131,52 +131,79 @@
       @update:limite="l => { limite = l; pagina = 1 }"
     />
 
-    <!-- Modal Formulario -->
+    <!-- Asistente de evento: datos → espacio → publicar, en un solo modal -->
     <Teleport to="body">
       <div v-if="modalAbierto" class="modal-fondo" @click.self="cerrarModal">
-        <div class="modal fade-in">
-          <div class="modal-cabecera">
-            <h3>{{ eventoEditando ? 'Editar evento' : 'Nuevo evento' }}</h3>
-            <button class="btn-x" @click="cerrarModal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+        <div class="modal modal-wizard fade-in">
+          <div class="modal-cabecera wz-cab">
+            <div class="wz-titulo">
+              <span class="wz-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="21" height="21" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="m9 16 2 2 4-4"></path></svg>
+              </span>
+              <div class="wz-textos">
+                <h3>{{ esNuevo ? 'Nuevo evento' : 'Editar evento' }}</h3>
+                <p class="wz-sub">{{ esNuevo ? 'Datos, espacio y publicación, en tres pasos' : (eventoEditando?.nombre_evento || '') }}</p>
+              </div>
+            </div>
+            <button class="btn-x" @click="cerrarModal" aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
-          
-          <form class="modal-form" @submit.prevent="guardarEvento">
-            <div class="form-fila">
-              <div class="grupo-campo">
-                <label class="etiqueta">Nombre del evento *</label>
-                <input v-model="form.nombre_evento" class="campo" required placeholder="Ej. Fiesta Neón Sábado" />
+
+          <!-- Pasos -->
+          <ol class="wz-pasos" aria-label="Pasos del asistente">
+            <li v-for="p in PASOS" :key="p.n" :class="{ activo: paso === p.n, hecho: paso > p.n }">
+              <button type="button" :disabled="p.n > 1 && !idEventoWizard" @click="irAPaso(p.n)">
+                <span class="wz-num">
+                  <svg v-if="paso > p.n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="13" height="13"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <template v-else>{{ p.n }}</template>
+                </span>
+                <span class="wz-lbl">{{ p.label }}</span>
+              </button>
+            </li>
+          </ol>
+
+          <!-- ===== PASO 1: DATOS ===== -->
+          <form v-if="paso === 1" class="modal-form" @submit.prevent="guardarYContinuar">
+            <section class="wz-seccion">
+              <p class="wz-seccion-tit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 8h10M7 12h6"></path></svg>
+                Datos básicos
+              </p>
+              <div class="form-fila">
+                <div class="grupo-campo">
+                  <label class="etiqueta">Nombre del evento *</label>
+                  <input v-model="form.nombre_evento" class="campo" required placeholder="Ej. Fiesta Neón Sábado" />
+                </div>
+                <div class="grupo-campo">
+                  <label class="etiqueta">Tipo de evento</label>
+                  <BaseSelect v-model="form.tipo_evento" :options="opcionesTipoForm" />
+                </div>
+              </div>
+              <p class="tipo-ayuda">
+                <template v-if="form.tipo_evento === 'especial'">Evento con artista o temática (detalles en la descripción).</template>
+                <template v-else-if="form.tipo_evento === 'externo'">Evento en otra locación (indica dónde en la descripción).</template>
+                <template v-else>Noche normal del establecimiento (solo DJ).</template>
+              </p>
+              <div class="form-fila">
+                <div class="grupo-campo">
+                  <label class="etiqueta">Fecha y hora de inicio *</label>
+                  <BaseFecha v-model="form.fecha_hora_inicio" con-hora :clearable="false" placeholder="Elegir inicio" />
+                </div>
+                <div class="grupo-campo">
+                  <label class="etiqueta">Fecha y hora de fin (opcional)</label>
+                  <BaseFecha v-model="form.fecha_hora_fin" con-hora :min="form.fecha_hora_inicio || ''" placeholder="Elegir fin" />
+                </div>
               </div>
               <div class="grupo-campo">
-                <label class="etiqueta">Tipo de evento</label>
-                <BaseSelect v-model="form.tipo_evento" :options="opcionesTipoForm" />
+                <label class="etiqueta">Descripción</label>
+                <textarea v-model="form.descripcion" class="campo textarea" rows="3" placeholder="Detalles del evento, artistas, temática..."></textarea>
               </div>
-            </div>
-            <p class="tipo-ayuda">
-              <template v-if="form.tipo_evento === 'especial'">Evento con artista o temática (detalles en la descripción).</template>
-              <template v-else-if="form.tipo_evento === 'externo'">Evento en otra locación (indica dónde en la descripción).</template>
-              <template v-else>Noche normal del establecimiento (solo DJ).</template>
-            </p>
+            </section>
 
-            <div class="form-fila">
-              <div class="grupo-campo">
-                <label class="etiqueta">Fecha y hora de inicio *</label>
-                <BaseFecha v-model="form.fecha_hora_inicio" con-hora :clearable="false" placeholder="Elegir inicio" />
-              </div>
-              <div class="grupo-campo">
-                <label class="etiqueta">Fecha y hora de fin (opcional)</label>
-                <BaseFecha v-model="form.fecha_hora_fin" con-hora :min="form.fecha_hora_inicio || ''" placeholder="Elegir fin" />
-              </div>
-            </div>
-
-            <div class="grupo-campo">
-              <label class="etiqueta">Descripción</label>
-              <textarea v-model="form.descripcion" class="campo textarea" rows="3" placeholder="Detalles del evento, artistas, temática..."></textarea>
-            </div>
-
-            <p class="tipo-ayuda">Los planos del evento (pisos/áreas) se agregan después con el botón "Planos" en la tarjeta del evento.</p>
-
-            <div class="grupo-campo">
-              <label class="etiqueta">Imagen de portada (flyer)</label>
+            <section class="wz-seccion">
+              <p class="wz-seccion-tit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.6"></circle><path d="m21 16-5-5L5 20"></path></svg>
+                Portada (flyer)
+              </p>
               <div class="subida-imagen">
                 <input type="file" ref="inputArchivo" accept="image/*" @change="manejarArchivo" class="input-file" id="file-evento" />
                 <label for="file-evento" class="dropzone" :class="{ 'dropzone-cargada': archivoSeleccionado }">
@@ -188,102 +215,178 @@
                 </label>
               </div>
               <img v-if="previewImagen" :src="previewImagen" class="preview-img" alt="Vista previa" />
-            </div>
+            </section>
 
             <div class="modal-footer">
               <button type="button" class="btn btn-secundario" @click="cerrarModal">Cancelar</button>
               <button type="submit" class="btn btn-primario" :disabled="guardando">
-                {{ guardando ? 'Guardando...' : (eventoEditando ? 'Guardar cambios' : 'Planificar evento') }}
+                {{ guardando ? 'Guardando...' : 'Siguiente: espacio' }}
               </button>
             </div>
           </form>
+
+          <!-- ===== PASO 2: ESPACIO (planos, precio por área, cortesía) ===== -->
+          <div v-else-if="paso === 2" class="modal-form">
+            <section class="wz-seccion">
+              <p class="wz-seccion-tit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M9 4 3 6v14l6-3 6 3 6-3V3l-6 3-6-3z"></path><path d="M9 4v14M15 6v14"></path></svg>
+                Planos del evento
+              </p>
+              <p class="tipo-ayuda">Un plano por piso o ambiente. <b>El precio es por área</b>: el plano trae el suyo y aquí lo ajustas para esta noche. Las mesas heredan el precio de su área.</p>
+
+              <div v-if="planosDelEvento.length" class="pl-lista">
+                <div v-for="p in planosDelEvento" :key="p.id_zona" class="pl-item pl-item-col">
+                  <div class="pl-item-cab">
+                    <div class="pl-item-info">
+                      <strong>{{ p.nombre }}</strong>
+                      <span class="pl-item-meta">aforo {{ p.aforo }} · {{ p.elementos_total }} elementos</span>
+                    </div>
+                    <button class="btn btn-sm btn-peligro" @click="quitarPlanoDeEvento(p)">Quitar</button>
+                  </div>
+                  <div class="wz-areas">
+                    <label v-for="a in p.areas" :key="a.clave || a.nombre" class="wz-area">
+                      <span class="wz-area-nom">{{ a.nombre }}<small v-if="a.parados"> · {{ a.parados }} de pie</small></span>
+                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="a.precio" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
+                    </label>
+                    <label v-if="p.tiene_general || !p.areas.length" class="wz-area">
+                      <span class="wz-area-nom">General<small> · mesas sin área</small></span>
+                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="p.precio_entrada_base" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
+                    </label>
+                  </div>
+                  <div class="wz-area-acciones">
+                    <div class="wz-prioridad"><BaseSelect v-model="p.prioridad" :options="OPCIONES_PRIORIDAD" /></div>
+                    <button class="btn btn-sm btn-secundario" :disabled="guardandoPrecios === p.id_zona" @click="guardarPreciosPlano(p)">
+                      {{ guardandoPrecios === p.id_zona ? 'Guardando…' : 'Guardar precios' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="pl-vacio">Este evento aún no tiene planos. Agrega el primero abajo.</p>
+
+              <div class="pl-agregar">
+                <span class="pl-agregar-tit">Agregar plano</span>
+                <div class="form-fila">
+                  <div class="grupo-campo">
+                    <label class="etiqueta">Plano (de la biblioteca)</label>
+                    <BaseSelect v-model="formAgregar.id_plano" :options="opcionesPlano" placeholder="Elige un plano" @update:model-value="alElegirPlano" />
+                  </div>
+                  <div class="grupo-campo">
+                    <label class="etiqueta">Nombre en el evento (opcional)</label>
+                    <input v-model="formAgregar.nombre" class="campo" placeholder="Ej. Primer piso" />
+                  </div>
+                </div>
+                <template v-if="planoElegido">
+                  <div class="wz-areas">
+                    <label v-for="a in planoElegido.areas" :key="a.clave" class="wz-area">
+                      <span class="wz-area-nom">{{ a.nombre }}<small v-if="a.parados"> · {{ a.parados }} de pie</small></span>
+                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="formAgregar.precios[a.clave]" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
+                    </label>
+                    <label v-if="planoElegido.tiene_general" class="wz-area">
+                      <span class="wz-area-nom">General<small> · mesas sin área</small></span>
+                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="formAgregar.precio_general" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
+                    </label>
+                    <p v-if="!planoElegido.areas.length && !planoElegido.tiene_general" class="tipo-ayuda">Este plano no tiene mesas ni áreas reservables.</p>
+                  </div>
+                  <div class="grupo-campo">
+                    <label class="etiqueta">Prioridad de atención</label>
+                    <BaseSelect v-model="formAgregar.prioridad" :options="OPCIONES_PRIORIDAD" />
+                    <small class="ayuda-campo">Orden en que la barra prepara los pedidos de esta zona.</small>
+                  </div>
+                </template>
+                <button class="btn btn-primario" style="width:100%" :disabled="!formAgregar.id_plano || agregandoPlano" @click="agregarPlanoAEvento">
+                  {{ agregandoPlano ? 'Agregando…' : '+ Agregar al evento' }}
+                </button>
+              </div>
+            </section>
+
+            <section class="wz-seccion">
+              <p class="wz-seccion-tit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13M5 12v9h14v-9"></path><path d="M12 8a3 3 0 1 1 3-3c0 2-3 3-3 3zM12 8a3 3 0 1 0-3-3c0 2 3 3 3 3z"></path></svg>
+                Combo de cortesía
+              </p>
+              <label class="switch-row">
+                <span class="switch"><input type="checkbox" v-model="form.cortesia_activa" /><span class="switch-track"><span class="switch-thumb"></span></span></span>
+                <span class="switch-info"><span class="switch-txt">Regalar un combo por reserva</span><span class="switch-desc">El cliente elige entre ron, singani, vino o cerveza. Descuenta stock, no cobra.</span></span>
+              </label>
+              <div v-if="form.cortesia_activa" class="grupo-campo wz-cortesia-monto">
+                <label class="etiqueta">Para reservas desde</label>
+                <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="form.cortesia_desde" type="number" min="0" step="1" class="campo campo--prefijo" /></span>
+                <small class="ayuda-campo">Ej. 800: toda mesa reservada por Bs 800 o más recibe el combo.</small>
+              </div>
+            </section>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secundario" @click="paso = 1">Atrás</button>
+              <button type="button" class="btn btn-primario" :disabled="guardando" @click="guardarCortesiaYContinuar">
+                {{ guardando ? 'Guardando...' : 'Siguiente: publicar' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- ===== PASO 3: PUBLICAR ===== -->
+          <div v-else class="modal-form">
+            <section class="wz-seccion">
+              <p class="wz-seccion-tit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M20 6 9 17l-5-5"></path></svg>
+                Revisión
+              </p>
+              <dl class="wz-dl">
+                <div><dt>Evento</dt><dd>{{ form.nombre_evento }} <span class="wz-chip">{{ etiquetaTipo(form.tipo_evento) }}</span></dd></div>
+                <div><dt>Cuándo</dt><dd>{{ formatearFecha(form.fecha_hora_inicio) }}<template v-if="form.fecha_hora_fin"> → {{ formatearFecha(form.fecha_hora_fin) }}</template></dd></div>
+                <div>
+                  <dt>Planos</dt>
+                  <dd v-if="planosDelEvento.length">{{ planosDelEvento.length }} plano{{ planosDelEvento.length === 1 ? '' : 's' }} · aforo {{ aforoTotalWizard }} personas · {{ resumenPrecios }}</dd>
+                  <dd v-else class="wz-alerta">Sin planos: los clientes no podrán reservar.</dd>
+                </div>
+                <div><dt>Cortesía</dt><dd>{{ form.cortesia_activa ? `Combo de regalo para reservas desde Bs ${form.cortesia_desde}` : 'No se regala combo' }}</dd></div>
+                <div>
+                  <dt>Estado</dt>
+                  <dd>
+                    <span class="wz-estado" :style="{ color: colorEstado(estadoWizard) }"><i class="badge-punto" aria-hidden="true"></i>{{ etiquetaEstado(estadoWizard) }}</span>
+                    <small class="wz-estado-desc">{{ ESTADOS[estadoWizard]?.desc }}</small>
+                  </dd>
+                </div>
+              </dl>
+            </section>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secundario" @click="paso = 2">Atrás</button>
+              <template v-if="estadoWizard === 'planificacion'">
+                <button type="button" class="btn btn-secundario" @click="cerrarModal">Guardar como borrador</button>
+                <button type="button" class="btn btn-primario" :disabled="publicando || !planosDelEvento.length" @click="publicarEvento">
+                  {{ publicando ? 'Publicando…' : 'Publicar evento' }}
+                </button>
+              </template>
+              <button v-else type="button" class="btn btn-primario" @click="cerrarModal">Listo</button>
+            </div>
+          </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- Modal Cambiar Estado -->
+    <!-- Cambiar estado (solo los manuales: En curso es automático por la hora) -->
     <Teleport to="body">
       <div v-if="modalEstado" class="modal-fondo" @click.self="modalEstado=false">
-        <div class="modal fade-in" style="max-width: 400px; text-align: center;">
-          <div class="modal-cabecera" style="justify-content: center; border: none; padding-bottom: 0;">
-            <h3>Cambiar estado del evento</h3>
-          </div>
-          <div style="padding: 1rem 1.5rem 1.5rem 1.5rem;">
-            <p style="color: var(--texto-secundario); font-size: 0.9rem; margin-bottom: 1.5rem;">
-              Selecciona el nuevo estado para el evento: <strong>{{ eventoParaEstado?.nombre_evento }}</strong>
-            </p>
-            
-            <div style="margin-bottom: 1.5rem;"><BaseSelect v-model="nuevoEstadoSeleccionado" :options="opcionesNuevoEstado" placeholder="Selecciona un estado…" /></div>
-
-            <p class="nota-auto">
-              <strong>En transcurso</strong> y <strong>Terminado</strong> se activan solos según la fecha y hora. Normalmente solo pasas de <strong>Planificación</strong> a <strong>Promoción</strong> para publicar el evento.
-            </p>
-            <p v-if="eventoExpirado" style="color: var(--texto-secundario); font-size: 0.8rem; margin-bottom: 1.5rem;">
-              La fecha de este evento ya pasó: no puede reactivarse ni volver a planificarse.
-            </p>
-
-            <div style="display: flex; gap: 10px; justify-content: center;">
-              <button class="btn btn-secundario" style="flex: 1;" @click="modalEstado=false">Cancelar</button>
-              <button class="btn btn-primario" style="flex: 1;" @click="confirmarCambioEstado">Guardar Estado</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal Planos del evento -->
-    <Teleport to="body">
-      <div v-if="modalPlanos" class="modal-fondo" @click.self="modalPlanos=false">
-        <div class="modal fade-in" style="max-width: 560px;">
+        <div class="modal fade-in" style="max-width: 440px;">
           <div class="modal-cabecera">
-            <h3>Planos de "{{ eventoPlanos?.nombre_evento }}"</h3>
-            <button class="btn-x" @click="modalPlanos=false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+            <h3>Estado del evento</h3>
+            <button class="btn-x" @click="modalEstado=false" aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
           <div class="modal-form">
-            <p class="pl-ayuda">Un plano por piso o ambiente; cada uno trae su propio mapa.</p>
-
-            <!-- Lista de planos ya agregados -->
-            <div v-if="planosDelEvento.length" class="pl-lista">
-              <div v-for="p in planosDelEvento" :key="p.id_zona" class="pl-item">
-                <div class="pl-item-info">
-                  <strong>{{ p.nombre }}</strong>
-                  <span class="pl-item-meta">Bs. {{ Number(p.precio_entrada_base).toFixed(2) }} · aforo {{ p.aforo }}</span>
-                </div>
-                <button class="btn btn-sm btn-peligro" @click="quitarPlanoDeEvento(p)">Quitar</button>
-              </div>
+            <p class="tipo-ayuda"><strong>{{ eventoParaEstado?.nombre_evento }}</strong> · <em>En curso</em> se activa solo cuando llega la hora de inicio, y <em>Terminado</em> al pasar la hora de fin.</p>
+            <div class="wz-estados">
+              <button
+                v-for="s in ESTADOS_MANUALES" :key="s" type="button"
+                class="wz-estado-op" :class="{ activo: nuevoEstadoSeleccionado === s }"
+                :disabled="estadoDeshabilitado(s)" :style="{ '--c': ESTADOS[s].color }"
+                @click="nuevoEstadoSeleccionado = s">
+                <i class="badge-punto" aria-hidden="true"></i>
+                <span><b>{{ ESTADOS[s].label }}</b><small>{{ ESTADOS[s].desc }}</small></span>
+              </button>
             </div>
-            <p v-else class="pl-vacio">Este evento aún no tiene planos. Agrega el primero abajo.</p>
-
-            <!-- Agregar un plano -->
-            <div class="pl-agregar">
-              <span class="pl-agregar-tit">Agregar plano</span>
-              <div class="grupo-campo">
-                <label class="etiqueta">Plano (de la biblioteca)</label>
-                <BaseSelect v-model="formAgregar.id_plano" :options="opcionesPlano" placeholder="Elige un plano" />
-              </div>
-              <div class="form-fila">
-                <div class="grupo-campo">
-                  <label class="etiqueta">Nombre en el evento (opcional)</label>
-                  <input v-model="formAgregar.nombre" class="campo" placeholder="Ej. Primer piso" />
-                </div>
-                <div class="grupo-campo">
-                  <label class="etiqueta">Precio de entrada (Bs.)</label>
-                  <input v-model.number="formAgregar.precio_base" type="number" min="0" step="0.01" class="campo" placeholder="0.00" />
-                </div>
-              </div>
-              <div class="grupo-campo">
-                <label class="etiqueta">Prioridad de atención</label>
-                <BaseSelect
-                  v-model="formAgregar.prioridad"
-                  :options="[
-                    { value: 0, label: 'Normal' },
-                    { value: 1, label: 'Alta' },
-                    { value: 2, label: 'Zona VIP' },
-                  ]"
-                />
-                <small class="ayuda-campo">Define el orden en que la barra prepara los pedidos de esta zona.</small>
-              </div>
-              <button class="btn btn-primario" style="width:100%" @click="agregarPlanoAEvento">+ Agregar al evento</button>
+            <p v-if="eventoExpirado" class="tipo-ayuda">La fecha de este evento ya pasó: no puede volver a borrador ni publicarse.</p>
+            <div class="modal-footer">
+              <button class="btn btn-secundario" @click="modalEstado=false">Cancelar</button>
+              <button class="btn btn-primario" @click="confirmarCambioEstado">Guardar estado</button>
             </div>
           </div>
         </div>
@@ -311,15 +414,29 @@ async function cargarPlanosDisponibles() {
   try { planosDisponibles.value = await clienteHttp.get('/espacios/plantillas') } catch { planosDisponibles.value = [] }
 }
 
-// Modelo de la Fase 3: estados y tipos con su etiqueta y color.
+// Estados VISIBLES: cuatro (Borrador, Publicado, En curso, Terminado). Los códigos
+// internos se conservan; 'lleno' es "En curso con el aforo completo", no un estado aparte.
 const ESTADOS = {
-  planificacion: { label: 'Planificación', color: '#8b8b96' },
-  promocion:     { label: 'Promoción',     color: '#a855f7' },
-  en_transcurso: { label: 'En transcurso', color: '#22c55e' },
-  lleno:         { label: 'Lleno',          color: '#f59e0b' },
-  terminado:     { label: 'Terminado',      color: '#6b7280' },
+  planificacion: { label: 'Borrador',  color: '#8b8b96', desc: 'Solo lo ves tú. El cliente todavía no lo ve.' },
+  promocion:     { label: 'Publicado', color: '#a855f7', desc: 'Visible en la cartelera y reservable.' },
+  en_transcurso: { label: 'En curso',  color: '#22c55e', desc: 'Está ocurriendo ahora. Se activa solo por la hora.' },
+  lleno:         { label: 'En curso',  color: '#22c55e', desc: 'En curso, con el aforo completo.', sub: 'Aforo completo' },
+  terminado:     { label: 'Terminado', color: '#6b7280', desc: 'Cerrado. No se puede reabrir.' },
 }
-const ORDEN_ESTADOS = ['planificacion', 'promocion', 'en_transcurso', 'lleno', 'terminado']
+const ORDEN_ESTADOS = ['planificacion', 'promocion', 'en_transcurso', 'terminado']
+// Los que el admin cambia a mano. "En curso" lo pone el sistema cuando llega la hora.
+const ESTADOS_MANUALES = ['planificacion', 'promocion', 'terminado']
+
+// ---- Asistente de 3 pasos ----
+const PASOS = [{ n: 1, label: 'Datos' }, { n: 2, label: 'Espacio' }, { n: 3, label: 'Publicar' }]
+const paso = ref(1)
+const esNuevo = ref(true)
+const publicando = ref(false)
+const OPCIONES_PRIORIDAD = [
+  { value: 0, label: 'Normal' },
+  { value: 1, label: 'Alta' },
+  { value: 2, label: 'Zona VIP' },
+]
 const TIPOS = {
   estandar: { label: 'Estándar', color: '#a855f7' },
   especial: { label: 'Especial', color: '#ec4899' },
@@ -364,45 +481,132 @@ const form = reactive({
   fecha_hora_inicio: '',
   fecha_hora_fin: '',
   tipo_evento: 'estandar',
+  // Combo de cortesía: desde qué monto de reserva se regala (null = no se regala)
+  cortesia_activa: false,
+  cortesia_desde: 800,
 })
 
-// ── Gestión de planos del evento (un evento puede tener varios: pisos/áreas) ──
-const modalPlanos = ref(false)
-const eventoPlanos = ref(null)              // evento cuyos planos gestionamos
-const planosDelEvento = ref([])             // planos ya agregados (zonas)
-const cargandoPlanos = ref(false)
-const formAgregar = reactive({ id_plano: '', nombre: '', precio_base: 0, prioridad: 0 })
+// El evento que el asistente está editando (recién creado o abierto desde la tarjeta)
+const idEventoWizard = computed(() => eventoEditando.value?.id_evento || null)
+const estadoWizard = computed(() => eventoEditando.value?.estado || 'planificacion')
+function irAPaso(n) { if (n > 1 && !idEventoWizard.value) return; paso.value = n }
 
+// ── Planos del evento (un evento puede tener varios: pisos/ambientes) ──
+// El precio se define por ÁREA: el plano trae el suyo y el evento lo ajusta.
+const planosDelEvento = ref([])             // planos ya agregados (zonas) con sus áreas y precios
+const cargandoPlanos = ref(false)
+const agregandoPlano = ref(false)
+const guardandoPrecios = ref(null)
+const planoElegido = ref(null)              // áreas del plano elegido para agregar (precio prellenado)
+const formAgregar = reactive({ id_plano: '', nombre: '', prioridad: 0, precios: {}, precio_general: null })
+function resetFormAgregar() {
+  formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.prioridad = 0
+  formAgregar.precios = {}; formAgregar.precio_general = null
+  planoElegido.value = null
+}
+
+// Abrir el asistente directo en el paso de planos (botón "Planos" de la tarjeta)
 async function abrirPlanosEvento(evento) {
-  eventoPlanos.value = evento
-  formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0; formAgregar.prioridad = 0
-  modalPlanos.value = true
-  // Recargar la biblioteca para incluir planos creados recientemente (evita el caché de KeepAlive).
-  cargarPlanosDisponibles()
-  await cargarPlanosDelEvento()
+  await abrirModal(evento)
+  paso.value = 2
 }
 async function cargarPlanosDelEvento() {
-  if (!eventoPlanos.value) return
+  if (!idEventoWizard.value) { planosDelEvento.value = []; return }
   cargandoPlanos.value = true
   try {
-    planosDelEvento.value = await clienteHttp.get(`/espacios/eventos/${eventoPlanos.value.id_evento}/planos`)
+    const lista = await clienteHttp.get(`/espacios/eventos/${idEventoWizard.value}/planos`)
+    planosDelEvento.value = (lista || []).map(p => ({
+      ...p,
+      precio_entrada_base: Number(p.precio_entrada_base) > 0 ? Number(p.precio_entrada_base) : null,
+      prioridad: Number(p.prioridad) || 0,
+      areas: (p.areas || []).map(a => ({ ...a, precio: a.precio > 0 ? Number(a.precio) : null })),
+    }))
   } catch { planosDelEvento.value = [] }
   finally { cargandoPlanos.value = false }
 }
+// Al elegir un plano de la biblioteca se listan sus áreas con el precio que trae el plano.
+async function alElegirPlano(id) {
+  planoElegido.value = null
+  formAgregar.precios = {}; formAgregar.precio_general = null
+  if (!id) return
+  try {
+    const p = await clienteHttp.get(`/espacios/plantillas/${id}`)
+    const els = p.elementos || []
+    const areas = els
+      .filter(e => e.tipo_elemento === 'area')
+      .map(e => ({ clave: e.clave, nombre: e.numero_nombre || 'Área', precio: (e.precio != null && e.precio !== '') ? Number(e.precio) : null, parados: Number(e.capacidad_sillas) || 0 }))
+    const tiene_general = els.some(e => (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
+    // Si el plano no trae precio, el campo queda VACÍO (no en 0): así se nota que falta.
+    for (const a of areas) formAgregar.precios[a.clave] = a.precio > 0 ? a.precio : null
+    formAgregar.precio_general = null
+    planoElegido.value = { nombre: p.nombre, areas, tiene_general }
+  } catch { notif.error('No se pudo leer el plano') }
+}
+// Nadie entra gratis: toda área (y el general, si hay mesas sueltas) necesita precio > 0.
+function faltanPrecios(areas, tieneGeneral, precios, precioGeneral) {
+  const sin = areas.filter(a => !(Number(precios[a.clave]) > 0)).map(a => a.nombre)
+  if (tieneGeneral && !(Number(precioGeneral) > 0)) sin.push('General')
+  return sin
+}
 async function agregarPlanoAEvento() {
   if (!formAgregar.id_plano) { notif.advertencia('Elige un plano para agregar.'); return }
+  if (planoElegido.value) {
+    const sin = faltanPrecios(planoElegido.value.areas, planoElegido.value.tiene_general, formAgregar.precios, formAgregar.precio_general)
+    if (sin.length) { notif.advertencia(`Falta el precio de: ${sin.join(', ')}. Nadie puede reservar gratis.`); return }
+  }
+  agregandoPlano.value = true
   try {
-    await clienteHttp.post(`/espacios/eventos/${eventoPlanos.value.id_evento}/asignar-plano`, {
+    await clienteHttp.post(`/espacios/eventos/${idEventoWizard.value}/asignar-plano`, {
       id_plantilla: formAgregar.id_plano,
-      precio_base: formAgregar.precio_base,
       nombre: formAgregar.nombre,
       prioridad: formAgregar.prioridad,
+      precios_areas: formAgregar.precios,
+      precio_general: formAgregar.precio_general,
     })
-    formAgregar.id_plano = ''; formAgregar.nombre = ''; formAgregar.precio_base = 0; formAgregar.prioridad = 0
+    resetFormAgregar()
     await cargarPlanosDelEvento()
     cargarEventos()
     notif.exito('Plano agregado al evento')
   } catch (e) { notif.error(e.error || 'No se pudo agregar el plano') }
+  finally { agregandoPlano.value = false }
+}
+// Reajusta precios de un plano YA asignado sin quitarlo (quitarlo devuelve dinero).
+async function guardarPreciosPlano(p) {
+  const sin = p.areas.filter(a => !(Number(a.precio) > 0)).map(a => a.nombre)
+  if ((p.tiene_general || !p.areas.length) && !(Number(p.precio_entrada_base) > 0)) sin.push('General')
+  if (sin.length) { notif.advertencia(`Falta el precio de: ${sin.join(', ')}. Nadie puede reservar gratis.`); return }
+  guardandoPrecios.value = p.id_zona
+  try {
+    const precios_areas = {}
+    for (const a of p.areas) if (a.clave) precios_areas[a.clave] = a.precio
+    await clienteHttp.put(`/espacios/zonas/${p.id_zona}/precios`, { precios_areas, precio_general: p.precio_entrada_base, prioridad: p.prioridad })
+    notif.exito('Precios actualizados')
+    cargarEventos()
+  } catch (e) { notif.error(e.error || 'No se pudieron guardar los precios') }
+  finally { guardandoPrecios.value = null }
+}
+// Resumen del paso 3
+const aforoTotalWizard = computed(() => planosDelEvento.value.reduce((a, p) => a + (Number(p.aforo) || 0), 0))
+const resumenPrecios = computed(() => {
+  const precios = []
+  for (const p of planosDelEvento.value) {
+    for (const a of p.areas) if (a.precio != null) precios.push(Number(a.precio))
+    if (p.tiene_general || !p.areas.length) precios.push(Number(p.precio_entrada_base) || 0)
+  }
+  if (!precios.length) return 'sin precios'
+  const min = Math.min(...precios), max = Math.max(...precios)
+  return min === max ? `Bs ${min}` : `de Bs ${min} a Bs ${max}`
+})
+async function publicarEvento() {
+  if (!idEventoWizard.value) return
+  publicando.value = true
+  try {
+    await servicioEventos.cambiarEstado(idEventoWizard.value, 'promocion')
+    eventoEditando.value = { ...eventoEditando.value, estado: 'promocion' }
+    cargarEventos()
+    notif.exito('Evento publicado: ya aparece en la cartelera de los clientes')
+  } catch (e) { notif.error(e?.error || 'No se pudo publicar el evento') }
+  finally { publicando.value = false }
 }
 async function quitarPlanoDeEvento(p) {
   const ok = await notif.confirmar({
@@ -474,7 +678,10 @@ useTiempoReal('eventos', () => cargarEventos())
 const eventosFiltrados = computed(() => {
   return eventos.value.filter(e => {
     const matchNombre = e.nombre_evento.toLowerCase().includes(filtroBusqueda.value.toLowerCase())
-    const matchEstado = filtroEstado.value ? e.estado === filtroEstado.value : true
+    // 'lleno' es "En curso" con aforo completo: entra en el mismo filtro
+    const matchEstado = filtroEstado.value
+      ? (filtroEstado.value === 'en_transcurso' ? ['en_transcurso', 'lleno'].includes(e.estado) : e.estado === filtroEstado.value)
+      : true
     const matchTipo   = filtroTipo.value ? (e.tipo_evento || 'estandar') === filtroTipo.value : true
     return matchNombre && matchEstado && matchTipo
   })
@@ -520,27 +727,37 @@ function formatearFechaParaInput(fechaStr) {
     + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-// Funciones del Modal
-function abrirModal(evento = null) {
+// Funciones del asistente
+async function abrirModal(evento = null) {
   eventoEditando.value = evento
+  esNuevo.value = !evento
+  paso.value = 1
   archivoSeleccionado.value = null
   previewImagen.value = evento ? evento.url_portada : null
-  
+  resetFormAgregar()
+
   if (evento) {
     form.nombre_evento = evento.nombre_evento
     form.descripcion = evento.descripcion || ''
     form.fecha_hora_inicio = formatearFechaParaInput(evento.fecha_hora_inicio)
     form.fecha_hora_fin = formatearFechaParaInput(evento.fecha_hora_fin)
     form.tipo_evento = evento.tipo_evento || 'estandar'
+    form.cortesia_activa = evento.cortesia_desde != null
+    form.cortesia_desde = evento.cortesia_desde != null ? Number(evento.cortesia_desde) : 800
   } else {
     form.nombre_evento = ''
     form.descripcion = ''
     form.fecha_hora_inicio = ''
     form.fecha_hora_fin = ''
     form.tipo_evento = 'estandar'
+    form.cortesia_activa = false
+    form.cortesia_desde = 800
   }
 
   modalAbierto.value = true
+  // La biblioteca puede tener planos nuevos (evita el caché de KeepAlive)
+  cargarPlanosDisponibles()
+  await cargarPlanosDelEvento()
 }
 
 function cerrarModal() {
@@ -548,6 +765,7 @@ function cerrarModal() {
   setTimeout(() => {
     archivoSeleccionado.value = null
     previewImagen.value = null
+    paso.value = 1
   }, 200)
 }
 
@@ -559,33 +777,47 @@ function manejarArchivo(e) {
   }
 }
 
-// Guardar
-async function guardarEvento() {
+// Paso 1 → guarda los datos (crea el evento si es nuevo) y pasa al espacio
+async function guardarYContinuar() {
   guardando.value = true
   try {
     const formData = new FormData()
     formData.append('nombre_evento', form.nombre_evento)
     formData.append('descripcion', form.descripcion)
     formData.append('fecha_hora_inicio', form.fecha_hora_inicio)
-    if (form.fecha_hora_fin) formData.append('fecha_hora_fin', form.fecha_hora_fin)
+    formData.append('fecha_hora_fin', form.fecha_hora_fin || '')
     formData.append('tipo_evento', form.tipo_evento)
-    
-    if (archivoSeleccionado.value) {
-      formData.append('imagen', archivoSeleccionado.value)
-    }
+    formData.append('cortesia_desde', form.cortesia_activa ? String(form.cortesia_desde ?? '') : '')
+    if (archivoSeleccionado.value) formData.append('imagen', archivoSeleccionado.value)
 
-    const editando = !!eventoEditando.value
-    if (editando) {
-      await servicioEventos.editar(eventoEditando.value.id_evento, formData)
-    } else {
-      await servicioEventos.crear(formData)
-    }
+    let r
+    if (idEventoWizard.value) r = await servicioEventos.editar(idEventoWizard.value, formData)
+    else r = await servicioEventos.crear(formData)
+    if (r?.evento) eventoEditando.value = { ...(eventoEditando.value || {}), ...r.evento }
 
-    cerrarModal()
     cargarEventos()
-    notif.exito(editando ? 'Evento actualizado' : 'Evento creado')
+    await cargarPlanosDelEvento()
+    paso.value = 2
   } catch (error) {
     notif.error('Error al guardar el evento: ' + (error.error || error.message))
+  } finally {
+    guardando.value = false
+  }
+}
+
+// Paso 2 → guarda la cortesía y pasa a la revisión
+async function guardarCortesiaYContinuar() {
+  if (!idEventoWizard.value) { paso.value = 1; return }
+  guardando.value = true
+  try {
+    const formData = new FormData()
+    formData.append('cortesia_desde', form.cortesia_activa ? String(form.cortesia_desde ?? '') : '')
+    const r = await servicioEventos.editar(idEventoWizard.value, formData)
+    if (r?.evento) eventoEditando.value = { ...(eventoEditando.value || {}), ...r.evento }
+    cargarEventos()
+    paso.value = 3
+  } catch (error) {
+    notif.error('No se pudo guardar la cortesía: ' + (error.error || error.message))
   } finally {
     guardando.value = false
   }
@@ -617,8 +849,10 @@ function estadoDeshabilitado(destino) {
   if (destino === ev.estado) return false
   // Un evento Terminado es cierre definitivo: no vuelve a un estado anterior.
   if (ev.estado === 'terminado') return true
-  // Un evento cuya fecha ya pasó no puede volver a Planificación o Promoción.
+  // Un evento cuya fecha ya pasó no puede volver a Borrador ni publicarse.
   if (eventoExpirado.value && (destino === 'planificacion' || destino === 'promocion')) return true
+  // Un evento en curso no vuelve a borrador (la gente ya está adentro).
+  if ((ev.estado === 'en_transcurso' || ev.estado === 'lleno') && destino === 'planificacion') return true
   return false
 }
 
@@ -1115,4 +1349,82 @@ async function confirmarCambioEstado() {
 }
 
 .ayuda-campo { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--texto-secundario); }
+</style>
+
+<style scoped>
+/* ===== Asistente de evento (3 pasos) ===== */
+.modal-wizard { max-width: 620px; }
+.wz-cab { align-items: center; }
+.wz-titulo { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.wz-icono { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radio-md); color: #fff; background: var(--gradiente-marca); box-shadow: 0 4px 14px rgba(168,85,247,.35); }
+.wz-textos { min-width: 0; }
+.wz-sub { margin: 2px 0 0; font-size: .78rem; color: var(--texto-secundario); font-weight: 400; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+
+.wz-pasos { list-style: none; margin: 0; padding: 12px 1.5rem 0; display: flex; gap: 6px; position: sticky; top: 64px; z-index: 1; background: var(--fondo-tarjeta); }
+.wz-pasos li { flex: 1; }
+.wz-pasos button { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta-alt); color: var(--texto-secundario); cursor: pointer; font-size: .82rem; font-weight: 600; transition: var(--trans-rapida); }
+.wz-pasos button:disabled { opacity: .5; cursor: not-allowed; }
+.wz-pasos li.activo button { border-color: var(--morado-brillante); background: rgba(168,85,247,.12); color: var(--texto-principal); }
+.wz-pasos li.hecho button { border-color: rgba(34,197,94,.45); color: var(--texto-principal); }
+.wz-num { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .74rem; font-weight: 800; background: rgba(255,255,255,.08); }
+.wz-pasos li.activo .wz-num { background: var(--gradiente-marca); color: #fff; }
+.wz-pasos li.hecho .wz-num { background: rgba(34,197,94,.2); color: #86efac; }
+
+.wz-seccion { display: flex; flex-direction: column; gap: .8rem; padding: 1rem 1.05rem 1.1rem; border: 1px solid var(--borde-sutil); border-radius: var(--radio-lg); background: rgba(255,255,255,.018); }
+.wz-seccion-tit { display: flex; align-items: center; gap: 7px; margin: 0 0 .1rem; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--morado-hover); }
+
+/* Precio por área */
+.pl-item-col { flex-direction: column; align-items: stretch; gap: 10px; }
+.pl-item-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wz-areas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wz-area { display: flex; flex-direction: column; gap: 5px; padding: 9px 10px; border-radius: var(--radio-md); background: rgba(168,85,247,.06); border: 1px solid var(--borde-sutil); }
+.wz-area-nom { font-size: .8rem; font-weight: 700; color: var(--texto-principal); }
+.wz-area-nom small { font-weight: 500; color: var(--texto-desactivado); }
+.wz-area-acciones { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wz-prioridad { flex: 0 1 200px; }
+
+/* Campos con adorno Bs. */
+.campo-adorno { position: relative; display: flex; align-items: center; }
+.campo-adorno .campo { width: 100%; }
+.adorno { position: absolute; top: 50%; transform: translateY(-50%); left: 12px; font-size: .8rem; font-weight: 700; color: var(--texto-desactivado); pointer-events: none; }
+.campo--prefijo { padding-left: 40px; }
+
+/* Switch (mismo diseño que en productos) */
+.switch-row { display: flex; align-items: center; gap: .65rem; padding: .65rem .75rem; border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); background: var(--fondo-tarjeta-alt); cursor: pointer; user-select: none; transition: border-color var(--trans-rapida), background var(--trans-rapida); }
+.switch-row:hover { border-color: var(--borde-activo); }
+.switch-row:has(input:checked) { border-color: var(--morado-brillante); background: rgba(168,85,247,.09); }
+.switch { position: relative; flex-shrink: 0; width: 40px; height: 22px; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch-track { position: absolute; inset: 0; border-radius: var(--radio-full); background: rgba(255,255,255,.14); transition: background var(--trans-rapida); }
+.switch-thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--radio-full); background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45); transition: transform .22s cubic-bezier(.34,1.56,.64,1); }
+.switch input:checked + .switch-track { background: var(--gradiente-marca); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(18px); }
+.switch-info { display: flex; flex-direction: column; gap: 1px; line-height: 1.15; min-width: 0; }
+.switch-txt { font-size: .85rem; font-weight: 600; color: var(--texto-principal); }
+.switch-desc { font-size: .7rem; color: var(--texto-desactivado); }
+.wz-cortesia-monto { max-width: 260px; }
+
+/* Revisión */
+.wz-dl { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.wz-dl > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: baseline; }
+.wz-dl dt { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-desactivado); }
+.wz-dl dd { margin: 0; font-size: .9rem; color: var(--texto-principal); }
+.wz-chip { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: var(--radio-full); background: rgba(168,85,247,.14); color: var(--morado-hover); margin-left: 6px; }
+.wz-alerta { color: var(--color-alerta) !important; font-weight: 600; }
+.wz-estado { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.wz-estado .badge-punto { background: currentColor; }
+.wz-estado-desc { display: block; margin-top: 2px; font-size: .74rem; color: var(--texto-desactivado); }
+
+/* Elegir estado */
+.wz-estados { display: flex; flex-direction: column; gap: 8px; }
+.wz-estado-op { display: flex; align-items: center; gap: 11px; text-align: left; padding: 10px 12px; border-radius: var(--radio-md); border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta-alt); color: var(--texto-principal); cursor: pointer; transition: var(--trans-rapida); }
+.wz-estado-op:hover:not(:disabled) { border-color: var(--borde-activo); }
+.wz-estado-op.activo { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.wz-estado-op:disabled { opacity: .45; cursor: not-allowed; }
+.wz-estado-op .badge-punto { background: var(--c); width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.wz-estado-op span { display: flex; flex-direction: column; gap: 1px; }
+.wz-estado-op b { font-size: .88rem; }
+.wz-estado-op small { font-size: .72rem; color: var(--texto-secundario); }
+
+@media (max-width: 560px) { .wz-areas { grid-template-columns: 1fr; } .wz-dl > div { grid-template-columns: 1fr; gap: 2px; } .wz-pasos .wz-lbl { display: none; } .wz-pasos button { justify-content: center; } }
 </style>

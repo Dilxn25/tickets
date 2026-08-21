@@ -90,6 +90,8 @@
       </div>
 
       <div class="panel-tabla superficie tabla-wrapper">
+        <!-- Semáforo: el estado se lee por color (el texto queda en el detalle) -->
+        <LeyendaEstados class="ventas-leyenda" />
         <div v-if="cargando" class="estado-carga">
           <div class="fila-esqueleto" v-for="n in 6" :key="n">
             <span class="esqueleto" style="width: 12%"></span>
@@ -129,7 +131,7 @@
               <td class="texto-sec" data-label="Atendido por">{{ venta.mesero_nombre }}</td>
               <td data-label="Monto"><span class="monto-tabla">Bs. {{ venta.monto_total.toFixed(2) }}</span></td>
               <td data-label="Pago"><span class="badge" :class="getBadgeClasePago(venta.metodo_pago)">{{ venta.metodo_pago }}</span></td>
-              <td data-label="Estado"><span class="badge" :class="getBadgeClaseEstado(venta.estado)">{{ venta.estado }}</span></td>
+              <td data-label="Estado"><span class="celda-sem"><PuntoEstado :pedido="{ estado: venta.estado }" grande /></span></td>
               <td class="texto-sec" data-label="Fecha">{{ formatearFecha(venta.fecha_comanda) }}</td>
               <td class="sin-label">
                 <div class="acciones">
@@ -325,6 +327,8 @@ import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import BaseFecha from '@/componentes/comunes/BaseFecha.vue'
 import { useTiempoReal } from '@/composables/useTiempoReal'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
+import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
 
 const notif = useNotificaciones()
 
@@ -1560,4 +1564,10 @@ async function cancelarVenta() {
     justify-content: center;
   }
 }
+</style>
+
+<style scoped>
+/* ===== Semáforo de estados en la tabla ===== */
+.ventas-leyenda { padding: 10px 16px 0; }
+.celda-sem { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; }
 </style>

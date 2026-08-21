@@ -86,7 +86,7 @@
             </span>
           </div>
         </div>
-        <span class="aforo-pie">Cada área es una zona con su propio aforo (parados + mesas/sillas asignadas). Los precios se ajustan al asignar el plano a un evento.</span>
+        <span class="aforo-pie">Cada área tiene su aforo y su precio. Las mesas heredan el precio de su área; al crear el evento lo ajustas para esa noche.</span>
       </div>
     </section>
 
@@ -143,6 +143,7 @@
             >
               <span class="elemento-etiqueta">{{ el.numero_nombre || tipoLabel(el.tipo_elemento) }}</span>
               <span v-if="el.tipo_elemento === 'mesa'" class="elemento-cap">{{ el.capacidad_sillas }}p</span>
+              <span v-if="el.tipo_elemento === 'area' && el.precio" class="elemento-precio">Bs {{ el.precio }}</span>
               <div v-if="idx === seleccionado" class="manija-resize" @pointerdown.stop="iniciarResize($event, idx)" title="Estirar"></div>
             </div>
             <!-- Guías de alineación (aparecen al arrastrar) -->
@@ -197,11 +198,21 @@
             <BaseSelect v-model="elSel.area_ref" :options="opcionesAreas" />
           </label>
 
-          <label class="prop-campo" v-if="permitePrecio(elSel.tipo_elemento)">
-            <span>Precio (Bs.)</span>
-            <input v-model.number="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="Ej. 800 (Lounge), 1500 (VIP)…" />
-            <small v-if="elSel.tipo_elemento === 'area'" class="prop-nota">Precio sugerido de esta zona (podrás ajustarlo al asignar el plano a un evento).</small>
-          </label>
+          <div class="prop-precio" v-if="permitePrecio(elSel.tipo_elemento)">
+            <span class="prop-precio-tit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V7a2 2 0 0 0-2-2h-5L3 15l6 6 10-10Z"></path><circle cx="9" cy="9" r="1.4"></circle></svg>
+              Precio del área
+            </span>
+            <span class="prop-precio-campo">
+              <span class="prop-precio-bs">Bs.</span>
+              <input v-model.number="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="Ej. 800" />
+            </span>
+            <small class="prop-nota">Las mesas y sillas de esta área heredan este precio. Al crear el evento puedes ajustarlo para esa noche.</small>
+          </div>
+          <p v-else-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'" class="prop-herencia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            El precio lo toma del área a la que pertenece.
+          </p>
 
           <template v-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'">
             <label class="prop-check">
@@ -220,7 +231,7 @@
         </template>
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
-          <p class="prop-ayuda">Áreas = secciones con precio · Mesas y sillas = aforo · Barra, escenario y paredes = decorativos.</p>
+          <p class="prop-ayuda">Áreas = zonas con precio · Mesas y sillas = aforo (heredan el precio de su área) · Barra, escenario y estructuras = decorativos.</p>
         </template>
       </div>
     </div>
@@ -345,8 +356,9 @@ function tipoLabel(t) {
 // Qué elementos suman aforo (personas). Barra, escenario y pared son decorativos.
 // El área aporta su aforo de "parados" (pista); mesas y sillas aportan sus asientos.
 function cuentaAforo(t) { return t === 'mesa' || t === 'silla' || t === 'area' }
-// Qué elementos pueden llevar precio (secciones cotizables): mesas, sillas y áreas.
-function permitePrecio(t) { return t === 'mesa' || t === 'silla' || t === 'area' }
+// REGLA ÚNICA: el precio es por ÁREA. Mesas y sillas heredan el de su área;
+// el evento puede ajustarlo para esa noche. Así el precio vive en un solo lugar.
+function permitePrecio(t) { return t === 'area' }
 
 async function cargarPlanos() {
   try { planos.value = await clienteHttp.get('/espacios/plantillas') } catch { planos.value = [] }
@@ -478,7 +490,8 @@ function agregarElemento(tipo) {
     posicion_x: x, posicion_y: y,
     ancho: t.ancho, alto: t.alto, rotacion: 0,
     capacidad_sillas: (tipo === 'mesa' || tipo === 'silla') && ultimo ? ultimo.capacidad_sillas : (CAP_DEFECTO[tipo] || 0),
-    precio: ultimo ? (ultimo.precio ?? null) : null,
+    // Solo las áreas llevan precio (las mesas heredan el de su área)
+    precio: tipo === 'area' ? (ultimo ? (ultimo.precio ?? null) : null) : null,
     es_seleccionable: tipo === 'mesa' || tipo === 'silla',
     forma: FORMA_DEFECTO[tipo] || null,
     clave: tipo === 'area' ? 'area_' + idLocal : undefined,
@@ -621,7 +634,8 @@ function elementosParaGuardar() {
     posicion_x: e.posicion_x, posicion_y: e.posicion_y,
     ancho: e.ancho, alto: e.alto, rotacion: e.rotacion,
     capacidad_sillas: e.capacidad_sillas,
-    precio: (e.precio === '' || e.precio == null) ? null : Number(e.precio),
+    // El precio solo se guarda en las áreas (fuente única); las mesas lo heredan.
+    precio: (e.tipo_elemento === 'area' && e.precio !== '' && e.precio != null) ? Number(e.precio) : null,
     es_seleccionable: e.es_seleccionable,
     forma: e.forma || null,
     // Modelo de zonas: clave estable del área y a qué área pertenece cada mesa/silla.
@@ -981,4 +995,48 @@ select.campo { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .campo, .btn, .btn-herramienta, .btn-herramienta svg, .btn-x, .fila-plantilla, .aforo-relleno { transition: none; }
 }
+</style>
+
+<style scoped>
+/* ===== Rediseño del editor de planos ===== */
+/* Barra superior como tarjeta con jerarquía */
+.barra-mapa { border-radius: var(--radio-xl); padding: 16px 18px; gap: 18px; }
+.plano-nombre-input { font-family: var(--fuente-titulo); font-weight: 800; font-size: 1.05rem; background: transparent; border: none; border-bottom: 2px solid var(--borde-sutil); border-radius: 0; padding: 6px 2px; color: var(--texto-principal); min-width: 240px; outline: none; transition: border-color var(--trans-rapida); }
+.plano-nombre-input:focus { border-bottom-color: var(--morado-brillante); }
+.panel-aforo { border-radius: var(--radio-xl); }
+.aforo-valor { font-family: var(--fuente-titulo); font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; }
+
+/* Herramientas: mosaico de fichas con icono arriba */
+.herramientas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
+.herramientas-titulo { grid-column: 1 / -1; margin-bottom: 2px; }
+.btn-herramienta { flex-direction: column; justify-content: center; gap: 6px; padding: 12px 6px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; border-radius: var(--radio-lg); background: var(--fondo-tarjeta-alt); transition: var(--trans-rapida); }
+.btn-herramienta svg { width: 22px; height: 22px; color: var(--morado-hover); transition: transform var(--trans-rapida); }
+.btn-herramienta:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.12); transform: translateY(-2px); }
+.btn-herramienta:hover svg { transform: scale(1.08); }
+.editor-grid { grid-template-columns: 168px 1fr 300px; }
+
+/* Lienzo */
+.lienzo-scroll { border: 1px solid var(--borde-sutil); background: radial-gradient(circle at 20% 0%, rgba(168,85,247,.08), transparent 50%), var(--fondo-tarjeta); }
+.elemento-precio { position: absolute; right: 6px; top: 6px; font-size: .64rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(10,6,26,.72); color: #fff; border: 1px solid rgba(255,255,255,.18); pointer-events: none; }
+
+/* Panel de propiedades con secciones */
+.propiedades { border-radius: var(--radio-xl); gap: 14px; }
+.propiedades-cab { padding-bottom: 12px; }
+.propiedades-chip { background: var(--gradiente-marca); color: #fff; border: none; }
+.prop-campo > span:first-child { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-desactivado); }
+.prop-precio { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--radio-lg); border: 1px solid rgba(168,85,247,.4); background: linear-gradient(135deg, rgba(168,85,247,.14), rgba(236,72,153,.06)); }
+.prop-precio-tit { display: flex; align-items: center; gap: 7px; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--morado-hover); }
+.prop-precio-campo { position: relative; display: flex; align-items: center; }
+.prop-precio-campo .campo { width: 100%; padding-left: 42px; font-family: var(--fuente-titulo); font-weight: 800; font-size: 1.05rem; }
+.prop-precio-bs { position: absolute; left: 12px; font-size: .8rem; font-weight: 700; color: var(--texto-desactivado); pointer-events: none; }
+.prop-herencia { display: flex; align-items: center; gap: 7px; margin: 0; font-size: .76rem; color: var(--texto-secundario); padding: 9px 11px; border-radius: var(--radio-md); background: rgba(255,255,255,.04); border: 1px dashed var(--borde-sutil); }
+.prop-acciones .btn { border-radius: var(--radio-full); }
+
+/* Galería */
+.plano-card { border-radius: var(--radio-xl); }
+.plano-card:hover { border-color: var(--morado-brillante); box-shadow: 0 14px 34px rgba(168,85,247,.22); }
+.plano-card-nom { font-family: var(--fuente-titulo); font-weight: 800; }
+
+@media (max-width: 1024px) { .editor-grid { grid-template-columns: 1fr; } .herramientas { grid-template-columns: repeat(6, 1fr); } .herramientas-titulo { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .herramientas { grid-template-columns: repeat(3, 1fr); } }
 </style>

@@ -187,8 +187,44 @@
           <p class="codigo">Código: <b>{{ reservaOk.entrada.codigo_ingreso }}</b></p>
           <p class="saldo-rest">Saldo restante: {{ formatoBs(reservaOk.saldo_restante) }}</p>
 
+          <!-- CORTESÍA: la reserva alcanzó el monto y la casa regala un combo -->
+          <div v-if="reservaOk.cortesia" class="cortesia-box">
+            <div class="cortesia-cab">
+              <span class="cortesia-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13M5 12v9h14v-9"></path><path d="M12 8a3 3 0 1 1 3-3c0 2-3 3-3 3zM12 8a3 3 0 1 0-3-3c0 2 3 3 3 3z"></path></svg>
+              </span>
+              <div>
+                <p class="cortesia-titulo">Tu reserva incluye un combo de cortesía</p>
+                <p class="cortesia-sub">Elige uno y te lo llevamos a la mesa. Si prefieres, lo eliges después desde Mis reservas.</p>
+              </div>
+            </div>
+
+            <div v-if="cortesiaElegida" class="cortesia-listo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><b>{{ cortesiaElegida.combo }}</b> · {{ cortesiaElegida.mensaje }}</span>
+            </div>
+            <div v-else class="cortesia-opciones">
+              <button
+                v-for="op in reservaOk.cortesia.opciones" :key="op.id_producto"
+                class="cortesia-op" type="button"
+                :disabled="eligiendoCortesia || !op.disponible"
+                @click="elegirCortesia(op)">
+                <span class="cortesia-op-img">
+                  <img v-if="op.url_imagen" :src="op.url_imagen" :alt="op.nombre" @error="$event.target.style.visibility = 'hidden'" />
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
+                </span>
+                <span class="cortesia-op-txt">
+                  <b>{{ op.nombre.replace('Cortesía ', '') }}</b>
+                  <small>{{ op.componentes.map(c => `${c.cantidad}× ${c.nombre}`).join(' · ') }}</small>
+                  <em v-if="!op.disponible">Sin stock ahora</em>
+                </span>
+              </button>
+            </div>
+            <p v-if="errorCortesia" class="hoja-error">{{ errorCortesia }}</p>
+          </div>
+
           <!-- PACKS PARA MESA de la IA: patrones reales de mesas grandes, con imágenes -->
-          <div v-if="tipoReservado === 'mesa' && packs.length" class="packs-mesa">
+          <div v-else-if="tipoReservado === 'mesa' && packs.length" class="packs-mesa">
             <p class="combos-titulo">Arma tu mesa de una vez</p>
             <div class="packs-mesa-lista">
               <button v-for="(pk, i) in packs" :key="'pk' + i" class="pack-mesa" type="button" @click="agregarPack(pk)">
@@ -225,7 +261,7 @@
 
           <div class="modal-acciones col">
             <button class="btn-primario grande brillo-hover" @click="irMisReservas">Ver mis reservas</button>
-            <button class="btn-texto" @click="cerrarExito">Seguir en el mapa</button>
+            <button class="btn-texto" @click="cerrarExito">{{ reservaOk.cortesia && !cortesiaElegida ? 'Elegir el combo después' : 'Seguir en el mapa' }}</button>
           </div>
         </div>
       </div>
@@ -268,6 +304,24 @@ const pidiendoPin = ref(false)
 const pin = ref('')
 const accionPin = ref('mesa') // 'mesa' | 'campo' | 'pie' — qué confirma el PIN
 const reservaOk = ref(null)
+
+// ---- Combo de cortesía (regalo de la casa por la reserva) ----
+const cortesiaElegida = ref(null)
+const eligiendoCortesia = ref(false)
+const errorCortesia = ref('')
+async function elegirCortesia(op) {
+  if (!reservaOk.value?.cortesia || eligiendoCortesia.value) return
+  eligiendoCortesia.value = true
+  errorCortesia.value = ''
+  try {
+    const r = await servicioReservas.elegirCortesia(reservaOk.value.cortesia.id_cortesia, op.id_producto)
+    cortesiaElegida.value = { combo: r.combo || op.nombre, mensaje: r.mensaje }
+  } catch (e) {
+    errorCortesia.value = (e?.response?.data || e)?.error || 'No se pudo registrar tu combo. Puedes elegirlo desde Mis reservas.'
+  } finally {
+    eligiendoCortesia.value = false
+  }
+}
 
 // Presencia en vivo: quiénes están VIENDO cada lugar ahora → { id_mesa: { socketId: nombre } }.
 const viendoOtros = ref({})
@@ -1138,4 +1192,25 @@ onUnmounted(() => {
   .btn-volver, .btn-mias, .tab-zona, .btn-primario, .combo-chip, .pack-mesa,
   .elemento.libre, .input-pin { transition: none; }
 }
+</style>
+
+<style scoped>
+/* ===== Combo de cortesía al confirmar la reserva ===== */
+.cortesia-box { margin: 14px 0 4px; padding: 14px; border-radius: 16px; border: 1px solid rgba(236,72,153,0.4); background: linear-gradient(135deg, rgba(236,72,153,0.14), rgba(168,85,247,0.08)); text-align: left; }
+.cortesia-cab { display: flex; gap: 11px; align-items: flex-start; margin-bottom: 12px; }
+.cortesia-icono { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #A855F7, #EC4899); box-shadow: 0 6px 16px rgba(236,72,153,0.35); }
+.cortesia-titulo { margin: 0; font-weight: 800; font-size: 0.98rem; color: var(--texto-principal); }
+.cortesia-sub { margin: 3px 0 0; font-size: 0.78rem; color: var(--texto-secundario); line-height: 1.35; }
+.cortesia-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cortesia-op { display: flex; gap: 9px; align-items: center; text-align: left; padding: 9px; border-radius: 12px; cursor: pointer; border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta-alt); color: var(--texto-principal); transition: border-color .15s ease, transform .15s ease, background .15s ease; }
+.cortesia-op:hover:not(:disabled) { border-color: #EC4899; background: var(--fondo-tarjeta); transform: translateY(-1px); }
+.cortesia-op:disabled { opacity: 0.5; cursor: not-allowed; }
+.cortesia-op-img { flex: none; width: 44px; height: 44px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: rgba(255,255,255,0.06); color: var(--morado-hover); }
+.cortesia-op-img img { width: 100%; height: 100%; object-fit: cover; }
+.cortesia-op-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cortesia-op-txt b { font-size: 0.9rem; }
+.cortesia-op-txt small { font-size: 0.7rem; color: var(--texto-secundario); line-height: 1.3; }
+.cortesia-op-txt em { font-size: 0.68rem; color: var(--color-alerta); font-style: normal; font-weight: 700; }
+.cortesia-listo { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 12px; background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.4); color: #BBF7D0; font-size: 0.88rem; }
+@media (max-width: 420px) { .cortesia-opciones { grid-template-columns: 1fr; } }
 </style>

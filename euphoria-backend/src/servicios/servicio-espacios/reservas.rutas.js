@@ -155,6 +155,178 @@ async function obtenerCombosSugeridos(limite = 3) {
   }
 }
 
+// ===================== CORTESÍA POR RESERVA =====================
+// El dueño regala un combo a las reservas desde cierto monto (evento.cortesia_desde).
+// La cortesía nace 'pendiente' con la reserva; el cliente elige el combo cuando
+// quiera y recién ahí se crea la comanda a Bs 0 que va a la barra.
+
+// Los 4 combos de cortesía con su contenido y si hay stock de cada componente.
+async function obtenerOpcionesCortesia() {
+  const combos = await prisma.producto.findMany({
+    where: { es_cortesia: true },
+    orderBy: { id_producto: 'asc' },
+    include: {
+      combo_detalle_combo_detalle_id_producto_padreToproducto: {
+        include: { producto_combo_detalle_id_producto_hijoToproducto: { select: { id_producto: true, nombre_producto: true, url_imagen: true, stock_actual: true } } },
+      },
+    },
+  })
+  return combos.map(c => {
+    const comps = c.combo_detalle_combo_detalle_id_producto_padreToproducto.map(d => ({
+      id_producto: d.id_producto_hijo,
+      nombre: d.producto_combo_detalle_id_producto_hijoToproducto?.nombre_producto || '',
+      url_imagen: d.producto_combo_detalle_id_producto_hijoToproducto?.url_imagen || null,
+      cantidad: d.cantidad,
+      hay_stock: (d.producto_combo_detalle_id_producto_hijoToproducto?.stock_actual || 0) >= d.cantidad,
+    }))
+    return {
+      id_producto: c.id_producto,
+      nombre: c.nombre_producto,
+      descripcion: c.descripcion,
+      url_imagen: c.url_imagen || comps.find(x => x.url_imagen)?.url_imagen || null,
+      componentes: comps.map(({ hay_stock, ...r }) => r),
+      disponible: comps.length > 0 && comps.every(x => x.hay_stock),
+    }
+  })
+}
+
+// Crea la cortesía si la reserva alcanza el monto del evento. Devuelve null si no corresponde.
+async function crearCortesiaSiCorresponde(entrada, id_evento, montoPagado) {
+  const ev = await prisma.evento.findUnique({ where: { id_evento }, select: { cortesia_desde: true, nombre_evento: true } })
+  if (!ev || ev.cortesia_desde == null) return null
+  if (Number(montoPagado) < Number(ev.cortesia_desde)) return null
+  const c = await prisma.cortesia_reserva.upsert({
+    where: { id_entrada: entrada.id_entrada },
+    update: {},
+    create: { id_entrada: entrada.id_entrada },
+  })
+  await notificar(entrada.id_usuario, {
+    tipo: 'cortesia',
+    titulo: 'Tienes un combo de cortesía',
+    mensaje: `Por tu reserva en ${ev.nombre_evento} te regalamos un combo. Elígelo cuando quieras.`,
+    url: '/cliente/mis-reservas',
+  })
+  return { id_cortesia: c.id_cortesia, estado: c.estado, opciones: await obtenerOpcionesCortesia() }
+}
+
+// GET /api/reservas/cortesias — cortesías del cliente (pendientes y elegidas) + opciones.
+router.get('/cortesias', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const lista = await prisma.cortesia_reserva.findMany({
+      where: { entrada: { id_usuario: req.usuario.id } },
+      include: {
+        producto: { select: { nombre_producto: true } },
+        comanda: { select: { estado_despacho: true, estado_entrega: true } },
+        entrada: { select: { id_entrada: true, mesa_espacio: { select: { numero_nombre: true } }, zona: { select: { evento: { select: { nombre_evento: true, estado: true } } } } } },
+      },
+      orderBy: { fecha_creacion: 'desc' },
+    })
+    res.json({
+      opciones: await obtenerOpcionesCortesia(),
+      cortesias: lista.map(c => ({
+        id_cortesia: c.id_cortesia,
+        id_entrada: c.id_entrada,
+        estado: c.estado,
+        combo: c.producto?.nombre_producto || null,
+        pedido_estado: c.comanda?.estado_despacho || null,
+        pedido_entrega: c.comanda?.estado_entrega || null,
+        mesa: c.entrada?.mesa_espacio?.numero_nombre || null,
+        evento: c.entrada?.zona?.evento?.nombre_evento || null,
+        evento_terminado: c.entrada?.zona?.evento?.estado === 'terminado',
+      })),
+    })
+  } catch (error) {
+    console.error('Error obteniendo cortesías:', error)
+    res.status(500).json({ error: 'Error al obtener tus cortesías' })
+  }
+})
+
+// POST /api/reservas/cortesias/:id/elegir — el cliente elige su combo de regalo.
+// Crea la comanda a Bs 0 (va a la barra) y descuenta el stock de cada componente.
+router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
+  try {
+    const id_cortesia = Number(req.params.id)
+    const id_producto = Number(req.body.id_producto)
+    const cort = await prisma.cortesia_reserva.findUnique({
+      where: { id_cortesia },
+      include: { entrada: { include: { zona: { select: { evento: { select: { estado: true } } } } } } },
+    })
+    if (!cort || cort.entrada.id_usuario !== req.usuario.id) return res.status(404).json({ error: 'Cortesía no encontrada' })
+    if (cort.estado !== 'pendiente') return res.status(409).json({ error: 'Ya elegiste tu combo de cortesía.' })
+    if (cort.entrada.zona?.evento?.estado === 'terminado') return res.status(400).json({ error: 'Este evento ya terminó.' })
+
+    const combo = await prisma.producto.findFirst({
+      where: { id_producto, es_cortesia: true },
+      include: { combo_detalle_combo_detalle_id_producto_padreToproducto: { include: { producto_combo_detalle_id_producto_hijoToproducto: { select: { nombre_producto: true } } } } },
+    })
+    if (!combo) return res.status(400).json({ error: 'Ese combo no está disponible como cortesía.' })
+    const componentes = combo.combo_detalle_combo_detalle_id_producto_padreToproducto
+
+    // El pedido lo recibe el mesero asignado a la mesa; si aún no hay, queda a
+    // nombre del cliente (igual que los pedidos hechos desde la app).
+    let id_mesero = req.usuario.id
+    if (cort.entrada.id_mesa) {
+      const asig = await prisma.asignacion_mesa.findFirst({ where: { id_mesa: cort.entrada.id_mesa, estado: { in: ['asignada', 'atendiendo'] } } })
+      if (asig) id_mesero = asig.id_mesero
+    }
+    // Si todavía no ingresó, el pedido queda Programado y despierta al entrar (R5.3).
+    const yaAdentro = (cort.entrada.cantidad_ingresada || 0) > 0
+
+    let comanda
+    try {
+      comanda = await prisma.$transaction(async (tx) => {
+        // Stock condicional de CADA componente (no se regala lo que no hay)
+        for (const d of componentes) {
+          const baja = await tx.producto.updateMany({
+            where: { id_producto: d.id_producto_hijo, stock_actual: { gte: d.cantidad } },
+            data: { stock_actual: { decrement: d.cantidad } },
+          })
+          if (baja.count === 0) throw new Error('SIN_STOCK:' + (d.producto_combo_detalle_id_producto_hijoToproducto?.nombre_producto || 'un componente'))
+        }
+        const nueva = await tx.comanda.create({
+          data: {
+            id_cliente: req.usuario.id,
+            id_mesero,
+            id_mesa: cort.entrada.id_mesa,
+            id_entrada: cort.id_entrada,
+            estado_despacho: yaAdentro ? 'Pendiente' : 'Programado',
+            fecha_registro: new Date(),
+            metodo_pago: 'Cortesía',
+            origen: 'cortesia',
+            modo_entrega: 'llevar',
+            detalle_comanda: { create: [{ id_producto: combo.id_producto, cantidad: 1, precio_cobrado: 0, subtotal: 0 }] },
+          },
+        })
+        // Marcado condicional: si dos toques llegan a la vez, solo uno gana
+        const marcada = await tx.cortesia_reserva.updateMany({
+          where: { id_cortesia, estado: 'pendiente' },
+          data: { estado: 'elegida', id_producto, id_comanda: nueva.id_comanda, fecha_eleccion: new Date() },
+        })
+        if (marcada.count === 0) throw new Error('YA_ELEGIDA')
+        return nueva
+      })
+    } catch (e) {
+      if (String(e.message).startsWith('SIN_STOCK:')) return res.status(409).json({ error: `Justo se acabó ${e.message.slice(10)}. Elige otro combo.` })
+      if (e.message === 'YA_ELEGIDA') return res.status(409).json({ error: 'Ya elegiste tu combo de cortesía.' })
+      throw e
+    }
+
+    // La notificación de "elige tu combo" ya cumplió su función
+    await prisma.notificacion.updateMany({ where: { id_usuario: req.usuario.id, tipo: 'cortesia', leida: false }, data: { leida: true } })
+    if (global.io && yaAdentro) global.io.emit('nueva_comanda', { id_comanda: comanda.id_comanda })
+    emitirRecurso('reservas', { id_cliente: req.usuario.id })
+    res.json({
+      mensaje: yaAdentro ? 'Combo elegido: la barra ya lo está preparando.' : 'Combo elegido: te lo llevamos a la mesa cuando ingreses.',
+      id_comanda: comanda.id_comanda,
+      programado: !yaAdentro,
+      combo: combo.nombre_producto,
+    })
+  } catch (error) {
+    console.error('Error eligiendo cortesía:', error)
+    res.status(500).json({ error: 'No se pudo registrar tu combo' })
+  }
+})
+
 // ---------- CATALOGO PARA EL CLIENTE ----------
 
 // GET /api/reservas/eventos — eventos con zonas reservables (mesas libres disponibles)
@@ -280,9 +452,10 @@ router.post('/mesa', async (req, res) => {
     // La silla es individual (1 persona).
     const cantidad_personas = esMesa ? Math.max(1, mesa.capacidad_sillas || 1) : 1
 
-    // 2. Precio: el de la mesa si tiene, si no el base de la zona
+    // 2. Precio: el del área de la mesa; si no tiene área, el general de la zona.
+    // Nadie reserva gratis: un precio en 0 es un error de configuración, no una oferta.
     const precio = Number(mesa.precio != null ? mesa.precio : mesa.zona.precio_entrada_base)
-    if (!(precio >= 0)) return res.status(400).json({ error: 'La mesa no tiene un precio valido' })
+    if (!(precio > 0)) return res.status(400).json({ error: 'Este lugar aún no tiene precio configurado. Avisa al personal.' })
 
     // 3. Billetera del cliente (+ PIN si esta configurado)
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
@@ -359,9 +532,11 @@ router.post('/mesa', async (req, res) => {
       throw e
     }
 
-    // 5. QR de la entrada + combos sugeridos (upsell)
+    // 5. QR de la entrada + cortesía (si la reserva alcanza el monto del evento).
+    // Si hay cortesía, ese es el regalo que se ofrece; si no, los combos de venta.
     const imagenQR = await generarImagenQREntrada(entradaCreada)
-    const combos = await obtenerCombosSugeridos(3)
+    const cortesia = await crearCortesiaSiCorresponde(entradaCreada, mesa.zona.id_evento, precio)
+    const combos = cortesia ? [] : await obtenerCombosSugeridos(3)
 
     // 6. Tiempo real: avisar que la mesa cambio y refrescar saldo del cliente
     if (global.io) {
@@ -385,6 +560,7 @@ router.post('/mesa', async (req, res) => {
       qr: imagenQR,
       saldo_restante: Number(billetera.saldo_actual) - precio,
       combos_sugeridos: combos,
+      cortesia,
     })
   } catch (error) {
     console.error('Error reservando mesa:', error)
@@ -418,7 +594,7 @@ router.post('/campo', async (req, res) => {
     }
 
     const precio = Number(zona.precio_entrada_base)
-    if (!(precio >= 0)) return res.status(400).json({ error: 'La zona no tiene un precio válido' })
+    if (!(precio > 0)) return res.status(400).json({ error: 'Esta zona aún no tiene precio configurado. Avisa al personal.' })
 
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
     if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
@@ -523,7 +699,7 @@ router.post('/pie', async (req, res) => {
     if (vendidas >= zona.capacidad_maxima) return res.status(409).json({ error: 'Aforo completo en esta zona.' })
 
     const precio = Number(area.precio != null ? area.precio : zona.precio_entrada_base)
-    if (!(precio >= 0)) return res.status(400).json({ error: 'Esta zona no tiene un precio válido.' })
+    if (!(precio > 0)) return res.status(400).json({ error: 'Esta zona aún no tiene precio configurado. Avisa al personal.' })
 
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
     if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
@@ -609,6 +785,8 @@ router.get('/mias', async (req, res) => {
         mesa_espacio: true,
         // Historial real de ingresos/salidas de esta entrada (por tandas)
         registro_aforo: { orderBy: { fecha_hora: 'asc' } },
+        // Combo de cortesía de la reserva (si le correspondió) y cómo va su pedido
+        cortesia_reserva: { include: { producto: { select: { nombre_producto: true } }, comanda: { select: { estado_despacho: true, estado_entrega: true } } } },
       },
     })
 
@@ -641,6 +819,13 @@ router.get('/mias', async (req, res) => {
         })),
         // El QR solo se genera si la entrada aún se puede usar (ni usada ni vencida)
         qr: (!completo && estadoFecha !== 'finalizada') ? await generarImagenQREntrada(e) : null,
+        cortesia: e.cortesia_reserva ? {
+          id_cortesia: e.cortesia_reserva.id_cortesia,
+          estado: e.cortesia_reserva.estado,             // pendiente | elegida
+          combo: e.cortesia_reserva.producto?.nombre_producto || null,
+          pedido_estado: e.cortesia_reserva.comanda?.estado_despacho || null,
+          pedido_entrega: e.cortesia_reserva.comanda?.estado_entrega || null,
+        } : null,
       }
     }))
     res.json(salida)

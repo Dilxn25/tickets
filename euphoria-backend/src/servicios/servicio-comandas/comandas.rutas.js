@@ -1105,6 +1105,9 @@ function comandaBartender(c, ahora) {
     estado_entrega: c.estado_entrega,
     modo_entrega: c.modo_entrega,
     origen: c.origen,
+    metodo_pago: c.metodo_pago,
+    // Regalo por reserva: la barra lo prepara igual, pero no es una venta
+    es_cortesia: c.origen === 'cortesia',
     mesa: c.mesa_espacio?.numero_nombre || null,
     id_mesa: c.id_mesa,
     zona: zonaEv?.nombre_zona || null,
@@ -1124,13 +1127,23 @@ function comandaBartender(c, ahora) {
       nombre: d.producto?.nombre_producto || '',
       cantidad: d.cantidad,
       imagen: d.producto?.url_imagen || null,  // para que el bartender VEA qué preparar
+      // Contenido del combo ("1× Ron 37 Lenguas, 2× Coca Cola") para no adivinar
+      componentes: (d.producto?.combo_detalle_combo_detalle_id_producto_padreToproducto || [])
+        .map(x => `${x.cantidad}× ${x.producto_combo_detalle_id_producto_hijoToproducto?.nombre_producto || ''}`)
+        .join(', ') || null,
     })),
     total_items: c.detalle_comanda.reduce((a, d) => a + d.cantidad, 0),
   }
 }
 
 const INCLUDE_BARTENDER = {
-  detalle_comanda: { include: { producto: { select: { nombre_producto: true, url_imagen: true } } } },
+  detalle_comanda: { include: { producto: { select: {
+    nombre_producto: true, url_imagen: true, es_combo: true,
+    // Si es un combo (p. ej. una cortesía), la barra ve qué lleva adentro
+    combo_detalle_combo_detalle_id_producto_padreToproducto: {
+      select: { cantidad: true, producto_combo_detalle_id_producto_hijoToproducto: { select: { nombre_producto: true } } },
+    },
+  } } } },
   usuario_comanda_id_meseroTousuario: { select: { nombres: true, apellidos: true } },
   usuario_comanda_id_clienteTousuario: { select: { nombres: true, apellidos: true, es_vip: true } },
   mesa_espacio: { include: { zona: { select: { prioridad: true, nombre_zona: true, id_evento: true, evento: { select: { nombre_evento: true } } } } } },

@@ -19,6 +19,13 @@ const { hoyBolivia } = require('../../utilidades/tiempo')
 // Modelo de la Fase 3: tipos y estados (identificadores internos).
 const TIPOS_EVENTO = ['estandar', 'especial', 'externo']
 const ESTADOS_EVENTO = ['planificacion', 'promocion', 'en_transcurso', 'lleno', 'terminado']
+
+// Monto de cortesía: número >= 0, o null si viene vacío / inválido (= sin cortesía).
+function parseCortesia(v) {
+  if (v === undefined || v === null || v === '' || v === 'null') return null
+  const n = Number(v)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
 // Estados en que un evento es visible/reservable para el cliente.
 const ESTADOS_PUBLICOS = ['promocion', 'en_transcurso', 'lleno']
 
@@ -255,7 +262,7 @@ router.get('/', async (req, res) => {
 // ---- POST /api/eventos (Crear evento) ----
 router.post('/', subirImagenEvento.single('imagen'), async (req, res) => {
   try {
-    const { nombre_evento, descripcion, fecha_hora_inicio, fecha_hora_fin, tipo_evento } = req.body
+    const { nombre_evento, descripcion, fecha_hora_inicio, fecha_hora_fin, tipo_evento, cortesia_desde } = req.body
 
     if (!nombre_evento || !fecha_hora_inicio) {
       return res.status(400).json({ error: 'El nombre y la fecha de inicio son requeridos' })
@@ -269,7 +276,9 @@ router.post('/', subirImagenEvento.single('imagen'), async (req, res) => {
         fecha_hora_fin: fecha_hora_fin ? new Date(fecha_hora_fin) : null,
         url_portada: req.file ? req.file.path : null,
         tipo_evento: TIPOS_EVENTO.includes(tipo_evento) ? tipo_evento : 'estandar',
-        estado: 'planificacion' // Todo evento nace en Planificación.
+        // Combo de cortesía: desde qué monto de reserva se regala ('' o ausente = no regala)
+        cortesia_desde: parseCortesia(cortesia_desde),
+        estado: 'planificacion' // Todo evento nace en Borrador (código interno: planificacion).
       }
     })
 
@@ -308,6 +317,7 @@ router.put('/:id', subirImagenEvento.single('imagen'), async (req, res) => {
       // Permite BORRAR la fecha de fin (enviar '' la pone en null)
       ...(fecha_hora_fin !== undefined && { fecha_hora_fin: fecha_hora_fin ? new Date(fecha_hora_fin) : null }),
       ...(TIPOS_EVENTO.includes(tipo_evento) && { tipo_evento }),
+      ...(req.body.cortesia_desde !== undefined && { cortesia_desde: parseCortesia(req.body.cortesia_desde) }),
     }
 
     if (req.file) {

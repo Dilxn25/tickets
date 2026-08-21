@@ -49,25 +49,35 @@
       <p class="ped-estado-sub">{{ tab === 'activos' ? 'Lo que pidas en el evento aparecerá aquí.' : 'Aún no hay pedidos completados.' }}</p>
     </div>
 
-    <ul v-else class="ped-lista">
-      <li v-for="p in listaVisible" :key="p.id_comanda" class="ped-item" :class="{ listo: esListoBarra(p) }">
+    <template v-else>
+    <!-- Semáforo: el cliente mira el color, no lee el estado -->
+    <LeyendaEstados class="ped-leyenda" />
+    <ul class="ped-lista">
+      <li v-for="p in listaVisible" :key="p.id_comanda" class="ped-item" :class="{ listo: esListoBarra(p), cortesia: p.metodo_pago === 'Cortesía' }" :style="{ '--sem-color': semaforoDe(p).color }">
         <div class="ped-top">
           <span class="ped-fecha">{{ formatoFecha(p.fecha) }}</span>
-          <span class="ped-estado-chip" :class="claseEstado(p)">{{ etiquetaEstado(p) }}</span>
+          <span class="ped-sem">
+            <span v-if="esListoBarra(p)" class="ped-recoger">Recoger en barra</span>
+            <PuntoEstado :pedido="p" grande />
+          </span>
         </div>
         <ul class="ped-items">
           <li v-for="(it, i) in p.items" :key="i"><span class="ped-cant">{{ it.cantidad }}×</span> {{ it.nombre }}</li>
         </ul>
         <div class="ped-meta">
           <span v-if="p.evento" class="ped-badge evento">{{ p.evento }}</span>
-          <span class="ped-badge" :class="'origen-' + p.origen">{{ etiquetaOrigen(p.origen) }}</span>
-          <span class="ped-badge metodo">{{ p.metodo_pago }}</span>
+          <span v-if="p.metodo_pago === 'Cortesía'" class="ped-badge cortesia">Cortesía de la casa</span>
+          <template v-else>
+            <span class="ped-badge" :class="'origen-' + p.origen">{{ etiquetaOrigen(p.origen) }}</span>
+            <span class="ped-badge metodo">{{ p.metodo_pago }}</span>
+          </template>
           <span v-if="p.modo_entrega" class="ped-badge entrega">{{ p.modo_entrega === 'llevar' ? 'A la mesa' : 'En barra' }}</span>
           <span v-if="p.mesa" class="ped-badge">Mesa {{ p.mesa }}</span>
           <!-- Devolución honesta: si pagó menos que el total pleno (premio/descuento),
                se muestra el total tachado y lo realmente pagado destacado -->
           <span class="ped-total">
-            <template v-if="pagoDistinto(p)">
+            <template v-if="p.metodo_pago === 'Cortesía'"><b class="pt-gratis">Gratis</b></template>
+            <template v-else-if="pagoDistinto(p)">
               <s class="pt-pleno">{{ formatoBs(p.total) }}</s>
               <b class="pt-pagado">Pagaste {{ formatoBs(p.total_pagado) }}</b>
             </template>
@@ -100,6 +110,7 @@
         </div>
       </li>
     </ul>
+    </template>
   </div>
 </template>
 
@@ -110,6 +121,9 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import { formatoFecha, formatoBs } from '@/utilidades/formato.js'
+import { semaforoDe } from '@/utilidades/estado-pedido.js'
+import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
+import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
 
 const auth = useTiendaAutenticacion()
 const notif = useNotificaciones()
@@ -298,11 +312,14 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-item.listo { border-color: rgba(34,197,94,0.5); box-shadow: 0 0 20px rgba(34,197,94,0.15); }
 .ped-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .ped-fecha { font-size: 0.8rem; color: var(--texto-secundario); }
-.ped-estado-chip { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 10px; border-radius: var(--radio-full); white-space: nowrap; }
-.ped-estado-chip.ok { background: rgba(34,197,94,0.16); color: #86EFAC; }
-.ped-estado-chip.recoger { background: rgba(34,197,94,0.28); color: #fff; animation: pulso 1.6s ease-in-out infinite; }
-.ped-estado-chip.proceso { background: rgba(168,85,247,0.16); color: #E9D5FF; }
-.ped-estado-chip.cancel { background: rgba(239,68,68,0.16); color: #FCA5A5; }
+/* Semáforo: borde lateral + punto del color del estado (sin texto) */
+.ped-leyenda { margin: 0 0 10px 2px; }
+.ped-item { border-left: 4px solid var(--sem-color, var(--borde-sutil)); }
+.ped-sem { display: inline-flex; align-items: center; gap: 10px; }
+.ped-recoger { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: rgba(59,130,246,0.35); padding: 3px 10px; border-radius: var(--radio-full); animation: pulso 1.6s ease-in-out infinite; }
+.ped-item.cortesia { background: linear-gradient(135deg, rgba(236,72,153,0.10), transparent 60%); }
+.ped-badge.cortesia { background: rgba(236,72,153,0.18); color: #F9A8D4; font-weight: 800; }
+.pt-gratis { color: #F9A8D4; }
 @keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
 .ped-items { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .ped-items li { font-size: 0.9rem; color: var(--texto-principal); }

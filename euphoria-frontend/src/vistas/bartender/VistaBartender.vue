@@ -36,6 +36,8 @@
       Mesa {{ filtroMesa }}
       <button @click="filtroMesa = ''; recargar()" aria-label="Quitar filtro">×</button>
     </div>
+    <!-- Semáforo: la barra mira el color, no lee el estado -->
+    <LeyendaEstados class="b2-leyenda" :solo="['pendiente', 'preparando', 'listo', 'entregado']" />
 
     <div class="b2-carriles">
       <!-- ===== Carril AHORA: qué preparar ===== -->
@@ -44,9 +46,13 @@
         <p v-if="!enPreparacion && !cola.length" class="b2-vacio">Barra al día.</p>
 
         <!-- El pedido EN CURSO (o el siguiente): tarjeta grande -->
-        <article v-if="alFrente" class="b2-ahora" :class="claseEdad(alFrente)">
+        <article v-if="alFrente" class="b2-ahora" :class="[claseEdad(alFrente), { cortesia: alFrente.es_cortesia }]" :style="{ '--sem-color': semaforoDe(alFrente).color }">
           <header class="b2-ahora-cab">
-            <b>#{{ alFrente.id_comanda }}</b>
+            <span class="b2-id-sem">
+              <PuntoEstado :pedido="alFrente" grande />
+              <b>#{{ alFrente.id_comanda }}</b>
+              <span v-if="alFrente.es_cortesia" class="b2-cortesia">Cortesía</span>
+            </span>
             <span class="b2-crono">{{ crono(alFrente) }}</span>
           </header>
           <ul class="b2-items">
@@ -56,7 +62,10 @@
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="22" height="22"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M5 3l7 8 7-8H5z"></path></svg>
               </span>
               <b class="b2-item-cant">{{ it.cantidad }}×</b>
-              <span class="b2-item-nom">{{ it.nombre }}</span>
+              <span class="b2-item-nom">
+                {{ it.nombre }}
+                <small v-if="it.componentes" class="b2-item-comp">{{ it.componentes }}</small>
+              </span>
             </li>
           </ul>
           <footer class="b2-ahora-pie">
@@ -73,8 +82,9 @@
 
         <!-- Los siguientes, compactos -->
         <div v-if="siguientes.length" class="b2-cola">
-          <button v-for="c in siguientes" :key="c.id_comanda" class="b2-cola-item" :class="claseEdad(c)" @click="ponerAlFrente(c)">
-            <b>#{{ c.id_comanda }}</b>
+          <button v-for="c in siguientes" :key="c.id_comanda" class="b2-cola-item" :class="claseEdad(c)" :style="{ '--sem-color': semaforoDe(c).color }" @click="ponerAlFrente(c)">
+            <PuntoEstado :pedido="c" />
+            <b>#{{ c.id_comanda }}<span v-if="c.es_cortesia" class="b2-cortesia mini">C</span></b>
             <span>{{ resumenItems(c) }}</span>
             <small>{{ crono(c) }}</small>
           </button>
@@ -86,15 +96,16 @@
         <h2 class="b2-carril-tit entregar">Entregar</h2>
         <p v-if="!listos.length" class="b2-vacio">Nada esperando entrega.</p>
 
-        <article v-for="c in listos" :key="c.id_comanda" class="b2-listo">
+        <article v-for="c in listos" :key="c.id_comanda" class="b2-listo" :class="{ cortesia: c.es_cortesia }" :style="{ '--sem-color': semaforoDe(c).color }">
           <header class="b2-listo-cab">
+            <PuntoEstado :pedido="c" />
             <span class="b2-listo-dest" :class="{ barra: c.modo_entrega === 'barra' }">
               <svg v-if="c.modo_entrega === 'barra'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="8" width="18" height="4" rx="1"></rect><line x1="6" y1="12" x2="6" y2="19"></line><line x1="18" y1="12" x2="18" y2="19"></line></svg>
               <b v-if="c.modo_entrega === 'barra'">{{ c.cliente }}</b>
               <b v-else>Mesa {{ c.mesa }}<template v-if="c.mesero"> · {{ primerNombre(c.mesero) }}</template></b>
             </span>
-            <span class="b2-listo-id">#{{ c.id_comanda }}</span>
+            <span class="b2-listo-id">#{{ c.id_comanda }}<span v-if="c.es_cortesia" class="b2-cortesia mini">Cortesía</span></span>
           </header>
           <p class="b2-listo-items">{{ resumenItems(c) }}</p>
 
@@ -271,6 +282,9 @@ import clienteHttp from '@/servicios-api/cliente-http.js'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import HistorialBarra from './paneles/HistorialBarra.vue'
+import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
+import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
+import { semaforoDe } from '@/utilidades/estado-pedido.js'
 
 // ---- Tablero ----
 const columnas = ref({ Pendiente: [], Preparando: [], Listo: [] })
@@ -718,4 +732,19 @@ onUnmounted(() => { if (socket) socket.disconnect(); clearInterval(tick) })
   .b2-overlay { padding: 0; align-items: stretch; }
   .b2-modal.mapa { width: 100%; max-height: none; height: 100dvh; border-radius: 0; border: none; }
 }
+</style>
+
+<style scoped>
+/* ===== Semáforo de estados (color en vez de texto) ===== */
+.b2-leyenda { margin: 2px 0 10px 2px; }
+.b2-id-sem { display: inline-flex; align-items: center; gap: 9px; }
+.b2-ahora, .b2-listo { border-left: 5px solid var(--sem-color, transparent); }
+.b2-cola-item { border-left: 4px solid var(--sem-color, transparent); }
+/* La regla genérica ".b2-cola-item span { flex:1 }" estiraba el punto: se fija su tamaño */
+.b2-cola-item .punto-estado { flex: 0 0 12px; width: 12px; height: 12px; margin-right: 2px; }
+/* Cortesía: es un regalo de la casa, se prepara igual pero no es venta */
+.b2-cortesia { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #F9A8D4; background: rgba(236,72,153,0.18); border: 1px solid rgba(236,72,153,0.4); padding: 2px 8px; border-radius: 999px; }
+.b2-cortesia.mini { margin-left: 6px; padding: 1px 6px; font-size: 0.6rem; }
+.b2-ahora.cortesia, .b2-listo.cortesia { background: linear-gradient(135deg, rgba(236,72,153,0.08), var(--fondo-tarjeta) 55%); }
+.b2-item-comp { display: block; font-size: 0.74rem; color: var(--texto-secundario); font-weight: 400; margin-top: 1px; }
 </style>

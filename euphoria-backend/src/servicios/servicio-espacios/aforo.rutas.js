@@ -11,6 +11,7 @@ const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
 const { hoyBolivia } = require('../../utilidades/tiempo')
+const { notificar } = require('../../utilidades/notificaciones')
 
 router.use(verificarToken)
 
@@ -232,6 +233,19 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
       })
       if (activados.count > 0 && global.io) global.io.emit('nueva_comanda', { id_cliente: entrada.id_usuario })
     } catch (e) { console.warn('No se pudieron activar pedidos programados:', e.message) }
+
+    // Combo de cortesía sin elegir: ahora que ya está adentro, se le recuerda.
+    try {
+      const cort = await prisma.cortesia_reserva.findUnique({ where: { id_entrada: entrada.id_entrada } })
+      if (cort && cort.estado === 'pendiente') {
+        await notificar(entrada.id_usuario, {
+          tipo: 'cortesia',
+          titulo: 'Tu combo de cortesía te espera',
+          mensaje: 'Ya estás adentro: elige tu combo de regalo y te lo llevamos a la mesa.',
+          url: '/cliente/mis-reservas',
+        })
+      }
+    } catch (e) { console.warn('No se pudo recordar la cortesía:', e.message) }
 
     // Asignación de mesero: si la reserva tiene mesa, o ya está asignada (se informa
     // quién) o se sugiere el mesero con menos carga para que recepción confirme.

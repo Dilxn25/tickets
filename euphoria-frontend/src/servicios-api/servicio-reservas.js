@@ -44,6 +44,17 @@ export const servicioReservas = {
     return api.get('/reservas/mias')
   },
 
+  // ---- Combo de cortesía por reserva ----
+  /** Cortesías del cliente (pendientes y elegidas) + los combos para elegir */
+  async misCortesias() {
+    return api.get('/reservas/cortesias')
+  },
+
+  /** Elegir el combo de regalo de una reserva (crea el pedido a Bs 0 para la barra) */
+  async elegirCortesia(idCortesia, idProducto) {
+    return api.post(`/reservas/cortesias/${idCortesia}/elegir`, { id_producto: idProducto })
+  },
+
   /** Cancelar una reserva (devuelve a billetera según la regla de 24 h) */
   async cancelarReserva(idEntrada, opciones = {}) {
     // opciones.cancelar_pedidos = true → "Cancelar todo" (devuelve pedidos + reserva)
