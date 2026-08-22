@@ -1221,9 +1221,10 @@ onUnmounted(() => {
 @media (min-width: 760px) {
   .modal-exito { max-width: 620px; padding: 2.2rem 2.1rem; }
   .modal-exito h3 { font-size: 1.6rem; }
-  /* Los combos de cortesía en tres columnas, con la foto más grande */
-  .cortesia-opciones { grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .cortesia-op { flex-direction: column; align-items: center; text-align: center; padding: 12px 10px; gap: 8px; }
+  /* Los combos entran en UNA sola fila (son cuatro): con tres columnas el
+     cuarto quedaba solo, con un hueco enorme al lado. */
+  .cortesia-opciones { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+  .cortesia-op { flex-direction: column; align-items: center; text-align: center; padding: 12px 10px; gap: 8px; justify-content: flex-start; }
   .cortesia-op-img { width: 68px; height: 68px; border-radius: 14px; }
   .cortesia-op-txt { align-items: center; }
   .cortesia-op-txt b { font-size: 0.95rem; }

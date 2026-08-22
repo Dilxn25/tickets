@@ -97,16 +97,17 @@
           </div>
         </div>
         <!-- Aún no ingresa al evento: nota breve, no intrusiva (no se ofrece entrega todavía) -->
-        <p v-else-if="!p.modo_entrega && esActivo(p) && !p.ingresado" class="ped-nota-ingreso">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-          Cuando ingreses al evento eliges cómo y cuándo recibirlo.
+        <p v-else-if="!p.modo_entrega && esActivo(p) && !p.ingresado" class="ped-nota-ingreso" title="Cuando ingreses al evento eliges cómo y cuándo recibirlo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v5l3 2"></path></svg>
+          Eliges la entrega al ingresar
         </p>
         <!-- Devolución -->
         <div v-if="p.puede_reembolso" class="ped-reembolso">
           <span class="pr-info">
-            ¿No vas a consumirlo? Te devolvemos <b>{{ formatoBs(p.reembolso_estimado) }}</b> a tu billetera.
-            <em v-if="p.sin_comision" class="pr-full">Sin comisión (faltan +24 h).</em>
-            <em v-else class="pr-com">Dentro de 24 h: comisión {{ p.comision_pct }}%.</em>
+            <span class="pr-lbl">Te devolvemos</span>
+            <b class="pr-monto">{{ formatoBs(p.reembolso_estimado) }}</b>
+            <em v-if="p.sin_comision" class="pr-tag pr-full">sin comisión</em>
+            <em v-else class="pr-tag pr-com">−{{ p.comision_pct }}%</em>
           </span>
           <button class="pr-btn" :disabled="reembolsando === p.id_comanda" @click="pedirDevolucion(p)">
             {{ reembolsando === p.id_comanda ? 'Procesando…' : 'Pedir devolución' }}
@@ -357,11 +358,12 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .pe-btn:hover:not(:disabled) { background: rgba(168,85,247,0.2); color: #fff; }
 .pe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ped-reembolso { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--borde-sutil); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.pr-info { font-size: 0.8rem; color: var(--texto-secundario); }
-.pr-info b { color: var(--color-exito); }
-.pr-full, .pr-com { display: block; font-style: normal; font-size: 0.72rem; margin-top: 2px; }
-.pr-full { color: #86EFAC; }
-.pr-com { color: #FCD34D; }
+.pr-info { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-size: 0.8rem; color: var(--texto-secundario); }
+.pr-lbl { font-size: 0.74rem; color: var(--texto-desactivado); }
+.pr-monto { font-family: var(--fuente-titulo); font-size: 1.12rem; font-weight: 800; color: var(--color-exito); font-variant-numeric: tabular-nums; }
+.pr-tag { font-style: normal; font-size: 0.68rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em; }
+.pr-full { color: #86EFAC; background: rgba(34,197,94,.15); }
+.pr-com { color: #FCD34D; background: rgba(245,158,11,.15); }
 .pr-btn { flex-shrink: 0; padding: 8px 14px; border-radius: var(--radio-full); border: 1px solid var(--borde-activo); background: rgba(168,85,247,0.1); color: var(--morado-hover); font-weight: 700; font-size: 0.8rem; cursor: pointer; }
 .pr-btn:hover:not(:disabled) { background: rgba(168,85,247,0.2); color: #fff; }
 .pr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
