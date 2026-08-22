@@ -465,6 +465,8 @@
           <div class="subseccion-qr-predeterminado">
             <div class="contenedor-qr-default">
               <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR para transferir el pago a Euphoria" class="qr-imagen" />
+            </div>
+            <div class="qr-acciones">
               <button class="btn-ampliar-qr" @click="ampliarQRDefault" type="button">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
@@ -2442,7 +2444,7 @@ button.mov-fila:focus-visible {
   padding: 1rem;
   padding-right: 3rem;
   background: var(--fondo-principal);
-  border: 1px solid var(--borde-color);
+  border: 1px solid var(--borde-sutil);
   border-radius: 8px;
   color: var(--texto-principal);
   font-size: 1.5rem;
@@ -2556,11 +2558,12 @@ button.mov-fila:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--texto-principal);
-  margin-bottom: 0.6rem;
+  margin: 1.35rem 0 0.75rem;
   font-size: 0.95rem;
 }
+.info-recarga-paso:first-of-type { margin-top: 0; }
 
 .num-paso {
   flex-shrink: 0;
@@ -2604,56 +2607,46 @@ button.mov-fila:focus-visible {
   justify-content: center;
   margin-bottom: 1.5rem;
   background: var(--fondo-principal);
-  border: 1px solid var(--borde-color);
+  border: 1px solid var(--borde-sutil);
   border-radius: 12px;
   padding: 1.5rem;
 }
 
+.subseccion-qr-predeterminado { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .contenedor-qr-default {
-  position: relative;
-  display: inline-block;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  display: inline-block; padding: 12px; border-radius: 18px; background: #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 1px rgba(168,85,247,.25);
 }
-
 .contenedor-qr-default .qr-imagen {
-  display: block;
-  width: 100%;
-  max-width: 180px;
-  height: auto;
-  background: white;
-  padding: 8px;
+  display: block; width: 100%; max-width: 216px; height: auto; border-radius: 8px;
 }
+.qr-acciones { display: flex; justify-content: center; }
 
 .btn-ampliar-qr {
-  position: absolute;
-  bottom: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20, 10, 46, 0.92);
-  border: 1px solid rgba(168, 85, 247, 0.5);
-  border-radius: 20px;
-  color: white;
-  padding: 0.4rem 1rem;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid var(--borde-activo);
+  border-radius: var(--radio-full);
+  color: var(--morado-hover);
+  padding: 0.5rem 1.1rem;
+  font-family: inherit;
   font-size: 0.85rem;
-  font-weight: 600;
-  display: flex;
+  font-weight: 700;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: var(--trans-rapida);
   white-space: nowrap;
 }
 
 .btn-ampliar-qr:hover {
-  background: var(--morado-brillante);
-  transform: translateX(-50%) scale(1.05);
+  background: rgba(168, 85, 247, 0.24);
+  border-color: var(--morado-brillante);
+  color: var(--texto-principal);
+  transform: translateY(-2px);
 }
 
-.btn-ampliar-qr:active {
-  transform: translateX(-50%) scale(0.98);
-}
+.btn-ampliar-qr:active { transform: translateY(0) scale(0.97); }
 
 .btn-ampliar-qr:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.85);
@@ -2671,12 +2664,24 @@ button.mov-fila:focus-visible {
 .input-monto {
   display: flex;
   align-items: center;
-  background: var(--fondo-tarjeta);
-  border: 1px solid var(--borde-color);
-  border-radius: 8px;
+  background: var(--fondo-input);
+  border: 1.5px solid var(--borde-sutil);
+  border-radius: var(--radio-lg);
   overflow: hidden;
   transition: border-color var(--trans-normal), box-shadow var(--trans-normal);
 }
+.input-monto .prefijo {
+  padding: 0 0.5rem 0 1rem;
+  font-size: 1rem; font-weight: 800; color: var(--texto-desactivado);
+}
+.input-monto .input-field {
+  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
+  padding: 0.95rem 0.5rem 0.95rem 0;
+  font-family: var(--fuente-titulo);
+  font-size: 1.5rem; font-weight: 800; color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+}
+.input-monto .input-field::placeholder { color: var(--texto-desactivado); font-weight: 700; }
 
 .input-monto:focus-within {
   border-color: var(--morado-brillante);
@@ -2698,30 +2703,37 @@ button.mov-fila:focus-visible {
 .icono-check-valido { margin-right: 1rem; }
 
 .montos-rapidos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 0.85rem;
 }
 
 .chip-monto {
-  padding: 0.4rem 0.9rem;
-  border-radius: 999px;
-  border: 1px solid var(--borde-color);
-  background: var(--fondo-tarjeta);
+  padding: 0.72rem 0.4rem;
+  border-radius: var(--radio-md);
+  border: 1px solid var(--borde-sutil);
+  background: var(--fondo-tarjeta-alt);
   color: var(--texto-principal);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: border-color var(--trans-normal), background var(--trans-normal), color var(--trans-normal);
+  transition: var(--trans-rapida);
 }
 
-.chip-monto:hover:not(:disabled) { border-color: var(--morado-brillante); }
+.chip-monto:hover:not(:disabled) {
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.14);
+  transform: translateY(-2px);
+}
 
 .chip-monto.activo {
-  border-color: var(--morado-brillante);
-  background: rgba(168, 85, 247, 0.15);
-  color: var(--morado-brillante);
+  border-color: transparent;
+  background: var(--gradiente-marca);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(168, 85, 247, .38);
 }
 
 .chip-monto:disabled {
@@ -3288,7 +3300,7 @@ button.mov-fila:focus-visible {
   align-items: center;
   gap: 0.55rem;
   padding: 1.1rem 0.75rem;
-  border: 2px dashed var(--borde-color);
+  border: 2px dashed var(--borde-sutil);
   border-radius: var(--radio-md);
   background: var(--fondo-principal);
   color: var(--texto-secundario);
