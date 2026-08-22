@@ -467,6 +467,10 @@
               <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="Código QR para transferir el pago a Euphoria" class="qr-imagen" />
             </div>
             <div class="qr-acciones">
+              <button class="btn-ampliar-qr btn-qr-descargar" @click="descargarQRRecarga" type="button" :disabled="descargandoQR">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                {{ descargandoQR ? 'Guardando…' : 'Descargar' }}
+              </button>
               <button class="btn-ampliar-qr" @click="ampliarQRDefault" type="button">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
@@ -555,24 +559,14 @@
                  el inicio (validando…) y se marcan ✓/✗ conforme se resuelven. -->
             <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr con-pasos">
               <div class="ocr-cabecera">
-                <div class="ocr-cab-txt">
-                  <p class="ocr-titulo">{{ procesandoOCR ? 'Revisando tu comprobante' : 'Revisión terminada' }}</p>
-                  <p class="ocr-sub">
-                    {{ procesandoOCR
-                      ? 'Leemos la imagen y comparamos los datos con tu transferencia. No cierres esta ventana.'
-                      : 'Estos son los controles que se aplicaron a tu comprobante.' }}
-                  </p>
-                </div>
+                <p class="ocr-titulo">{{ procesandoOCR ? 'Revisando tu comprobante' : 'Revisión terminada' }}</p>
                 <span class="ocr-reloj" :class="{ activo: procesandoOCR }">{{ segundosOCR }}s</span>
               </div>
               <!-- Progreso real: cuántos controles ya se resolvieron -->
               <div class="ocr-barra" role="progressbar" :aria-valuenow="pasosResueltos" :aria-valuemin="0" :aria-valuemax="totalPasosOCR">
                 <span class="ocr-barra-fill" :style="{ width: progresoOCR + '%' }"></span>
               </div>
-              <p class="ocr-progreso-txt">
-                Control {{ Math.min(pasosResueltos + (procesandoOCR ? 1 : 0), totalPasosOCR) }} de {{ totalPasosOCR }}
-                <span class="ocr-progreso-esp" v-if="procesandoOCR">· suele tardar menos de 30 segundos</span>
-              </p>
+              <p class="ocr-progreso-txt">Control {{ Math.min(pasosResueltos + (procesandoOCR ? 1 : 0), totalPasosOCR) }} de {{ totalPasosOCR }}</p>
               <ul class="ocr-pasos">
                 <li v-for="(p, i) in pasosValidacion" :key="i" class="ocr-paso visible" :class="{ 'paso-ok': p.ok === true, 'paso-fail': p.ok === false, 'paso-cargando': p.ok === null, 'paso-skip': p.ok === 'skip' }">
                   <span class="ocr-paso-icono">
@@ -1369,21 +1363,30 @@ function ampliarQRDefault() {
 // Descarga el QR que se está viendo, como imagen, para guardarlo en el celular.
 // Funciona con los QR generados (data URL) y con el QR fijo del local (archivo).
 const descargandoQR = ref(false)
-async function descargarQRAmpliado() {
+// Descarga el QR de recarga sin necesidad de ampliarlo primero.
+function descargarQRRecarga() {
+  const img = document.querySelector('.contenedor-qr-default .qr-imagen')
+  return guardarImagenQR(img?.getAttribute('src'), 'QR-recarga-Euphoria.jpg')
+}
+
+function descargarQRAmpliado() {
+  const img = document.querySelector('.qr-fullscreen .qr-fs-img')
+  const nombre = qrAmpliado.value === 'default'
+    ? 'QR-recarga-Euphoria.jpg'
+    : `QR-billetera-${identificadorQRAmpliado.value || 'euphoria'}.png`
+  return guardarImagenQR(img?.getAttribute('src'), nombre)
+}
+
+async function guardarImagenQR(src, nombre) {
   if (descargandoQR.value) return
   descargandoQR.value = true
   try {
-    const cont = document.querySelector('.qr-fullscreen .qr-fs-img')
-    const src = cont?.getAttribute('src')
     if (!src) throw new Error('sin imagen')
     // Se pasa por blob para que el navegador guarde el archivo también cuando
     // la imagen viene de una URL y no de un data URL.
     const resp = await fetch(src)
     const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
-    const nombre = qrAmpliado.value === 'default'
-      ? 'QR-recarga-Euphoria.jpg'
-      : `QR-billetera-${identificadorQRAmpliado.value || 'euphoria'}.png`
     const a = document.createElement('a')
     a.href = url
     a.download = nombre
@@ -2620,7 +2623,7 @@ button.mov-fila:focus-visible {
 .contenedor-qr-default .qr-imagen {
   display: block; width: 100%; max-width: 216px; height: auto; border-radius: 8px;
 }
-.qr-acciones { display: flex; justify-content: center; }
+.qr-acciones { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
 
 .btn-ampliar-qr {
   background: rgba(168, 85, 247, 0.12);
@@ -2647,6 +2650,9 @@ button.mov-fila:focus-visible {
 }
 
 .btn-ampliar-qr:active { transform: translateY(0) scale(0.97); }
+.btn-qr-descargar { background: var(--gradiente-marca); border-color: transparent; color: #fff; box-shadow: 0 5px 14px rgba(168,85,247,.32); }
+.btn-qr-descargar:hover { background: var(--gradiente-marca); filter: brightness(1.1); color: #fff; }
+.btn-qr-descargar:disabled { opacity: .6; cursor: progress; transform: none; }
 
 .btn-ampliar-qr:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.85);
@@ -2818,7 +2824,7 @@ button.mov-fila:focus-visible {
 /* Validación paso a paso */
 .ocr-titulo { margin: 0; font-weight: 700; font-size: 0.95rem; color: var(--texto-principal); }
 /* Cabecera explicativa + progreso real de la revisión del comprobante */
-.ocr-cabecera { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ocr-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .ocr-cab-txt { flex: 1; min-width: 0; }
 .ocr-sub { margin: 3px 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--texto-secundario); }
 .ocr-reloj {
@@ -2836,7 +2842,7 @@ button.mov-fila:focus-visible {
   background: var(--gradiente-marca);
   transition: width .45s cubic-bezier(.16,1,.3,1);
 }
-.ocr-progreso-txt { margin: 7px 0 12px; font-size: 0.76rem; font-weight: 600; color: var(--texto-secundario); }
+.ocr-progreso-txt { margin: 7px 0 12px; font-size: 0.76rem; font-weight: 600; color: var(--texto-secundario); font-variant-numeric: tabular-nums; }
 .ocr-progreso-esp { font-weight: 500; color: var(--texto-desactivado); }
 @media (max-width: 420px) { .ocr-progreso-esp { display: block; } }
 .ocr-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
