@@ -31,7 +31,7 @@
           </span>
           <div>
             <h3 class="comision-titulo">Comisión de devolución</h3>
-            <p class="comision-sub">Lo que retiene el local cuando el cliente cancela <strong>dentro de las 24 h</strong> del evento. Con más de 24 h de anticipación se devuelve el total sin comisión.</p>
+            <p class="comision-sub">Se retiene solo si cancela <strong>dentro de las 24 h</strong>. Antes, devolución total.</p>
           </div>
         </div>
         <div class="comision-control">
@@ -64,20 +64,20 @@
               <svg class="icono-busqueda" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
               </svg>
-              <input v-model="busqueda" class="campo campo-con-icono" placeholder="Filtrar en esta página (cliente o # comanda)…" />
+              <input v-model="busqueda" class="campo campo-con-icono" placeholder="Cliente o # de comanda…" />
             </span>
           </label>
           <label class="filtro-campo" style="flex:0 1 160px;min-width:140px">
             <span class="filtro-lbl">Estado</span>
-            <BaseSelect v-model="filtroEstado" :options="opcionesEstadoVenta" placeholder="Todos los estados" />
+            <BaseSelect v-model="filtroEstado" :options="opcionesEstadoVenta" placeholder="Todos" />
           </label>
           <label class="filtro-campo" style="flex:0 1 160px;min-width:140px">
             <span class="filtro-lbl">Método de pago</span>
-            <BaseSelect v-model="filtroMetodo" :options="opcionesMetodo" placeholder="Todos los métodos" />
+            <BaseSelect v-model="filtroMetodo" :options="opcionesMetodo" placeholder="Todos" />
           </label>
           <label class="filtro-campo" style="flex:0 1 170px;min-width:150px">
             <span class="filtro-lbl">Cajero</span>
-            <BaseSelect v-model="filtroCajero" :options="opcionesCajero" placeholder="Todos los cajeros" />
+            <BaseSelect v-model="filtroCajero" :options="opcionesCajero" placeholder="Todos" />
           </label>
           <label class="filtro-campo" style="flex:0 1 175px;min-width:150px">
             <span class="filtro-lbl">Fecha</span>
@@ -135,7 +135,9 @@
               <td class="texto-sec" data-label="Fecha">{{ formatearFecha(venta.fecha_comanda) }}</td>
               <td class="sin-label">
                 <div class="acciones">
-                  <button class="btn btn-sm btn-primario" @click="abrirDetalle(venta)">Ver</button>
+                  <button class="btn-ver" @click="abrirDetalle(venta)" title="Ver el detalle de la venta" aria-label="Ver detalle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -185,23 +187,6 @@
         </div>
 
         <div class="detalle-grid">
-          <!-- Información de la Comanda -->
-          <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Información de comanda</h4>
-            <div class="campo-detalle">
-              <span class="etiqueta">ID Comanda:</span>
-              <span class="valor código">#{{ ventaSeleccionada.id_comanda }}</span>
-            </div>
-            <div class="campo-detalle">
-              <span class="etiqueta">Fecha/Hora:</span>
-              <span class="valor">{{ formatearFechaCompleta(ventaSeleccionada.fecha_comanda) }}</span>
-            </div>
-            <div class="campo-detalle">
-              <span class="etiqueta">Estado:</span>
-              <span class="valor badge" :class="getBadgeClaseEstado(ventaSeleccionada.estado)">{{ ventaSeleccionada.estado }}</span>
-            </div>
-          </div>
-
           <!-- Información del Cliente -->
           <div class="detalle-seccion">
             <h4 class="seccion-titulo">Cliente</h4>
@@ -228,25 +213,15 @@
             </div>
           </div>
 
-          <!-- Información del Pago -->
-          <div class="detalle-seccion">
-            <h4 class="seccion-titulo">Detalles del pago</h4>
-            <div class="campo-detalle">
-              <span class="etiqueta">Método:</span>
-              <span class="valor badge" :class="getBadgeClasePago(ventaSeleccionada.metodo_pago)">
-                {{ ventaSeleccionada.metodo_pago }}
-              </span>
-            </div>
-            <div class="campo-detalle">
-              <span class="etiqueta">Total a Pagar:</span>
-              <span class="valor texto-fuerte" style="color: var(--color-exito); font-size: 1.1rem;">Bs. {{ ventaSeleccionada.monto_total.toFixed(2) }}</span>
-            </div>
+          <!-- Vuelto: solo aplica al cobro en efectivo -->
+          <div v-if="ventaSeleccionada.monto_recibido || ventaSeleccionada.cambio_dado" class="detalle-seccion">
+            <h4 class="seccion-titulo">Efectivo</h4>
             <div v-if="ventaSeleccionada.monto_recibido" class="campo-detalle">
-              <span class="etiqueta">Monto Recibido:</span>
+              <span class="etiqueta">Recibido:</span>
               <span class="valor">Bs. {{ ventaSeleccionada.monto_recibido.toFixed(2) }}</span>
             </div>
             <div v-if="ventaSeleccionada.cambio_dado" class="campo-detalle">
-              <span class="etiqueta">Cambio Dado:</span>
+              <span class="etiqueta">Cambio:</span>
               <span class="valor">Bs. {{ ventaSeleccionada.cambio_dado.toFixed(2) }}</span>
             </div>
           </div>
@@ -333,7 +308,7 @@ import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
 const notif = useNotificaciones()
 
 const opcionesEstadoVenta = [
-  { value: '', label: 'Todos los estados' },
+  { value: '', label: 'Todos' },
   { value: 'Pendiente', label: 'Pendientes' },
   { value: 'Preparando', label: 'Preparando' },
   { value: 'Listo', label: 'Listos' },
@@ -353,8 +328,8 @@ const cargando = ref(false)
 // Opciones de filtro (métodos de pago y cajeros con ventas)
 const metodosDisponibles = ref([])
 const cajerosDisponibles = ref([])
-const opcionesMetodo = computed(() => [{ value: '', label: 'Todos los métodos' }, ...metodosDisponibles.value.map(m => ({ value: m, label: m }))])
-const opcionesCajero = computed(() => [{ value: '', label: 'Todos los cajeros' }, ...cajerosDisponibles.value.map(c => ({ value: c.id, label: c.nombre }))])
+const opcionesMetodo = computed(() => [{ value: '', label: 'Todos' }, ...metodosDisponibles.value.map(m => ({ value: m, label: m }))])
+const opcionesCajero = computed(() => [{ value: '', label: 'Todos' }, ...cajerosDisponibles.value.map(c => ({ value: c.id, label: c.nombre }))])
 async function cargarFiltros() {
   try {
     const f = await clienteHttp.get('/comandas/filtros')
@@ -732,6 +707,15 @@ async function cancelarVenta() {
   font-weight: 700;
   margin: 0 0 2px;
 }
+.btn-ver {
+  display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
+  border-radius: var(--radio-md); border: 1px solid var(--borde-activo);
+  background: rgba(168,85,247,.12); color: var(--morado-hover);
+  transition: var(--trans-rapida);
+}
+.btn-ver svg { width: 16px; height: 16px; }
+.btn-ver:hover { background: var(--gradiente-marca); border-color: transparent; color: #fff; transform: translateY(-2px); }
+
 .comision-sub {
   font-size: 0.82rem;
   color: var(--texto-secundario);
@@ -858,6 +842,8 @@ async function cancelarVenta() {
   background: rgba(168, 85, 247, 0.1);
   border: 1px solid var(--glass-borde);
   white-space: nowrap;
+  margin-left: auto;
+  align-self: flex-end;
 }
 .chip-conteo strong {
   color: var(--texto-principal);

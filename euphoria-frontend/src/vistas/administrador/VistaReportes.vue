@@ -3,12 +3,9 @@
     <div class="vista-cabecera">
       <div class="vista-cabecera-info">
         <h2 class="vista-titulo">Reportes</h2>
-        <p class="vista-subtitulo">Panorama en vivo de ventas, personal, inventario y billetera digital</p>
+        <p class="vista-subtitulo">Ventas, personal, inventario y billetera</p>
       </div>
       <div class="cabecera-acciones">
-        <span class="badge-tiempo-real">
-          <span class="punto-verde animate-pulse">●</span> Actualizado en vivo
-        </span>
         <button class="btn-sincronizar brillo-hover" @click="exportarPDF">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar PDF
@@ -87,7 +84,7 @@
       <div class="rep-dos-col">
         <div class="rep-col-main">
           <div class="rep-seccion-head">
-            <h3 class="rep-seccion-titulo">Analítica en vivo</h3>
+            <h3 class="rep-seccion-titulo">Analítica</h3>
             <span class="rep-seccion-sub">Ventas y categorías</span>
             <span class="rep-seccion-linea"></span>
           </div>
@@ -101,7 +98,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
         </div>
         <div class="grafico-contenido-2d">
-          <svg viewBox="0 0 360 160" class="svg-tendencia-2d">
+          <svg viewBox="0 0 560 160" class="svg-tendencia-2d">
             <defs>
               <linearGradient id="grad-neon-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="var(--morado-brillante)" stop-opacity="0.3" />
@@ -109,14 +106,10 @@
               </linearGradient>
             </defs>
             <!-- Cuadrícula premium de fondo -->
-            <line x1="20" y1="20" x2="340" y2="20" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-            <line x1="20" y1="65" x2="340" y2="65" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-            <line x1="20" y1="110" x2="340" y2="110" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-            <line x1="20" y1="130" x2="340" y2="130" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
-            
-            <!-- Ejes y Etiquetas del Gráfico 2D -->
-            <text x="12" y="15" fill="rgba(255,255,255,0.3)" font-size="9" font-weight="700">Bs. (Ingresos)</text>
-            <text x="310" y="142" fill="rgba(255,255,255,0.3)" font-size="9" font-weight="700">Comandas →</text>
+            <line x1="30" y1="20" x2="530" y2="20" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+            <line x1="30" y1="65" x2="530" y2="65" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+            <line x1="30" y1="110" x2="530" y2="110" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+            <line x1="30" y1="130" x2="530" y2="130" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
             
             <!-- Área de relleno de degradado -->
             <path v-if="salesTrendFillPoints" :d="salesTrendFillPoints" fill="url(#grad-neon-fill)" />
@@ -236,7 +229,7 @@
         <div class="grafico-header">
           <div class="grafico-header-info">
             <h3 class="grafico-titulo">Desempeño del Personal</h3>
-            <span class="subtexto-grafico">Ingresos totales cobrados por mesero (Datos Reales)</span>
+            <span class="subtexto-grafico">Ingresos cobrados por mesero</span>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         </div>
@@ -258,25 +251,21 @@
                 </linearGradient>
               </defs>
               
-              <!-- Columna Rect con animación de altura y brillo en hover -->
-              <rect :x="45 + idx * (250 / Math.max(datosMeseros.length, 1))"
-                    :y="160 - (m.total / Math.max(...datosMeseros.map(x => x.total), 1)) * 110"
-                    :width="Math.max(120 / Math.max(datosMeseros.length, 1), 22)"
-                    :height="(m.total / Math.max(...datosMeseros.map(x => x.total), 1)) * 110"
+              <!-- Columna: se reparten todo el ancho y la más baja siempre se ve -->
+              <rect :x="colX(idx)" :y="160 - colAlto(m)" :width="colAncho" :height="colAlto(m)"
                     rx="4"
                     :fill="'url(#grad-col-' + idx + ')'"
                     style="transition: all 0.3s ease; cursor: pointer;"
                     class="columna-rect-2d" />
-                    
+
               <!-- Monto del mesero en el tope -->
-              <text :x="45 + idx * (250 / Math.max(datosMeseros.length, 1)) + Math.max(120 / Math.max(datosMeseros.length, 1), 22) / 2"
-                    :y="148 - (m.total / Math.max(...datosMeseros.map(x => x.total), 1)) * 110"
+              <text :x="colX(idx) + colAncho / 2" :y="152 - colAlto(m)"
                     fill="#fff" font-size="10.5" font-weight="800" text-anchor="middle" class="texto-nodo-grafico">
                 Bs. {{ m.total.toFixed(0) }}
               </text>
-              
+
               <!-- Nombre abreviado en el eje X -->
-              <text :x="45 + idx * (250 / Math.max(datosMeseros.length, 1)) + Math.max(120 / Math.max(datosMeseros.length, 1), 22) / 2"
+              <text :x="colX(idx) + colAncho / 2"
                     y="178"
                     fill="rgba(255,255,255,0.4)" font-size="10" font-weight="700" text-anchor="middle" class="texto-nodo-grafico">
                 {{ m.nombre.split(' ')[0] }}
@@ -354,28 +343,27 @@
         <div class="grafico-header">
           <div class="grafico-header-info">
             <h3 class="grafico-titulo">Últimas Ventas</h3>
-            <span class="subtexto-grafico">Las 8 más recientes del periodo — el detalle completo se abre aparte</span>
+            <span class="subtexto-grafico">Las 8 más recientes</span>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
         </div>
         <div class="tabla-contenedor">
-          <table class="tabla-admin">
+          <table class="tabla-admin tabla-mini">
             <thead>
-              <tr><th>ID</th><th>Fecha y Hora</th><th>Cliente</th><th>Atendido Por</th><th>Método Pago</th><th>Total (Bs)</th></tr>
+              <tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Total</th></tr>
             </thead>
             <tbody>
               <tr v-for="venta in ventas.slice(0, 8)" :key="venta.id_comanda">
                 <td>#{{ venta.id_comanda }}</td>
-                <td>{{ formatearFecha(venta.fecha_registro) }}</td>
+                <td class="celda-fecha">{{ fechaCorta(venta.fecha_registro) }}</td>
                 <td>
                   <span v-if="venta.usuario_comanda_id_clienteTousuario">{{ venta.usuario_comanda_id_clienteTousuario.nombres }}</span>
-                  <span v-else class="texto-sutil">Sin registro / Barra</span>
+                  <span v-else class="texto-sutil">Barra</span>
                 </td>
-                <td>{{ venta.usuario_comanda_id_meseroTousuario?.nombres || '—' }}</td>
                 <td><span :class="['badge-pago', venta.metodo_pago.toLowerCase().replace(' ', '-')]">{{ venta.metodo_pago }}</span></td>
                 <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (venta.subtotal || 0).toFixed(2) }}</td>
               </tr>
-              <tr v-if="ventas.length === 0"><td colspan="6" class="texto-centro">No hay ventas registradas en este periodo.</td></tr>
+              <tr v-if="ventas.length === 0"><td colspan="5" class="texto-centro">No hay ventas registradas en este periodo.</td></tr>
             </tbody>
           </table>
         </div>
@@ -475,6 +463,7 @@
             </div>
             <div class="grafico-contenido">
               <!-- Participación total en una sola barra apilada -->
+              <span v-if="!meseroSel && datosMeseros.length > 1" class="rep-stack-lbl">Participación sobre el total</span>
               <div v-if="!meseroSel && datosMeseros.length > 1" class="rep-stack">
                 <div v-for="m in datosMeseros" :key="'s' + m.nombre" class="rep-stack-seg"
                      :style="{ width: Math.max(m.participacion, 2) + '%', background: m.color }"
@@ -508,13 +497,16 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             </div>
             <div class="tabla-contenedor">
-              <table class="tabla-admin">
-                <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th></tr></thead>
+              <table class="tabla-admin tabla-mini">
+                <thead><tr><th>Nombre</th><th>Rol</th><th style="width:60px; text-align:center;">Estado</th></tr></thead>
                 <tbody>
                   <tr v-for="u in listadoPersonal.slice(0, 5)" :key="u.id_usuario">
                     <td style="font-weight:600;">{{ u.nombres }} {{ u.apellidos }}</td>
                     <td>{{ u.rol }}</td>
-                    <td><span :class="['badge-pago', u.estado_cuenta === 'activo' ? 'activo' : 'finalizado']">{{ u.estado_cuenta }}</span></td>
+                    <td style="text-align:center;">
+                      <span class="punto-cuenta" :class="u.estado_cuenta === 'activo' ? 'activa' : 'bloqueada'"
+                            :title="u.estado_cuenta === 'activo' ? 'Cuenta activa' : 'Cuenta bloqueada'"></span>
+                    </td>
                   </tr>
                   <tr v-if="listadoPersonal.length === 0"><td colspan="3" class="texto-centro">Sin personal registrado.</td></tr>
                 </tbody>
@@ -585,20 +577,19 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
             </div>
             <div class="tabla-contenedor">
-              <table class="tabla-admin">
+              <table class="tabla-admin tabla-mini">
                 <thead>
-                  <tr><th style="width:60px; text-align:center;">#</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Vendido</th><th>Ingresos (Bs)</th></tr>
+                  <tr><th style="width:40px; text-align:center;">#</th><th>Producto</th><th>Stock</th><th>Vendido</th><th>Ingresos</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="(prod, idx) in listadoProductosRanking.slice(0, 5)" :key="prod.id_producto">
                     <td style="font-weight:800; text-align:center;" :style="idx < 3 ? 'color:var(--color-alerta)' : 'color:rgba(255,255,255,0.4)'">{{ idx + 1 }}</td>
-                    <td style="font-weight:700; color:var(--texto-principal);">{{ prod.nombre_producto }}</td>
-                    <td><span class="badge-pago planificado">{{ prod.nombre_categoria }}</span></td>
+                    <td style="font-weight:700; color:var(--texto-principal);">{{ prod.nombre_producto }}<span class="cat-mini">{{ prod.nombre_categoria }}</span></td>
                     <td><span :class="['stock-indicador', prod.stock_actual <= UMBRAL_STOCK_BAJO ? 'bajo' : 'normal']">{{ prod.stock_actual }}</span></td>
-                    <td style="font-weight:700; color:var(--morado-brillante);">{{ prod.vecesVendido }} uds.</td>
+                    <td style="font-weight:700; color:var(--morado-brillante); white-space:nowrap;">{{ prod.vecesVendido }} uds.</td>
                     <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (prod.ingresosGenerados || 0).toFixed(2) }}</td>
                   </tr>
-                  <tr v-if="listadoProductosRanking.length === 0"><td colspan="6" class="texto-centro">No hay productos registrados.</td></tr>
+                  <tr v-if="listadoProductosRanking.length === 0"><td colspan="5" class="texto-centro">No hay productos registrados.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -733,17 +724,19 @@
               </div>
             </div>
           </div>
-          <div class="tarjeta-grafico">
+          <!-- Atajo: el detalle unidad-por-precio vive en el historial de cada producto -->
+          <div class="tarjeta-grafico rep-atajo" role="button" tabindex="0"
+               @click="$router.push('/administrador/productos')" @keyup.enter="$router.push('/administrador/productos')">
             <div class="grafico-header">
               <div class="grafico-header-info">
                 <h3 class="grafico-titulo">¿Cómo se vendió a cada precio?</h3>
-                <span class="subtexto-grafico">Detalle por producto</span>
+                <span class="subtexto-grafico">Historial de cada producto</span>
               </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </div>
-            <p class="texto-sutil" style="font-size:.85rem; line-height:1.5">
-              En <strong>Productos</strong>, cada tarjeta tiene el botón de historial (reloj):
-              ahí ves la línea de tiempo del producto y cuántas unidades se vendieron a cada precio.
-            </p>
+            <span class="rep-atajo-cta">Abrir Productos
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </span>
           </div>
         </div>
       </div>
@@ -762,20 +755,20 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
             </div>
             <div class="tabla-contenedor">
-              <table class="tabla-admin">
+              <table class="tabla-admin tabla-mini">
                 <thead>
-                  <tr><th>Evento</th><th>Fecha Inicio</th><th>Estado</th><th>Asistencia</th><th>Ventas Estimadas</th><th></th></tr>
+                  <tr><th>Evento</th><th>Fecha</th><th style="width:52px; text-align:center;">Estado</th><th>Asist.</th><th>Ventas</th></tr>
                 </thead>
                 <tbody>
-                  <tr v-for="ev in listadoEventos.slice(0, 5)" :key="ev.id_evento">
+                  <tr v-for="ev in listadoEventos.slice(0, 5)" :key="ev.id_evento"
+                      class="fila-clic" title="Ver qué se vendió en este evento" @click="verVentasDeEvento(ev)">
                     <td style="font-weight:600; color:var(--morado-brillante);">{{ ev.nombre_evento }}</td>
-                    <td>{{ formatearFecha(ev.fecha_hora_inicio) }}</td>
-                    <td><span :class="['badge-pago', ev.estado]">{{ ev.estado }}</span></td>
-                    <td style="font-weight:600;">{{ ev.asistenciaReal || 0 }} pers.</td>
-                    <td style="font-weight:bold; color:var(--color-exito);">Bs. {{ (ev.ventasReales || 0).toFixed(2) }}</td>
-                    <td><button class="btn-ver-historial btn-mini" @click="verVentasDeEvento(ev)">Qué se vendió</button></td>
+                    <td class="celda-fecha">{{ fechaCorta(ev.fecha_hora_inicio) }}</td>
+                    <td style="text-align:center;"><span class="punto-evento" :class="ev.estado" :title="textoEstadoEvento(ev.estado)"></span></td>
+                    <td style="font-weight:600; white-space:nowrap;">{{ ev.asistenciaReal || 0 }} pers.</td>
+                    <td style="font-weight:bold; color:var(--color-exito); white-space:nowrap;">Bs. {{ Math.round(ev.ventasReales || 0) }}</td>
                   </tr>
-                  <tr v-if="listadoEventos.length === 0"><td colspan="6" class="texto-centro">No hay eventos registrados.</td></tr>
+                  <tr v-if="listadoEventos.length === 0"><td colspan="5" class="texto-centro">No hay eventos registrados.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1088,12 +1081,12 @@
               <tbody>
                 <tr v-for="venta in ventas" :key="venta.id_comanda">
                   <td>#{{ venta.id_comanda }}</td>
-                  <td>{{ formatearFecha(venta.fecha_registro) }}</td>
+                  <td class="celda-fecha">{{ fechaCorta(venta.fecha_registro) }}</td>
                   <td>
                     <span v-if="venta.usuario_comanda_id_clienteTousuario">
                       {{ venta.usuario_comanda_id_clienteTousuario.nombres }}
                     </span>
-                    <span v-else class="texto-sutil">Sin registro / Barra</span>
+                    <span v-else class="texto-sutil">Barra</span>
                   </td>
                   <td>{{ venta.usuario_comanda_id_meseroTousuario?.nombres || '—' }}</td>
                   <td>
@@ -1126,7 +1119,7 @@
       <div class="sb-cabecera">
         <div class="sb-titulo-area">
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--morado-brillante)" stroke-width="2" width="28" height="28"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
-          <h3>Billetera Digital — Análisis de Uso</h3>
+          <h3>Billetera Digital</h3>
         </div>
         <button class="btn-ver-historial" @click="mostrarHistorialRecargas = !mostrarHistorialRecargas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
@@ -1234,7 +1227,7 @@
           <div class="grafico-header">
             <div class="grafico-header-info">
               <h3 class="grafico-titulo">¿Cómo se Recargan?</h3>
-              <span class="subtexto-grafico">Cuenta propia (app) vs Asistido por Cajero</span>
+              <span class="subtexto-grafico">App vs. caja</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>
           </div>
@@ -1287,7 +1280,7 @@
           <div class="grafico-header">
             <div class="grafico-header-info">
               <h3 class="grafico-titulo">Top Clientes por Saldo</h3>
-              <span class="subtexto-grafico">Clientes con mayor saldo disponible en billetera</span>
+              <span class="subtexto-grafico">Mayor saldo disponible</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           </div>
@@ -1313,7 +1306,7 @@
           <div class="grafico-header">
             <div class="grafico-header-info">
               <h3 class="grafico-titulo">Actividad de Cajeros</h3>
-              <span class="subtexto-grafico">Quién procesa más recargas en caja</span>
+              <span class="subtexto-grafico">Quién procesa más recargas</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
           </div>
@@ -1590,6 +1583,14 @@ const datosMetodos = ref([])
 const listadoProductosRanking = ref([])
 const productosBajoStock = ref([])
 const datosMeseros = ref([])
+// Columnas del desempeño: reparten el ancho completo y nunca desaparecen por escala
+const colPaso = computed(() => 300 / Math.max(datosMeseros.value.length, 1))
+const colAncho = computed(() => Math.min(colPaso.value * 0.55, 46))
+const colX = (idx) => 30 + colPaso.value * idx + (colPaso.value - colAncho.value) / 2
+const colAlto = (m) => {
+  const max = Math.max(...datosMeseros.value.map(x => x.total), 1)
+  return Math.max((m.total / max) * 110, m.total > 0 ? 4 : 0)
+}
 // Agregados nuevos del backend: ventas por día y por hora (horas pico)
 const porDia = ref([])
 const porHora = ref([])
@@ -1722,11 +1723,11 @@ async function exportarPDF() {
   // Los SVG van como <img> con data-URI: el generador de PDF los rasteriza fiel
   const svgAImg = (svg) => `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" style="width:100%;height:auto" />`
   const svgTendenciaMarkup = trendComandas.value.length > 0
-    ? `<svg viewBox="0 0 360 160" width="360" height="160" xmlns="http://www.w3.org/2000/svg">
-        <line x1="20" y1="20" x2="340" y2="20" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
-        <line x1="20" y1="65" x2="340" y2="65" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
-        <line x1="20" y1="110" x2="340" y2="110" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
-        <line x1="20" y1="130" x2="340" y2="130" stroke="rgba(0,0,0,0.12)" stroke-width="1" />
+    ? `<svg viewBox="0 0 560 160" width="560" height="160" xmlns="http://www.w3.org/2000/svg">
+        <line x1="30" y1="20" x2="530" y2="20" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="30" y1="65" x2="530" y2="65" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="30" y1="110" x2="530" y2="110" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+        <line x1="30" y1="130" x2="530" y2="130" stroke="rgba(0,0,0,0.12)" stroke-width="1" />
         ${salesTrendFillPoints.value ? `<path d="${salesTrendFillPoints.value}" fill="rgba(170,59,255,0.15)" />` : ''}
         ${salesTrendPoints.value ? `<path d="${salesTrendPoints.value}" fill="none" stroke="#aa3bff" stroke-width="3" stroke-linecap="round" />` : ''}
         ${trendComandas.value.map(pt => `
@@ -2137,7 +2138,7 @@ async function cargarReportes(silencioso = false) {
       const ultimas = [...resumen.tendencia].reverse().map(t => ({ id_comanda: t.id_comanda, subtotal: t.total, fecha_registro: t.fecha }))
       if (ultimas.length > 0) {
         const maxSub = Math.max(...ultimas.map(c => c.subtotal), 1)
-        const width = 360, height = 150, padding = 20
+        const width = 560, height = 150, padding = 30
         let pathD = '', fillD = ''
         const coords = ultimas.map((c, idx) => {
           const x = padding + (idx * (width - 2 * padding)) / Math.max(ultimas.length - 1, 1)
@@ -2227,6 +2228,19 @@ async function cargarReporteBilletera() {
   } catch (e) {
     console.warn('Error cargando reporte billetera:', e)
   }
+}
+
+// El estado del evento se ve por color; el nombre queda en el tooltip
+const ETIQUETA_ESTADO_EV = { promocion: 'En promoción', publicado: 'Publicado', activo: 'En curso', terminado: 'Terminado', cancelado: 'Cancelado', borrador: 'Borrador' }
+function textoEstadoEvento(e) { return ETIQUETA_ESTADO_EV[e] || e }
+
+// Fecha compacta para tablas angostas: "21 ago · 21:03"
+function fechaCorta(fechaStr) {
+  if (!fechaStr) return '—'
+  const d = new Date(fechaStr)
+  const dia = d.toLocaleDateString('es-BO', { day: '2-digit', month: 'short' }).replace('.', '')
+  const hora = d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${dia} · ${hora}`
 }
 
 function formatearFecha(isoStr) {
@@ -2381,6 +2395,26 @@ function formatearFecha(isoStr) {
 }
 
 /* Pie "ver más" de las listas compactas (top 5 + detalle en modal) */
+.celda-fecha { white-space: nowrap; }
+.fila-clic { cursor: pointer; transition: background var(--trans-rapida); }
+.fila-clic:hover { background: rgba(168,85,247,.08); }
+.rep-stack-lbl { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-desactivado); margin-bottom: 6px; }
+.punto-evento { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--texto-desactivado); }
+.punto-evento.promocion { background: var(--color-info); box-shadow: 0 0 0 3px rgba(59,130,246,.16); }
+.punto-evento.publicado { background: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168,85,247,.16); }
+.punto-evento.activo { background: var(--color-exito); box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
+.punto-evento.terminado { background: var(--texto-desactivado); }
+.punto-evento.cancelado { background: var(--color-error); box-shadow: 0 0 0 3px rgba(239,68,68,.16); }
+
+.punto-cuenta { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.punto-cuenta.activa { background: var(--color-exito); box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
+.punto-cuenta.bloqueada { background: var(--color-error); box-shadow: 0 0 0 3px rgba(239,68,68,.16); }
+.cat-mini { display: block; font-size: 0.68rem; font-weight: 600; color: var(--texto-desactivado); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+.tabla-mini th, .tabla-mini td { padding: 9px 8px; font-size: 0.82rem; }
+.tabla-mini .badge-pago { padding: 3px 7px; font-size: 0.66rem; }
+.tabla-mini td:last-child { white-space: nowrap; text-align: right; }
+.tabla-admin th { white-space: nowrap; }
+
 .rep-ver-mas {
   display: flex;
   align-items: center;
@@ -3386,16 +3420,14 @@ function formatearFecha(isoStr) {
 .svg-tendencia-2d {
   width: 100%;
   height: auto;
-  min-height: 230px;
-  max-height: 280px;
+  aspect-ratio: 560 / 160;
   overflow: visible;
   filter: drop-shadow(0px 0px 8px rgba(170, 59, 255, 0.15));
 }
 .svg-columnas-2d {
   width: 100%;
   height: auto;
-  min-height: 230px;
-  max-height: 280px;
+  aspect-ratio: 360 / 200;
   overflow: visible;
   filter: drop-shadow(0px 0px 8px rgba(170, 59, 255, 0.15));
 }
@@ -3664,6 +3696,13 @@ function formatearFecha(isoStr) {
 }
 
 /* GRÁFICO DE COLUMNAS VERTICALES */
+.rep-atajo { cursor: pointer; transition: var(--trans-rapida); }
+.rep-atajo:hover { border-color: var(--borde-activo); transform: translateY(-2px); }
+.rep-atajo-cta {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  font-size: 0.8rem; font-weight: 700; color: var(--morado-hover);
+}
+
 .grafico-contenido-columnas {
   display: flex;
   flex-direction: column;

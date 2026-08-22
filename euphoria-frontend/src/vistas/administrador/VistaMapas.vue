@@ -4,7 +4,7 @@
       <div class="encabezado-fila">
         <div class="encabezado-texto">
           <h2 class="vista-titulo">Planos</h2>
-          <p class="vista-subtitulo">Arma el plano del local: arrastra mesas, sillas, barra y escenario sobre el lienzo.</p>
+          <p class="vista-subtitulo">Arrastra mesas, barra y escenario sobre el lienzo.</p>
         </div>
         <div class="cabecera-acciones">
           <template v-if="modo === 'galeria'">
@@ -50,8 +50,12 @@
           </div>
           <div class="plano-card-acciones" @click.stop>
             <button class="btn btn-sm btn-primario" @click="editarPlano(p)">Editar</button>
-            <button class="btn btn-sm btn-secundario" @click="duplicarPlano(p)">Duplicar</button>
-            <button class="btn btn-sm btn-peligro" @click="eliminarPlano(p)">Eliminar</button>
+            <button class="pl-icono" @click="duplicarPlano(p)" title="Duplicar plano" aria-label="Duplicar plano">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button class="pl-icono pl-borrar" @click="eliminarPlano(p)" title="Eliminar plano" aria-label="Eliminar plano">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </div>
         </article>
       </div>
@@ -86,7 +90,7 @@
             </span>
           </div>
         </div>
-        <span class="aforo-pie">El plano define el espacio; los precios se ponen al armar el evento.</span>
+        <span class="aforo-pie">Los precios se definen al armar el evento.</span>
       </div>
     </section>
 
@@ -231,7 +235,7 @@
           </div>
         </template>
         <template v-else>
-          <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
+          <p class="prop-vacio">Toca un elemento para editarlo.</p>
           <ul class="prop-leyenda">
             <li><i class="pl-cuadro area"></i><span><b>Área</b> sección</span></li>
             <li><i class="pl-cuadro mesa"></i><span><b>Mesa/silla</b> aforo</span></li>
@@ -821,7 +825,7 @@ cargarPlanos()
 .btn-icono { flex-shrink: 0; margin-top: -1px; }
 
 /* ── Barra de selección (evento / zona / plano / aforo) ── */
-.barra-mapa { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 1.25rem; }
+.barra-mapa { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 1.25rem; }
 .campo-selector { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .campo-selector label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-secundario); font-weight: 700; }
 .grupo-zona { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1030,6 +1034,16 @@ select.campo { cursor: pointer; }
 .fila-plantilla strong { color: var(--texto-principal); }
 .plantilla-desc { display: block; color: var(--texto-secundario); font-size: 0.8rem; margin-top: 2px; }
 .plantilla-info { min-width: 0; flex: 1; }
+.pl-icono {
+  display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
+  border-radius: var(--radio-md); border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,.03); color: var(--texto-secundario);
+  transition: var(--trans-rapida);
+}
+.pl-icono svg { width: 15px; height: 15px; }
+.pl-icono:hover { color: #fff; border-color: var(--borde-activo); background: rgba(168,85,247,.14); }
+.pl-borrar:hover { color: var(--color-error); border-color: rgba(239,68,68,.4); background: rgba(239,68,68,.12); }
+
 .plantilla-acciones { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .aviso { color: var(--texto-desactivado); font-size: 0.78rem; line-height: 1.5; text-wrap: pretty; }
 

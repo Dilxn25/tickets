@@ -58,7 +58,9 @@
         <div class="producto-imagen">
           <img v-if="p.url_imagen" :src="p.url_imagen" :alt="`Imagen de ${p.nombre_producto}`" />
           <ComboImagen v-else-if="p.es_combo && p.combos_como_padre?.length" :componentes="p.combos_como_padre" />
-          <div v-else class="imagen-placeholder" aria-hidden="true">IMG</div>
+          <div v-else class="imagen-placeholder" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" v-html="iconoProducto(p.nombre_producto, p.nombre_categoria)"></svg>
+          </div>
           <div class="producto-badges">
             <span v-if="p.es_combo" class="badge-combo">Combo</span>
             <span v-if="p.estado_promocion" class="badge-promo">Promo</span>
@@ -222,8 +224,8 @@
                   <span class="dropzone-icono" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="30" height="30" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
                   </span>
-                  <p class="dropzone-titulo">Arrastrá una imagen aquí</p>
-                  <p class="dropzone-sub">o <span class="dropzone-link">hacé clic para elegir</span></p>
+                  <p class="dropzone-titulo">Arrastra una imagen aquí</p>
+                  <p class="dropzone-sub">o <span class="dropzone-link">haz clic para elegir</span></p>
                   <p class="dropzone-formatos">PNG, JPG o WEBP · hasta 5&nbsp;MB</p>
                 </template>
               </div>
@@ -234,7 +236,7 @@
             <!-- Editor de combo: qué productos lo componen -->
             <div v-if="form.es_combo" class="combo-editor">
               <label class="etiqueta">Productos del combo</label>
-              <p class="combo-hint">Un combo agrupa varios productos a un precio especial. Elige qué incluye y en qué cantidad.</p>
+              <p class="combo-hint">Elige qué productos incluye y en qué cantidad.</p>
               <div class="combo-agregar">
                 <div class="combo-sel"><BaseSelect v-model="comboSel" :options="opcionesComponentes" placeholder="Elegir producto…" /></div>
                 <input v-model.number="comboCant" type="number" min="1" class="campo combo-cant" aria-label="Cantidad" />
@@ -339,6 +341,7 @@
 </template>
 
 <script setup>
+import { iconoProducto } from '@/utilidades/iconos-producto.js'
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import clienteHttp from '@/servicios-api/cliente-http.js'
@@ -785,7 +788,8 @@ async function eliminarCategoria(cat) {
 .producto-imagen::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(14,8,33,.55));pointer-events:none}
 .producto-imagen img{width:100%;height:100%;object-fit:cover;transition:transform var(--trans-lenta)}
 .tarjeta-producto:hover .producto-imagen img{transform:scale(1.06)}
-.imagen-placeholder{font-family:var(--fuente-titulo);font-size:1.5rem;font-weight:700;letter-spacing:.08em;color:var(--texto-desactivado);opacity:.5}
+.imagen-placeholder{display:grid;place-items:center;width:100%;height:100%;color:var(--morado-brillante);opacity:.28}
+.imagen-placeholder svg{width:46px;height:46px}
 .producto-badges{position:absolute;top:9px;left:9px;right:9px;display:flex;justify-content:space-between;gap:6px;z-index:2;pointer-events:none}
 .badge-combo,.badge-promo{font-size:.62rem;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:var(--radio-full);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.35)}
 .badge-combo{background:rgba(56,189,248,.28);color:var(--color-info);border:1px solid rgba(56,189,248,.45)}

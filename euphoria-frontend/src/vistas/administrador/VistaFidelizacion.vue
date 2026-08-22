@@ -4,7 +4,7 @@
     <header class="fid-header">
       <div class="fid-head-txt">
         <h2><span class="fid-head-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span> Fidelización</h2>
-        <p class="fid-sub">Tus clientes que más consumen. Prémialos y conviértelos en habituales.</p>
+        <p class="fid-sub">Los que más consumen. Prémialos para que vuelvan.</p>
       </div>
       <!-- El ranking se recalcula solo cuando entra una venta (socket 'ventas'). -->
     </header>
@@ -246,7 +246,7 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 @keyframes giro { to { transform: rotate(360deg); } }
 
 /* KPIs */
-.fid-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.fid-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 250px)); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 640px) { .fid-kpis { grid-template-columns: 1fr; } }
 .kpi { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil); position: relative; overflow: hidden; }
 .kpi::after { content: ''; position: absolute; inset: 0; opacity: 0.5; pointer-events: none; background: radial-gradient(120% 100% at 0 0, rgba(168,85,247,0.08), transparent 60%); }

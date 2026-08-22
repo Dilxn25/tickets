@@ -5,14 +5,10 @@
     <div class="ia-cabecera">
       <div class="ia-cabecera-info">
         <h2 class="ia-titulo">Panel de IA</h2>
-        <p class="ia-subtitulo">Motor de recomendaciones: combos sugeridos, descuento y comportamiento en la toma de pedidos</p>
+        <p class="ia-subtitulo">Combos, descuentos y sugerencias al mesero</p>
       </div>
       <div class="ia-cabecera-acciones">
-        <span class="badge-estado" :class="estado.en_linea ? 'ok' : 'mal'">
-          <span class="punto-estado"></span>
-          {{ estado.en_linea ? 'Motor en línea' : 'Motor fuera de línea' }}
-        </span>
-        <button class="btn-secundario" @click="cargarEstado" :disabled="cargandoEstado">
+        <button v-if="!estado.en_linea || cargandoEstado" class="btn-secundario" @click="cargarEstado" :disabled="cargandoEstado">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           {{ cargandoEstado ? 'Verificando...' : 'Reintentar' }}
         </button>
@@ -66,7 +62,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Combos sugeridos por la IA</h3>
-              <span class="sub">Lo que los clientes más compran junto (historial real). Es solo sugerencia: no modifica los precios reales.</span>
+              <span class="sub">Lo que más se compra junto. Es sugerencia: no cambia los precios reales.</span>
             </div>
             <div class="toggle-tam">
               <button :class="{ activo: tamCombos === 2 }" @click="cambiarTamCombos(2)">Pares</button>
@@ -84,7 +80,7 @@
               <div class="combo-info">
                 <p class="combo-nombre">{{ c.nombre }}</p>
                 <p class="combo-veces">Comprados juntos {{ c.veces }} veces</p>
-                <p v-if="c.razon" class="combo-razon">{{ c.razon }}</p>
+                <p v-if="c.razon" class="combo-razon" :title="c.razon">{{ c.razon }}</p>
                 <div class="combo-precios">
                   <span class="precio-normal">Bs. {{ c.precio_normal.toFixed(2) }}</span>
                   <span class="precio-combo">Bs. {{ c.precio_combo.toFixed(2) }}</span>
@@ -105,7 +101,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Packs para mesa</h3>
-              <span class="sub">Aprendidos de las mesas grandes reales: las combinaciones que más se repiten en el historial — pensados para ofrecer al reservar</span>
+              <span class="sub">Lo que más repiten las mesas grandes, para ofrecer al reservar</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="icono-sutil"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
           </div>
@@ -120,8 +116,7 @@
                 <img v-for="it in pk.items" :key="it.id_producto" :src="it.url_imagen || sinImagen" :alt="it.nombre" @error="imgRota" />
                 <span class="combo-mas">+</span>
               </div>
-              <p class="pack-desc">{{ pk.descripcion }}</p>
-              <p v-if="pk.razon" class="combo-razon">{{ pk.razon }}</p>
+              <p class="pack-desc" :title="pk.razon || pk.descripcion">{{ pk.descripcion }}</p>
               <ul class="pack-items">
                 <li v-for="it in pk.items" :key="it.id_producto">
                   <span class="pack-cant">{{ it.cantidad }}×</span> {{ it.nombre }}
@@ -145,7 +140,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Efectividad real de la IA</h3>
-              <span class="sub">Una cosa es la precisión del modelo y otra que la gente acepte: esto mide lo segundo</span>
+              <span class="sub">Cuánto acepta la gente lo que la IA sugiere</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="icono-sutil"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           </div>
@@ -211,13 +206,13 @@
                       class="preset-pct" :class="{ activo: formDescuento === p }"
                       @click="formDescuento = p">{{ p }}%</button>
             </div>
-            <span class="campo-config-ayuda">El precio final se redondea a un precio atractivo (.90, .50...).</span>
+            <span class="campo-config-ayuda">El precio final se redondea (.90, .50).</span>
           </div>
 
           <label class="campo-config campo-toggle">
             <div>
               <span class="campo-config-label">Sugerencias en la toma de pedidos</span>
-              <span class="campo-config-ayuda">Si se pausa, el mesero no ve recomendaciones (el pedido sigue normal).</span>
+              <span class="campo-config-ayuda">Si se pausa, el mesero no ve recomendaciones.</span>
             </div>
             <button class="toggle" :class="{ activo: formSugerencias }" @click.prevent="formSugerencias = !formSugerencias" role="switch" :aria-checked="formSugerencias">
               <span class="toggle-bola"></span>
@@ -227,7 +222,7 @@
           <!-- Premio por perfil completo (módulo cliente): % y tope en Bs -->
           <div class="campo-config">
             <span class="campo-config-label">Premio por perfil completo</span>
-            <span class="campo-config-ayuda">Descuento único que gana el cliente al completar su perfil, en su próximo pedido con billetera.</span>
+            <span class="campo-config-ayuda">Se aplica una sola vez, en su próximo pedido con billetera.</span>
             <div class="premio-fila">
               <div class="premio-campo">
                 <label class="premio-mini-label">Descuento</label>
@@ -268,7 +263,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Probador de sugerencias</h3>
-              <span class="sub">Simula una mesa y mira qué recomienda la IA. Activa el interruptor para quitar los combos de la lista.</span>
+              <span class="sub">Arma una mesa y mira qué recomienda la IA</span>
             </div>
             <div class="switch-combos">
               <span>Ocultar combos</span>
@@ -297,7 +292,7 @@
               <BaseSelect v-model="clienteProbador" :options="opcionesClientes" placeholder="Nuevo (sin historial)" />
             </div>
             <p v-if="modeloIA.modo === 'demo'" class="demo-nota">
-              Elige un cliente con historial y verás sus recomendaciones personalizadas; "Nuevo" cae a lo popular (arranque en frío).
+              Con historial recomienda a su gusto; "Nuevo" cae a lo popular.
             </p>
           </div>
 
@@ -311,7 +306,7 @@
             </button>
           </div>
           <p class="probador-conteo">
-            {{ mesa.length ? mesa.length + ' producto(s) en la mesa' : 'Mesa vacía: muestra lo personalizado del cliente o lo popular (arranque en frío)' }}
+            {{ mesa.length ? mesa.length + ' producto(s) en la mesa' : 'Mesa vacía · sugiere según el cliente' }}
           </p>
 
           <button class="btn-guardar" :disabled="probando" @click="probarSugerencias">
@@ -1242,7 +1237,10 @@ onActivated(() => {
 .pack-card:hover { border-color: rgba(236, 72, 153, 0.45); transform: translateY(-2px); }
 .pack-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
 .pack-nombre { font-size: 0.95rem; font-weight: 800; color: #fff; }
-.pack-desc { margin: 0 0 10px; font-size: 0.74rem; color: var(--texto-secundario); line-height: 1.35; }
+.pack-desc {
+  margin: 0 0 10px; font-size: 0.74rem; color: var(--texto-secundario); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .pack-items { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
 .pack-items li { font-size: 0.82rem; color: var(--texto-principal); font-weight: 600; }
 .pack-cant {

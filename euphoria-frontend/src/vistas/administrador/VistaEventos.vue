@@ -4,7 +4,7 @@
       <div class="encabezado-fila">
         <div class="encabezado-texto">
           <h2 class="vista-titulo">Gestión de eventos</h2>
-          <p class="vista-subtitulo">Planifica y activa las fechas de atención del establecimiento</p>
+          <p class="vista-subtitulo">Las noches del local, mes por mes</p>
         </div>
         <div class="acciones-encabezado">
           <!-- Noches de siempre: el boliche abre igual, solo con DJ. Un clic deja
@@ -92,7 +92,7 @@
       <section v-for="mes in mesesAgenda" :key="mes.clave" class="mes-bloque aparecer-subir">
         <header class="mes-cab">
           <h3 class="mes-nombre">{{ mes.nombre }}</h3>
-          <span class="mes-conteo">{{ mes.eventos.length }}</span>
+          <span v-if="mes.conEvento" class="mes-conteo">{{ mes.conEvento }}</span>
         </header>
 
         <ul class="mes-filas">
@@ -262,7 +262,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   </span>
                   <span class="dropzone-texto">
-                    {{ archivoSeleccionado ? archivoSeleccionado.name : (arrastrandoFlyer ? 'Soltá la imagen aquí' : 'Arrastrá el flyer o hacé clic') }}
+                    {{ archivoSeleccionado ? archivoSeleccionado.name : (arrastrandoFlyer ? 'Suelta la imagen aquí' : 'Arrastra el flyer o haz clic') }}
                   </span>
                   <span class="dropzone-hint">PNG o JPG · hasta 5 MB</span>
                 </label>
@@ -829,6 +829,8 @@ const mesesAgenda = computed(() => {
     }
     mes.eventos.push(f)
   }
+  // El contador del mes es de eventos reales, no de las noches libres sugeridas
+  for (const m of meses) m.conEvento = m.eventos.filter(f => !f.hueco).length
   return meses
 })
 

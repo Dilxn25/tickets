@@ -122,16 +122,28 @@
           </div>
         </div>
 
-        <div class="flujo-grafico" role="img" :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
-          <div v-for="h in flujo.horas" :key="h.hora" class="fl-col" :class="{ pico: h.hora === flujo.pico?.hora }">
-            <div class="fl-barras">
-              <span class="fl-linea-dentro" :style="{ bottom: alturaPct(h.dentro, maxDentro) }" :title="`${h.dentro} dentro`"></span>
-              <span class="fl-barra in" :style="{ height: alturaPct(h.ingresos, maxMovimiento) }" :title="`${h.ingresos} entraron`"></span>
-              <span class="fl-barra out" :style="{ height: alturaPct(h.salidas, maxMovimiento) }" :title="`${h.salidas} salieron`"></span>
-            </div>
-            <span class="fl-hora">{{ h.hora }}</span>
-          </div>
-        </div>
+        <svg v-if="grafFlujo" class="flujo-svg" :viewBox="`0 0 ${grafFlujo.W} ${grafFlujo.H}`" role="img"
+             :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
+          <line x1="20" :y1="grafFlujo.base" :x2="grafFlujo.W - 20" :y2="grafFlujo.base" stroke="rgba(255,255,255,.10)" stroke-width="1" />
+          <!-- Barras: lo que entró y lo que salió en cada hora -->
+          <g v-for="c in grafFlujo.cols" :key="c.hora">
+            <rect v-if="c.hIn > 0" :x="c.xIn" :y="grafFlujo.base - c.hIn" :width="c.w" :height="c.hIn" rx="2" fill="var(--color-exito)" opacity=".9">
+              <title>{{ c.ingresos }} entraron a las {{ c.hora }}:00</title>
+            </rect>
+            <rect v-if="c.hOut > 0" :x="c.xOut" :y="grafFlujo.base - c.hOut" :width="c.w" :height="c.hOut" rx="2" fill="var(--color-error)" opacity=".9">
+              <title>{{ c.salidas }} salieron a las {{ c.hora }}:00</title>
+            </rect>
+            <text :x="c.cx" :y="grafFlujo.base + 14" text-anchor="middle" font-size="9" font-weight="700" fill="rgba(255,255,255,.45)">{{ c.hora }}</text>
+          </g>
+          <!-- Curva: cuánta gente había dentro -->
+          <path :d="grafFlujo.linea" fill="none" stroke="var(--morado-brillante)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <g v-for="c in grafFlujo.cols" :key="'p' + c.hora">
+            <circle :cx="c.cx" :cy="c.yDentro" :r="c.pico ? 4 : 2.6" fill="var(--morado-brillante)" :stroke="c.pico ? '#fff' : 'none'" stroke-width="1.5">
+              <title>{{ c.dentro }} dentro a las {{ c.hora }}:00</title>
+            </circle>
+            <text v-if="c.pico" :x="c.cx" :y="c.yDentro - 9" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff">{{ c.dentro }}</text>
+          </g>
+        </svg>
 
         <div class="flujo-pie">
           <span class="fl-dato"><b>{{ flujo.total_ingresos }}</b> ingresos</span>
@@ -149,7 +161,10 @@
             <h2 class="seccion-h2">Mapa en vivo</h2>
             <span v-if="zonaMapa" class="mapa-plano-nom">{{ zonaMapa.nombre_zona }}</span>
           </div>
-          <div v-if="!zonaMapa" class="mapa-hint">Elige un plano arriba para ver su mapa en vivo. En "Todos" ves el reporte del evento completo.</div>
+          <div v-if="!zonaMapa" class="mapa-hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="30" height="30"><polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21 1 6"/><line x1="8" y1="3" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="21"/></svg>
+            Elige un plano para ver su mapa
+          </div>
           <div v-else class="mapa-live-cuerpo">
             <div class="mapa-lienzo" :style="{ aspectRatio: String(zonaMapa.proporcion || 1.6) }">
               <div
@@ -223,7 +238,11 @@ const resumenActivo = computed(() => {
   }
 })
 // Plano cuyo mapa se muestra (null = vista "Todos").
-const zonaMapa = computed(() => vistaSel.value === 'todos' ? null : (zonas.value.find(z => z.id_zona === vistaSel.value) || null))
+const zonaMapa = computed(() => {
+  if (vistaSel.value !== 'todos') return zonas.value.find(z => z.id_zona === vistaSel.value) || null
+  // En "Todos" con un único plano, ese plano ES el mapa del evento
+  return zonas.value.length === 1 ? zonas.value[0] : null
+})
 
 const circunferencia = 2 * Math.PI * 52
 let socket = null
@@ -279,10 +298,31 @@ const flujo = ref({ horas: [], pico: null, total_ingresos: 0, total_salidas: 0 }
 const maxMovimiento = computed(() => Math.max(1, ...flujo.value.horas.map(h => Math.max(h.ingresos, h.salidas))))
 const maxDentro = computed(() => Math.max(1, ...flujo.value.horas.map(h => h.dentro)))
 // Altura en % dejando un mínimo visible para que un valor chico no desaparezca.
-function alturaPct(valor, max) {
-  if (!valor) return '0%'
-  return Math.max(6, Math.round((valor / max) * 100)) + '%'
-}
+// Coordenadas del gráfico de flujo: barras de entradas/salidas + curva de "dentro"
+const grafFlujo = computed(() => {
+  const hs = flujo.value.horas || []
+  if (!hs.length) return null
+  const W = 560, H = 170, padX = 24, techo = 18, base = H - 26
+  const paso = (W - padX * 2) / hs.length
+  const alto = base - techo
+  const maxMov = maxMovimiento.value
+  const maxDen = maxDentro.value
+  const w = Math.max(4, Math.min(paso * 0.26, 14))
+  const cols = hs.map((h, i) => {
+    const cx = padX + paso * i + paso / 2
+    return {
+      hora: h.hora, cx, ingresos: h.ingresos, salidas: h.salidas, dentro: h.dentro,
+      xIn: cx - w - 1.5, xOut: cx + 1.5, w,
+      hIn: (h.ingresos / maxMov) * alto,
+      hOut: (h.salidas / maxMov) * alto,
+      yDentro: base - (h.dentro / maxDen) * alto,
+      pico: h.hora === flujo.value.pico?.hora,
+    }
+  })
+  const linea = cols.map((c, i) => `${i ? 'L' : 'M'} ${c.cx.toFixed(1)} ${c.yDentro.toFixed(1)}`).join(' ')
+  return { W, H, base, cols, linea }
+})
+
 async function cargarFlujo() {
   if (!idEventoSel.value) return
   try { flujo.value = await clienteHttp.get(`/aforo/flujo/${idEventoSel.value}`) }
@@ -433,7 +473,8 @@ onDeactivated(() => {
 .kpi-num.acento-libre { color: var(--rosa-acento); }
 .kpi-lbl { font-size: 0.8rem; color: var(--texto-secundario); }
 .kpi-hero .kpi-lbl { font-size: 0.9rem; font-weight: 600; }
-.kpi-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--esp-4); padding-top: var(--esp-5); border-top: 1px solid var(--borde-sutil); }
+.kpi-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: var(--esp-3); padding-top: var(--esp-4); border-top: 1px solid var(--borde-sutil); }
+.kpi-fila .kpi-lbl { font-size: 0.7rem; }
 
 /* Encabezado de sección de zonas */
 /* ---- Flujo de la noche: barras de ingresos/salidas + línea de "dentro" ---- */
@@ -446,36 +487,7 @@ onDeactivated(() => {
 .fl-punto.out { background: var(--color-error); }
 .fl-punto.dentro { background: var(--morado-brillante); border-radius: 999px; }
 
-.flujo-grafico {
-  display: flex; align-items: flex-end; gap: 6px;
-  height: 168px; padding: 10px 4px 0;
-  border-bottom: 1px solid var(--borde-sutil);
-  overflow-x: auto;
-}
-.fl-col { flex: 1 1 0; min-width: 26px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
-.fl-barras {
-  position: relative; flex: 1; width: 100%;
-  display: flex; align-items: flex-end; justify-content: center; gap: 3px;
-}
-.fl-barra {
-  width: 42%; max-width: 16px; border-radius: 4px 4px 0 0;
-  transition: height .5s cubic-bezier(.16,1,.3,1);
-}
-.fl-barra.in { background: linear-gradient(180deg, var(--color-exito), rgba(34,197,94,.45)); }
-.fl-barra.out { background: linear-gradient(180deg, var(--color-error), rgba(239,68,68,.4)); }
-/* Marca de cuánta gente quedó dentro a esa hora */
-.fl-linea-dentro {
-  position: absolute; left: 8%; right: 8%; height: 3px; border-radius: 2px;
-  background: var(--morado-brillante);
-  box-shadow: 0 0 10px rgba(168,85,247,.65);
-  transition: bottom .5s cubic-bezier(.16,1,.3,1);
-}
-.fl-hora { font-size: 0.7rem; font-weight: 700; color: var(--texto-desactivado); font-variant-numeric: tabular-nums; }
-.fl-col.pico .fl-hora { color: var(--morado-hover); }
-.fl-col.pico .fl-barras::after {
-  content: ''; position: absolute; inset: 0 0 -2px; border-radius: 6px;
-  background: rgba(168,85,247,.10); pointer-events: none;
-}
+.flujo-svg { width: 100%; height: auto; display: block; overflow: visible; }
 .flujo-pie { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 0.78rem; color: var(--texto-secundario); }
 .fl-dato b { color: var(--texto-principal); font-variant-numeric: tabular-nums; }
 .fl-dato.pico b { color: var(--morado-hover); }
@@ -516,7 +528,11 @@ onDeactivated(() => {
 .vt-btn:hover { color: var(--texto-principal); }
 .vt-btn.activo { background: var(--gradiente-marca); color: #fff; box-shadow: var(--glow-morado); }
 .mapa-plano-nom { font-size: 0.85rem; font-weight: 700; color: var(--morado-hover); }
-.mapa-hint { color: var(--texto-secundario); font-size: 0.88rem; line-height: 1.5; padding: 2.5rem 1.25rem; text-align: center; }
+.mapa-hint {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  color: var(--texto-desactivado); font-size: 0.85rem; padding: 2rem 1rem; text-align: center;
+}
+.mapa-hint svg { opacity: .45; }
 .mapa-live-cuerpo { display: flex; flex-direction: column; gap: var(--esp-4); }
 .mapa-lienzo {
   position: relative; width: 100%;

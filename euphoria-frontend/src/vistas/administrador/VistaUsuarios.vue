@@ -72,16 +72,26 @@
             <td class="texto-sec celda-mono" data-label="CI/Carnet">{{ u.ci_carnet || '—' }}</td>
             <td class="texto-sec" data-label="Correo">{{ u.correo }}</td>
             <td data-label="Rol"><span class="badge badge-rol"><span class="punto-rol" :style="{ background: colorRol(u.rol) }" />{{ u.rol }}</span></td>
-            <td data-label="Estado"><span :class="u.estado_cuenta==='activo'?'badge badge-exito con-punto':'badge badge-error con-punto'">{{ u.estado_cuenta }}</span></td>
+            <td data-label="Estado">
+              <span class="punto-cuenta" :class="u.estado_cuenta === 'activo' ? 'activa' : 'bloqueada'"
+                    :title="u.estado_cuenta === 'activo' ? 'Cuenta activa' : 'Cuenta bloqueada'"
+                    role="img" :aria-label="u.estado_cuenta === 'activo' ? 'Cuenta activa' : 'Cuenta bloqueada'"></span>
+            </td>
             <td class="sin-label">
               <div class="acciones">
-                <button class="btn btn-sm btn-secundario" @click="abrirModal(u)">Editar</button>
+                <button class="btn-acc" @click="abrirModal(u)" title="Editar usuario" aria-label="Editar usuario">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
                 <button
                   v-if="!esUsuarioActual(u)"
-                  class="btn btn-sm btn-peligro"
+                  class="btn-acc acc-bloquear"
+                  :class="{ activa: u.estado_cuenta !== 'activo' }"
                   @click="alternarEstado(u)"
+                  :title="u.estado_cuenta === 'activo' ? 'Bloquear el acceso' : 'Desbloquear el acceso'"
+                  :aria-label="u.estado_cuenta === 'activo' ? 'Bloquear usuario' : 'Desbloquear usuario'"
                 >
-                  {{ u.estado_cuenta === 'activo' ? 'Bloquear' : 'Desbloquear' }}
+                  <svg v-if="u.estado_cuenta === 'activo'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
                 </button>
               </div>
             </td>
@@ -446,7 +456,24 @@ async function eliminarRol(rol) {
 .punto-rol { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .tabla .badge-exito.con-punto { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.32); color:var(--color-exito); }
 .tabla .badge-error.con-punto { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.32); color:var(--color-error); }
-.acciones       { display:flex; gap:6px; }
+.acciones       { display:flex; gap:6px; justify-content:flex-end; }
+/* Acciones con icono: la tabla deja de repetir "Editar/Bloquear" en cada fila */
+.btn-acc {
+  display:grid; place-items:center; width:32px; height:32px; cursor:pointer;
+  border-radius:var(--radio-md); border:1px solid var(--borde-sutil);
+  background:rgba(255,255,255,.04); color:var(--texto-secundario);
+  transition:var(--trans-rapida);
+}
+.btn-acc svg { width:16px; height:16px; }
+.btn-acc:hover { border-color:var(--morado-brillante); background:rgba(168,85,247,.16); color:var(--texto-principal); transform:translateY(-2px); }
+.btn-acc.acc-bloquear:hover { border-color:var(--color-error); background:rgba(239,68,68,.15); color:var(--color-error); }
+.btn-acc.acc-bloquear.activa { color:var(--color-alerta); border-color:rgba(245,158,11,.4); }
+.btn-acc.acc-bloquear.activa:hover { border-color:var(--color-exito); background:rgba(34,197,94,.15); color:var(--color-exito); }
+
+/* Estado de la cuenta: un punto, no una palabra repetida 21 veces */
+.punto-cuenta { display:inline-block; width:11px; height:11px; border-radius:50%; }
+.punto-cuenta.activa { background:var(--color-exito); box-shadow:0 0 0 3px rgba(34,197,94,.18); }
+.punto-cuenta.bloqueada { background:var(--color-error); box-shadow:0 0 0 3px rgba(239,68,68,.18); }
 .fila-tabla td:last-child .acciones { justify-content:flex-end; }
 .acciones .btn:active { transform:translateY(1px); }
 .btn-x:focus-visible, .acciones .btn:focus-visible, .cabecera-acciones .btn:focus-visible { outline:2px solid var(--morado-brillante); outline-offset:2px; }
