@@ -1511,6 +1511,9 @@ async function cargarSugerencias() {
     const enOrden = new Set(ids)
     sugerencias.value = (res.recomendaciones || [])
       .filter(r => !enOrden.has(r.id_producto))
+      // Sin probabilidad real del modelo no se muestra: una sugerencia sin número
+      // parece inventada y eso ya pasó una vez en una demostración.
+      .filter(r => Number.isFinite(Number(r?.probabilidad)) && Number(r.probabilidad) > 0)
       // No sugerir productos agotados
       .filter(r => { const p = productos.value.find(x => x.id_producto === r.id_producto); return !p || stockDisponible(p) > 0 })
       .slice(0, 3)

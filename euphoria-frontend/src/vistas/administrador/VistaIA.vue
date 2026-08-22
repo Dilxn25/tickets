@@ -615,16 +615,25 @@ function toggleMesa(p) {
   }
 }
 
+// Cuántas sugerencias se piden y se muestran (una sola fuente de verdad)
+const K_SUGERENCIAS = 3
+
 async function probarSugerencias() {
   probando.value = true
   resultado.value = null
   try {
-    resultado.value = await clienteHttp.post('/recomendaciones', {
+    const res = await clienteHttp.post('/recomendaciones', {
       productos_en_mesa: mesa.value.map(p => p.id_producto),
-      k: 3,
+      k: K_SUGERENCIAS,
       probador: true, // no contamina las métricas de efectividad real
       id_cliente: clienteProbador.value || null, // personalización (modelo demo)
     })
+    // Blindaje: en la defensa apareció una sugerencia SIN porcentaje. Aquí no entra
+    // nada que no traiga una probabilidad real del modelo, y nunca más de las pedidas.
+    res.recomendaciones = (res.recomendaciones || [])
+      .filter(r => Number.isFinite(Number(r?.probabilidad)) && Number(r.probabilidad) > 0)
+      .slice(0, K_SUGERENCIAS)
+    resultado.value = res
   } catch {
     resultado.value = { recomendaciones: [], error: 'No se pudo consultar la IA.' }
   } finally {

@@ -64,7 +64,7 @@
         </div>
         <div class="tarjeta-estadistica bg-ventas" @click="pestana = 'ventas'">
           <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
-          <div class="info-est"><h3>Ventas Totales</h3><h2>Bs. {{ stats.ingresosTotales.toFixed(2) }}</h2><p>Ver transacciones</p></div>
+          <div class="info-est"><h3>Ventas Totales</h3><h2 :title="'Bs. ' + stats.ingresosTotales.toFixed(2)">Bs. {{ montoEntero(stats.ingresosTotales) }}</h2><p>Ver transacciones</p></div>
         </div>
         <div class="tarjeta-estadistica bg-productos" @click="pestana = 'productos'">
           <div class="icono-est"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg></div>
@@ -1655,6 +1655,10 @@ function etiquetaDia(iso) {
 function montoCorto(v) {
   return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0)
 }
+// Cifra grande de KPI: sin centavos y con punto de miles (el detalle exacto va en el tooltip)
+function montoEntero(v) {
+  return Math.round(Number(v) || 0).toLocaleString('es-BO')
+}
 
 // Ventas por evento (comparativa gráfica en la pestaña Eventos)
 const maxVentasEvento = computed(() =>
@@ -2318,9 +2322,17 @@ function formatearFecha(isoStr) {
 .rep-kpis-strip {
   /* 200px mínimo: con 160 las tarjetas quedaban tan angostas en anchos
      intermedios que la cifra de ventas no entraba en su caja. */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)) !important;
   gap: 12px !important;
 }
+/* Nada dentro del KPI puede desbordar su caja, por angosta que quede */
+.rep-kpis-strip .tarjeta-estadistica { overflow: hidden; }
+.rep-kpis-strip .tarjeta-estadistica > * { min-width: 0; }
+.rep-kpis-strip .icono-est { flex: none; }
+.rep-kpis-strip .info-est { min-width: 0; }
+.rep-kpis-strip .info-est h3,
+.rep-kpis-strip .info-est p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-kpis-strip .info-est h2 { overflow-wrap: anywhere; min-width: 0; }
 .rep-kpis-strip .tarjeta-estadistica {
   min-height: 0;
   padding: 14px 16px;
@@ -2330,18 +2342,26 @@ function formatearFecha(isoStr) {
 .rep-kpis-strip .icono-est svg { width: 22px; height: 22px; }
 .rep-kpis-strip .info-est h3 { font-size: 0.62rem; letter-spacing: 0.9px; margin-bottom: 3px; }
 .rep-kpis-strip .info-est h2 { font-size: clamp(1.05rem, 1.7vw, 1.5rem); margin: 0 0 2px; }
-/* La cifra de ventas puede ser larga (Bs. 699220.90): se achica con la pantalla
-   y, si no entra, baja a la línea de abajo SIN partir los dígitos. */
+/* La cifra de ventas es la más larga de la franja: se achica con la pantalla y
+   baja entera a la segunda línea; si aun así no entra, parte antes que salirse. */
 .rep-kpis-strip .bg-ventas .info-est h2 {
-  font-size: clamp(1.05rem, 1.75vw, 1.6rem);
-  word-break: keep-all;
-  overflow-wrap: normal;
+  font-size: clamp(0.95rem, 1.6vw, 1.55rem);
+  /* Nunca se parte dígito a dígito ni se sale: si la caja fuera diminuta, se
+     recorta y el valor exacto queda en el tooltip. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .rep-kpis-strip .info-est p { font-size: 0.68rem; margin: 0; }
-/* Solo forzar 6 columnas cuando REALMENTE hay ancho (el sidebar come ~255px);
-   antes se activaba a 900px de ventana y los KPIs quedaban aplastados */
-@media (min-width: 1350px) {
+/* Las seis en una fila solo con pantalla de verdad ancha: con menos, quedaban
+   tan angostas que la cifra de ventas se salía de su caja. */
+@media (min-width: 1650px) {
   .rep-kpis-strip { grid-template-columns: repeat(6, 1fr) !important; }
+}
+/* En anchos intermedios el icono estorba: primero manda el dato */
+@media (max-width: 1100px) {
+  .rep-kpis-strip .icono-est { display: none; }
 }
 
 /* Filtros embebidos en el header de una tarjeta */
@@ -3460,10 +3480,12 @@ function formatearFecha(isoStr) {
 }
 .anillos-visual {
   position: relative;
-  /* Se encoge con la tarjeta en vez de forzar 250px fijos y desbordar. */
-  width: clamp(150px, 42vw, 250px);
-  height: clamp(150px, 42vw, 250px);
-  max-width: 100%;
+  /* El ancho manda y el alto lo sigue: con alto fijo la torta se deformaba y se
+     salía de la tarjeta en pantallas intermedias (el clamp usaba vw, no el ancho
+     real de la columna). */
+  width: min(250px, 100%);
+  aspect-ratio: 1;
+  height: auto;
   flex: 0 1 auto;
   display: flex;
   align-items: center;
@@ -3472,10 +3494,7 @@ function formatearFecha(isoStr) {
   transition: all 0.3s ease;
 }
 @media (max-width: 768px) {
-  .anillos-visual {
-    width: 180px;
-    height: 180px;
-  }
+  .anillos-visual { width: min(180px, 100%); }
 }
 .svg-torta {
   width: 100%;

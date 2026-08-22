@@ -1,10 +1,23 @@
 <template>
   <div class="vista-mapas fade-in">
-    <header class="mapas-encabezado superficie">
+    <header class="mapas-encabezado superficie" :class="{ 'modo-editor': modo === 'editor' }">
       <div class="encabezado-fila">
-        <div class="encabezado-texto">
+        <div v-if="modo === 'galeria'" class="encabezado-texto">
           <h2 class="vista-titulo">Planos</h2>
           <p class="vista-subtitulo">Arrastra mesas, barra y escenario sobre el lienzo.</p>
+        </div>
+        <!-- En el editor la cabecera ES la barra de trabajo: nombre, forma y aforo -->
+        <div v-else class="editor-cab">
+          <input v-model="planoActual.nombre" class="plano-nombre-input" placeholder="Nombre del plano" aria-label="Nombre del plano" />
+          <div class="editor-cab-forma">
+            <BaseSelect v-model="planoProporcion" :options="OPCIONES_PROPORCION" @update:model-value="cambiarProporcion" />
+          </div>
+          <button type="button" class="aforo-chip" :class="{ abierto: aforoAbierto }" @click="aforoAbierto = !aforoAbierto"
+                  :title="aforoAbierto ? 'Ocultar desglose' : 'Ver desglose por área'">
+            <span class="aforo-chip-num">{{ totalSillas }}</span>
+            <span class="aforo-chip-lbl">personas</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
         </div>
         <div class="cabecera-acciones">
           <template v-if="modo === 'galeria'">
@@ -61,40 +74,23 @@
       </div>
     </div>
 
-    <!-- EDITOR: barra (forma + aforo) -->
-    <section v-if="modo === 'editor'" class="barra-mapa superficie">
-      <div class="campo-selector">
-        <label>Nombre del plano</label>
-        <input v-model="planoActual.nombre" class="plano-nombre-input" placeholder="Ej. Piso 1 / Local principal" />
-      </div>
-      <div class="campo-selector">
-        <label>Forma del plano</label>
-        <BaseSelect v-model="planoProporcion" :options="OPCIONES_PROPORCION" @update:model-value="cambiarProporcion" />
-      </div>
-      <div class="panel-aforo">
-        <div class="aforo-fila">
-          <span class="aforo-titulo">Aforo del plano</span>
-          <span class="aforo-valor">{{ totalSillas }} <span class="aforo-sep">personas</span></span>
-        </div>
-        <div v-if="desgloseAforo.length" class="aforo-desglose">
-          <div v-for="f in desgloseAforo" :key="f.clave || 'general'" class="aforo-zona">
-            <span class="aforo-zona-nombre">
-              <span class="zona-punto" :style="{ background: f.color || 'transparent', borderColor: f.color || 'var(--borde-sutil)' }"></span>
-              {{ f.nombre }}
-            </span>
-            <span class="aforo-zona-detalle">
-              <span class="aforo-parte" v-if="f.parados">{{ f.parados }} parados</span>
-              <span class="aforo-parte" v-if="f.enMesas">{{ f.enMesas }} en mesas</span>
-              <span class="aforo-parte" v-if="f.enSillas">{{ f.enSillas }} en sillas</span>
-              <b class="aforo-zona-total">= {{ f.total }}</b>
-            </span>
-          </div>
-        </div>
-        <span class="aforo-pie">Los precios se definen al armar el evento.</span>
+    <!-- Desglose de aforo: se abre desde el chip de la cabecera -->
+    <section v-if="modo === 'editor' && aforoAbierto && desgloseAforo.length" class="aforo-desglose-panel superficie">
+      <div v-for="f in desgloseAforo" :key="f.clave || 'general'" class="aforo-zona">
+        <span class="aforo-zona-nombre">
+          <span class="zona-punto" :style="{ background: f.color || 'transparent', borderColor: f.color || 'var(--borde-sutil)' }"></span>
+          {{ f.nombre }}
+        </span>
+        <span class="aforo-zona-detalle">
+          <span class="aforo-parte" v-if="f.parados">{{ f.parados }} parados</span>
+          <span class="aforo-parte" v-if="f.enMesas">{{ f.enMesas }} en mesas</span>
+          <span class="aforo-parte" v-if="f.enSillas">{{ f.enSillas }} en sillas</span>
+          <b class="aforo-zona-total">= {{ f.total }}</b>
+        </span>
       </div>
     </section>
 
-    <div v-if="modo === 'editor'" ref="refEditor" class="editor-grid" :class="{ 'sin-izq': !panelIzq, 'sin-der': !panelDer, 'pantalla-completa': pantallaCompleta }">
+    <div v-if="modo === 'editor'" ref="refEditor" class="editor-grid" :class="{ 'sin-izq': !panelIzq, 'sin-der': !panelDer || !elSel, 'pantalla-completa': pantallaCompleta }">
       <!-- Barra de herramientas (se pliega para dejarle el ancho al plano) -->
       <div v-if="panelIzq" class="herramientas superficie escalonar">
         <span class="herramientas-titulo">Agregar</span>
@@ -149,7 +145,7 @@
           </button>
         </div>
         <div class="lienzo-scroll">
-          <div ref="lienzo" class="lienzo" :style="{ aspectRatio: String(planoProporcion), width: (zoom * 100) + '%' }" @pointerdown="clicVacio">
+          <div ref="lienzo" class="lienzo" :style="{ aspectRatio: String(planoProporcion), '--z': zoom }" @pointerdown="clicVacio">
             <div
               v-for="(el, idx) in elementos"
               :key="el._id"
@@ -170,8 +166,8 @@
         </div>
       </div>
 
-      <!-- Panel de propiedades (plegable) -->
-      <div v-if="panelDer" class="propiedades superficie">
+      <!-- Panel de propiedades: solo cuando hay algo que editar -->
+      <div v-if="panelDer && elSel" class="propiedades superficie">
         <template v-if="elSel">
           <div class="propiedades-cab">
             <span class="propiedades-titulo">{{ tipoLabel(elSel.tipo_elemento) }}</span>
@@ -214,11 +210,6 @@
             <BaseSelect v-model="elSel.area_ref" :options="opcionesAreas" />
           </label>
 
-          <p class="prop-herencia">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            Los precios se ponen al armar el evento.
-          </p>
-
           <template v-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'">
             <label class="prop-check">
               <input type="checkbox" v-model="elSel.es_seleccionable" />
@@ -233,14 +224,6 @@
             </button>
             <button class="btn btn-peligro" @click="eliminarSeleccionado">Eliminar</button>
           </div>
-        </template>
-        <template v-else>
-          <p class="prop-vacio">Toca un elemento para editarlo.</p>
-          <ul class="prop-leyenda">
-            <li><i class="pl-cuadro area"></i><span><b>Área</b> sección</span></li>
-            <li><i class="pl-cuadro mesa"></i><span><b>Mesa/silla</b> aforo</span></li>
-            <li><i class="pl-cuadro deco"></i><span><b>Barra/escenario</b> decorativo</span></li>
-          </ul>
         </template>
       </div>
     </div>
@@ -330,6 +313,7 @@ function claveArea(el) {
 }
 // ---- Espacio de trabajo: paneles plegables y pantalla completa -----------
 // El plano es lo que importa; los paneles se apartan cuando estorban.
+const aforoAbierto = ref(false)
 const panelIzq = ref(true)
 const panelDer = ref(true)
 const pantallaCompleta = ref(false)
@@ -861,17 +845,17 @@ select.campo { cursor: pointer; }
 .vacio-texto { font-size: 0.9rem; max-width: 42ch; text-wrap: pretty; }
 
 /* ── Editor: barra de herramientas · lienzo · propiedades ── */
-.editor-grid { display: grid; grid-template-columns: 132px 1fr 268px; gap: 14px; align-items: start; transition: grid-template-columns .25s ease; }
+.editor-grid { display: grid; grid-template-columns: 92px minmax(0, 1fr) 268px; gap: 14px; align-items: start; transition: grid-template-columns .25s ease; }
 /* Paneles plegados: el plano se queda con todo el ancho */
-.editor-grid.sin-izq { grid-template-columns: 1fr 268px; }
-.editor-grid.sin-der { grid-template-columns: 132px 1fr; }
-.editor-grid.sin-izq.sin-der { grid-template-columns: 1fr; }
+.editor-grid.sin-izq { grid-template-columns: minmax(0, 1fr) 268px; }
+.editor-grid.sin-der { grid-template-columns: 92px minmax(0, 1fr); }
+.editor-grid.sin-izq.sin-der { grid-template-columns: minmax(0, 1fr); }
 /* Pantalla completa: el editor ocupa la pantalla entera */
 .editor-grid.pantalla-completa {
   background: var(--fondo-principal, #0E0821);
   padding: 14px; height: 100vh; align-content: start;
 }
-.editor-grid.pantalla-completa .lienzo-scroll { max-height: calc(100vh - 130px); }
+.editor-grid.pantalla-completa .lienzo-scroll { height: calc(100vh - 108px); }
 
 /* Barra del espacio de trabajo (plegar paneles / pantalla completa) */
 .lienzo-barra { position: absolute; top: 10px; left: 12px; z-index: 6; display: flex; gap: 6px; }
@@ -892,8 +876,13 @@ select.campo { cursor: pointer; }
 .btn-herramienta:hover svg { transform: scale(1.08); background: rgba(168, 85, 247, 0.24); }
 .btn-herramienta:active { transform: translateY(0); }
 
-.lienzo-contenedor { width: 100%; position: relative; }
-.lienzo-scroll { width: 100%; overflow: auto; border-radius: 14px; max-height: 82vh; }
+.lienzo-contenedor { width: 100%; min-width: 0; position: relative; display: flex; flex-direction: column; }
+/* El plano es el protagonista: toma todo el alto libre y el ancho sale de su proporción */
+.lienzo-scroll {
+  width: 100%; overflow: auto; border-radius: 14px;
+  height: calc(100vh - 236px); min-height: 380px;
+  display: flex; align-items: flex-start; justify-content: center;
+}
 .zoom-barra { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-bottom: 8px; }
 .zoom-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--borde-sutil); border-radius: 8px; background: var(--fondo-tarjeta); color: var(--texto-principal); cursor: pointer; transition: border-color .15s ease; }
 .zoom-btn:hover:not(:disabled) { border-color: var(--color-primario); }
@@ -903,9 +892,13 @@ select.campo { cursor: pointer; }
 .guia { position: absolute; background: #EC4899; pointer-events: none; z-index: 20; box-shadow: 0 0 6px #EC4899; }
 .guia-v { top: 0; bottom: 0; width: 1px; transform: translateX(-0.5px); }
 .guia-h { left: 0; right: 0; height: 1px; transform: translateY(-0.5px); }
+/* El plano entra completo en el espacio libre (alto y ancho); con zoom crece y aparece el scroll */
 .lienzo {
   position: relative;
-  width: 100%;
+  height: calc(var(--z, 1) * 100%);
+  width: auto;
+  max-width: calc(var(--z, 1) * 100%);
+  flex: none;
   aspect-ratio: 16 / 10;
   background:
     linear-gradient(var(--borde-sutil) 1px, transparent 1px) 0 0 / 5% 5%,
@@ -1034,6 +1027,27 @@ select.campo { cursor: pointer; }
 .fila-plantilla strong { color: var(--texto-principal); }
 .plantilla-desc { display: block; color: var(--texto-secundario); font-size: 0.8rem; margin-top: 2px; }
 .plantilla-info { min-width: 0; flex: 1; }
+/* Cabecera en modo editor: compacta, para que el plano se lleve el alto */
+.mapas-encabezado.modo-editor { padding: 10px 16px; margin-bottom: 12px; }
+.editor-cab { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.editor-cab-forma { min-width: 150px; }
+.aforo-chip {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 7px 13px; border-radius: var(--radio-full);
+  border: 1px solid var(--glass-borde);
+  background: linear-gradient(135deg, rgba(168,85,247,.16), rgba(236,72,153,.10));
+  color: var(--texto-principal); transition: var(--trans-rapida);
+}
+.aforo-chip:hover { border-color: var(--borde-activo); }
+.aforo-chip svg { transition: transform .2s ease; opacity: .6; }
+.aforo-chip.abierto svg { transform: rotate(180deg); }
+.aforo-chip-num { font-family: var(--fuente-titulo); font-weight: 800; font-size: 1.05rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.aforo-chip-lbl { font-size: .74rem; color: var(--texto-secundario); font-weight: 600; }
+.aforo-desglose-panel {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 20px;
+  padding: 12px 16px; margin-bottom: 12px; border-radius: var(--radio-lg);
+}
+
 .pl-icono {
   display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
   border-radius: var(--radio-md); border: 1px solid var(--borde-sutil);
@@ -1078,10 +1092,10 @@ select.campo { cursor: pointer; }
 .aforo-valor { font-family: var(--fuente-titulo); font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; }
 
 /* Herramientas: mosaico de fichas con icono arriba */
-.herramientas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
+.herramientas { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 8px; }
 .herramientas-titulo { grid-column: 1 / -1; margin-bottom: 2px; }
-.btn-herramienta { flex-direction: column; justify-content: center; gap: 6px; padding: 12px 6px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; border-radius: var(--radio-lg); background: var(--fondo-tarjeta-alt); transition: var(--trans-rapida); }
-.btn-herramienta svg { width: 22px; height: 22px; color: var(--morado-hover); transition: transform var(--trans-rapida); }
+.btn-herramienta { flex-direction: column; justify-content: center; gap: 4px; padding: 9px 4px; font-size: .66rem; font-weight: 700; letter-spacing: .02em; border-radius: var(--radio-lg); background: var(--fondo-tarjeta-alt); transition: var(--trans-rapida); }
+.btn-herramienta svg { width: 20px; height: 20px; color: var(--morado-hover); transition: transform var(--trans-rapida); }
 .btn-herramienta:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.12); transform: translateY(-2px); }
 .btn-herramienta:hover svg { transform: scale(1.08); }
 .editor-grid { grid-template-columns: 148px 1fr 280px; }

@@ -177,7 +177,7 @@
     <!-- Asistente de evento: datos → espacio → publicar, en un solo modal -->
     <Teleport to="body">
       <div v-if="modalAbierto" class="modal-fondo" @click.self="cerrarModal">
-        <div class="modal modal-wizard fade-in">
+        <div class="modal modal-wizard fade-in" :class="{ 'wz-ancho': paso === 2 }">
           <div class="modal-cabecera wz-cab">
             <div class="wz-titulo">
               <span class="wz-icono" aria-hidden="true">
@@ -286,7 +286,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M9 4 3 6v14l6-3 6 3 6-3V3l-6 3-6-3z"></path><path d="M9 4v14M15 6v14"></path></svg>
                 Planos del evento
               </p>
-              <p class="tipo-ayuda">Un plano por piso o ambiente. <b>Los precios se definen acá y solo acá</b>: el plano es el dibujo del local. Se cobra por área y las mesas heredan el de la suya.</p>
+              <p class="tipo-ayuda">Se cobra por área; cada mesa hereda el precio de la suya.</p>
 
               <div v-if="planosDelEvento.length" class="pl-lista">
                 <div v-for="p in planosDelEvento" :key="p.id_zona" class="pl-item pl-item-col">
@@ -297,15 +297,26 @@
                     </div>
                     <button class="btn btn-sm btn-peligro" @click="quitarPlanoDeEvento(p)">Quitar</button>
                   </div>
-                  <div class="wz-areas">
-                    <label v-for="a in p.areas" :key="a.clave || a.nombre" class="wz-area">
-                      <span class="wz-area-nom">{{ a.nombre }}<small v-if="a.parados"> · {{ a.parados }} de pie</small></span>
-                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="a.precio" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
-                    </label>
-                    <label v-if="p.tiene_general || !p.areas.length" class="wz-area">
-                      <span class="wz-area-nom">General<small> · mesas sin área</small></span>
-                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="p.precio_entrada_base" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
-                    </label>
+                  <div class="pp-lista">
+                    <div v-for="a in p.areas" :key="a.clave || a.nombre" class="pp-fila" :class="{ listo: a.precio > 0 }">
+                      <span class="pp-color" :style="{ background: colorDeArea(a.clave) }"></span>
+                      <span class="pp-info">
+                        <b>{{ a.nombre }}</b>
+                        <em v-if="a.parados">{{ a.parados }} de pie</em>
+                      </span>
+                      <span class="pp-input">
+                        <i>Bs</i>
+                        <input v-model.number="a.precio" type="number" min="0" step="1" placeholder="0" />
+                      </span>
+                    </div>
+                    <div v-if="p.tiene_general || !p.areas.length" class="pp-fila" :class="{ listo: p.precio_entrada_base > 0 }">
+                      <span class="pp-color pp-color-gris"></span>
+                      <span class="pp-info"><b>Resto del salón</b><em>mesas sin área</em></span>
+                      <span class="pp-input">
+                        <i>Bs</i>
+                        <input v-model.number="p.precio_entrada_base" type="number" min="0" step="1" placeholder="0" />
+                      </span>
+                    </div>
                   </div>
                   <div class="wz-area-acciones">
                     <div class="wz-prioridad"><BaseSelect v-model="p.prioridad" :options="OPCIONES_PRIORIDAD" /></div>
@@ -315,7 +326,6 @@
                   </div>
                 </div>
               </div>
-              <p v-else class="pl-vacio">Este evento aún no tiene planos. Agrega el primero abajo.</p>
 
               <div class="pl-agregar">
                 <span class="pl-agregar-tit">Agregar plano</span>
@@ -330,26 +340,69 @@
                   </div>
                 </div>
                 <template v-if="planoElegido">
-                  <!-- Atajo: repetir lo que se cobró la última vez con este plano -->
-                  <button v-if="ultimosPrecios" type="button" class="wz-copiar" @click="copiarUltimosPrecios">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    Copiar precios de {{ ultimosPrecios.evento }}
-                  </button>
-                  <div class="wz-areas">
-                    <label v-for="a in planoElegido.areas" :key="a.clave" class="wz-area">
-                      <span class="wz-area-nom">{{ a.nombre }}<small v-if="a.parados"> · {{ a.parados }} de pie</small></span>
-                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="formAgregar.precios[a.clave]" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
-                    </label>
-                    <label v-if="planoElegido.tiene_general" class="wz-area">
-                      <span class="wz-area-nom">General<small> · mesas sin área</small></span>
-                      <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="formAgregar.precio_general" type="number" min="0" step="0.01" class="campo campo--prefijo" /></span>
-                    </label>
-                    <p v-if="!planoElegido.areas.length && !planoElegido.tiene_general" class="tipo-ayuda">Este plano no tiene mesas ni áreas reservables.</p>
-                  </div>
-                  <div class="grupo-campo">
-                    <label class="etiqueta">Prioridad de atención</label>
-                    <BaseSelect v-model="formAgregar.prioridad" :options="OPCIONES_PRIORIDAD" />
-                    <small class="ayuda-campo">Orden en que la barra prepara los pedidos de esta zona.</small>
+                  <!-- El precio se pone viendo el dibujo del local, no a ciegas -->
+                  <div class="pp-tablero">
+                    <div class="pp-mapa" :style="{ aspectRatio: String(planoElegido.proporcion) }">
+                      <div v-for="(el, i) in planoElegido.elementos" :key="i"
+                           class="pp-el" :class="['pp-' + el.tipo_elemento, { atenuado: areaFoco && el.clave !== areaFoco }]"
+                           :style="estiloPrecioEl(el)">
+                        <span v-if="el.tipo_elemento === 'area'" class="pp-el-tag">
+                          <b>{{ el.numero_nombre || 'Área' }}</b>
+                          <em :class="{ vacio: !(formAgregar.precios[el.clave] > 0) }">
+                            {{ formAgregar.precios[el.clave] > 0 ? 'Bs ' + formAgregar.precios[el.clave] : 'sin precio' }}
+                          </em>
+                        </span>
+                      </div>
+                      <span v-if="planoElegido.tiene_general" class="pp-general-tag" :class="{ vacio: !(formAgregar.precio_general > 0) }">
+                        Resto del salón: {{ formAgregar.precio_general > 0 ? 'Bs ' + formAgregar.precio_general : 'sin precio' }}
+                      </span>
+                    </div>
+
+                    <div class="pp-lista">
+                      <button v-if="ultimosPrecios" type="button" class="wz-copiar" @click="copiarUltimosPrecios">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copiar precios de {{ ultimosPrecios.evento }}
+                      </button>
+
+                      <div v-for="a in planoElegido.areas" :key="a.clave" class="pp-fila"
+                           :class="{ listo: formAgregar.precios[a.clave] > 0 }"
+                           @mouseenter="areaFoco = a.clave" @mouseleave="areaFoco = null">
+                        <span class="pp-color" :style="{ background: colorDeArea(a.clave) }"></span>
+                        <span class="pp-info">
+                          <b>{{ a.nombre }}</b>
+                          <em>{{ resumenArea(a) }}</em>
+                        </span>
+                        <span class="pp-input">
+                          <i>Bs</i>
+                          <input v-model.number="formAgregar.precios[a.clave]" type="number" min="0" step="1" placeholder="0"
+                                 @focus="areaFoco = a.clave" @blur="areaFoco = null" />
+                        </span>
+                      </div>
+
+                      <div v-if="planoElegido.tiene_general" class="pp-fila" :class="{ listo: formAgregar.precio_general > 0 }">
+                        <span class="pp-color pp-color-gris"></span>
+                        <span class="pp-info">
+                          <b>Resto del salón</b>
+                          <em>{{ resumenArea(planoElegido.general) }}</em>
+                        </span>
+                        <span class="pp-input">
+                          <i>Bs</i>
+                          <input v-model.number="formAgregar.precio_general" type="number" min="0" step="1" placeholder="0" />
+                        </span>
+                      </div>
+
+                      <p v-if="!planoElegido.areas.length && !planoElegido.tiene_general" class="tipo-ayuda">Este plano no tiene mesas ni áreas reservables.</p>
+
+                      <div v-if="planoElegido.areas.length || planoElegido.tiene_general" class="pp-rapidos">
+                        <span>Rellenar lo vacío</span>
+                        <button v-for="v in [30, 50, 80, 120]" :key="v" type="button" @click="rellenarPrecios(v)">Bs {{ v }}</button>
+                      </div>
+
+                      <div class="pp-prioridad">
+                        <span title="Orden en que la barra prepara los pedidos de esta zona">Prioridad de atención</span>
+                        <BaseSelect v-model="formAgregar.prioridad" :options="OPCIONES_PRIORIDAD" />
+                      </div>
+                    </div>
                   </div>
                 </template>
                 <button class="btn btn-primario" style="width:100%" :disabled="!formAgregar.id_plano || agregandoPlano" @click="agregarPlanoAEvento">
@@ -365,7 +418,7 @@
               </p>
               <label class="switch-row">
                 <span class="switch"><input type="checkbox" v-model="form.cortesia_activa" /><span class="switch-track"><span class="switch-thumb"></span></span></span>
-                <span class="switch-info"><span class="switch-txt">Regalar un combo por reserva</span><span class="switch-desc">El cliente elige entre ron, singani, vino o cerveza. Descuenta stock, no cobra.</span></span>
+                <span class="switch-info"><span class="switch-txt">Regalar un combo por reserva</span><span class="switch-desc">El cliente elige uno. Descuenta stock, no cobra.</span></span>
               </label>
               <div v-if="form.cortesia_activa" class="grupo-campo wz-cortesia-monto">
                 <label class="etiqueta">Para reservas desde</label>
@@ -470,7 +523,12 @@ const notif = useNotificaciones()
 const planosDisponibles = ref([])
 const opcionesPlano = computed(() => planosDisponibles.value.map(p => ({ value: p.id_plantilla, label: p.nombre })))
 async function cargarPlanosDisponibles() {
-  try { planosDisponibles.value = await clienteHttp.get('/espacios/plantillas') } catch { planosDisponibles.value = [] }
+  // Si esto falla, el desplegable queda vacío y no se entiende por qué: se avisa.
+  try { planosDisponibles.value = await clienteHttp.get('/espacios/plantillas') }
+  catch (e) {
+    planosDisponibles.value = []
+    notif.error(e?.error || 'No se pudo leer la biblioteca de planos. Revisa la conexión e intenta de nuevo.')
+  }
 }
 
 // Estados VISIBLES: cuatro (Borrador, Publicado, En curso, Terminado). Los códigos
@@ -556,6 +614,56 @@ const planosDelEvento = ref([])             // planos ya agregados (zonas) con s
 const cargandoPlanos = ref(false)
 const agregandoPlano = ref(false)
 const guardandoPrecios = ref(null)
+// ---- Precios sobre el dibujo del local ----------------------------------
+// Poner precios a ciegas era el punto flojo: ahora se ve el plano, cada area
+// pintada con su color y el precio encima mientras se escribe.
+const areaFoco = ref(null)
+const PALETA_AREAS = ['#A855F7', '#EC4899', '#22C55E', '#38BDF8', '#F59E0B', '#F43F5E', '#14B8A6']
+const mapaColores = computed(() => {
+  const m = {}
+  ;(planoElegido.value?.areas || []).forEach((a, i) => { m[a.clave] = PALETA_AREAS[i % PALETA_AREAS.length] })
+  return m
+})
+function colorDeArea(clave) { return mapaColores.value[clave] || 'var(--texto-desactivado)' }
+
+function estiloPrecioEl(el) {
+  const est = {
+    left: (el.posicion_x || 0) + '%',
+    top: (el.posicion_y || 0) + '%',
+    width: (el.ancho || 7) + '%',
+    height: (el.alto || 10) + '%',
+    transform: el.rotacion ? 'rotate(' + el.rotacion + 'deg)' : 'none',
+  }
+  if (el.forma) est.borderRadius = el.forma === 'redondo' ? '50%' : '4px'
+  if (el.tipo_elemento === 'area') {
+    const c = colorDeArea(el.clave)
+    est.borderColor = c
+    est.background = c + '22'
+  } else if (el.area_ref && mapaColores.value[el.area_ref]) {
+    const c = mapaColores.value[el.area_ref]
+    est.borderColor = c
+    est.background = c + '44'
+  }
+  return est
+}
+
+function resumenArea(a) {
+  if (!a) return ''
+  const partes = []
+  if (a.mesas) partes.push(a.mesas + (a.mesas === 1 ? ' mesa' : ' mesas'))
+  if (a.parados) partes.push(a.parados + ' de pie')
+  if (a.cupo) partes.push(a.cupo + ' personas')
+  return partes.join(' · ')
+}
+
+// Llenar de una lo que quedo vacio, para no teclear area por area
+function rellenarPrecios(valor) {
+  for (const a of planoElegido.value?.areas || []) {
+    if (!(formAgregar.precios[a.clave] > 0)) formAgregar.precios[a.clave] = valor
+  }
+  if (planoElegido.value?.tiene_general && !(formAgregar.precio_general > 0)) formAgregar.precio_general = valor
+}
+
 const planoElegido = ref(null)              // áreas del plano elegido para agregar (precio prellenado)
 const formAgregar = reactive({ id_plano: '', nombre: '', prioridad: 0, precios: {}, precio_general: null })
 function resetFormAgregar() {
@@ -580,7 +688,10 @@ async function cargarPlanosDelEvento() {
       prioridad: Number(p.prioridad) || 0,
       areas: (p.areas || []).map(a => ({ ...a, precio: a.precio > 0 ? Number(a.precio) : null })),
     }))
-  } catch { planosDelEvento.value = [] }
+  } catch (e) {
+    planosDelEvento.value = []
+    notif.error(e?.error || 'No se pudieron leer los planos de este evento.')
+  }
   finally { cargandoPlanos.value = false }
 }
 // Al elegir un plano de la biblioteca se listan sus áreas con el precio que trae el plano.
@@ -593,12 +704,24 @@ async function alElegirPlano(id) {
     const els = p.elementos || []
     const areas = els
       .filter(e => e.tipo_elemento === 'area')
-      .map(e => ({ clave: e.clave, nombre: e.numero_nombre || 'Área', parados: Number(e.capacidad_sillas) || 0 }))
-    const tiene_general = els.some(e => (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
+      .map(e => {
+        // Lo que hay dentro del área: mesas y cuánta gente entra en total
+        const dentro = els.filter(x => x.area_ref === e.clave && (x.tipo_elemento === 'mesa' || x.tipo_elemento === 'silla'))
+        const mesas = dentro.filter(x => x.tipo_elemento === 'mesa').length
+        const enMesas = dentro.reduce((t, x) => t + (Number(x.capacidad_sillas) || 0), 0)
+        const parados = Number(e.capacidad_sillas) || 0
+        return { clave: e.clave, nombre: e.numero_nombre || 'Área', parados, mesas, cupo: enMesas + parados }
+      })
+    const sueltos = els.filter(e => (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
+    const tiene_general = sueltos.length > 0
+    const general = {
+      mesas: sueltos.filter(x => x.tipo_elemento === 'mesa').length,
+      cupo: sueltos.reduce((t, x) => t + (Number(x.capacidad_sillas) || 0), 0),
+    }
     // El plano ya no trae precios: los campos nacen vacíos para esta noche.
     for (const a of areas) formAgregar.precios[a.clave] = null
     formAgregar.precio_general = null
-    planoElegido.value = { nombre: p.nombre, areas, tiene_general }
+    planoElegido.value = { nombre: p.nombre, areas, tiene_general, general, elementos: els, proporcion: p.proporcion || 1.6 }
     cargarUltimosPrecios(id)
   } catch { notif.error('No se pudo leer el plano') }
 }
@@ -1656,6 +1779,8 @@ async function confirmarCambioEstado() {
 <style scoped>
 /* ===== Asistente de evento (3 pasos) ===== */
 .modal-wizard { max-width: 620px; }
+/* El paso de precios necesita aire: plano a la izquierda, precios a la derecha */
+.modal-wizard.wz-ancho { max-width: 900px; }
 .wz-cab { align-items: center; }
 .wz-titulo { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .wz-icono { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radio-md); color: #fff; background: var(--gradiente-marca); box-shadow: 0 4px 14px rgba(168,85,247,.35); }
@@ -1729,4 +1854,80 @@ async function confirmarCambioEstado() {
 .wz-estado-op small { font-size: .72rem; color: var(--texto-secundario); }
 
 @media (max-width: 560px) { .wz-areas { grid-template-columns: 1fr; } .wz-dl > div { grid-template-columns: 1fr; gap: 2px; } .wz-pasos .wz-lbl { display: none; } .wz-pasos button { justify-content: center; } }
+
+/* ---- Precios sobre el plano ---- */
+.pp-tablero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 4px; }
+@media (max-width: 720px) { .pp-tablero { grid-template-columns: 1fr; } }
+
+.pp-mapa {
+  position: relative; width: 100%; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--borde-activo);
+  background:
+    linear-gradient(var(--borde-sutil) 1px, transparent 1px) 0 0 / 6.5% 6.5%,
+    linear-gradient(90deg, var(--borde-sutil) 1px, transparent 1px) 0 0 / 6.5% 6.5%,
+    var(--fondo-tarjeta-alt, #150C33);
+}
+.pp-el {
+  position: absolute; border: 1px solid var(--borde-sutil); border-radius: 3px;
+  background: rgba(255,255,255,.05); transition: opacity .18s ease, filter .18s ease;
+}
+.pp-el.atenuado { opacity: .28; filter: grayscale(.5); }
+.pp-area { border-style: dashed; border-width: 1.5px; }
+.pp-barra, .pp-escenario, .pp-pared { background: rgba(255,255,255,.09); }
+.pp-el-tag {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 2; pointer-events: none; align-items: center; text-align: center; display: flex; flex-direction: column; line-height: 1.1;
+  padding: 2px 6px; border-radius: 6px; background: rgba(10,6,26,.82); backdrop-filter: blur(3px);
+  font-size: .58rem; white-space: nowrap;
+}
+.pp-el-tag b { font-size: .6rem; font-weight: 800; color: var(--texto-principal); }
+.pp-el-tag em { font-style: normal; font-weight: 700; color: var(--color-exito); font-variant-numeric: tabular-nums; }
+.pp-el-tag em.vacio { color: var(--color-alerta); font-weight: 600; }
+.pp-general-tag {
+  position: absolute; right: 6px; bottom: 6px; z-index: 3; padding: 3px 8px; border-radius: 999px;
+  background: rgba(10,6,26,.82); border: 1px solid var(--borde-sutil);
+  font-size: .6rem; font-weight: 700; color: var(--color-exito);
+}
+.pp-general-tag.vacio { color: var(--color-alerta); }
+
+.pp-lista { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.pp-fila {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+  border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+  background: rgba(255,255,255,.02); transition: var(--trans-rapida);
+}
+.pp-fila:hover { border-color: var(--borde-activo); }
+.pp-fila.listo { border-color: rgba(34,197,94,.38); background: rgba(34,197,94,.06); }
+.pp-color { width: 10px; height: 26px; border-radius: 3px; flex-shrink: 0; }
+.pp-color-gris { background: var(--texto-desactivado); }
+.pp-info { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.pp-info b { font-size: .84rem; font-weight: 700; color: var(--texto-principal); }
+.pp-info em { font-style: normal; font-size: .68rem; color: var(--texto-secundario); }
+.pp-input {
+  display: flex; align-items: center; gap: 4px; padding: 5px 9px; flex-shrink: 0;
+  border: 1px solid var(--borde-sutil); border-radius: var(--radio-md); background: var(--fondo-input);
+  transition: var(--trans-rapida);
+}
+.pp-input:focus-within { border-color: var(--morado-brillante); box-shadow: var(--anillo-foco); }
+.pp-input i { font-style: normal; font-size: .68rem; font-weight: 700; color: var(--texto-desactivado); }
+.pp-input input {
+  width: 62px; border: none; background: transparent; outline: none; text-align: right;
+  font-family: var(--fuente-titulo); font-size: 1rem; font-weight: 800; color: var(--texto-principal);
+  font-variant-numeric: tabular-nums;
+}
+.pp-input input::-webkit-outer-spin-button, .pp-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.pp-rapidos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.pp-rapidos span { font-size: .68rem; color: var(--texto-desactivado); font-weight: 600; white-space: nowrap; }
+.pp-rapidos button {
+  padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--borde-sutil); background: rgba(255,255,255,.03);
+  color: var(--texto-secundario); font-size: .7rem; font-weight: 700; transition: var(--trans-rapida);
+}
+.pp-rapidos button:hover { border-color: var(--borde-activo); color: var(--texto-principal); background: rgba(168,85,247,.14); }
+
+.pp-prioridad { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.pp-prioridad > span { font-size: .74rem; font-weight: 700; color: var(--texto-secundario); cursor: help; }
+.pp-prioridad > span { white-space: nowrap; }
+.pp-prioridad > :last-child { min-width: 160px; }
 </style>

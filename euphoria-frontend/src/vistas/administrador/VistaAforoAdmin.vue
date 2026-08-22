@@ -21,6 +21,12 @@
 
     <div v-if="cargando" class="cargando"><div class="spinner"></div></div>
 
+    <div v-else-if="errorCarga" class="aforo-error" role="alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>{{ errorCarga }}</span>
+      <button class="btn btn-sm btn-secundario" @click="cargarAforo">Reintentar</button>
+    </div>
+
     <div v-else-if="!eventos.length" class="vacio superficie aparecer-zoom">
       <div class="vacio-icono" aria-hidden="true">
         <span class="dot"></span>
@@ -84,6 +90,48 @@
         </div>
       </section>
 
+      <!-- Flujo de la noche: a qué hora entra y sale la gente -->
+      <section class="flujo superficie aparecer-subir">
+        <div class="flujo-cab">
+          <h2 class="seccion-h2">Flujo de la noche</h2>
+          <div class="flujo-leyenda" aria-hidden="true">
+            <span class="fl-item"><i class="fl-punto in"></i>Entran</span>
+            <span class="fl-item"><i class="fl-punto out"></i>Salen</span>
+            <span class="fl-item"><i class="fl-punto dentro"></i>Dentro</span>
+          </div>
+        </div>
+
+        <div v-if="!grafFlujo" class="flujo-vacio">Todavía no ingresó nadie: el movimiento de la noche aparece acá.</div>
+        <svg v-else class="flujo-svg" :viewBox="`0 0 ${grafFlujo.W} ${grafFlujo.H}`" role="img"
+             :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
+          <line x1="20" :y1="grafFlujo.base" :x2="grafFlujo.W - 20" :y2="grafFlujo.base" stroke="rgba(255,255,255,.10)" stroke-width="1" />
+          <!-- Barras: lo que entró y lo que salió en cada hora -->
+          <g v-for="c in grafFlujo.cols" :key="c.hora">
+            <rect v-if="c.hIn > 0" :x="c.xIn" :y="grafFlujo.base - c.hIn" :width="c.w" :height="c.hIn" rx="2" fill="var(--color-exito)" opacity=".9">
+              <title>{{ c.ingresos }} entraron a las {{ c.hora }}:00</title>
+            </rect>
+            <rect v-if="c.hOut > 0" :x="c.xOut" :y="grafFlujo.base - c.hOut" :width="c.w" :height="c.hOut" rx="2" fill="var(--color-error)" opacity=".9">
+              <title>{{ c.salidas }} salieron a las {{ c.hora }}:00</title>
+            </rect>
+            <text :x="c.cx" :y="grafFlujo.base + 14" text-anchor="middle" font-size="9" font-weight="700" fill="rgba(255,255,255,.45)">{{ c.hora }}</text>
+          </g>
+          <!-- Curva: cuánta gente había dentro -->
+          <path :d="grafFlujo.linea" fill="none" stroke="var(--morado-brillante)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <g v-for="c in grafFlujo.cols" :key="'p' + c.hora">
+            <circle :cx="c.cx" :cy="c.yDentro" :r="c.pico ? 4 : 2.6" fill="var(--morado-brillante)" :stroke="c.pico ? '#fff' : 'none'" stroke-width="1.5">
+              <title>{{ c.dentro }} dentro a las {{ c.hora }}:00</title>
+            </circle>
+            <text v-if="c.pico" :x="c.cx" :y="c.yDentro - 9" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff">{{ c.dentro }}</text>
+          </g>
+        </svg>
+
+        <div v-if="grafFlujo" class="flujo-pie">
+          <span class="fl-dato"><b>{{ flujo.total_ingresos }}</b> ingresos</span>
+          <span class="fl-dato"><b>{{ flujo.total_salidas }}</b> salidas</span>
+          <span v-if="flujo.pico" class="fl-dato pico"><b>{{ flujo.pico.dentro }}</b> en el pico · {{ flujo.pico.hora }}:00</span>
+        </div>
+      </section>
+
       <!-- Zonas -->
       <div class="zonas-encabezado aparecer-subir">
         <h2 class="seccion-h2">Ocupación por plano</h2>
@@ -111,46 +159,6 @@
         </div>
       </div>
 
-      <!-- Flujo de la noche: a qué hora entra y sale la gente -->
-      <section v-if="flujo.horas.length" class="flujo superficie aparecer-subir">
-        <div class="flujo-cab">
-          <h2 class="seccion-h2">Flujo de la noche</h2>
-          <div class="flujo-leyenda" aria-hidden="true">
-            <span class="fl-item"><i class="fl-punto in"></i>Entran</span>
-            <span class="fl-item"><i class="fl-punto out"></i>Salen</span>
-            <span class="fl-item"><i class="fl-punto dentro"></i>Dentro</span>
-          </div>
-        </div>
-
-        <svg v-if="grafFlujo" class="flujo-svg" :viewBox="`0 0 ${grafFlujo.W} ${grafFlujo.H}`" role="img"
-             :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
-          <line x1="20" :y1="grafFlujo.base" :x2="grafFlujo.W - 20" :y2="grafFlujo.base" stroke="rgba(255,255,255,.10)" stroke-width="1" />
-          <!-- Barras: lo que entró y lo que salió en cada hora -->
-          <g v-for="c in grafFlujo.cols" :key="c.hora">
-            <rect v-if="c.hIn > 0" :x="c.xIn" :y="grafFlujo.base - c.hIn" :width="c.w" :height="c.hIn" rx="2" fill="var(--color-exito)" opacity=".9">
-              <title>{{ c.ingresos }} entraron a las {{ c.hora }}:00</title>
-            </rect>
-            <rect v-if="c.hOut > 0" :x="c.xOut" :y="grafFlujo.base - c.hOut" :width="c.w" :height="c.hOut" rx="2" fill="var(--color-error)" opacity=".9">
-              <title>{{ c.salidas }} salieron a las {{ c.hora }}:00</title>
-            </rect>
-            <text :x="c.cx" :y="grafFlujo.base + 14" text-anchor="middle" font-size="9" font-weight="700" fill="rgba(255,255,255,.45)">{{ c.hora }}</text>
-          </g>
-          <!-- Curva: cuánta gente había dentro -->
-          <path :d="grafFlujo.linea" fill="none" stroke="var(--morado-brillante)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          <g v-for="c in grafFlujo.cols" :key="'p' + c.hora">
-            <circle :cx="c.cx" :cy="c.yDentro" :r="c.pico ? 4 : 2.6" fill="var(--morado-brillante)" :stroke="c.pico ? '#fff' : 'none'" stroke-width="1.5">
-              <title>{{ c.dentro }} dentro a las {{ c.hora }}:00</title>
-            </circle>
-            <text v-if="c.pico" :x="c.cx" :y="c.yDentro - 9" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff">{{ c.dentro }}</text>
-          </g>
-        </svg>
-
-        <div class="flujo-pie">
-          <span class="fl-dato"><b>{{ flujo.total_ingresos }}</b> ingresos</span>
-          <span class="fl-dato"><b>{{ flujo.total_salidas }}</b> salidas</span>
-          <span v-if="flujo.pico" class="fl-dato pico"><b>{{ flujo.pico.dentro }}</b> en el pico · {{ flujo.pico.hora }}:00</span>
-        </div>
-      </section>
 
       </div><!-- /aforo-izq -->
 
@@ -329,14 +337,18 @@ async function cargarFlujo() {
   catch { flujo.value = { horas: [], pico: null, total_ingresos: 0, total_salidas: 0 } }
 }
 
+const errorCarga = ref('')
 async function cargarAforo() {
   if (!idEventoSel.value) return
   cargando.value = true
+  errorCarga.value = ''
   try {
     aplicar(await servicioAforo.obtenerAforoEvento(idEventoSel.value))
     cargarFlujo()
   } catch (err) {
+    // Si esto falla la pantalla queda en blanco: hay que decir por qué.
     console.error('Error cargando aforo:', err)
+    errorCarga.value = err?.error || 'No se pudo leer el aforo del evento. Revisa la conexión e intenta de nuevo.'
   } finally {
     cargando.value = false
   }
@@ -488,6 +500,17 @@ onDeactivated(() => {
 .fl-punto.dentro { background: var(--morado-brillante); border-radius: 999px; }
 
 .flujo-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.flujo-vacio { padding: 26px 12px; text-align: center; color: var(--texto-desactivado); font-size: .85rem; }
+
+.aforo-error {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 14px 16px; border-radius: var(--radio-lg);
+  border: 1px solid rgba(239,68,68,.35); background: rgba(239,68,68,.08);
+  color: var(--texto-principal); font-size: .88rem;
+}
+.aforo-error svg { color: var(--color-error); flex: none; }
+.aforo-error button { margin-left: auto; }
+
 .flujo-pie { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 0.78rem; color: var(--texto-secundario); }
 .fl-dato b { color: var(--texto-principal); font-variant-numeric: tabular-nums; }
 .fl-dato.pico b { color: var(--morado-hover); }
