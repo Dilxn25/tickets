@@ -23,8 +23,7 @@
           La noche <span class="texto-marca">empieza aquí</span>
         </h1>
         <p class="hero-sub">
-          Entra a tu mundo nocturno: reservas VIP, eventos en vivo y tu
-          billetera digital, todo en un mismo lugar.
+          Reservas, eventos y tu billetera, en un solo lugar.
         </p>
 
         <ul class="hero-chips escalonar">
@@ -154,7 +153,7 @@
 
             <!-- Paso 1: Correo -->
             <form v-if="pasoRecuperacion === 1" @submit.prevent="enviarCodigoRec">
-              <p class="desc">Te enviaremos un código a tu correo para crear una nueva contraseña.</p>
+              <p class="desc">Te enviamos un código a tu correo.</p>
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Correo electrónico</label>
                 <input v-model="correoRecuperacion" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
@@ -167,7 +166,7 @@
 
             <!-- Paso secundario: recuperar por pregunta de seguridad -->
             <form v-else-if="pasoRecuperacion === 'pregunta-email'" @submit.prevent="buscarPregunta">
-              <p class="desc">Escribe el correo de tu cuenta y responde tu pregunta de seguridad.</p>
+              <p class="desc">Tu correo y tu pregunta de seguridad.</p>
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Correo electrónico</label>
                 <input v-model="correoRecuperacion" type="email" class="campo w-full" placeholder="tu@correo.com" required autocomplete="email" />
@@ -210,7 +209,7 @@
             <!-- Paso: ingresar código + nueva contraseña -->
             <form v-else-if="pasoRecuperacion === 'codigo'" @submit.prevent="confirmarCodigoRec">
               <p class="desc">Ingresa el código de 6 dígitos que te enviamos a <b>{{ correoRecuperacion }}</b> y tu nueva contraseña.</p>
-              <p v-if="correoNoVerificadoRec" class="aviso-verif">Tu correo aún no estaba verificado: al confirmar este código también quedará verificado.</p>
+              <p v-if="correoNoVerificadoRec" class="aviso-verif">Al confirmar el código tu correo queda verificado.</p>
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Código</label>
                 <input v-model="codigoRec" @input="codigoRec = codigoRec.replace(/\D/g,'').slice(0,6)" inputmode="numeric" maxlength="6" class="campo w-full campo-codigo" placeholder="000000" required />
@@ -233,7 +232,7 @@
 
             <!-- Paso: pedir ayuda al local (no recuerda contraseña ni pregunta) -->
             <form v-else-if="pasoRecuperacion === 'ayuda'" @submit.prevent="enviarAyudaLocal">
-              <p class="desc">Déjanos tus datos y el local te ayudará a recuperar tu cuenta.</p>
+              <p class="desc">El local te ayudará a recuperarla.</p>
 
               <div class="grupo-campo mb-3">
                 <label class="etiqueta">Correo de la cuenta</label>
@@ -257,7 +256,7 @@
                 <textarea v-model="ayudaForm.mensaje" class="campo w-full campo-area" rows="2" placeholder="Cuéntanos qué pasó"></textarea>
               </div>
 
-              <p class="nota-verifica">El local comparará estos datos con los registrados en tu cuenta para verificar que eres tú.</p>
+              <p class="nota-verifica">Sirven para verificar que eres tú.</p>
 
               <button type="submit" class="btn btn-primario w-full" :disabled="cargandoRec || !puedeEnviarAyuda">
                 <span v-if="cargandoRec" class="spinner"></span>

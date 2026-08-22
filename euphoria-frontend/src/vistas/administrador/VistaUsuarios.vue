@@ -205,7 +205,7 @@
           <div style="padding:0 1.5rem 1.5rem 1.5rem;">
             <h3 style="color: var(--texto-principal); margin-bottom: 10px;">¿Resetear contraseña?</h3>
             <p style="color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
-              La contraseña de <strong>{{ usuarioEditando?.nombres }}</strong> se restablecerá a la contraseña temporal <strong>123456</strong>. Compártela con el usuario para que pueda ingresar y cambiarla desde su perfil. ¿Estás seguro?
+              La clave de <strong>{{ usuarioEditando?.nombres }}</strong> pasa a <strong>123456</strong>. Compártesela para que la cambie.
             </p>
             <div style="display:flex; gap:10px; justify-content:center;">
               <button class="btn btn-secundario" style="flex:1;" @click="modalAlertaReset=false">Cancelar</button>

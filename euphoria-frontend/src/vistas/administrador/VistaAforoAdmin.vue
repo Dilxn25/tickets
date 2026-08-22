@@ -101,7 +101,7 @@
           </div>
         </div>
 
-        <div v-if="!grafFlujo" class="flujo-vacio">Todavía no ingresó nadie: el movimiento de la noche aparece acá.</div>
+        <div v-if="!grafFlujo" class="flujo-vacio">Sin ingresos todavía</div>
         <svg v-else class="flujo-svg" :viewBox="`0 0 ${grafFlujo.W} ${grafFlujo.H}`" role="img"
              :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
           <line x1="20" :y1="grafFlujo.base" :x2="grafFlujo.W - 20" :y2="grafFlujo.base" stroke="rgba(255,255,255,.10)" stroke-width="1" />

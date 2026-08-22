@@ -423,7 +423,7 @@
               <div v-if="form.cortesia_activa" class="grupo-campo wz-cortesia-monto">
                 <label class="etiqueta">Para reservas desde</label>
                 <span class="campo-adorno"><span class="adorno">Bs.</span><input v-model.number="form.cortesia_desde" type="number" min="0" step="1" class="campo campo--prefijo" /></span>
-                <small class="ayuda-campo">Ej. 800: toda mesa reservada por Bs 800 o más recibe el combo.</small>
+                <small class="ayuda-campo">Desde ese monto va con combo</small>
               </div>
             </section>
 
@@ -495,7 +495,7 @@
                 <span><b>{{ ESTADOS[s].label }}</b><small>{{ ESTADOS[s].desc }}</small></span>
               </button>
             </div>
-            <p v-if="eventoExpirado" class="tipo-ayuda">La fecha de este evento ya pasó: no puede volver a borrador ni publicarse.</p>
+            <p v-if="eventoExpirado" class="tipo-ayuda">Evento pasado: ya no se puede cambiar</p>
             <div class="modal-footer">
               <button class="btn btn-secundario" @click="modalEstado=false">Cancelar</button>
               <button class="btn btn-primario" @click="confirmarCambioEstado">Guardar estado</button>

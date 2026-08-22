@@ -34,7 +34,7 @@
         </svg>
       </div>
       <h3>No se pudo cargar la cartelera</h3>
-      <p>Ocurrió un problema de conexión. Revisa tu internet e inténtalo de nuevo.</p>
+      <p>Sin conexión. Revisa tu internet.</p>
       <button class="btn-reintentar" @click="cargarEventos">Reintentar</button>
     </div>
 
@@ -46,7 +46,7 @@
         </svg>
       </div>
       <h3>Sin eventos disponibles</h3>
-      <p>Actualmente no hay eventos programados. Vuelve a revisar más tarde.</p>
+      <p>No hay eventos por ahora.</p>
     </div>
 
     <div v-else class="lista-eventos escalonar">
@@ -122,7 +122,7 @@
               </span>
               <span class="eg-txt">
                 <b>¿Vienen en grupo grande?</b>
-                <i>Máximo 2 mesas por cuenta. Para más espacios, envía tu solicitud y el local (recepción) la confirma.</i>
+                <i>Máximo 2 mesas. Para más, envía una solicitud.</i>
               </span>
               <svg class="eg-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>

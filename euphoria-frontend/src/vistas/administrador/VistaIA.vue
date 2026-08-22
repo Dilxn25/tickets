@@ -62,7 +62,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Combos sugeridos por la IA</h3>
-              <span class="sub">Lo que más se compra junto. Es sugerencia: no cambia los precios reales.</span>
+              <span class="sub">Lo que más se compra junto</span>
             </div>
             <div class="toggle-tam">
               <button :class="{ activo: tamCombos === 2 }" @click="cambiarTamCombos(2)">Pares</button>
@@ -93,7 +93,7 @@
               </div>
             </div>
           </div>
-          <div v-else class="vacio">Aún no hay suficiente historial de ventas para detectar combos de este tamaño.</div>
+          <div v-else class="vacio">Sin historial suficiente para este tamaño</div>
         </div>
 
         <!-- Packs para mesa: aprendidos de los patrones reales de las mesas grandes -->
@@ -101,7 +101,7 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Packs para mesa</h3>
-              <span class="sub">Lo que más repiten las mesas grandes, para ofrecer al reservar</span>
+              <span class="sub">Lo que más repiten las mesas grandes</span>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="icono-sutil"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
           </div>
@@ -173,7 +173,7 @@
               <div class="efe-pista"><div class="efe-barra" :style="{ width: t.tasa + '%' }"></div></div>
             </div>
           </template>
-          <div v-else class="vacio chico">Todavía no hay datos: se llenan solos a medida que el mesero use las sugerencias en pedidos reales.</div>
+          <div v-else class="vacio chico">Se llena solo cuando el mesero use las sugerencias</div>
         </div>
       </div>
 
@@ -292,7 +292,7 @@
               <BaseSelect v-model="clienteProbador" :options="opcionesClientes" placeholder="Nuevo (sin historial)" />
             </div>
             <p v-if="modeloIA.modo === 'demo'" class="demo-nota">
-              Con historial recomienda a su gusto; "Nuevo" cae a lo popular.
+              "Nuevo" cae a lo popular
             </p>
           </div>
 

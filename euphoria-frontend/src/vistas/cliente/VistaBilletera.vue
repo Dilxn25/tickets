@@ -148,7 +148,7 @@
               </svg>
             </div>
             <p class="titulo-vacio">Tu historia empieza con una recarga</p>
-            <p class="subtitulo-vacio">Recarga saldo y cada recarga, trago y reserva de tus noches aparecerá aquí.</p>
+            <p class="subtitulo-vacio">Tus recargas, tragos y reservas aparecen aquí.</p>
           </div>
 
           <div v-else class="lista-movimientos escalonar">
@@ -247,7 +247,7 @@
         <div class="modal-body">
           <div v-if="tienePin" class="campo-pin">
             <label>Contraseña de tu cuenta</label>
-            <p class="campo-pin-ayuda">Confirma tu contraseña para cambiar el PIN. No necesitas recordar el PIN anterior.</p>
+            <p class="campo-pin-ayuda">Confirma tu contraseña para cambiar el PIN.</p>
             <div class="input-pin-wrapper">
               <input
                 v-model="passwordCambio"
@@ -458,7 +458,7 @@
         </div>
         <div class="modal-body">
           <p v-if="sinBilletera" class="nota-primera-recarga">
-            Esta será tu primera recarga: tu billetera se creará automáticamente al completarla.
+            Tu billetera se crea con esta primera recarga.
           </p>
           <!-- QR Predeterminado -->
           <div class="info-recarga-paso"><span class="num-paso">1</span> Escanea el QR para transferir</div>
@@ -674,7 +674,7 @@
               </span>
             </div>
 
-            <p class="retiro-ayuda">El cajero verá tu solicitud y coordina la entrega de tu dinero en efectivo.</p>
+            <p class="retiro-ayuda">El cajero coordina la entrega en efectivo.</p>
 
             <label class="retiro-label">¿Cómo prefieres recibirlo?</label>
             <div class="retiro-metodos">

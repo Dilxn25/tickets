@@ -21,7 +21,7 @@
           <span v-else>Vacío</span>
         </span>
       </div>
-      <p class="hero-sub">La previa empieza aquí: revisa tu pedido y paga con tu billetera.</p>
+      <p class="hero-sub">Revisa tu pedido y paga con tu billetera.</p>
     </header>
 
 

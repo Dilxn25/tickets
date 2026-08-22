@@ -213,7 +213,7 @@
             <b>Registrar reposición</b>
             <button class="b2-cerrar-x" @click="repoAbierto = false" aria-label="Cerrar">×</button>
           </header>
-          <p class="b2-repo-hint">Un producto se cayó o derramó y hubo que reponerlo. No es una venta: descuenta stock y deja registrado quién fue el descuido.</p>
+          <p class="b2-repo-hint">No es venta: descuenta stock y queda el descuido.</p>
 
           <div class="b2-repo-cuerpo">
             <template v-if="!repoProducto">

@@ -138,7 +138,7 @@
         <div class="grafico-header">
           <div class="grafico-header-info">
             <h3 class="grafico-titulo">Ventas por Categoría</h3>
-            <span class="subtexto-grafico">Ingresos divididos por categorías de producto en barra y mesas</span>
+            <span class="subtexto-grafico">Ingresos por categoría</span>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="texto-sutil"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
         </div>
@@ -273,7 +273,7 @@
             </g>
           </svg>
           <div v-else class="texto-sutil texto-centro" style="padding: 40px 0; width: 100%;">
-            Aún no hay comandas registradas para evaluar el desempeño de meseros.
+            Sin comandas en este periodo
           </div>
         </div>
       </div>
@@ -720,7 +720,7 @@
                 </div>
               </div>
               <div v-if="preciosMasMovidos.length === 0" class="texto-sutil texto-centro" style="padding:24px 0">
-                Todavía no hay cambios de precio (solo los registros iniciales). Cambia un precio o haz una promo y aparecerá aquí.
+                Sin cambios de precio todavía
               </div>
             </div>
           </div>

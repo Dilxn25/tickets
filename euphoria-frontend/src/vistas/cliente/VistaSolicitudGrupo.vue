@@ -6,7 +6,7 @@
       </button>
       <div>
         <h1>Reserva para grupo grande</h1>
-        <p>Marca los lugares donde te gustaría estar. Son tentativos: el local revisa y te confirma.</p>
+        <p>Marca los lugares. El local confirma.</p>
       </div>
     </header>
 
@@ -123,7 +123,7 @@
       <button class="sg-btn sg-enviar" :disabled="enviando" @click="enviar">
         {{ enviando ? 'Enviando…' : 'Enviar solicitud' }}
       </button>
-      <p class="sg-nota">El local puede ajustar los lugares según disponibilidad. Esto no cobra nada todavía.</p>
+      <p class="sg-nota">Todavía no se cobra nada.</p>
     </template>
   </div>
 </template>

@@ -90,7 +90,7 @@
       </div>
     </section>
 
-    <div v-if="modo === 'editor'" ref="refEditor" class="editor-grid" :class="{ 'sin-izq': !panelIzq, 'sin-der': !panelDer || !elSel, 'pantalla-completa': pantallaCompleta }">
+    <div v-if="modo === 'editor'" ref="refEditor" class="editor-grid" :class="{ 'sin-izq': !panelIzq, 'pantalla-completa': pantallaCompleta }">
       <!-- Barra de herramientas (se pliega para dejarle el ancho al plano) -->
       <div v-if="panelIzq" class="herramientas superficie escalonar">
         <span class="herramientas-titulo">Agregar</span>
@@ -144,6 +144,36 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
+        <!-- Alinear el elemento dentro del plano (aparece al seleccionar) -->
+        <div v-if="elSel" class="alinear-barra">
+          <button class="al-btn" @click="alinear('izq')" title="Pegar a la izquierda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="3" x2="4" y2="21"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="8" height="4" rx="1"/></svg>
+          </button>
+          <button class="al-btn" @click="alinear('centroH')" title="Centrar en horizontal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><rect x="4" y="6" width="16" height="4" rx="1"/><rect x="7" y="14" width="10" height="4" rx="1"/></svg>
+          </button>
+          <button class="al-btn" @click="alinear('der')" title="Pegar a la derecha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="20" y1="3" x2="20" y2="21"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="9" y="14" width="8" height="4" rx="1"/></svg>
+          </button>
+          <span class="al-sep"></span>
+          <button class="al-btn" @click="alinear('arriba')" title="Pegar arriba">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="4" x2="21" y2="4"/><rect x="6" y="7" width="4" height="12" rx="1"/><rect x="14" y="7" width="4" height="8" rx="1"/></svg>
+          </button>
+          <button class="al-btn" @click="alinear('centroV')" title="Centrar en vertical">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="7" width="4" height="10" rx="1"/></svg>
+          </button>
+          <button class="al-btn" @click="alinear('abajo')" title="Pegar abajo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="9" width="4" height="8" rx="1"/></svg>
+          </button>
+          <span class="al-sep"></span>
+          <button class="al-btn" @click="duplicarSeleccionado" title="Duplicar (Ctrl+D)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="al-btn al-borrar" @click="eliminarSeleccionado" title="Eliminar (Supr)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+
         <div class="lienzo-scroll">
           <div ref="lienzo" class="lienzo" :style="{ aspectRatio: String(planoProporcion), '--z': zoom }" @pointerdown="clicVacio">
             <div
@@ -156,7 +186,11 @@
             >
               <span class="elemento-etiqueta">{{ el.numero_nombre || tipoLabel(el.tipo_elemento) }}</span>
               <span v-if="el.tipo_elemento === 'mesa'" class="elemento-cap">{{ el.capacidad_sillas }}p</span>
-              <div v-if="idx === seleccionado" class="manija-resize" @pointerdown.stop="iniciarResize($event, idx)" title="Estirar"></div>
+              <!-- Se estira desde cualquier lado o esquina, no solo desde una manija -->
+              <template v-if="idx === seleccionado">
+                <div v-for="lado in MANIJAS" :key="lado" class="manija" :class="'m-' + lado"
+                     @pointerdown.stop="iniciarResize($event, idx, lado)" :title="'Estirar ' + TITULO_MANIJA[lado]"></div>
+              </template>
             </div>
             <!-- Guías de alineación (aparecen al arrastrar) -->
             <div v-if="guiaX != null" class="guia guia-v" :style="{ left: guiaX + '%' }"></div>
@@ -164,14 +198,15 @@
             <div v-if="elementos.length === 0" class="lienzo-vacio">Arrastra elementos desde la barra "Agregar"</div>
           </div>
         </div>
-      </div>
 
-      <!-- Panel de propiedades: solo cuando hay algo que editar -->
-      <div v-if="panelDer && elSel" class="propiedades superficie">
+      <!-- Panel de propiedades: flota sobre el plano para no encogerlo -->
+      <div v-if="panelDer && elSel" class="propiedades superficie prop-flotante">
         <template v-if="elSel">
           <div class="propiedades-cab">
             <span class="propiedades-titulo">{{ tipoLabel(elSel.tipo_elemento) }}</span>
-            <span class="propiedades-chip">Editando</span>
+            <button class="prop-cerrar" @click="seleccionado = null" title="Cerrar" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           <label class="prop-campo">
             <span>Nombre / número</span>
@@ -201,7 +236,7 @@
           <label class="prop-campo" v-if="cuentaAforo(elSel.tipo_elemento)">
             <span>{{ elSel.tipo_elemento === 'area' ? 'Aforo de parados / pista' : 'Capacidad (personas)' }}</span>
             <input v-model.number="elSel.capacidad_sillas" type="number" min="0" class="campo" />
-            <small v-if="elSel.tipo_elemento === 'area'" class="prop-nota">Personas paradas que caben en esta sección (0 si es solo mesas/sillas).</small>
+            <small v-if="elSel.tipo_elemento === 'area'" class="prop-nota">0 si solo hay mesas</small>
           </label>
 
           <!-- Asignar una mesa o silla a un área (define a qué zona pertenece su aforo/precio) -->
@@ -226,6 +261,8 @@
           </div>
         </template>
       </div>
+      </div>
+
     </div>
 
     <!-- Modal guardar plano nuevo -->
@@ -251,7 +288,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
@@ -468,6 +505,37 @@ function clampPosicion(el) {
   el.posicion_x = Math.round((cx - (el.ancho || 6) / 2) * 10) / 10
   el.posicion_y = Math.round((cy - (el.alto || 8) / 2) * 10) / 10
 }
+// Alinear el elemento contra los bordes o el centro del plano (como en un
+// editor de diseno: evita tener que cuadrarlo a ojo arrastrando).
+function alinear(donde) {
+  const el = elSel.value
+  if (!el) return
+  const w = el.ancho || 6, h = el.alto || 8
+  if (donde === 'izq') el.posicion_x = 0
+  else if (donde === 'centroH') el.posicion_x = (100 - w) / 2
+  else if (donde === 'der') el.posicion_x = 100 - w
+  else if (donde === 'arriba') el.posicion_y = 0
+  else if (donde === 'centroV') el.posicion_y = (100 - h) / 2
+  else if (donde === 'abajo') el.posicion_y = 100 - h
+  clampSeleccionado()
+}
+
+// Atajos del editor: mover con flechas, duplicar y borrar sin usar el raton.
+function atajosEditor(ev) {
+  if (modo.value !== 'editor' || !elSel.value) return
+  const t = ev.target
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+  const el = elSel.value
+  const paso = ev.shiftKey ? 2 : 0.5
+  if (ev.key === 'ArrowLeft')  { el.posicion_x = (el.posicion_x || 0) - paso; clampSeleccionado(); ev.preventDefault() }
+  else if (ev.key === 'ArrowRight') { el.posicion_x = (el.posicion_x || 0) + paso; clampSeleccionado(); ev.preventDefault() }
+  else if (ev.key === 'ArrowUp')    { el.posicion_y = (el.posicion_y || 0) - paso; clampSeleccionado(); ev.preventDefault() }
+  else if (ev.key === 'ArrowDown')  { el.posicion_y = (el.posicion_y || 0) + paso; clampSeleccionado(); ev.preventDefault() }
+  else if (ev.key === 'Delete' || ev.key === 'Backspace') { eliminarSeleccionado(); ev.preventDefault() }
+  else if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'd' || ev.key === 'D')) { duplicarSeleccionado(); ev.preventDefault() }
+  else if (ev.key === 'Escape') { seleccionado.value = null }
+}
+
 function clampSeleccionado() { if (elSel.value) clampPosicion(elSel.value) }
 function alCambiarTam() { if (elSel.value) { recordarTam(elSel.value); clampPosicion(elSel.value) } }
 
@@ -581,21 +649,49 @@ function finArrastre() {
 
 // ---- Redimensionar (estirar) ----
 let redimensionando = null
-function iniciarResize(e, idx) {
+// Ocho puntos de agarre, como en cualquier editor de diseno: las esquinas
+// estiran en dos ejes y los lados en uno solo. El borde contrario queda fijo.
+const MANIJAS = ['n', 's', 'e', 'o', 'ne', 'no', 'se', 'so']
+const TITULO_MANIJA = {
+  n: 'desde arriba', s: 'desde abajo', e: 'desde la derecha', o: 'desde la izquierda',
+  ne: 'desde la esquina', no: 'desde la esquina', se: 'desde la esquina', so: 'desde la esquina',
+}
+const MIN_TAM = 2
+
+function iniciarResize(e, idx, lado = 'se') {
   seleccionado.value = idx
+  const el = elementos.value[idx]
   const rect = lienzo.value.getBoundingClientRect()
-  redimensionando = { idx, rect }
+  redimensionando = {
+    idx, rect, lado,
+    // Bordes de partida: el lado opuesto al que se agarra no se mueve
+    x0: el.posicion_x || 0,
+    y0: el.posicion_y || 0,
+    x1: (el.posicion_x || 0) + (el.ancho || 6),
+    y1: (el.posicion_y || 0) + (el.alto || 8),
+  }
   window.addEventListener('pointermove', moverResize)
   window.addEventListener('pointerup', finResize)
 }
+
 function moverResize(e) {
   if (!redimensionando) return
-  const { idx, rect } = redimensionando
+  const { idx, rect, lado, x0, y0, x1, y1 } = redimensionando
   const el = elementos.value[idx]
-  const w = ((e.clientX - rect.left) / rect.width) * 100 - el.posicion_x
-  const h = ((e.clientY - rect.top) / rect.height) * 100 - el.posicion_y
-  el.ancho = Math.round(Math.max(2, Math.min(100, w)) * 10) / 10
-  el.alto = Math.round(Math.max(2, Math.min(100, h)) * 10) / 10
+  const px = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+  const py = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
+
+  let nx0 = x0, ny0 = y0, nx1 = x1, ny1 = y1
+  if (lado.includes('e')) nx1 = Math.max(x0 + MIN_TAM, px)
+  if (lado.includes('o')) nx0 = Math.min(x1 - MIN_TAM, px)
+  if (lado.includes('s')) ny1 = Math.max(y0 + MIN_TAM, py)
+  if (lado.includes('n')) ny0 = Math.min(y1 - MIN_TAM, py)
+
+  const r1 = (v) => Math.round(v * 10) / 10
+  el.posicion_x = r1(nx0)
+  el.posicion_y = r1(ny0)
+  el.ancho = r1(Math.max(MIN_TAM, nx1 - nx0))
+  el.alto = r1(Math.max(MIN_TAM, ny1 - ny0))
   clampPosicion(el)
 }
 function finResize() {
@@ -759,6 +855,9 @@ function alFinalizarBorrado(p) {
   cargarPlanos()
 }
 
+onMounted(() => window.addEventListener('keydown', atajosEditor))
+onBeforeUnmount(() => window.removeEventListener('keydown', atajosEditor))
+
 // Botones del editor: operan sobre el plano en edición.
 function duplicarPlanoActual() {
   if (planoSelId.value != null) duplicarPlano({ id_plantilla: planoSelId.value, nombre: planoActual.value.nombre })
@@ -845,11 +944,9 @@ select.campo { cursor: pointer; }
 .vacio-texto { font-size: 0.9rem; max-width: 42ch; text-wrap: pretty; }
 
 /* ── Editor: barra de herramientas · lienzo · propiedades ── */
-.editor-grid { display: grid; grid-template-columns: 92px minmax(0, 1fr) 268px; gap: 14px; align-items: start; transition: grid-template-columns .25s ease; }
+.editor-grid { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; align-items: start; transition: grid-template-columns .25s ease; }
 /* Paneles plegados: el plano se queda con todo el ancho */
-.editor-grid.sin-izq { grid-template-columns: minmax(0, 1fr) 268px; }
-.editor-grid.sin-der { grid-template-columns: 92px minmax(0, 1fr); }
-.editor-grid.sin-izq.sin-der { grid-template-columns: minmax(0, 1fr); }
+.editor-grid.sin-izq { grid-template-columns: minmax(0, 1fr); }
 /* Pantalla completa: el editor ocupa la pantalla entera */
 .editor-grid.pantalla-completa {
   background: var(--fondo-principal, #0E0821);
@@ -930,20 +1027,32 @@ select.campo { cursor: pointer; }
 .elemento:active { cursor: grabbing; }
 .elemento.seleccionado { outline: 2px solid var(--rosa-acento); outline-offset: 2px; z-index: 5; overflow: visible; }
 .elemento-cap { font-size: 0.6rem; opacity: 0.85; font-weight: 600; }
-.manija-resize {
+/* Ocho agarres: esquinas y lados, con el cursor que corresponde a cada uno */
+.manija {
   position: absolute;
-  bottom: -9px; right: -9px;
-  width: 20px; height: 20px;
   background: var(--rosa-acento);
   border: 2px solid #fff;
-  border-radius: 5px;
-  cursor: nwse-resize;
+  border-radius: 3px;
   z-index: 6;
   box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-  background-image: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.9) 40%, rgba(255,255,255,0.9) 50%, transparent 50%, transparent 65%, rgba(255,255,255,0.9) 65%, rgba(255,255,255,0.9) 75%, transparent 75%);
-  transition: transform 0.12s ease;
+  transition: transform .12s ease, background .12s ease;
 }
-.manija-resize:hover { transform: scale(1.15); }
+.manija:hover { transform: scale(1.25); background: #fff; }
+/* Esquinas */
+.m-no, .m-ne, .m-so, .m-se { width: 13px; height: 13px; }
+.m-no { top: -7px; left: -7px; cursor: nwse-resize; }
+.m-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+.m-ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.m-so { bottom: -7px; left: -7px; cursor: nesw-resize; }
+/* Lados: barras finas centradas en cada borde */
+.m-n, .m-s { left: 50%; margin-left: -13px; width: 26px; height: 9px; cursor: ns-resize; }
+.m-n { top: -5px; }
+.m-s { bottom: -5px; }
+.m-e, .m-o { top: 50%; margin-top: -13px; height: 26px; width: 9px; cursor: ew-resize; }
+.m-e { right: -5px; }
+.m-o { left: -5px; }
+/* En elementos chicos las manijas se encogen para no taparlos */
+.elemento[style*="width: 3"] .manija, .elemento[style*="width: 2"] .manija { transform: scale(.75); }
 
 .tipo-mesa { background: linear-gradient(135deg, var(--morado-medio), var(--morado-brillante)); border-radius: 50%; box-shadow: var(--sombra-tarjeta); }
 .tipo-silla { background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-activo); border-radius: 4px; color: var(--texto-secundario); }
@@ -992,8 +1101,7 @@ select.campo { cursor: pointer; }
 .pl-cuadro.deco { background: rgba(255,255,255,.10); border: 1px solid var(--borde-sutil); }
 /* Pantallas anchas: el plano aprovecha el espacio en vez de quedar chico */
 @media (min-width: 1500px) {
-  .editor-grid { grid-template-columns: 156px 1fr 300px; gap: 18px; }
-  .lienzo-scroll { max-height: 84vh; }
+  .editor-grid { grid-template-columns: 104px minmax(0, 1fr); gap: 18px; }
 }
 .prop-fila { display: flex; gap: 10px; }
 .prop-fila .prop-campo { flex: 1; }
@@ -1098,7 +1206,7 @@ select.campo { cursor: pointer; }
 .btn-herramienta svg { width: 20px; height: 20px; color: var(--morado-hover); transition: transform var(--trans-rapida); }
 .btn-herramienta:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.12); transform: translateY(-2px); }
 .btn-herramienta:hover svg { transform: scale(1.08); }
-.editor-grid { grid-template-columns: 148px 1fr 280px; }
+.editor-grid { grid-template-columns: 92px minmax(0, 1fr); }
 
 /* Lienzo */
 .lienzo-scroll { border: 1px solid var(--borde-sutil); background: radial-gradient(circle at 20% 0%, rgba(168,85,247,.08), transparent 50%), var(--fondo-tarjeta); }
@@ -1124,4 +1232,44 @@ select.campo { cursor: pointer; }
 
 @media (max-width: 1024px) { .editor-grid { grid-template-columns: 1fr; } .herramientas { grid-template-columns: repeat(6, 1fr); } .herramientas-titulo { grid-column: 1 / -1; } }
 @media (max-width: 560px) { .herramientas { grid-template-columns: repeat(3, 1fr); } }
+
+/* ---- Editor: panel flotante y alineación (el plano nunca cambia de tamaño) ---- */
+.prop-flotante {
+  position: absolute; top: 52px; right: 12px; z-index: 9;
+  width: 250px; max-height: calc(100% - 66px); overflow-y: auto;
+  padding: 14px; border-radius: var(--radio-lg);
+  background: rgba(20, 12, 46, .94); backdrop-filter: blur(10px);
+  border: 1px solid var(--borde-activo);
+  box-shadow: 0 18px 44px rgba(0,0,0,.5);
+  animation: prop-in .16s ease;
+}
+@keyframes prop-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.prop-cerrar {
+  display: grid; place-items: center; width: 26px; height: 26px; cursor: pointer;
+  border-radius: 8px; border: 1px solid var(--borde-sutil);
+  background: rgba(255,255,255,.04); color: var(--texto-secundario); transition: var(--trans-rapida);
+}
+.prop-cerrar:hover { color: #fff; border-color: var(--borde-activo); background: rgba(168,85,247,.18); }
+
+.alinear-barra {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 8;
+  display: flex; align-items: center; gap: 3px; padding: 4px 6px;
+  border-radius: 11px; border: 1px solid var(--borde-sutil);
+  background: rgba(14,8,33,.9); backdrop-filter: blur(8px);
+  box-shadow: 0 8px 22px rgba(0,0,0,.4);
+}
+.al-btn {
+  display: grid; place-items: center; width: 28px; height: 28px; cursor: pointer;
+  border: none; border-radius: 7px; background: none; color: var(--texto-secundario);
+  transition: var(--trans-rapida);
+}
+.al-btn svg { width: 16px; height: 16px; }
+.al-btn:hover { background: rgba(168,85,247,.22); color: #fff; }
+.al-borrar:hover { background: rgba(239,68,68,.2); color: var(--color-error); }
+.al-sep { width: 1px; height: 18px; background: var(--borde-sutil); margin: 0 3px; }
+
+@media (max-width: 900px) {
+  .prop-flotante { position: static; width: auto; max-height: none; margin-top: 10px; }
+  .alinear-barra { position: static; transform: none; margin-bottom: 8px; justify-content: center; }
+}
 </style>

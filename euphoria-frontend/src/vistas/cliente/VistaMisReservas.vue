@@ -44,7 +44,7 @@
         </div>
         <div class="estado-texto">
           <h2 class="estado-titulo">Todavía no tienes reservas</h2>
-          <p class="estado-detalle">Reserva tu mesa para el próximo evento y aparecerá aquí con su QR de acceso.</p>
+          <p class="estado-detalle">Tus mesas reservadas aparecen aquí con su QR.</p>
         </div>
         <RouterLink to="/cliente/eventos" class="cta-isla link brillo-hover">Ver eventos</RouterLink>
       </div>

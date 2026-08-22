@@ -13,7 +13,7 @@
 
       <h1 class="error-titulo">Acceso denegado o ruta no encontrada</h1>
       <p class="error-descripcion">
-        No tienes permisos para ver esta página o la ruta que introdujiste no existe en el sistema.
+        Esta página no existe o no tienes acceso.
       </p>
       <button class="btn-regresar brillo-hover" @click="regresarAlMenu">
         Volver a mi menú principal

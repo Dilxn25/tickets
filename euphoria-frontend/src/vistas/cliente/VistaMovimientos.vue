@@ -41,7 +41,7 @@
         />
       </div>
       <p v-if="eventoActivo !== null" class="nota-evento">
-        Las recargas y los retiros no aparecen aquí: son dinero que entra o sale de tu billetera, no pertenecen a un evento.
+        Las recargas y retiros no pertenecen a un evento.
       </p>
     </div>
 
@@ -85,7 +85,7 @@
         </svg>
       </div>
       <p class="titulo-vacio">Tu historia empieza con una recarga</p>
-      <p class="subtitulo-vacio">Recarga saldo y cada recarga, trago y reserva de tus noches aparecerá aquí.</p>
+      <p class="subtitulo-vacio">Tus recargas, tragos y reservas aparecen aquí.</p>
     </div>
 
     <!-- Vacío por filtro -->
@@ -279,7 +279,7 @@
             </p>
             <p v-else class="reemb-nota">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              La comisión aplica por devolver dentro de las 24 h previas al evento.
+              Comisión por devolver dentro de las 24 h.
             </p>
             <p class="reemb-fecha">{{ formatoFecha(reembolsoDetalle.fecha) }}</p>
           </div>

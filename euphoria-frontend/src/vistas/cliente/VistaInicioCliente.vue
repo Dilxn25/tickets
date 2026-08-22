@@ -188,7 +188,7 @@
       </div>
       <p class="reserva-nota">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-        Máximo 2 mesas por cuenta en cada evento. Para empresas, cumpleaños o grupos, usa la solicitud de grupo grande.
+        Máximo 2 mesas. Para grupos, usa la solicitud.
       </p>
     </section>
 
@@ -358,7 +358,7 @@
           <div class="modal-cancelado-cuerpo">
             <h3>Evento suspendido</h3>
             <p>
-              El administrador canceló o modificó la disponibilidad del evento al que estabas registrado por causas de fuerza mayor.
+              El local cambió la disponibilidad de este evento.
               <br><br>Tu sesión en este evento se cerró.
             </p>
             <button class="btn-modal-entendido" @click="modalCancelado=false">Entendido</button>

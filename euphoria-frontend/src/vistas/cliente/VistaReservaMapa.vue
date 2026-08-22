@@ -195,7 +195,7 @@
               </span>
               <div>
                 <p class="cortesia-titulo">Tu reserva incluye un combo de cortesía</p>
-                <p class="cortesia-sub">Elige uno y te lo llevamos a la mesa. Si prefieres, lo eliges después desde Mis reservas.</p>
+                <p class="cortesia-sub">Elige uno ahora o más tarde en Mis reservas.</p>
               </div>
             </div>
 

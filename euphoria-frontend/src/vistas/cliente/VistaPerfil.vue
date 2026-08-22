@@ -6,7 +6,7 @@
     <!-- Encabezado -->
     <header class="hero-perfil">
       <h1 class="titulo-perfil">Mi perfil</h1>
-      <p class="sub-hero">Tu identidad para la noche: foto, datos y seguridad listos antes de la próxima salida.</p>
+      <p class="sub-hero">Tu foto, tus datos y tu seguridad.</p>
     </header>
 
     <div class="perfil-bento">
@@ -222,7 +222,7 @@
             <span class="panel-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><path d="M21 2l-2 2"></path><path d="M15.5 7.5l3 3L22 7l-3-3-3.5 3.5z"></path><path d="M15.5 7.5L11.39 11.61"></path><circle cx="7.5" cy="15.5" r="4.5"></circle></svg></span>
             <div>
               <h4 class="subtitulo-form">Recuperación de cuenta</h4>
-              <p class="panel-sub">Tu llave de repuesto: una pregunta y respuesta secreta por si olvidas tu contraseña.</p>
+              <p class="panel-sub">Por si olvidas tu contraseña.</p>
             </div>
           </div>
 
@@ -387,7 +387,7 @@
             <!-- Paso: pedir ayuda al local -->
             <template v-else-if="pasoRec === 'ayuda'">
               <h3 class="rec-titulo">Pedir ayuda al local</h3>
-              <p class="rec-sub">Déjanos tus datos y el local te ayudará a cambiar tu contraseña.</p>
+              <p class="rec-sub">El local te ayudará a cambiarla.</p>
 
               <form @submit.prevent="enviarAyudaLocal">
                 <div class="grupo-campo">
@@ -412,7 +412,7 @@
                   <textarea v-model="ayudaForm.mensaje" class="campo campo-area" rows="2" placeholder="Cuéntanos qué pasó"></textarea>
                 </div>
 
-                <p class="nota-verifica">El local comparará estos datos con los registrados en tu cuenta para verificar que eres tú.</p>
+                <p class="nota-verifica">Sirven para verificar que eres tú.</p>
 
                 <Transition name="err-inline">
                   <p v-if="errorRec" class="mensaje error rec-mensaje">

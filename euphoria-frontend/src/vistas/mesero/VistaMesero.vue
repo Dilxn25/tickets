@@ -640,7 +640,7 @@
 
             <!-- TAB 1: TRANSFERENCIA -->
             <div v-if="metodoPago === 'Transferencia QR'" class="cobro-panel">
-              <p class="cobro-instruccion">El cliente transfiere al QR del establecimiento y sube el comprobante.</p>
+              <p class="cobro-instruccion">Transfiere al QR y sube el comprobante</p>
 
               <div class="qr-row">
                 <img src="@/activos/imagenes/QRPago euphoria.jpeg" alt="QR Pago" class="qr-mini" />
@@ -704,7 +704,7 @@
 
               <!-- Estado inicial (Paso 1) -->
               <div v-else class="billetera-inicio fade-in">
-                <p class="cobro-instruccion">El cliente paga con su saldo Euphoria. Escanea su QR o ingresa su ID.</p>
+                <p class="cobro-instruccion">Escanea su QR o ingresa su ID</p>
 
                 <CapturaCamara modo="qr" :deshabilitado="procesando" texto-guia="Coloca el QR del cliente dentro del marco" @codigo="alDetectarQr" />
 
@@ -908,7 +908,7 @@
           </div>
           
           <h3>Cobro realizado con éxito</h3>
-          <p class="exito-sub">La orden se envió automáticamente a la barra para su preparación.</p>
+          <p class="exito-sub">Enviada a la barra</p>
 
           <!-- Detalle del Recibo IA -->
           <div class="recibo-ia">

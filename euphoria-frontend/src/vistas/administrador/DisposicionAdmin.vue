@@ -196,7 +196,7 @@
                     </div>
                   </div>
 
-                  <p v-if="solicitudesRec.length" class="sol-pie">Si los datos coinciden, «Restablecer» deja la clave temporal 123456; si no, pide el CI físico o «Rechazar».</p>
+                  <p v-if="solicitudesRec.length" class="sol-pie">Si coinciden, la clave temporal queda en 123456.</p>
                 </div>
 
                 <div class="notif-sec">
