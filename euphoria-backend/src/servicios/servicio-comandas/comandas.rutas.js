@@ -22,6 +22,7 @@ const Tesseract = require('tesseract.js')
 const { analizarComprobante, analizarComprobanteRobusto, hoyBolivia, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
+const { bloqueoPorRetiroPendiente } = require('../../utilidades/retiro-pendiente')
 
 // Titular de la cuenta receptora, editable en la tabla configuracion
 // (clave 'ocr_titular_destino'; admite varios nombres separados por |).
@@ -619,7 +620,12 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       })
 
       if (!billetera) return res.status(404).json({ error: 'Billetera no encontrada con ese código' })
-      
+
+      // Con un retiro de saldo pendiente no se puede gastar (el cajero va a
+      // devolver ese dinero): se frena acá, con el motivo, antes de cobrar.
+      const bloqueoRetiro = await bloqueoPorRetiroPendiente(billetera.id_usuario)
+      if (bloqueoRetiro) return res.status(409).json(bloqueoRetiro)
+
       // Validación de PIN: si el QR es privado (pago_con_pin) O si el dueño de la
       // billetera es quien paga desde su propia sesión y tiene PIN configurado
       // (antes el pago del carrito lo bypasseaba mandando el qr_publico plano).

@@ -552,7 +552,25 @@
             <!-- Validación del comprobante EN TIEMPO REAL: los pasos aparecen desde
                  el inicio (validando…) y se marcan ✓/✗ conforme se resuelven. -->
             <div v-if="procesandoOCR || pasosValidacion.length" class="estado-ocr con-pasos">
-              <p class="ocr-titulo">Validando tu comprobante…</p>
+              <div class="ocr-cabecera">
+                <div class="ocr-cab-txt">
+                  <p class="ocr-titulo">{{ procesandoOCR ? 'Revisando tu comprobante' : 'Revisión terminada' }}</p>
+                  <p class="ocr-sub">
+                    {{ procesandoOCR
+                      ? 'Leemos la imagen y comparamos los datos con tu transferencia. No cierres esta ventana.'
+                      : 'Estos son los controles que se aplicaron a tu comprobante.' }}
+                  </p>
+                </div>
+                <span class="ocr-reloj" :class="{ activo: procesandoOCR }">{{ segundosOCR }}s</span>
+              </div>
+              <!-- Progreso real: cuántos controles ya se resolvieron -->
+              <div class="ocr-barra" role="progressbar" :aria-valuenow="pasosResueltos" :aria-valuemin="0" :aria-valuemax="totalPasosOCR">
+                <span class="ocr-barra-fill" :style="{ width: progresoOCR + '%' }"></span>
+              </div>
+              <p class="ocr-progreso-txt">
+                Control {{ Math.min(pasosResueltos + (procesandoOCR ? 1 : 0), totalPasosOCR) }} de {{ totalPasosOCR }}
+                <span class="ocr-progreso-esp" v-if="procesandoOCR">· suele tardar menos de 30 segundos</span>
+              </p>
               <ul class="ocr-pasos">
                 <li v-for="(p, i) in pasosValidacion" :key="i" class="ocr-paso visible" :class="{ 'paso-ok': p.ok === true, 'paso-fail': p.ok === false, 'paso-cargando': p.ok === null, 'paso-skip': p.ok === 'skip' }">
                   <span class="ocr-paso-icono">
@@ -610,7 +628,12 @@
           class="qr-fs-img"
         />
         <p v-if="identificadorQRAmpliado" class="qr-fs-codigo">ID: {{ identificadorQRAmpliado }}</p>
-        <p class="qr-fs-hint">Toca para cerrar</p>
+        <!-- Descargar: para guardarlo en la galería y escanearlo desde otro celular -->
+        <button class="qr-fs-descargar" type="button" @click.stop="descargarQRAmpliado" :disabled="descargandoQR">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          {{ descargandoQR ? 'Guardando…' : 'Descargar imagen' }}
+        </button>
+        <p class="qr-fs-hint">Toca fuera para cerrar</p>
       </div>
     </Teleport>
 
@@ -1028,6 +1051,7 @@ function limpiarFormularioRecarga() {
   ocrExitoso.value = false
   errorOCR.value = ''
   procesandoOCR.value = false
+  pararRelojOCR()
   urlComprobanteGenerado.value = ''
 }
 
@@ -1188,11 +1212,32 @@ const PASOS_PLACEHOLDER = [
   { clave: 'no_repetido', etiqueta: 'Comprobante no repetido' },
 ]
 const pasosValidacion = ref([])
+// Progreso visible de la revisión: cuántos controles ya se resolvieron, cuánto
+// lleva corriendo y qué porcentaje va. Antes solo decía "Identificando banco…"
+// sin decir en qué punto estaba ni cuánto podía tardar.
+const segundosOCR = ref(0)
+let relojOCR = null
+const totalPasosOCR = computed(() => Math.max(pasosValidacion.value.length, PASOS_PLACEHOLDER.length))
+const pasosResueltos = computed(() => pasosValidacion.value.filter(p => p.ok !== null).length)
+const progresoOCR = computed(() => {
+  const total = totalPasosOCR.value || 1
+  const hechos = pasosResueltos.value
+  // Mientras corre, el control en curso suma medio paso para que la barra avance.
+  const parcial = procesandoOCR.value ? 0.5 : 0
+  return Math.min(100, Math.round(((hechos + parcial) / total) * 100))
+})
+function arrancarRelojOCR() {
+  segundosOCR.value = 0
+  clearInterval(relojOCR)
+  relojOCR = setInterval(() => { segundosOCR.value++ }, 1000)
+}
+function pararRelojOCR() { clearInterval(relojOCR); relojOCR = null }
 // Al iniciar solo se ve EL PRIMER paso ("Identificando banco…"): los demás van
 // APARECIENDO de a uno conforme se resuelven, en el orden en que el backend
 // los validó (primero el banco, luego los campos de ESA plantilla).
 function iniciarPasos() {
   pasosValidacion.value = [{ ...PASOS_PLACEHOLDER[0], ok: null }]
+  arrancarRelojOCR()
 }
 async function resolverPasos(resPasos) {
   // Sin pasos (error de red/500): se limpia la lista y queda solo el mensaje
@@ -1240,6 +1285,7 @@ async function procesarOCR(file) {
       comprobanteProcesado.value = true
       urlComprobanteGenerado.value = res.url_comprobante
       procesandoOCR.value = false // Liberar flag antes de llamar a completar
+      pararRelojOCR()
       await completarRecarga()
     } else {
       const msg = res.error || res.mensaje || 'El comprobante no pudo validarse.'
@@ -1255,6 +1301,7 @@ async function procesarOCR(file) {
     archivoComprobante.value = null
   } finally {
     procesandoOCR.value = false
+    pararRelojOCR()
   }
 }
 
@@ -1315,6 +1362,39 @@ async function mostrarQRRapido(tipo) {
 
 function ampliarQRDefault() {
   qrAmpliado.value = 'default'
+}
+
+// Descarga el QR que se está viendo, como imagen, para guardarlo en el celular.
+// Funciona con los QR generados (data URL) y con el QR fijo del local (archivo).
+const descargandoQR = ref(false)
+async function descargarQRAmpliado() {
+  if (descargandoQR.value) return
+  descargandoQR.value = true
+  try {
+    const cont = document.querySelector('.qr-fullscreen .qr-fs-img')
+    const src = cont?.getAttribute('src')
+    if (!src) throw new Error('sin imagen')
+    // Se pasa por blob para que el navegador guarde el archivo también cuando
+    // la imagen viene de una URL y no de un data URL.
+    const resp = await fetch(src)
+    const blob = await resp.blob()
+    const url = URL.createObjectURL(blob)
+    const nombre = qrAmpliado.value === 'default'
+      ? 'QR-recarga-Euphoria.jpg'
+      : `QR-billetera-${identificadorQRAmpliado.value || 'euphoria'}.png`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombre
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+    notif.exito('QR guardado en tus descargas')
+  } catch {
+    notif.error('No se pudo descargar el QR. Mantén presionada la imagen para guardarla.')
+  } finally {
+    descargandoQR.value = false
+  }
 }
 
 // Cargar saldo
@@ -2724,7 +2804,29 @@ button.mov-fila:focus-visible {
 .estado-ocr.con-pasos { display: block; }
 
 /* Validación paso a paso */
-.ocr-titulo { margin: 0 0 12px; font-weight: 700; font-size: 0.92rem; color: var(--texto-principal); }
+.ocr-titulo { margin: 0; font-weight: 700; font-size: 0.95rem; color: var(--texto-principal); }
+/* Cabecera explicativa + progreso real de la revisión del comprobante */
+.ocr-cabecera { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ocr-cab-txt { flex: 1; min-width: 0; }
+.ocr-sub { margin: 3px 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--texto-secundario); }
+.ocr-reloj {
+  flex: none; font-variant-numeric: tabular-nums; font-size: 0.8rem; font-weight: 700;
+  color: var(--texto-secundario); background: rgba(255,255,255,.06);
+  border: 1px solid var(--borde-sutil); border-radius: 999px; padding: 4px 11px;
+}
+.ocr-reloj.activo { color: var(--morado-hover); border-color: var(--borde-activo); }
+.ocr-barra {
+  height: 7px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,.09); border: 1px solid var(--borde-sutil);
+}
+.ocr-barra-fill {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--gradiente-marca);
+  transition: width .45s cubic-bezier(.16,1,.3,1);
+}
+.ocr-progreso-txt { margin: 7px 0 12px; font-size: 0.76rem; font-weight: 600; color: var(--texto-secundario); }
+.ocr-progreso-esp { font-weight: 500; color: var(--texto-desactivado); }
+@media (max-width: 420px) { .ocr-progreso-esp { display: block; } }
 .ocr-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .ocr-paso.paso-skip { opacity: 0.5; }
 .ocr-paso.paso-skip .ocr-paso-icono { color: var(--texto-desactivado); }
@@ -3013,6 +3115,20 @@ button.mov-fila:focus-visible {
   word-break: break-all;
   max-width: 90vw;
 }
+
+/* Botón de descarga sobre el fondo blanco del QR ampliado */
+.qr-fs-descargar {
+  display: inline-flex; align-items: center; gap: 9px;
+  margin: 4px 0 2px; padding: 11px 20px;
+  border: none; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 0.92rem; font-weight: 700; color: #fff;
+  background: var(--gradiente-marca);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, .38);
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+.qr-fs-descargar:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(236, 72, 153, .42); }
+.qr-fs-descargar:active { transform: translateY(0) scale(.97); }
+.qr-fs-descargar:disabled { opacity: .6; cursor: progress; transform: none; }
 
 .qr-fs-hint {
   margin: 0;

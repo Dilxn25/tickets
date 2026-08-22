@@ -6,10 +6,22 @@
           <h2 class="vista-titulo">Gestión de eventos</h2>
           <p class="vista-subtitulo">Planifica y activa las fechas de atención del establecimiento</p>
         </div>
-        <button class="btn btn-primario brillo-hover" @click="abrirModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="btn-icono"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nuevo evento
-        </button>
+        <div class="acciones-encabezado">
+          <!-- Noches de siempre: el boliche abre igual, solo con DJ. Un clic deja
+               el evento armado (nombre, día y horario) listo para elegir el plano. -->
+          <button class="btn btn-rapido" @click="abrirNocheEstandar(5)" title="Crear la noche del próximo viernes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            Viernes
+          </button>
+          <button class="btn btn-rapido" @click="abrirNocheEstandar(6)" title="Crear la noche del próximo sábado">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="btn-icono"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            Sábado
+          </button>
+          <button class="btn btn-primario brillo-hover" @click="abrirModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="btn-icono"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Nuevo evento
+          </button>
+        </div>
       </div>
       <dl class="encabezado-metricas">
         <div class="metrica">
@@ -96,16 +108,23 @@
             {{ formatearFecha(evento.fecha_hora_inicio) }}
           </p>
           <h3 class="evento-nombre">{{ evento.nombre_evento }}</h3>
-          <p class="evento-desc">{{ evento.descripcion || 'Sin descripción' }}</p>
+          <p v-if="evento.descripcion" class="evento-desc">{{ evento.descripcion }}</p>
 
+          <!-- Acciones con icono: se reconocen de un vistazo, sin cuatro palabras -->
           <div class="acciones">
-            <button class="btn btn-sm btn-secundario" @click="abrirModal(evento)">Editar</button>
-            <button class="btn btn-sm btn-secundario" @click="abrirPlanosEvento(evento)">
-              Planos<span v-if="evento.cantidadZonas" class="chip-conteo">{{ evento.cantidadZonas }}</span>
+            <button class="btn-icono-acc" @click="abrirModal(evento)" title="Editar datos del evento" aria-label="Editar evento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
-            <button class="btn btn-sm btn-primario" @click="iniciarCambioEstado(evento)">Estado</button>
-            <button class="btn btn-sm btn-peligro" @click="eliminarEvento(evento)" :disabled="eliminandoEvento === evento.id_evento">
-              {{ eliminandoEvento === evento.id_evento ? '…' : 'Eliminar' }}
+            <button class="btn-icono-acc" @click="abrirPlanosEvento(evento)" :title="`Planos y precios (${evento.cantidadZonas || 0})`" aria-label="Planos del evento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
+              <span v-if="evento.cantidadZonas" class="chip-conteo">{{ evento.cantidadZonas }}</span>
+            </button>
+            <button class="btn-icono-acc acc-estado" @click="iniciarCambioEstado(evento)" title="Cambiar el estado del evento" aria-label="Cambiar estado">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+            </button>
+            <button class="btn-icono-acc acc-borrar" @click="eliminarEvento(evento)" :disabled="eliminandoEvento === evento.id_evento" title="Eliminar evento" aria-label="Eliminar evento">
+              <svg v-if="eliminandoEvento !== evento.id_evento" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+              <span v-else class="acc-spinner" aria-hidden="true"></span>
             </button>
           </div>
         </div>
@@ -206,13 +225,24 @@
               </p>
               <div class="subida-imagen">
                 <input type="file" ref="inputArchivo" accept="image/*" @change="manejarArchivo" class="input-file" id="file-evento" />
-                <label for="file-evento" class="dropzone" :class="{ 'dropzone-cargada': archivoSeleccionado }">
+                <label
+                  for="file-evento"
+                  class="dropzone"
+                  :class="{ 'dropzone-cargada': archivoSeleccionado, 'dropzone-arrastrando': arrastrandoFlyer }"
+                  @dragover.prevent="arrastrandoFlyer = true"
+                  @dragenter.prevent="arrastrandoFlyer = true"
+                  @dragleave.prevent="arrastrandoFlyer = false"
+                  @drop.prevent="soltarFlyer"
+                >
                   <span class="dropzone-icono" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   </span>
-                  <span class="dropzone-texto">{{ archivoSeleccionado ? archivoSeleccionado.name : 'Seleccionar imagen del flyer' }}</span>
-                  <span class="dropzone-hint">PNG o JPG · se muestra en la tarjeta del evento</span>
+                  <span class="dropzone-texto">
+                    {{ archivoSeleccionado ? archivoSeleccionado.name : (arrastrandoFlyer ? 'Soltá la imagen aquí' : 'Arrastrá el flyer o hacé clic') }}
+                  </span>
+                  <span class="dropzone-hint">PNG o JPG · hasta 5 MB</span>
                 </label>
+                <p v-if="errorFlyer" class="dropzone-error">{{ errorFlyer }}</p>
               </div>
               <img v-if="previewImagen" :src="previewImagen" class="preview-img" alt="Vista previa" />
             </section>
@@ -760,6 +790,41 @@ async function abrirModal(evento = null) {
   await cargarPlanosDelEvento()
 }
 
+// ---- Noches estándar (viernes / sábado) --------------------------------
+// La noche normal del local: abre igual, sin artista, solo con DJ. Estos
+// botones abren el asistente ya completado con el próximo viernes o sábado,
+// de 21:00 a 03:00. El administrador solo elige el plano y confirma.
+const HORA_INICIO_NOCHE = 21
+const HORA_FIN_NOCHE = 3
+const NOMBRE_DIA = { 5: 'viernes', 6: 'sábado' }
+
+// Próxima fecha de ese día de la semana (si hoy es ese día y aún no son las
+// 21:00, se usa hoy; si ya pasó, la semana que viene).
+function proximaNoche(diaSemana) {
+  const ahora = new Date()
+  const d = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), HORA_INICIO_NOCHE, 0, 0, 0)
+  let saltar = (diaSemana - d.getDay() + 7) % 7
+  if (saltar === 0 && ahora.getHours() >= HORA_INICIO_NOCHE) saltar = 7
+  d.setDate(d.getDate() + saltar)
+  return d
+}
+
+async function abrirNocheEstandar(diaSemana) {
+  await abrirModal()
+  const inicio = proximaNoche(diaSemana)
+  const fin = new Date(inicio)
+  fin.setDate(fin.getDate() + 1)
+  fin.setHours(HORA_FIN_NOCHE, 0, 0, 0)
+
+  const dia = inicio.toLocaleDateString('es-BO', { day: 'numeric', month: 'long' })
+  form.nombre_evento = `Noche de DJ · ${NOMBRE_DIA[diaSemana]} ${dia}`
+  form.descripcion = 'Noche habitual del local, con DJ residente.'
+  form.fecha_hora_inicio = formatearFechaParaInput(inicio)
+  form.fecha_hora_fin = formatearFechaParaInput(fin)
+  form.tipo_evento = 'estandar'
+  notif.info(`Noche del ${NOMBRE_DIA[diaSemana]} lista: revisa el horario y elige el plano.`)
+}
+
 function cerrarModal() {
   modalAbierto.value = false
   setTimeout(() => {
@@ -769,12 +834,24 @@ function cerrarModal() {
   }, 200)
 }
 
-function manejarArchivo(e) {
-  const archivo = e.target.files[0]
-  if (archivo) {
-    archivoSeleccionado.value = archivo
-    previewImagen.value = URL.createObjectURL(archivo)
-  }
+// El flyer se puede ARRASTRAR sobre el recuadro o elegir con clic.
+const arrastrandoFlyer = ref(false)
+const errorFlyer = ref('')
+
+function tomarFlyer(archivo) {
+  if (!archivo) return
+  if (!archivo.type.startsWith('image/')) { errorFlyer.value = 'El archivo debe ser una imagen (PNG o JPG).'; return }
+  if (archivo.size > 5 * 1024 * 1024) { errorFlyer.value = 'La imagen no debe pesar más de 5 MB.'; return }
+  errorFlyer.value = ''
+  archivoSeleccionado.value = archivo
+  previewImagen.value = URL.createObjectURL(archivo)
+}
+
+function manejarArchivo(e) { tomarFlyer(e.target.files?.[0]) }
+
+function soltarFlyer(e) {
+  arrastrandoFlyer.value = false
+  tomarFlyer(e.dataTransfer?.files?.[0])
 }
 
 // Paso 1 → guarda los datos (crea el evento si es nuevo) y pasa al espacio
@@ -915,6 +992,40 @@ async function confirmarCambioEstado() {
   flex-wrap: wrap;
 }
 .encabezado-texto { min-width: 0; }
+/* Accesos rápidos a las noches de siempre, junto a "Nuevo evento" */
+.acciones-encabezado { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+/* Acciones de la tarjeta en iconos: menos texto, misma función */
+.btn-icono-acc {
+  position: relative; display: inline-grid; place-items: center;
+  width: 36px; height: 36px; border-radius: var(--radio-md); cursor: pointer;
+  border: 1px solid var(--borde-sutil); background: rgba(255,255,255,.04);
+  color: var(--texto-secundario); transition: var(--trans-rapida);
+}
+.btn-icono-acc svg { width: 17px; height: 17px; }
+.btn-icono-acc:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.16); color: var(--texto-principal); transform: translateY(-2px); }
+.btn-icono-acc:disabled { opacity: .55; cursor: progress; transform: none; }
+.btn-icono-acc.acc-estado { color: var(--morado-hover); border-color: var(--borde-activo); background: rgba(168,85,247,.12); }
+.btn-icono-acc.acc-borrar:hover { border-color: var(--color-error); background: rgba(239,68,68,.15); color: var(--color-error); }
+.btn-icono-acc .chip-conteo {
+  position: absolute; top: -6px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--gradiente-marca); color: #fff;
+  font-size: .64rem; font-weight: 800; display: grid; place-items: center;
+}
+.acc-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--borde-sutil); border-top-color: var(--morado-brillante); animation: girar 0.7s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+.btn-rapido {
+  background: rgba(168, 85, 247, 0.10);
+  border: 1px solid var(--borde-activo);
+  color: var(--morado-hover);
+  font-weight: 600;
+  transition: var(--trans-rapida);
+}
+.btn-rapido:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--morado-brillante);
+  color: var(--texto-principal);
+  transform: translateY(-2px);
+}
 .vista-titulo { font-family: var(--fuente-titulo); font-size: 1.7rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.25rem; line-height: 1.1; color: var(--texto-principal); text-wrap: balance; }
 .vista-subtitulo { color: var(--texto-secundario); font-size: 0.9rem; line-height: 1.5; max-width: 52ch; text-wrap: pretty; }
 .encabezado-fila .btn-primario { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
@@ -1257,6 +1368,16 @@ async function confirmarCambioEstado() {
 }
 .dropzone:hover { border-color: var(--morado-brillante); background: rgba(168, 85, 247, 0.12); color: var(--texto-principal); }
 .dropzone-cargada { border-style: solid; border-color: var(--color-exito); background: rgba(34, 197, 94, 0.08); }
+/* Mientras se arrastra una imagen encima: el recuadro se enciende */
+.dropzone-arrastrando {
+  border-style: solid;
+  border-color: var(--morado-brillante);
+  background: rgba(168, 85, 247, 0.16);
+  color: var(--texto-principal);
+  box-shadow: 0 0 0 3px var(--rosa-suave);
+  transform: scale(1.01);
+}
+.dropzone-error { margin: 6px 0 0; font-size: 0.78rem; font-weight: 600; color: var(--color-error); }
 .dropzone-icono {
   display: inline-flex;
   align-items: center;

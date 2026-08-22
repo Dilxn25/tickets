@@ -254,13 +254,17 @@ router.get('/personal-operativo', soloRoles('Bartender', 'Administrador'), async
 // ---- GET /api/productos — Listar ----
 router.get('/', async (req, res) => {
   try {
-    const { busqueda, categoria, promo } = req.query
+    const { busqueda, categoria, promo, incluir_cortesias } = req.query
 
     const productos = await prisma.producto.findMany({
       where: {
         ...(busqueda  && { nombre_producto: { contains: busqueda } }),
         ...(categoria && { id_categoria: Number(categoria) }),
         ...(promo === 'true' && { estado_promocion: true }),
+        // Los combos de CORTESÍA (Bs 0) no son productos a la venta: solo se
+        // ofrecen al cliente que reservó. Fuera del catálogo del cliente, del
+        // mesero y del cajero; el administrador los pide aparte para gestionarlos.
+        ...(incluir_cortesias !== '1' && { es_cortesia: false }),
       },
       include: {
         categoria: { select: { id_categoria: true, nombre_categoria: true } },

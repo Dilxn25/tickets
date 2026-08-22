@@ -438,7 +438,7 @@ async function cargarDatos() {
     // en cliente para que las métricas de cabecera sean siempre globales y el filtrado instantáneo.
     const [cats, prods] = await Promise.all([
       servicioProductos.obtenerCategorias(),
-      servicioProductos.listar({})
+      servicioProductos.listar({ incluir_cortesias: 1 })
     ])
     categorias.value = cats
     productos.value = prods

@@ -130,6 +130,8 @@ import IngresoEvento from './paneles/IngresoEvento.vue'
 import EntradaGeneral from './paneles/EntradaGeneral.vue'
 import TarjetaMesa from './paneles/TarjetaMesa.vue'
 import GruposGrandes from './paneles/GruposGrandes.vue'
+import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
+const notif = useNotificaciones()
 
 // ---- Evento activo ----
 const eventos = ref([])
@@ -266,8 +268,10 @@ async function enviarPropuesta() {
     salirModoPropuesta()
     cargarSolicitudes()
     cargarPlanos()
+    notif.exito('Propuesta enviada al cliente')
   } catch (e) {
-    console.error(e)
+    // Nunca en silencio: el recepcionista tiene que saber por qué no salió.
+    notif.error(e?.error || 'No se pudo enviar la propuesta.')
   } finally { proponiendo.value = false }
 }
 

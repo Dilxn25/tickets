@@ -2302,7 +2302,9 @@ function formatearFecha(isoStr) {
 
 /* Franja compacta de KPIs (6 en una fila, densos) */
 .rep-kpis-strip {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+  /* 200px mínimo: con 160 las tarjetas quedaban tan angostas en anchos
+     intermedios que la cifra de ventas no entraba en su caja. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
   gap: 12px !important;
 }
 .rep-kpis-strip .tarjeta-estadistica {
@@ -2313,8 +2315,14 @@ function formatearFecha(isoStr) {
 .rep-kpis-strip .icono-est { width: 44px; height: 44px; }
 .rep-kpis-strip .icono-est svg { width: 22px; height: 22px; }
 .rep-kpis-strip .info-est h3 { font-size: 0.62rem; letter-spacing: 0.9px; margin-bottom: 3px; }
-.rep-kpis-strip .info-est h2 { font-size: 1.5rem; margin: 0 0 2px; }
-.rep-kpis-strip .bg-ventas .info-est h2 { font-size: 1.6rem; }
+.rep-kpis-strip .info-est h2 { font-size: clamp(1.05rem, 1.7vw, 1.5rem); margin: 0 0 2px; }
+/* La cifra de ventas puede ser larga (Bs. 699220.90): se achica con la pantalla
+   y, si no entra, baja a la línea de abajo SIN partir los dígitos. */
+.rep-kpis-strip .bg-ventas .info-est h2 {
+  font-size: clamp(1.05rem, 1.75vw, 1.6rem);
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
 .rep-kpis-strip .info-est p { font-size: 0.68rem; margin: 0; }
 /* Solo forzar 6 columnas cuando REALMENTE hay ancho (el sidebar come ~255px);
    antes se activaba a 900px de ventana y los KPIs quedaban aplastados */
@@ -2685,7 +2693,16 @@ function formatearFecha(isoStr) {
     var(--glass-fondo);
   border-color: color-mix(in srgb, var(--color-exito) 30%, var(--glass-borde));
 }
-.bg-ventas .info-est h2 { font-size: clamp(2.2rem, 3vw, 2.7rem); }
+/* El número se adapta al ancho REAL de su tarjeta (cqi), no al de la pantalla:
+   en anchos intermedios "Bs. 10665.50" se salía de la caja. */
+.bg-ventas .info-est h2 {
+  /* Cifra grande, pero que se achica con la pantalla. Puede bajar el importe a
+     la segunda línea (debajo de "Bs."), lo que NUNCA hace es partir los dígitos
+     ni salirse de la tarjeta. */
+  font-size: clamp(1.05rem, 2vw, 2.7rem);
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
 
 .icono-est {
   width: 58px;
@@ -2722,11 +2739,14 @@ function formatearFecha(isoStr) {
   font-weight: 700;
 }
 .info-est h2 {
-  font-size: 2.15rem;
+  font-size: clamp(1.3rem, 2.6vw, 2.15rem);
   color: #fff;
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.05;
+  /* Nunca desborda su tarjeta: si no entra, parte la línea en vez de salirse. */
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
   margin: 0 0 6px;
 }
@@ -3395,6 +3415,10 @@ function formatearFecha(isoStr) {
   align-items: center;
   justify-content: space-around;
   flex: 1;
+  /* En anchos intermedios la torta y su leyenda no entraban lado a lado y se
+     salían de la tarjeta: ahora bajan solas y la torta se achica. */
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 24px;
   padding: 20px 18px;
   border-radius: var(--radio-lg);
@@ -3404,8 +3428,11 @@ function formatearFecha(isoStr) {
 }
 .anillos-visual {
   position: relative;
-  width: 250px;
-  height: 250px;
+  /* Se encoge con la tarjeta en vez de forzar 250px fijos y desbordar. */
+  width: clamp(150px, 42vw, 250px);
+  height: clamp(150px, 42vw, 250px);
+  max-width: 100%;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;

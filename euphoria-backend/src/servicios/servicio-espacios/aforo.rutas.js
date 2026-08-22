@@ -29,6 +29,9 @@ function estadoAforo(porcentaje) {
 // Ventana en la que una entrada es válida: SOLO el día del evento (con un
 // margen antes para la llegada temprana / apertura de puertas). Evita que
 // alguien use su entrada en otra fecha u otro evento.
+// Hora y fecha en formato boliviano para los mensajes al recepcionista.
+const horaBolivia = (d) => new Date(d).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/La_Paz' })
+const fechaCortaBolivia = (d) => new Date(d).toLocaleDateString('es-BO', { day: 'numeric', month: 'long', timeZone: 'America/La_Paz' })
 const HORAS_ANTES = 4   // margen de apertura antes del inicio
 const HORAS_DESPUES = 12 // duración por defecto si el evento no tiene fin
 function ventanaEvento(evento, ahora = hoyBolivia()) {
@@ -145,7 +148,9 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     // Rechazar admisión fuera del día del evento
     if (ventana.estado === 'proxima') {
       return res.status(409).json({
-        error: `Esta entrada aún no está activa. Es válida el ${new Date(ventana.inicio).toLocaleDateString('es-BO', { day: '2-digit', month: 'long' })}.`,
+        // Mensaje accionable: dice a qué HORA abre la puerta, no solo el día (a las
+        // 8 am del mismo día el recepcionista no entendía por qué no pasaba nada).
+        error: `Todavía no es hora de ingreso. La puerta abre a las ${horaBolivia(ventana.ventanaInicio)} (el evento empieza a las ${horaBolivia(ventana.inicio)} del ${fechaCortaBolivia(ventana.inicio)}).`,
         fuera_de_fecha: true,
         estado_fecha: 'proxima',
       })
@@ -236,8 +241,11 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
 
     // Combo de cortesía sin elegir: ahora que ya está adentro, se le recuerda.
     try {
-      const cort = await prisma.cortesia_reserva.findUnique({ where: { id_entrada: entrada.id_entrada } })
-      if (cort && cort.estado === 'pendiente') {
+      const cort = await prisma.entrada.findUnique({
+        where: { id_entrada: entrada.id_entrada },
+        select: { cortesia_estado: true },
+      })
+      if (cort?.cortesia_estado === 'pendiente') {
         await notificar(entrada.id_usuario, {
           tipo: 'cortesia',
           titulo: 'Tu combo de cortesía te espera',
@@ -346,6 +354,47 @@ router.post('/salida', soloRoles('Recepcionista', 'Administrador'), async (req, 
 })
 
 // ---------- PANEL DE AFORO ----------
+
+// GET /api/aforo/flujo/:idEvento — a qué hora entró y salió la gente.
+// Devuelve una fila por hora con ingresos, salidas y cuánta gente quedó dentro
+// (acumulado). Es la base del gráfico del panel: de un vistazo se ve la hora
+// pico y a qué hora se empieza a vaciar el local.
+router.get('/flujo/:idEvento', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const movimientos = await prisma.registro_aforo.findMany({
+      where: { zona: { id_evento } },
+      select: { tipo_movimiento: true, cantidad: true, fecha_hora: true },
+      orderBy: { fecha_hora: 'asc' },
+    })
+    if (!movimientos.length) return res.json({ horas: [], pico: null, total_ingresos: 0, total_salidas: 0 })
+
+    // Agrupar por hora local de Bolivia (el servidor corre en UTC).
+    const claveHora = (f) => new Date(f).toLocaleString('es-BO', { hour: '2-digit', hour12: false, timeZone: 'America/La_Paz' }).padStart(2, '0')
+    const porHora = new Map()
+    let totalIn = 0, totalOut = 0
+    for (const m of movimientos) {
+      const h = claveHora(m.fecha_hora)
+      if (!porHora.has(h)) porHora.set(h, { hora: h, ingresos: 0, salidas: 0 })
+      const fila = porHora.get(h)
+      const n = Number(m.cantidad || 1)
+      if (m.tipo_movimiento === 'salida') { fila.salidas += n; totalOut += n }
+      else { fila.ingresos += n; totalIn += n }
+    }
+
+    // Orden cronológico de una noche: 18, 19… 23, 00, 01… (no 00,01,…,23).
+    const orden = (h) => (Number(h) < 12 ? Number(h) + 24 : Number(h))
+    const horas = [...porHora.values()].sort((a, b) => orden(a.hora) - orden(b.hora))
+    let dentro = 0
+    for (const f of horas) { dentro += f.ingresos - f.salidas; f.dentro = Math.max(0, dentro) }
+    const pico = horas.reduce((a, b) => (b.dentro > (a?.dentro ?? -1) ? b : a), null)
+
+    res.json({ horas, pico, total_ingresos: totalIn, total_salidas: totalOut })
+  } catch (error) {
+    console.error('Error en flujo horario de aforo:', error)
+    res.status(500).json({ error: 'No se pudo calcular el flujo por hora' })
+  }
+})
 
 // GET /api/aforo/evento/:idEvento — aforo en vivo de todas las zonas del evento
 router.get('/evento/:idEvento', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {

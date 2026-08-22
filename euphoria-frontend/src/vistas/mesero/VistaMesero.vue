@@ -570,8 +570,9 @@
             >
               <span class="chip-nombre">{{ s.nombre }}</span>
               <span class="chip-meta">
-                <span v-if="s.probabilidad >= 0.005" class="chip-prob">{{ (s.probabilidad * 100).toFixed(0) }}%</span>
-                <span v-else-if="s.afinidad_cliente >= 0.15" class="chip-prob" title="Coincide con lo que suele pedir el cliente">{{ (s.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
+                <!-- Siempre se muestra la probabilidad REAL del modelo (nunca una sugerencia sin número) -->
+                <span class="chip-prob">{{ formatoProbabilidad(s.probabilidad) }}</span>
+                <span v-if="s.afinidad_cliente >= 0.15" class="chip-prob" title="Coincide con lo que suele pedir el cliente">{{ (s.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
                 <span class="chip-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
               </span>
               <span class="chip-mas">+</span>
@@ -1489,6 +1490,16 @@ function agregarAlCarrito(prod) {
 }
 
 // ---- Recomendaciones (IA) ----
+// Probabilidad del modelo SIEMPRE visible y honesta: con 1 decimal cuando es chica
+// (0,4 %), "< 0,1 %" cuando es ínfima. Antes se ocultaba bajo 0,5 % y la sugerencia
+// parecía inventada.
+function formatoProbabilidad(p) {
+  const v = Number(p || 0) * 100
+  if (v >= 1) return `${v.toFixed(0)}%`
+  if (v >= 0.1) return `${v.toFixed(1).replace('.', ',')}%`
+  return '< 0,1%'
+}
+
 // Pide al backend las sugerencias y las muestra. Funciona también con la MESA VACÍA
 // (arranque en frío → lo más pedido) y pasa el cliente si hay uno seleccionado
 // (personalización: le sugiere lo que ESE cliente suele pedir).
@@ -1496,7 +1507,7 @@ async function cargarSugerencias() {
   try {
     const ids = carrito.value.map(c => c.producto.id_producto)
     const idCliente = clienteSeleccionado.value?.id_usuario || null
-    const res = await clienteHttp.post('/recomendaciones', { productos_en_mesa: ids, k: 4, id_cliente: idCliente })
+    const res = await clienteHttp.post('/recomendaciones', { productos_en_mesa: ids, k: 3, id_cliente: idCliente })
     const enOrden = new Set(ids)
     sugerencias.value = (res.recomendaciones || [])
       .filter(r => !enOrden.has(r.id_producto))

@@ -25,8 +25,12 @@
 
     <!-- Filtro por evento -->
     <div v-if="eventosDisponibles.length > 1" class="ped-filtro">
-      <button class="pf-chip" :class="{ activo: eventoFiltro === null }" @click="eventoFiltro = null">Todos</button>
-      <button v-for="e in eventosDisponibles" :key="e.id" class="pf-chip" :class="{ activo: eventoFiltro === e.id }" @click="eventoFiltro = e.id">{{ e.nombre }}</button>
+      <BaseSelect
+        :model-value="eventoFiltro ?? ''"
+        :options="opcionesEvento"
+        placeholder="Todos tus eventos"
+        @update:model-value="eventoFiltro = $event === '' ? null : Number($event)"
+      />
     </div>
 
     <div v-if="cargando" class="ped-estado"><span class="spinner"></span></div>
@@ -124,6 +128,7 @@ import { formatoFecha, formatoBs } from '@/utilidades/formato.js'
 import { semaforoDe } from '@/utilidades/estado-pedido.js'
 import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
 import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
+import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const auth = useTiendaAutenticacion()
 const notif = useNotificaciones()
@@ -156,6 +161,12 @@ async function definirEntrega(p, modo) {
 
 const activos = computed(() => pedidos.value.filter(p => ESTADOS_ACTIVOS.includes(p.estado) && !p.entregado))
 const historial = computed(() => pedidos.value.filter(p => !activos.value.includes(p)))
+
+// Opciones del desplegable de eventos (menos texto que una fila de chips).
+const opcionesEvento = computed(() => [
+  { value: '', label: 'Todos tus eventos' },
+  ...eventosDisponibles.value.map(e => ({ value: e.id, label: e.nombre })),
+])
 
 const eventosDisponibles = computed(() => {
   const map = new Map()
@@ -264,9 +275,8 @@ onUnmounted(() => { if (socket) socket.disconnect() })
 .ped-tab.activo { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
 .ped-tab-n { background: rgba(255,255,255,0.25); border-radius: 999px; padding: 1px 7px; font-size: 0.72rem; }
 
-.ped-filtro { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.pf-chip { padding: 6px 14px; border-radius: var(--radio-full); border: 1px solid var(--borde-sutil); background: var(--fondo-tarjeta); color: var(--texto-secundario); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-.pf-chip.activo { border-color: var(--morado-brillante); color: var(--texto-principal); background: rgba(168,85,247,0.12); }
+.ped-filtro { max-width: 320px; margin-bottom: 14px; }
+@media (max-width: 560px) { .ped-filtro { max-width: 100%; } }
 
 .ped-estado { display: flex; justify-content: center; padding: 3rem; }
 

@@ -26,6 +26,23 @@ api.interceptors.request.use(config => {
   return config
 }, error => Promise.reject(error))
 
+// Mensaje de respaldo por código HTTP, para que ninguna falla llegue muda a la vista.
+function mensajePorEstado(status) {
+  switch (status) {
+    case 400: return 'Los datos enviados no son válidos. Revisa el formulario.'
+    case 401: return 'Tu sesión venció. Vuelve a iniciar sesión.'
+    case 403: return 'No tienes permiso para hacer esto.'
+    case 404: return 'No se encontró lo que buscabas.'
+    case 409: return 'La operación choca con el estado actual. Actualiza y vuelve a intentar.'
+    case 413: return 'El archivo es demasiado pesado.'
+    case 422: return 'Hay un dato que no se pudo procesar.'
+    case 429: return 'Demasiados intentos seguidos. Espera un momento.'
+    case 500: return 'Ocurrió un error en el servidor. Intenta de nuevo en unos segundos.'
+    case 502: case 503: case 504: return 'El servidor no responde por ahora. Intenta de nuevo en unos segundos.'
+    default: return 'No se pudo completar la operación.'
+  }
+}
+
 // ---- Interceptor de RESPUESTA: maneja errores globales ----
 api.interceptors.response.use(
   response => response.data,
@@ -67,9 +84,21 @@ api.interceptors.response.use(
     const data = error.response?.data
     if (data && typeof data === 'object') {
       data.__status = error.response.status
+      // Toda respuesta fallida llega a la vista con un `error` legible: si el
+      // servidor no mandó texto, se pone uno según el código.
+      if (!data.error) data.error = mensajePorEstado(error.response.status)
       return Promise.reject(data)
     }
-    return Promise.reject(data || error)
+    // Sin respuesta (servidor caído, sin internet, tiempo agotado): nunca se
+    // rechaza con un objeto mudo; la vista siempre tiene algo que mostrar.
+    const sinRed = error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response
+    return Promise.reject({
+      error: sinRed
+        ? 'No hay conexión con el servidor. Revisa tu internet y vuelve a intentar.'
+        : mensajePorEstado(error.response?.status),
+      __status: error.response?.status ?? 0,
+      __sin_red: sinRed,
+    })
   }
 )
 

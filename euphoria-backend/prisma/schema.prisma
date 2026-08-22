@@ -79,7 +79,7 @@ model comanda {
   entrada                             entrada?          @relation(fields: [id_entrada], references: [id_entrada], map: "COMANDA_id_entrada_fkey")
   detalle_comanda                     detalle_comanda[]
   transaccion                         transaccion[]
-  cortesia_reserva                    cortesia_reserva[]
+  entradas_cortesia                   entrada[]         @relation("cortesia_comanda")
 
   @@index([id_cliente], map: "COMANDA_id_cliente_fkey")
   @@index([id_mesa], map: "COMANDA_id_mesa_fkey")
@@ -125,14 +125,28 @@ model entrada {
   monto_pagado       Decimal?          @db.Decimal(10, 2)
   estado_validacion  Boolean           @default(false)
   fecha_reserva      DateTime          @default(now())
+  // Cierre de evento: si nadie ingresó con esta entrada, se devuelve el monto
+  // (menos comisión) y se sella la fecha aquí para no devolver dos veces.
+  // El monto queda en su fila de `transaccion`, por eso no se duplica acá.
+  fecha_devolucion   DateTime?
+  // CORTESÍA por reserva (antes tabla aparte `cortesia_reserva`, que era 1 a 1
+  // con la entrada). Vive acá: null en cortesia_estado = esta reserva no regala
+  // combo; si regala: pendiente | elegida | vencida.
+  cortesia_estado    String?           @db.VarChar(20)
+  cortesia_producto  Int?
+  cortesia_comanda   Int?
+  cortesia_fecha     DateTime?
   usuario            usuario           @relation(fields: [id_usuario], references: [id_usuario], map: "ENTRADA_id_usuario_fkey")
+  producto_cortesia  producto?         @relation("cortesia_producto", fields: [cortesia_producto], references: [id_producto], onDelete: SetNull, map: "ENTRADA_cortesia_producto_fkey")
+  comanda_cortesia   comanda?          @relation("cortesia_comanda", fields: [cortesia_comanda], references: [id_comanda], onDelete: SetNull, map: "ENTRADA_cortesia_comanda_fkey")
   zona               zona              @relation(fields: [id_zona], references: [id_zona], map: "ENTRADA_id_zona_fkey")
   mesa_espacio       mesa_espacio?     @relation(fields: [id_mesa], references: [id_mesa], map: "ENTRADA_id_mesa_fkey")
   registro_aforo     registro_aforo[]
   comanda            comanda[]
   asignacion_mesa    asignacion_mesa[]
-  cortesia_reserva   cortesia_reserva?
 
+  @@index([cortesia_producto], map: "ENTRADA_cortesia_producto_fkey")
+  @@index([cortesia_comanda], map: "ENTRADA_cortesia_comanda_fkey")
   @@index([id_usuario], map: "ENTRADA_id_usuario_fkey")
   @@index([id_zona], map: "ENTRADA_id_zona_fkey")
   @@index([id_mesa], map: "ENTRADA_id_mesa_fkey")
@@ -233,7 +247,7 @@ model producto {
   es_combo                                                Boolean            @default(false)
   // Combo que se REGALA por una reserva (no se vende en el catálogo)
   es_cortesia                                             Boolean            @default(false)
-  cortesia_reserva                                        cortesia_reserva[]
+  entradas_cortesia                                       entrada[]          @relation("cortesia_producto")
   combo_detalle_combo_detalle_id_producto_hijoToproducto  combo_detalle[]    @relation("combo_detalle_id_producto_hijoToproducto")
   combo_detalle_combo_detalle_id_producto_padreToproducto combo_detalle[]    @relation("combo_detalle_id_producto_padreToproducto")
   detalle_comanda                                         detalle_comanda[]
@@ -490,25 +504,6 @@ model sugerencia_ia {
 
   @@index([fecha_hora])
   @@index([id_producto])
-}
-
-// Combo de CORTESÍA que le corresponde a una reserva (el dueño regala un combo a
-// las reservas desde cierto monto). Nace 'pendiente'; cuando el cliente elige
-// su combo pasa a 'elegida' y se crea la comanda a Bs 0 que va a la barra.
-model cortesia_reserva {
-  id_cortesia    Int       @id @default(autoincrement())
-  id_entrada     Int       @unique(map: "CORTESIA_id_entrada_key")
-  id_producto    Int?
-  id_comanda     Int?
-  estado         String    @default("pendiente") @db.VarChar(20) // pendiente | elegida
-  fecha_creacion DateTime  @default(now())
-  fecha_eleccion DateTime?
-  entrada        entrada   @relation(fields: [id_entrada], references: [id_entrada], onDelete: Cascade, map: "CORTESIA_id_entrada_fkey")
-  producto       producto? @relation(fields: [id_producto], references: [id_producto], onDelete: SetNull, map: "CORTESIA_id_producto_fkey")
-  comanda        comanda?  @relation(fields: [id_comanda], references: [id_comanda], onDelete: SetNull, map: "CORTESIA_id_comanda_fkey")
-
-  @@index([id_producto], map: "CORTESIA_id_producto_fkey")
-  @@index([id_comanda], map: "CORTESIA_id_comanda_fkey")
 }
 
 // Depósitos ACH confirmados por el CORREO del banco (vigía IMAP): segunda

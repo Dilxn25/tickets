@@ -1078,6 +1078,7 @@ onUnmounted(() => {
   position: relative; overflow: hidden; isolation: isolate;
   background: var(--gradiente-sutil); border: 1px solid var(--glass-borde); border-radius: var(--radio-xl);
   padding: 1.9rem 1.7rem; text-align: center; max-width: 350px; width: 100%;
+  /* En computadora el modal se queda chico y los combos no se leen: crece. */
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), var(--sombra-modal), var(--sombra-glow);
   animation: aparecer-modal 0.4s var(--ease-cine);
 }
@@ -1154,7 +1155,9 @@ onUnmounted(() => {
 .combo-chip:hover { border-color: var(--borde-activo); box-shadow: var(--glow-morado); transform: translateY(-2px); background: rgba(168,85,247,0.12); }
 .combo-chip:active { transform: scale(0.98); }
 .combo-add { width: 18px; height: 18px; color: var(--morado-hover); flex-shrink: 0; }
-.combo-nombre { font-size: 0.82rem; color: var(--texto-principal); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+/* Nombre completo del combo: antes se cortaba con puntos suspensivos y no se
+   sabía qué incluía. Ahora baja de línea si hace falta. */
+.combo-nombre { font-size: 0.82rem; color: var(--texto-principal); font-weight: 600; line-height: 1.35; flex: 1; text-wrap: pretty; }
 .combo-precio { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .combo-precio s { font-size: 0.75rem; color: var(--texto-desactivado); }
 .combo-precio b { font-size: 0.9rem; color: var(--rosa-acento); }
@@ -1213,4 +1216,21 @@ onUnmounted(() => {
 .cortesia-op-txt em { font-size: 0.68rem; color: var(--color-alerta); font-style: normal; font-weight: 700; }
 .cortesia-listo { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 12px; background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.4); color: #BBF7D0; font-size: 0.88rem; }
 @media (max-width: 420px) { .cortesia-opciones { grid-template-columns: 1fr; } }
+
+/* ---- En computadora: el modal de confirmación deja de verse diminuto ---- */
+@media (min-width: 760px) {
+  .modal-exito { max-width: 620px; padding: 2.2rem 2.1rem; }
+  .modal-exito h3 { font-size: 1.6rem; }
+  /* Los combos de cortesía en tres columnas, con la foto más grande */
+  .cortesia-opciones { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .cortesia-op { flex-direction: column; align-items: center; text-align: center; padding: 12px 10px; gap: 8px; }
+  .cortesia-op-img { width: 68px; height: 68px; border-radius: 14px; }
+  .cortesia-op-txt { align-items: center; }
+  .cortesia-op-txt b { font-size: 0.95rem; }
+  .cortesia-op-txt small { font-size: 0.75rem; }
+  /* Los packs sugeridos, en dos columnas para no hacer una lista larguísima */
+  .combos-lista { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .combo-nombre { font-size: 0.88rem; }
+  .combo-precio b { font-size: 1rem; }
+}
 </style>

@@ -111,6 +111,35 @@
         </div>
       </div>
 
+      <!-- Flujo de la noche: a qué hora entra y sale la gente -->
+      <section v-if="flujo.horas.length" class="flujo superficie aparecer-subir">
+        <div class="flujo-cab">
+          <h2 class="seccion-h2">Flujo de la noche</h2>
+          <div class="flujo-leyenda" aria-hidden="true">
+            <span class="fl-item"><i class="fl-punto in"></i>Entran</span>
+            <span class="fl-item"><i class="fl-punto out"></i>Salen</span>
+            <span class="fl-item"><i class="fl-punto dentro"></i>Dentro</span>
+          </div>
+        </div>
+
+        <div class="flujo-grafico" role="img" :aria-label="`Ingresos y salidas por hora. Pico a las ${flujo.pico?.hora}:00 con ${flujo.pico?.dentro} personas`">
+          <div v-for="h in flujo.horas" :key="h.hora" class="fl-col" :class="{ pico: h.hora === flujo.pico?.hora }">
+            <div class="fl-barras">
+              <span class="fl-linea-dentro" :style="{ bottom: alturaPct(h.dentro, maxDentro) }" :title="`${h.dentro} dentro`"></span>
+              <span class="fl-barra in" :style="{ height: alturaPct(h.ingresos, maxMovimiento) }" :title="`${h.ingresos} entraron`"></span>
+              <span class="fl-barra out" :style="{ height: alturaPct(h.salidas, maxMovimiento) }" :title="`${h.salidas} salieron`"></span>
+            </div>
+            <span class="fl-hora">{{ h.hora }}</span>
+          </div>
+        </div>
+
+        <div class="flujo-pie">
+          <span class="fl-dato"><b>{{ flujo.total_ingresos }}</b> ingresos</span>
+          <span class="fl-dato"><b>{{ flujo.total_salidas }}</b> salidas</span>
+          <span v-if="flujo.pico" class="fl-dato pico"><b>{{ flujo.pico.dentro }}</b> en el pico · {{ flujo.pico.hora }}:00</span>
+        </div>
+      </section>
+
       </div><!-- /aforo-izq -->
 
       <!-- Mapa en vivo (columna derecha, siempre visible) -->
@@ -152,6 +181,7 @@
 import { ref, computed, onActivated, onDeactivated } from 'vue'
 import { io } from 'socket.io-client'
 import { servicioAforo } from '@/servicios-api/servicio-aforo.js'
+import clienteHttp from '@/servicios-api/cliente-http.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 
 const eventos = ref([])
@@ -244,11 +274,27 @@ function claseMesa(m) {
   return (m.estado_ocupacion === 'reservada' ? 'ocupada' : 'libre') + ' tipo-' + m.tipo_elemento
 }
 
+// ---- Flujo por hora (entradas y salidas de la noche) --------------------
+const flujo = ref({ horas: [], pico: null, total_ingresos: 0, total_salidas: 0 })
+const maxMovimiento = computed(() => Math.max(1, ...flujo.value.horas.map(h => Math.max(h.ingresos, h.salidas))))
+const maxDentro = computed(() => Math.max(1, ...flujo.value.horas.map(h => h.dentro)))
+// Altura en % dejando un mínimo visible para que un valor chico no desaparezca.
+function alturaPct(valor, max) {
+  if (!valor) return '0%'
+  return Math.max(6, Math.round((valor / max) * 100)) + '%'
+}
+async function cargarFlujo() {
+  if (!idEventoSel.value) return
+  try { flujo.value = await clienteHttp.get(`/aforo/flujo/${idEventoSel.value}`) }
+  catch { flujo.value = { horas: [], pico: null, total_ingresos: 0, total_salidas: 0 } }
+}
+
 async function cargarAforo() {
   if (!idEventoSel.value) return
   cargando.value = true
   try {
     aplicar(await servicioAforo.obtenerAforoEvento(idEventoSel.value))
+    cargarFlujo()
   } catch (err) {
     console.error('Error cargando aforo:', err)
   } finally {
@@ -267,6 +313,7 @@ onActivated(async () => {
   })
   socket.on('aforo_actualizado', (resumen) => {
     if (resumen.id_evento !== idEventoSel.value) return
+    cargarFlujo() // el gráfico de la noche también sigue el movimiento en vivo
     const i = zonas.value.findIndex(z => z.id_zona === resumen.id_zona)
     if (i >= 0) {
       // Solo se actualizan EN VIVO los campos de ocupación (el socket manda aforo_actual).
@@ -389,6 +436,50 @@ onDeactivated(() => {
 .kpi-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--esp-4); padding-top: var(--esp-5); border-top: 1px solid var(--borde-sutil); }
 
 /* Encabezado de sección de zonas */
+/* ---- Flujo de la noche: barras de ingresos/salidas + línea de "dentro" ---- */
+.flujo { padding: var(--esp-4); border-radius: var(--radio-xl); margin-top: var(--esp-4); }
+.flujo-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.flujo-leyenda { display: flex; gap: 14px; list-style: none; }
+.fl-item { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 600; color: var(--texto-secundario); }
+.fl-punto { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.fl-punto.in { background: var(--color-exito); }
+.fl-punto.out { background: var(--color-error); }
+.fl-punto.dentro { background: var(--morado-brillante); border-radius: 999px; }
+
+.flujo-grafico {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 168px; padding: 10px 4px 0;
+  border-bottom: 1px solid var(--borde-sutil);
+  overflow-x: auto;
+}
+.fl-col { flex: 1 1 0; min-width: 26px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.fl-barras {
+  position: relative; flex: 1; width: 100%;
+  display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+}
+.fl-barra {
+  width: 42%; max-width: 16px; border-radius: 4px 4px 0 0;
+  transition: height .5s cubic-bezier(.16,1,.3,1);
+}
+.fl-barra.in { background: linear-gradient(180deg, var(--color-exito), rgba(34,197,94,.45)); }
+.fl-barra.out { background: linear-gradient(180deg, var(--color-error), rgba(239,68,68,.4)); }
+/* Marca de cuánta gente quedó dentro a esa hora */
+.fl-linea-dentro {
+  position: absolute; left: 8%; right: 8%; height: 3px; border-radius: 2px;
+  background: var(--morado-brillante);
+  box-shadow: 0 0 10px rgba(168,85,247,.65);
+  transition: bottom .5s cubic-bezier(.16,1,.3,1);
+}
+.fl-hora { font-size: 0.7rem; font-weight: 700; color: var(--texto-desactivado); font-variant-numeric: tabular-nums; }
+.fl-col.pico .fl-hora { color: var(--morado-hover); }
+.fl-col.pico .fl-barras::after {
+  content: ''; position: absolute; inset: 0 0 -2px; border-radius: 6px;
+  background: rgba(168,85,247,.10); pointer-events: none;
+}
+.flujo-pie { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 0.78rem; color: var(--texto-secundario); }
+.fl-dato b { color: var(--texto-principal); font-variant-numeric: tabular-nums; }
+.fl-dato.pico b { color: var(--morado-hover); }
+
 .zonas-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-4); margin-bottom: var(--esp-4); flex-wrap: wrap; }
 .seccion-h2 { font-family: var(--fuente-titulo); font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--texto-principal); }
 .leyenda { display: flex; align-items: center; gap: var(--esp-4); flex-wrap: wrap; }

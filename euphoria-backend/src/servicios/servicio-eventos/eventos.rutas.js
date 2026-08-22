@@ -15,6 +15,7 @@ const { emitirRecurso } = require('../../utilidades/config-runtime')
 const { notificar } = require('../../utilidades/notificaciones')
 const { purgarEvento } = require('../../utilidades/purgar-espacios')
 const { hoyBolivia } = require('../../utilidades/tiempo')
+const { cerrarEvento } = require('../../utilidades/cierre-evento')
 
 // Modelo de la Fase 3: tipos y estados (identificadores internos).
 const TIPOS_EVENTO = ['estandar', 'especial', 'externo']
@@ -108,11 +109,12 @@ async function sincronizarEstadosPorTiempo() {
     where: { fecha_hora_fin: { lt: ahora }, estado: { not: 'terminado' } },
     data: { estado: 'terminado' },
   })
-  // R5.3: pedidos PROGRAMADOS de eventos que acaban de terminar → devolución
-  // AUTOMÁTICA Y COMPLETA a la billetera (no se preparó nada) + notificación.
+  // Cierre completo del evento (utilidades/cierre-evento): devuelve las entradas
+  // no usadas y los pedidos no entregados (menos comisión; los Programados
+  // completos), marca "No entregada" y vence las cortesías sin elegir.
   for (const ev of porTerminar) {
-    try { await devolverProgramadosDeEvento(ev.id_evento) }
-    catch (e) { console.error(`Devolución de programados del evento ${ev.id_evento}:`, e.message) }
+    try { await cerrarEvento(ev.id_evento) }
+    catch (e) { console.error(`Cierre del evento ${ev.id_evento}:`, e.message) }
   }
   await prisma.evento.updateMany({
     where: {

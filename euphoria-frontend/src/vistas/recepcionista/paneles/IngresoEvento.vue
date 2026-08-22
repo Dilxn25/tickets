@@ -75,7 +75,11 @@
               Código
             </button>
           </div>
-          <p v-if="error" class="ing-error">{{ error }}</p>
+          <!-- Error SIEMPRE visible y explicado (antes era una línea chica que pasaba desapercibida) -->
+          <div v-if="error" class="ing-error" role="alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>{{ error }}</span>
+          </div>
         </template>
       </div>
     </div>
@@ -186,7 +190,15 @@ function reiniciar() {
 .ing-sug-item:hover { border-color: var(--borde-activo); }
 .ing-sug-item b { color: var(--texto-principal); font-size: 0.86rem; letter-spacing: 0.06em; }
 .ing-sug-item small { color: var(--texto-desactivado); font-size: 0.74rem; }
-.ing-error { margin: 0; font-size: 0.84rem; color: var(--color-error); }
+.ing-error {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 0; padding: 11px 13px; border-radius: 12px;
+  font-size: 0.92rem; font-weight: 600; line-height: 1.4; color: #ffb4b4;
+  background: rgba(239, 68, 68, .14); border: 1px solid rgba(239, 68, 68, .45);
+  animation: ing-error-in .22s ease;
+}
+.ing-error svg { flex: none; margin-top: 1px; color: var(--color-error); }
+@keyframes ing-error-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 .ing-entrada { display: flex; flex-direction: column; gap: 14px; }
 .ing-quien { display: flex; align-items: center; gap: 12px; }

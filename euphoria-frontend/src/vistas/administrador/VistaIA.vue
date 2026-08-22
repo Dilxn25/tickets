@@ -326,8 +326,8 @@
               <div v-for="r in resultado.recomendaciones" :key="r.id_producto" class="bloque-sugerencia">
                 <div class="fila-sugerencia">
                   <span class="sug-nombre">{{ r.nombre }}</span>
-                  <span v-if="r.probabilidad != null && r.probabilidad >= 0.005" class="sug-prob">{{ (r.probabilidad * 100).toFixed(0) }}%</span>
-                  <span v-else-if="r.afinidad_cliente >= 0.15" class="sug-prob afin" title="Coincide con lo que suele pedir el cliente">{{ (r.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
+                  <span class="sug-prob">{{ formatoProbabilidad(r.probabilidad) }}</span>
+                  <span v-if="r.afinidad_cliente >= 0.15" class="sug-prob afin" title="Coincide con lo que suele pedir el cliente">{{ (r.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
                 </div>
                 <ul v-if="(r.razones || []).length" class="sug-razones">
                   <li v-for="(rz, i) in r.razones" :key="i">{{ rz }}</li>
@@ -365,6 +365,15 @@ const formSugerencias = ref(true)
 const formPremioPct = ref(10)
 const formPremioMax = ref(50)
 const guardando = ref(false)
+
+// Probabilidad del modelo SIEMPRE visible (1 decimal si es chica, "< 0,1%" si es ínfima):
+// nunca una sugerencia sin número, que parece inventada.
+function formatoProbabilidad(p) {
+  const v = Number(p || 0) * 100
+  if (v >= 1) return `${v.toFixed(0)}%`
+  if (v >= 0.1) return `${v.toFixed(1).replace('.', ',')}%`
+  return '< 0,1%'
+}
 const hayCambios = computed(() =>
   formDescuento.value !== config.value.descuento_combos ||
   formSugerencias.value !== config.value.sugerencias_activas ||
@@ -617,7 +626,7 @@ async function probarSugerencias() {
   try {
     resultado.value = await clienteHttp.post('/recomendaciones', {
       productos_en_mesa: mesa.value.map(p => p.id_producto),
-      k: 4,
+      k: 3,
       probador: true, // no contamina las métricas de efectividad real
       id_cliente: clienteProbador.value || null, // personalización (modelo demo)
     })

@@ -478,7 +478,7 @@ function confirmarCerrarSesion() {
   height: 100%;
   /* El padding vertical vive en el enlace (no en la píldora) para que el
      área tocable sea la barra completa, sin franjas muertas. */
-  padding: 8px 2px;
+  padding: 8px 1px;
 }
 .tab-item:hover { color: var(--texto-principal); }
 .tab-item:hover .icono { transform: translateY(-2px); }
@@ -504,16 +504,18 @@ function confirmarCerrarSesion() {
   z-index: 0;
 }
 
-.tab-item span:not(.tab-glow) {
+/* Solo el rótulo (hijo directo): antes la regla alcanzaba también al badge
+   del carrito, que vive dentro del envoltorio del icono. */
+.tab-item > span:not(.tab-glow) {
   position: relative;
   z-index: 1;
-  font-size: 0.66rem;
+  /* Se achica en pantallas angostas en vez de cortarse: "Carrito" salía "Carr…". */
+  font-size: clamp(0.56rem, 2.6vw, 0.66rem);
   font-weight: 600;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow: visible;
   transition: var(--trans-normal);
 }
 

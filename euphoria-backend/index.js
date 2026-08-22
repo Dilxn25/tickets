@@ -184,6 +184,13 @@ io.on('connection', socket => {
 const { iniciarVigiaCorreo } = require('./src/utilidades/vigia-correo')
 iniciarVigiaCorreo()
 
+// Cierre de eventos vencidos (cada 5 min y al arrancar): devuelve entradas no
+// usadas y pedidos no entregados, y vence las cortesías sin elegir. Antes solo
+// corría cuando alguien abría la lista de eventos, y las compras de eventos ya
+// terminados seguían "activas" por días.
+const { iniciarCierreDeEventos } = require('./src/utilidades/cierre-evento')
+iniciarCierreDeEventos({ cadaMinutos: 5 })
+
 // Mantener DESPIERTO el microservicio de IA. En Render (plan gratuito) el servicio
 // se DUERME tras ~15 min sin uso y tarda ~40s en despertar; como la toma de pedidos
 // solo espera unos segundos, las recomendaciones fallaban con "servicio no disponible".

@@ -86,7 +86,7 @@
             </span>
           </div>
         </div>
-        <span class="aforo-pie">Cada área tiene su aforo y su precio. Las mesas heredan el precio de su área; al crear el evento lo ajustas para esa noche.</span>
+        <span class="aforo-pie">Las mesas heredan el precio de su área.</span>
       </div>
     </section>
 
@@ -231,7 +231,11 @@
         </template>
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
-          <p class="prop-ayuda">Áreas = zonas con precio · Mesas y sillas = aforo (heredan el precio de su área) · Barra, escenario y estructuras = decorativos.</p>
+          <ul class="prop-leyenda">
+            <li><i class="pl-cuadro area"></i><span><b>Área</b> precio</span></li>
+            <li><i class="pl-cuadro mesa"></i><span><b>Mesa/silla</b> aforo</span></li>
+            <li><i class="pl-cuadro deco"></i><span><b>Barra/escenario</b> decorativo</span></li>
+          </ul>
         </template>
       </div>
     </div>
@@ -834,7 +838,7 @@ select.campo { cursor: pointer; }
 .vacio-texto { font-size: 0.9rem; max-width: 42ch; text-wrap: pretty; }
 
 /* ── Editor: barra de herramientas · lienzo · propiedades ── */
-.editor-grid { display: grid; grid-template-columns: 150px 1fr 288px; gap: 16px; align-items: start; }
+.editor-grid { display: grid; grid-template-columns: 132px 1fr 268px; gap: 14px; align-items: start; }
 
 .herramientas { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--radio-lg); align-self: start; }
 .herramientas-titulo { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-secundario); font-weight: 800; margin-bottom: 4px; padding-left: 2px; }
@@ -845,7 +849,7 @@ select.campo { cursor: pointer; }
 .btn-herramienta:active { transform: translateY(0); }
 
 .lienzo-contenedor { width: 100%; }
-.lienzo-scroll { width: 100%; overflow: auto; border-radius: 14px; max-height: 72vh; }
+.lienzo-scroll { width: 100%; overflow: auto; border-radius: 14px; max-height: 82vh; }
 .zoom-barra { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-bottom: 8px; }
 .zoom-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--borde-sutil); border-radius: 8px; background: var(--fondo-tarjeta); color: var(--texto-principal); cursor: pointer; transition: border-color .15s ease; }
 .zoom-btn:hover:not(:disabled) { border-color: var(--color-primario); }
@@ -941,6 +945,19 @@ select.campo { cursor: pointer; }
 .prop-check input { accent-color: var(--rosa-acento); width: 16px; height: 16px; cursor: pointer; }
 .prop-vacio { color: var(--texto-desactivado); font-size: 0.85rem; line-height: 1.5; }
 .prop-ayuda { color: var(--texto-desactivado); font-size: 0.78rem; line-height: 1.5; border-top: 1px dashed var(--borde-sutil); padding-top: 12px; text-wrap: pretty; }
+/* Leyenda visual (reemplaza el párrafo explicativo): color + palabra clave */
+.prop-leyenda { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px dashed var(--borde-sutil); display: flex; flex-direction: column; gap: 7px; }
+.prop-leyenda li { display: flex; align-items: center; gap: 8px; font-size: 0.74rem; color: var(--texto-desactivado); }
+.prop-leyenda b { color: var(--texto-secundario); font-weight: 700; margin-right: 3px; }
+.pl-cuadro { width: 13px; height: 13px; border-radius: 4px; flex: none; }
+.pl-cuadro.area { background: rgba(168,85,247,.35); border: 1px solid var(--morado-brillante); }
+.pl-cuadro.mesa { background: rgba(34,197,94,.28); border: 1px solid var(--color-exito); }
+.pl-cuadro.deco { background: rgba(255,255,255,.10); border: 1px solid var(--borde-sutil); }
+/* Pantallas anchas: el plano aprovecha el espacio en vez de quedar chico */
+@media (min-width: 1500px) {
+  .editor-grid { grid-template-columns: 156px 1fr 300px; gap: 18px; }
+  .lienzo-scroll { max-height: 84vh; }
+}
 .prop-fila { display: flex; gap: 10px; }
 .prop-fila .prop-campo { flex: 1; }
 .rango { width: 100%; accent-color: var(--rosa-acento); cursor: pointer; }
@@ -1013,7 +1030,7 @@ select.campo { cursor: pointer; }
 .btn-herramienta svg { width: 22px; height: 22px; color: var(--morado-hover); transition: transform var(--trans-rapida); }
 .btn-herramienta:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.12); transform: translateY(-2px); }
 .btn-herramienta:hover svg { transform: scale(1.08); }
-.editor-grid { grid-template-columns: 168px 1fr 300px; }
+.editor-grid { grid-template-columns: 148px 1fr 280px; }
 
 /* Lienzo */
 .lienzo-scroll { border: 1px solid var(--borde-sutil); background: radial-gradient(circle at 20% 0%, rgba(168,85,247,.08), transparent 50%), var(--fondo-tarjeta); }

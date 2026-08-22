@@ -244,9 +244,12 @@
           <div class="icono-alerta">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
           </div>
-          <h3>Atención</h3>
-          <p>Para pedir necesitas estar en un evento.</p>
-          <button class="btn-entendido" @click="alertaActiva = false">Entendido</button>
+          <h3>Necesitas una reserva</h3>
+          <p>Reserva tu lugar en un evento y ya podrás pedir desde la app, aunque todavía no hayas entrado: tu pedido queda listo y te espera.</p>
+          <div class="alerta-acciones">
+            <button class="btn-entendido" @click="irAEventos">Ver eventos</button>
+            <button class="btn-entendido btn-entendido--sec" @click="alertaActiva = false">Ahora no</button>
+          </div>
         </div>
       </div>
 
@@ -348,6 +351,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import { servicioProductos } from '@/servicios-api/servicio-productos.js'
 import { useTiendaAutenticacion } from '@/tiendas/tienda-autenticacion.js'
@@ -367,6 +371,8 @@ const categorias = ref([])
 const productos = ref([])
 const cargando = ref(true)
 const alertaActiva = ref(false)
+const routerCatalogo = useRouter()
+function irAEventos() { alertaActiva.value = false; routerCatalogo.push('/cliente/eventos') }
 
 const mostrarMiniCarrito = ref(true)
 
@@ -602,7 +608,11 @@ async function asegurarEventoParaPedir() {
   try {
     const resp = await servicioReservas.misReservas()
     const lista = Array.isArray(resp) ? resp : (resp?.reservas || [])
-    const activa = lista.find(r => !r.completo && r.estado_fecha !== 'finalizada')
+    // Basta con TENER la reserva: sirve tanto si el cliente aún no entró (el pedido
+    // queda Programado) como si ya entró con todos sus cupos. Antes se exigía
+    // `!r.completo`, con lo que el que ya estaba adentro no podía pedir.
+    const activas = lista.filter(r => r.estado_fecha !== 'finalizada')
+    const activa = activas.find(r => r.cantidad_ingresada > 0) || activas[0]
     if (activa?.id_evento) {
       tiendaCarrito.setEventoActivo(String(activa.id_evento))
       return true
@@ -1226,6 +1236,9 @@ async function agregarDesdeDetalle(producto) {
   transition: box-shadow var(--trans-normal), transform var(--trans-rapida);
 }
 .btn-entendido:hover { box-shadow: var(--glow-rosa); }
+.alerta-acciones { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.btn-entendido--sec { background: rgba(255,255,255,.08); border: 1px solid var(--borde-sutil); box-shadow: none; }
+.btn-entendido--sec:hover { box-shadow: none; border-color: var(--borde-activo); }
 .btn-entendido:focus-visible { outline: none; box-shadow: var(--anillo-foco); }
 .btn-entendido:active { transform: scale(0.96); }
 

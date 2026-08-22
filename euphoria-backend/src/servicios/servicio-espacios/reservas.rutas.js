@@ -14,6 +14,7 @@ const { verificarPin } = require('../../utilidades/pin-billetera')
 const { notificar } = require('../../utilidades/notificaciones')
 const { emitirRecurso } = require('../../utilidades/config-runtime')
 const { hoyBolivia } = require('../../utilidades/tiempo')
+const { bloqueoPorRetiroPendiente } = require('../../utilidades/retiro-pendiente')
 
 router.use(verificarToken)
 
@@ -195,10 +196,10 @@ async function crearCortesiaSiCorresponde(entrada, id_evento, montoPagado) {
   const ev = await prisma.evento.findUnique({ where: { id_evento }, select: { cortesia_desde: true, nombre_evento: true } })
   if (!ev || ev.cortesia_desde == null) return null
   if (Number(montoPagado) < Number(ev.cortesia_desde)) return null
-  const c = await prisma.cortesia_reserva.upsert({
-    where: { id_entrada: entrada.id_entrada },
-    update: {},
-    create: { id_entrada: entrada.id_entrada },
+  // La cortesía es un estado de la propia reserva: se marca pendiente si aún no lo estaba.
+  await prisma.entrada.updateMany({
+    where: { id_entrada: entrada.id_entrada, cortesia_estado: null },
+    data: { cortesia_estado: 'pendiente' },
   })
   await notificar(entrada.id_usuario, {
     tipo: 'cortesia',
@@ -206,33 +207,36 @@ async function crearCortesiaSiCorresponde(entrada, id_evento, montoPagado) {
     mensaje: `Por tu reserva en ${ev.nombre_evento} te regalamos un combo. Elígelo cuando quieras.`,
     url: '/cliente/mis-reservas',
   })
-  return { id_cortesia: c.id_cortesia, estado: c.estado, opciones: await obtenerOpcionesCortesia() }
+  return { id_cortesia: entrada.id_entrada, estado: 'pendiente', opciones: await obtenerOpcionesCortesia() }
 }
 
 // GET /api/reservas/cortesias — cortesías del cliente (pendientes y elegidas) + opciones.
 router.get('/cortesias', soloRoles('Cliente'), async (req, res) => {
   try {
-    const lista = await prisma.cortesia_reserva.findMany({
-      where: { entrada: { id_usuario: req.usuario.id } },
+    const lista = await prisma.entrada.findMany({
+      where: { id_usuario: req.usuario.id, cortesia_estado: { not: null } },
       include: {
-        producto: { select: { nombre_producto: true } },
-        comanda: { select: { estado_despacho: true, estado_entrega: true } },
-        entrada: { select: { id_entrada: true, mesa_espacio: { select: { numero_nombre: true } }, zona: { select: { evento: { select: { nombre_evento: true, estado: true } } } } } },
+        producto_cortesia: { select: { nombre_producto: true } },
+        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true } },
+        mesa_espacio: { select: { numero_nombre: true } },
+        zona: { select: { evento: { select: { nombre_evento: true, estado: true } } } },
       },
-      orderBy: { fecha_creacion: 'desc' },
+      orderBy: { fecha_reserva: 'desc' },
     })
     res.json({
       opciones: await obtenerOpcionesCortesia(),
+      // La reserva ES la cortesía: se identifica por su id_entrada (se mantiene
+      // `id_cortesia` con ese mismo valor para no romper a quien ya lo consume).
       cortesias: lista.map(c => ({
-        id_cortesia: c.id_cortesia,
+        id_cortesia: c.id_entrada,
         id_entrada: c.id_entrada,
-        estado: c.estado,
-        combo: c.producto?.nombre_producto || null,
-        pedido_estado: c.comanda?.estado_despacho || null,
-        pedido_entrega: c.comanda?.estado_entrega || null,
-        mesa: c.entrada?.mesa_espacio?.numero_nombre || null,
-        evento: c.entrada?.zona?.evento?.nombre_evento || null,
-        evento_terminado: c.entrada?.zona?.evento?.estado === 'terminado',
+        estado: c.cortesia_estado,
+        combo: c.producto_cortesia?.nombre_producto || null,
+        pedido_estado: c.comanda_cortesia?.estado_despacho || null,
+        pedido_entrega: c.comanda_cortesia?.estado_entrega || null,
+        mesa: c.mesa_espacio?.numero_nombre || null,
+        evento: c.zona?.evento?.nombre_evento || null,
+        evento_terminado: c.zona?.evento?.estado === 'terminado',
       })),
     })
   } catch (error) {
@@ -245,15 +249,15 @@ router.get('/cortesias', soloRoles('Cliente'), async (req, res) => {
 // Crea la comanda a Bs 0 (va a la barra) y descuenta el stock de cada componente.
 router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
   try {
-    const id_cortesia = Number(req.params.id)
+    const id_entrada = Number(req.params.id)
     const id_producto = Number(req.body.id_producto)
-    const cort = await prisma.cortesia_reserva.findUnique({
-      where: { id_cortesia },
-      include: { entrada: { include: { zona: { select: { evento: { select: { estado: true } } } } } } },
+    const cort = await prisma.entrada.findUnique({
+      where: { id_entrada },
+      include: { zona: { select: { evento: { select: { estado: true } } } } },
     })
-    if (!cort || cort.entrada.id_usuario !== req.usuario.id) return res.status(404).json({ error: 'Cortesía no encontrada' })
-    if (cort.estado !== 'pendiente') return res.status(409).json({ error: 'Ya elegiste tu combo de cortesía.' })
-    if (cort.entrada.zona?.evento?.estado === 'terminado') return res.status(400).json({ error: 'Este evento ya terminó.' })
+    if (!cort || cort.id_usuario !== req.usuario.id || !cort.cortesia_estado) return res.status(404).json({ error: 'Cortesía no encontrada' })
+    if (cort.cortesia_estado !== 'pendiente') return res.status(409).json({ error: 'Ya elegiste tu combo de cortesía.' })
+    if (cort.zona?.evento?.estado === 'terminado') return res.status(400).json({ error: 'Este evento ya terminó.' })
 
     const combo = await prisma.producto.findFirst({
       where: { id_producto, es_cortesia: true },
@@ -265,12 +269,12 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
     // El pedido lo recibe el mesero asignado a la mesa; si aún no hay, queda a
     // nombre del cliente (igual que los pedidos hechos desde la app).
     let id_mesero = req.usuario.id
-    if (cort.entrada.id_mesa) {
-      const asig = await prisma.asignacion_mesa.findFirst({ where: { id_mesa: cort.entrada.id_mesa, estado: { in: ['asignada', 'atendiendo'] } } })
+    if (cort.id_mesa) {
+      const asig = await prisma.asignacion_mesa.findFirst({ where: { id_mesa: cort.id_mesa, estado: { in: ['asignada', 'atendiendo'] } } })
       if (asig) id_mesero = asig.id_mesero
     }
     // Si todavía no ingresó, el pedido queda Programado y despierta al entrar (R5.3).
-    const yaAdentro = (cort.entrada.cantidad_ingresada || 0) > 0
+    const yaAdentro = (cort.cantidad_ingresada || 0) > 0
 
     let comanda
     try {
@@ -287,7 +291,7 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
           data: {
             id_cliente: req.usuario.id,
             id_mesero,
-            id_mesa: cort.entrada.id_mesa,
+            id_mesa: cort.id_mesa,
             id_entrada: cort.id_entrada,
             estado_despacho: yaAdentro ? 'Pendiente' : 'Programado',
             fecha_registro: new Date(),
@@ -298,9 +302,9 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
           },
         })
         // Marcado condicional: si dos toques llegan a la vez, solo uno gana
-        const marcada = await tx.cortesia_reserva.updateMany({
-          where: { id_cortesia, estado: 'pendiente' },
-          data: { estado: 'elegida', id_producto, id_comanda: nueva.id_comanda, fecha_eleccion: new Date() },
+        const marcada = await tx.entrada.updateMany({
+          where: { id_entrada, cortesia_estado: 'pendiente' },
+          data: { cortesia_estado: 'elegida', cortesia_producto: id_producto, cortesia_comanda: nueva.id_comanda, cortesia_fecha: new Date() },
         })
         if (marcada.count === 0) throw new Error('YA_ELEGIDA')
         return nueva
@@ -460,6 +464,9 @@ router.post('/mesa', async (req, res) => {
     // 3. Billetera del cliente (+ PIN si esta configurado)
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
     if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+    // Con un retiro de saldo pendiente no se puede reservar (ese dinero está por devolverse).
+    const bloqueoRetiro = await bloqueoPorRetiroPendiente(id_usuario)
+    if (bloqueoRetiro) return res.status(409).json(bloqueoRetiro)
 
     if (billetera.pin_transaccional) {
       if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
@@ -598,6 +605,9 @@ router.post('/campo', async (req, res) => {
 
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
     if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+    // Con un retiro de saldo pendiente no se puede reservar (ese dinero está por devolverse).
+    const bloqueoRetiro = await bloqueoPorRetiroPendiente(id_usuario)
+    if (bloqueoRetiro) return res.status(409).json(bloqueoRetiro)
 
     if (billetera.pin_transaccional) {
       if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
@@ -703,6 +713,9 @@ router.post('/pie', async (req, res) => {
 
     const billetera = await prisma.billetera.findUnique({ where: { id_usuario } })
     if (!billetera) return res.status(400).json({ error: 'No tienes billetera. Recarga primero.' })
+    // Con un retiro de saldo pendiente no se puede reservar (ese dinero está por devolverse).
+    const bloqueoRetiro = await bloqueoPorRetiroPendiente(id_usuario)
+    if (bloqueoRetiro) return res.status(409).json(bloqueoRetiro)
     if (billetera.pin_transaccional) {
       if (!pin) return res.status(403).json({ error: 'PIN requerido', requiere_pin: true })
       const pinValido = await verificarPin(pin, billetera.pin_transaccional)
@@ -786,7 +799,8 @@ router.get('/mias', async (req, res) => {
         // Historial real de ingresos/salidas de esta entrada (por tandas)
         registro_aforo: { orderBy: { fecha_hora: 'asc' } },
         // Combo de cortesía de la reserva (si le correspondió) y cómo va su pedido
-        cortesia_reserva: { include: { producto: { select: { nombre_producto: true } }, comanda: { select: { estado_despacho: true, estado_entrega: true } } } },
+        producto_cortesia: { select: { nombre_producto: true } },
+        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true } },
       },
     })
 
@@ -819,12 +833,12 @@ router.get('/mias', async (req, res) => {
         })),
         // El QR solo se genera si la entrada aún se puede usar (ni usada ni vencida)
         qr: (!completo && estadoFecha !== 'finalizada') ? await generarImagenQREntrada(e) : null,
-        cortesia: e.cortesia_reserva ? {
-          id_cortesia: e.cortesia_reserva.id_cortesia,
-          estado: e.cortesia_reserva.estado,             // pendiente | elegida
-          combo: e.cortesia_reserva.producto?.nombre_producto || null,
-          pedido_estado: e.cortesia_reserva.comanda?.estado_despacho || null,
-          pedido_entrega: e.cortesia_reserva.comanda?.estado_entrega || null,
+        cortesia: e.cortesia_estado ? {
+          id_cortesia: e.id_entrada,
+          estado: e.cortesia_estado,                     // pendiente | elegida | vencida
+          combo: e.producto_cortesia?.nombre_producto || null,
+          pedido_estado: e.comanda_cortesia?.estado_despacho || null,
+          pedido_entrega: e.comanda_cortesia?.estado_entrega || null,
         } : null,
       }
     }))
