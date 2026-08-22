@@ -78,57 +78,81 @@
     </Teleport>
 
     <!-- Lista de Eventos -->
-    <div class="grid-eventos escalonar" v-if="!cargando">
-      <div v-if="!listaActiva.length" class="estado-vacio">
+    <!-- LÍNEA DE TIEMPO: los eventos agrupados por mes, en orden de fecha.
+         Reemplaza la grilla de tarjetas sueltas: se lee la agenda de un vistazo. -->
+    <div class="linea-tiempo" v-if="!cargando">
+      <div v-if="!listaActiva.length && !huecosSugeridos.length" class="estado-vacio">
         <div class="estado-vacio-icono">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
         </div>
         <p v-if="pestana === 'pasados'">Aún no hay eventos pasados.</p>
         <p v-else>Aún no hay eventos actuales.</p>
-        <span class="estado-vacio-hint" v-if="pestana === 'actuales'">Crea uno con "Nuevo evento" para empezar a planificar.</span>
       </div>
 
-      <article v-for="evento in eventosPaginados" :key="evento.id_evento" class="tarjeta tarjeta-interactiva tarjeta-evento hover-elevar aparecer-subir">
-        <div class="portada-contenedor">
-          <img v-if="evento.url_portada" :src="evento.url_portada" class="portada-img" alt="Portada Evento" />
-          <div v-else class="portada-placeholder">Sin portada</div>
-          <span class="badge-tipo" :style="estiloBadge(colorTipo(evento.tipo_evento))">
-            {{ etiquetaTipo(evento.tipo_evento) }}
-          </span>
-          <span class="badge-estado" :style="estiloBadge(colorEstado(evento.estado))">
-            <i class="badge-punto" aria-hidden="true"></i>{{ etiquetaEstado(evento.estado) }}<template v-if="ESTADOS[evento.estado]?.sub"> · {{ ESTADOS[evento.estado].sub }}</template>
-          </span>
-        </div>
+      <section v-for="mes in mesesAgenda" :key="mes.clave" class="mes-bloque aparecer-subir">
+        <header class="mes-cab">
+          <h3 class="mes-nombre">{{ mes.nombre }}</h3>
+          <span class="mes-conteo">{{ mes.eventos.length }}</span>
+        </header>
 
-        <div class="evento-info">
-          <p class="evento-fecha">
-            <span class="fecha-icono" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icono"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            </span>
-            {{ formatearFecha(evento.fecha_hora_inicio) }}
-          </p>
-          <h3 class="evento-nombre">{{ evento.nombre_evento }}</h3>
-          <p v-if="evento.descripcion" class="evento-desc">{{ evento.descripcion }}</p>
+        <ul class="mes-filas">
+          <li v-for="fila in mes.eventos" :key="fila.clave" class="fila-ev" :class="{ 'fila-hueco': fila.hueco }">
+            <!-- Día -->
+            <div class="fila-dia" :class="{ finde: fila.finde }">
+              <span class="fd-sem">{{ fila.diaSemana }}</span>
+              <span class="fd-num">{{ fila.diaNum }}</span>
+            </div>
 
-          <!-- Acciones con icono: se reconocen de un vistazo, sin cuatro palabras -->
-          <div class="acciones">
-            <button class="btn-icono-acc" @click="abrirModal(evento)" title="Editar datos del evento" aria-label="Editar evento">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            </button>
-            <button class="btn-icono-acc" @click="abrirPlanosEvento(evento)" :title="`Planos y precios (${evento.cantidadZonas || 0})`" aria-label="Planos del evento">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
-              <span v-if="evento.cantidadZonas" class="chip-conteo">{{ evento.cantidadZonas }}</span>
-            </button>
-            <button class="btn-icono-acc acc-estado" @click="iniciarCambioEstado(evento)" title="Cambiar el estado del evento" aria-label="Cambiar estado">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
-            </button>
-            <button class="btn-icono-acc acc-borrar" @click="eliminarEvento(evento)" :disabled="eliminandoEvento === evento.id_evento" title="Eliminar evento" aria-label="Eliminar evento">
-              <svg v-if="eliminandoEvento !== evento.id_evento" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-              <span v-else class="acc-spinner" aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-      </article>
+            <!-- Hueco: viernes o sábado sin evento -->
+            <template v-if="fila.hueco">
+              <div class="fila-cuerpo">
+                <p class="fila-hueco-txt">Sin evento esta noche</p>
+              </div>
+              <button class="fila-crear" type="button" @click="abrirNocheEstandar(fila.diaSemanaNum)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Crear
+              </button>
+            </template>
+
+            <!-- Evento real -->
+            <template v-else>
+              <div class="fila-flyer">
+                <img v-if="fila.ev.url_portada" :src="fila.ev.url_portada" :alt="fila.ev.nombre_evento" />
+                <span v-else class="fila-flyer-vacio" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>
+                </span>
+              </div>
+
+              <div class="fila-cuerpo">
+                <p class="fila-nombre">{{ fila.ev.nombre_evento }}</p>
+                <p class="fila-meta">
+                  <span class="fm-hora">{{ fila.hora }}</span>
+                  <span class="fm-punto" :style="{ background: colorEstado(fila.ev.estado) }" aria-hidden="true"></span>
+                  <span class="fm-estado">{{ etiquetaEstado(fila.ev.estado) }}</span>
+                  <span v-if="fila.ev.cantidadZonas" class="fm-planos">{{ fila.ev.cantidadZonas }} plano{{ fila.ev.cantidadZonas > 1 ? 's' : '' }}</span>
+                </p>
+              </div>
+
+              <div class="acciones">
+                <button class="btn-icono-acc" @click="abrirModal(fila.ev)" title="Editar datos del evento" aria-label="Editar evento">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="btn-icono-acc" @click="abrirPlanosEvento(fila.ev)" :title="`Planos y precios (${fila.ev.cantidadZonas || 0})`" aria-label="Planos del evento">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
+                  <span v-if="fila.ev.cantidadZonas" class="chip-conteo">{{ fila.ev.cantidadZonas }}</span>
+                </button>
+                <button class="btn-icono-acc acc-estado" @click="iniciarCambioEstado(fila.ev)" title="Cambiar el estado del evento" aria-label="Cambiar estado">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+                </button>
+                <button class="btn-icono-acc acc-borrar" @click="eliminarEvento(fila.ev)" :disabled="eliminandoEvento === fila.ev.id_evento" title="Eliminar evento" aria-label="Eliminar evento">
+                  <svg v-if="eliminandoEvento !== fila.ev.id_evento" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                  <span v-else class="acc-spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+            </template>
+          </li>
+        </ul>
+      </section>
     </div>
 
     <div v-else class="grid-eventos">
@@ -262,7 +286,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M9 4 3 6v14l6-3 6 3 6-3V3l-6 3-6-3z"></path><path d="M9 4v14M15 6v14"></path></svg>
                 Planos del evento
               </p>
-              <p class="tipo-ayuda">Un plano por piso o ambiente. <b>El precio es por área</b>: el plano trae el suyo y aquí lo ajustas para esta noche. Las mesas heredan el precio de su área.</p>
+              <p class="tipo-ayuda">Un plano por piso o ambiente. <b>Los precios se definen acá y solo acá</b>: el plano es el dibujo del local. Se cobra por área y las mesas heredan el de la suya.</p>
 
               <div v-if="planosDelEvento.length" class="pl-lista">
                 <div v-for="p in planosDelEvento" :key="p.id_zona" class="pl-item pl-item-col">
@@ -306,6 +330,11 @@
                   </div>
                 </div>
                 <template v-if="planoElegido">
+                  <!-- Atajo: repetir lo que se cobró la última vez con este plano -->
+                  <button v-if="ultimosPrecios" type="button" class="wz-copiar" @click="copiarUltimosPrecios">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copiar precios de {{ ultimosPrecios.evento }}
+                  </button>
                   <div class="wz-areas">
                     <label v-for="a in planoElegido.areas" :key="a.clave" class="wz-area">
                       <span class="wz-area-nom">{{ a.nombre }}<small v-if="a.parados"> · {{ a.parados }} de pie</small></span>
@@ -564,13 +593,35 @@ async function alElegirPlano(id) {
     const els = p.elementos || []
     const areas = els
       .filter(e => e.tipo_elemento === 'area')
-      .map(e => ({ clave: e.clave, nombre: e.numero_nombre || 'Área', precio: (e.precio != null && e.precio !== '') ? Number(e.precio) : null, parados: Number(e.capacidad_sillas) || 0 }))
+      .map(e => ({ clave: e.clave, nombre: e.numero_nombre || 'Área', parados: Number(e.capacidad_sillas) || 0 }))
     const tiene_general = els.some(e => (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
-    // Si el plano no trae precio, el campo queda VACÍO (no en 0): así se nota que falta.
-    for (const a of areas) formAgregar.precios[a.clave] = a.precio > 0 ? a.precio : null
+    // El plano ya no trae precios: los campos nacen vacíos para esta noche.
+    for (const a of areas) formAgregar.precios[a.clave] = null
     formAgregar.precio_general = null
     planoElegido.value = { nombre: p.nombre, areas, tiene_general }
+    cargarUltimosPrecios(id)
   } catch { notif.error('No se pudo leer el plano') }
+}
+
+// ---- Copiar lo cobrado la última vez con este plano ----------------------
+// Los precios viven en el evento, así que sin esto habría que reescribirlos
+// cada noche. Se ofrece lo de la última vez y el administrador ajusta.
+const ultimosPrecios = ref(null)
+async function cargarUltimosPrecios(idPlano) {
+  ultimosPrecios.value = null
+  try {
+    const r = await clienteHttp.get(`/espacios/plantillas/${idPlano}/ultimos-precios`)
+    if (r?.hay) ultimosPrecios.value = r
+  } catch { /* si falla, simplemente no se ofrece */ }
+}
+function copiarUltimosPrecios() {
+  const u = ultimosPrecios.value
+  if (!u) return
+  for (const clave of Object.keys(formAgregar.precios)) {
+    if (u.precios_areas[clave] != null) formAgregar.precios[clave] = Number(u.precios_areas[clave])
+  }
+  if (u.precio_general > 0) formAgregar.precio_general = Number(u.precio_general)
+  notif.exito('Precios copiados. Ajusta lo que cambie para esta noche.')
 }
 // Nadie entra gratis: toda área (y el general, si hay mesas sueltas) necesita precio > 0.
 function faltanPrecios(areas, tieneGeneral, precios, precioGeneral) {
@@ -728,6 +779,59 @@ const eventosPasados  = computed(() => eventosFiltrados.value.filter(e => e.esta
 const totalEnCartelera = computed(() => eventos.value.filter(e => e.estado !== 'terminado').length)
 const totalPasados     = computed(() => eventos.value.filter(e => e.estado === 'terminado').length)
 const listaActiva = computed(() => pestana.value === 'pasados' ? eventosPasados.value : eventosActuales.value)
+// ---- Agenda: eventos agrupados por mes, en orden de fecha ----------------
+// En "Actuales" se agregan los viernes y sábados de las próximas semanas que
+// todavía no tienen evento, como huecos para crearlos de un clic.
+const SEMANAS_SUGERIDAS = 3
+const huecosSugeridos = computed(() => {
+  if (pestana.value !== 'actuales') return []
+  const ocupados = new Set(eventosActuales.value.map(e => new Date(e.fecha_hora_inicio).toDateString()))
+  const hoy = new Date()
+  const salida = []
+  for (let i = 0; i < SEMANAS_SUGERIDAS * 7; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i)
+    if (d.getDay() !== 5 && d.getDay() !== 6) continue
+    if (ocupados.has(d.toDateString())) continue
+    salida.push(d)
+  }
+  return salida
+})
+
+const NOMBRE_MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+const DIA_CORTO = ['dom','lun','mar','mié','jue','vie','sáb']
+
+const mesesAgenda = computed(() => {
+  const filas = []
+  for (const ev of listaActiva.value) {
+    const d = new Date(ev.fecha_hora_inicio)
+    filas.push({
+      clave: 'e' + ev.id_evento, fecha: d, ev, hueco: false,
+      diaSemana: DIA_CORTO[d.getDay()], diaNum: d.getDate(), finde: d.getDay() === 5 || d.getDay() === 6,
+      hora: d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false }),
+    })
+  }
+  for (const d of huecosSugeridos.value) {
+    filas.push({
+      clave: 'h' + d.getTime(), fecha: d, hueco: true,
+      diaSemana: DIA_CORTO[d.getDay()], diaNum: d.getDate(), finde: true, diaSemanaNum: d.getDay(),
+    })
+  }
+  // Los próximos primero; el historial, del más reciente al más viejo.
+  filas.sort((a, b) => pestana.value === 'pasados' ? b.fecha - a.fecha : a.fecha - b.fecha)
+
+  const meses = []
+  for (const f of filas) {
+    const clave = `${f.fecha.getFullYear()}-${f.fecha.getMonth()}`
+    let mes = meses.find(m => m.clave === clave)
+    if (!mes) {
+      mes = { clave, nombre: `${NOMBRE_MES[f.fecha.getMonth()]} ${f.fecha.getFullYear()}`, eventos: [] }
+      meses.push(mes)
+    }
+    mes.eventos.push(f)
+  }
+  return meses
+})
+
 const eventosPaginados = computed(() => {
   const ini = (pagina.value - 1) * limite.value
   return listaActiva.value.slice(ini, ini + limite.value)
@@ -994,6 +1098,81 @@ async function confirmarCambioEstado() {
 .encabezado-texto { min-width: 0; }
 /* Accesos rápidos a las noches de siempre, junto a "Nuevo evento" */
 .acciones-encabezado { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+/* ===== Agenda: la cartelera como línea de tiempo por mes ===== */
+.linea-tiempo { display: flex; flex-direction: column; gap: 26px; }
+.mes-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.mes-nombre {
+  font-family: var(--fuente-titulo); font-size: 0.82rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--morado-hover);
+}
+.mes-cab::after { content: ''; flex: 1; height: 1px; background: var(--borde-sutil); }
+.mes-conteo {
+  order: 3; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px;
+  display: grid; place-items: center; font-size: 0.72rem; font-weight: 800;
+  color: var(--texto-secundario); background: rgba(255,255,255,.06); border: 1px solid var(--borde-sutil);
+}
+.mes-filas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.fila-ev {
+  display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+  border-radius: var(--radio-lg); border: 1px solid var(--borde-sutil);
+  background: var(--fondo-tarjeta);
+  transition: border-color var(--trans-rapida), transform var(--trans-rapida), background var(--trans-rapida);
+}
+.fila-ev:hover { border-color: var(--borde-activo); transform: translateX(3px); background: var(--fondo-tarjeta-alt); }
+.fila-hueco { border-style: dashed; background: transparent; }
+.fila-hueco:hover { border-color: var(--morado-brillante); background: rgba(168,85,247,.06); }
+
+/* Día */
+.fila-dia {
+  flex: none; width: 52px; display: flex; flex-direction: column; align-items: center;
+  gap: 1px; padding: 5px 0; border-radius: var(--radio-md); background: rgba(255,255,255,.04);
+}
+.fila-dia.finde { background: rgba(168,85,247,.13); }
+.fd-sem { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-desactivado); }
+.fila-dia.finde .fd-sem { color: var(--morado-hover); }
+.fd-num { font-family: var(--fuente-titulo); font-size: 1.28rem; font-weight: 800; line-height: 1; color: var(--texto-principal); }
+
+/* Flyer chico */
+.fila-flyer { flex: none; width: 62px; height: 44px; border-radius: 9px; overflow: hidden; background: var(--fondo-tarjeta-alt); display: grid; place-items: center; }
+.fila-flyer img { width: 100%; height: 100%; object-fit: cover; }
+.fila-flyer-vacio { color: var(--texto-desactivado); }
+
+/* Cuerpo */
+.fila-cuerpo { flex: 1; min-width: 0; }
+.fila-nombre { margin: 0; font-weight: 700; font-size: 0.98rem; color: var(--texto-principal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fila-meta { margin: 3px 0 0; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 0.76rem; color: var(--texto-secundario); }
+.fm-hora { font-variant-numeric: tabular-nums; font-weight: 700; }
+.fm-punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.fm-planos { color: var(--texto-desactivado); }
+.fila-hueco-txt { margin: 0; font-size: 0.86rem; color: var(--texto-desactivado); font-style: italic; }
+
+/* Crear en un hueco */
+.fila-crear {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--radio-full); cursor: pointer;
+  border: 1px solid var(--borde-activo); background: rgba(168,85,247,.10);
+  color: var(--morado-hover); font-family: inherit; font-size: 0.8rem; font-weight: 700;
+  transition: var(--trans-rapida);
+}
+.fila-crear:hover { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+
+@media (max-width: 620px) {
+  .fila-ev { flex-wrap: wrap; gap: 10px; }
+  .fila-flyer { display: none; }
+  .fila-cuerpo { flex: 1 1 60%; }
+  .acciones { width: 100%; justify-content: flex-end; }
+}
+/* Atajo para repetir los precios de la última vez que se usó este plano */
+.wz-copiar {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  padding: 8px 14px; border-radius: var(--radio-full); cursor: pointer;
+  border: 1px dashed var(--borde-activo); background: rgba(168,85,247,.08);
+  color: var(--morado-hover); font-family: inherit; font-size: .82rem; font-weight: 600;
+  transition: var(--trans-rapida);
+}
+.wz-copiar:hover { background: rgba(168,85,247,.18); border-style: solid; color: var(--texto-principal); }
 /* Acciones de la tarjeta en iconos: menos texto, misma función */
 .btn-icono-acc {
   position: relative; display: inline-grid; place-items: center;

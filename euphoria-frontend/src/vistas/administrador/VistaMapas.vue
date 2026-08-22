@@ -86,13 +86,13 @@
             </span>
           </div>
         </div>
-        <span class="aforo-pie">Las mesas heredan el precio de su área.</span>
+        <span class="aforo-pie">El plano define el espacio; los precios se ponen al armar el evento.</span>
       </div>
     </section>
 
-    <div v-if="modo === 'editor'" class="editor-grid">
-      <!-- Barra de herramientas -->
-      <div class="herramientas superficie escalonar">
+    <div v-if="modo === 'editor'" ref="refEditor" class="editor-grid" :class="{ 'sin-izq': !panelIzq, 'sin-der': !panelDer, 'pantalla-completa': pantallaCompleta }">
+      <!-- Barra de herramientas (se pliega para dejarle el ancho al plano) -->
+      <div v-if="panelIzq" class="herramientas superficie escalonar">
         <span class="herramientas-titulo">Agregar</span>
         <button class="btn-herramienta" @click="agregarElemento('mesa')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"></circle></svg>
@@ -122,6 +122,19 @@
 
       <!-- Lienzo -->
       <div class="lienzo-contenedor">
+        <!-- Control del espacio de trabajo: plegar paneles y pantalla completa -->
+        <div class="lienzo-barra">
+          <button class="lz-btn" @click="panelIzq = !panelIzq" :title="panelIzq ? 'Ocultar herramientas' : 'Mostrar herramientas'" :aria-pressed="!panelIzq">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="4" width="6" height="16" rx="1"/><path d="M13 8h8M13 12h8M13 16h5"/></svg>
+          </button>
+          <button class="lz-btn" @click="panelDer = !panelDer" :title="panelDer ? 'Ocultar propiedades' : 'Mostrar propiedades'" :aria-pressed="!panelDer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="15" y="4" width="6" height="16" rx="1"/><path d="M3 8h8M3 12h8M3 16h5"/></svg>
+          </button>
+          <button class="lz-btn lz-full" @click="alternarPantallaCompleta" :title="pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'">
+            <svg v-if="!pantallaCompleta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" stroke-linecap="round"><path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+          </button>
+        </div>
         <div class="zoom-barra">
           <button class="zoom-btn" @click="ajustarZoom(-0.25)" :disabled="zoom <= 0.5" title="Alejar" aria-label="Alejar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -143,7 +156,6 @@
             >
               <span class="elemento-etiqueta">{{ el.numero_nombre || tipoLabel(el.tipo_elemento) }}</span>
               <span v-if="el.tipo_elemento === 'mesa'" class="elemento-cap">{{ el.capacidad_sillas }}p</span>
-              <span v-if="el.tipo_elemento === 'area' && el.precio" class="elemento-precio">Bs {{ el.precio }}</span>
               <div v-if="idx === seleccionado" class="manija-resize" @pointerdown.stop="iniciarResize($event, idx)" title="Estirar"></div>
             </div>
             <!-- Guías de alineación (aparecen al arrastrar) -->
@@ -154,8 +166,8 @@
         </div>
       </div>
 
-      <!-- Panel de propiedades -->
-      <div class="propiedades superficie">
+      <!-- Panel de propiedades (plegable) -->
+      <div v-if="panelDer" class="propiedades superficie">
         <template v-if="elSel">
           <div class="propiedades-cab">
             <span class="propiedades-titulo">{{ tipoLabel(elSel.tipo_elemento) }}</span>
@@ -198,20 +210,9 @@
             <BaseSelect v-model="elSel.area_ref" :options="opcionesAreas" />
           </label>
 
-          <div class="prop-precio" v-if="permitePrecio(elSel.tipo_elemento)">
-            <span class="prop-precio-tit">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V7a2 2 0 0 0-2-2h-5L3 15l6 6 10-10Z"></path><circle cx="9" cy="9" r="1.4"></circle></svg>
-              Precio del área
-            </span>
-            <span class="prop-precio-campo">
-              <span class="prop-precio-bs">Bs.</span>
-              <input v-model.number="elSel.precio" type="number" min="0" step="0.01" class="campo" placeholder="Ej. 800" />
-            </span>
-            <small class="prop-nota">Las mesas y sillas de esta área heredan este precio. Al crear el evento puedes ajustarlo para esa noche.</small>
-          </div>
-          <p v-else-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'" class="prop-herencia">
+          <p class="prop-herencia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            El precio lo toma del área a la que pertenece.
+            Los precios se ponen al armar el evento.
           </p>
 
           <template v-if="elSel.tipo_elemento === 'mesa' || elSel.tipo_elemento === 'silla'">
@@ -232,7 +233,7 @@
         <template v-else>
           <p class="prop-vacio">Toca un elemento del mapa para editar sus propiedades.</p>
           <ul class="prop-leyenda">
-            <li><i class="pl-cuadro area"></i><span><b>Área</b> precio</span></li>
+            <li><i class="pl-cuadro area"></i><span><b>Área</b> sección</span></li>
             <li><i class="pl-cuadro mesa"></i><span><b>Mesa/silla</b> aforo</span></li>
             <li><i class="pl-cuadro deco"></i><span><b>Barra/escenario</b> decorativo</span></li>
           </ul>
@@ -267,7 +268,7 @@ import { ref, computed } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BaseSelect from '@/componentes/comunes/BaseSelect.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
-import { mapaColorPorPrecio, colorPorPrecio } from '@/utilidades/colores-zona.js'
+import { mapaColorPorArea, colorPorArea } from '@/utilidades/colores-zona.js'
 
 const notif = useNotificaciones()
 
@@ -317,18 +318,36 @@ const opcionesAreas = computed(() => [
     .map(a => ({ value: a.clave, label: a.numero_nombre || 'Área' })),
 ])
 
-// Color por zona derivado del precio (la más cara = dorado/VIP). Sin campo en BD.
-function precioTier(el) {
-  if (el.tipo_elemento === 'area') return (el.precio != null && el.precio !== '') ? Number(el.precio) : null
-  if (el.precio != null && el.precio !== '') return Number(el.precio)
-  if (el.area_ref) {
-    const a = elementos.value.find(e => e.tipo_elemento === 'area' && e.clave === el.area_ref)
-    if (a && a.precio != null && a.precio !== '') return Number(a.precio)
-  }
-  return null
+// Color por ÁREA: el plano ya no lleva precios (se definen al armar el evento),
+// así que cada área se distingue por su propio color.
+function claveArea(el) {
+  if (el.tipo_elemento === 'area') return el.clave || null
+  return el.area_ref || null
 }
-const mapaColores = computed(() => mapaColorPorPrecio(elementos.value.map(precioTier)))
-function colorElemento(el) { return colorPorPrecio(precioTier(el), mapaColores.value) }
+// ---- Espacio de trabajo: paneles plegables y pantalla completa -----------
+// El plano es lo que importa; los paneles se apartan cuando estorban.
+const panelIzq = ref(true)
+const panelDer = ref(true)
+const pantallaCompleta = ref(false)
+const refEditor = ref(null)
+async function alternarPantallaCompleta() {
+  try {
+    if (!document.fullscreenElement) {
+      await refEditor.value?.requestFullscreen()
+      pantallaCompleta.value = true
+    } else {
+      await document.exitFullscreen()
+      pantallaCompleta.value = false
+    }
+  } catch { /* si el navegador no lo permite, queda como está */ }
+}
+// Salir con Esc también actualiza el estado del botón
+if (typeof document !== 'undefined') {
+  document.addEventListener('fullscreenchange', () => { pantallaCompleta.value = !!document.fullscreenElement })
+}
+
+const mapaColores = computed(() => mapaColorPorArea(elementos.value.map(claveArea)))
+function colorElemento(el) { return colorPorArea(claveArea(el), mapaColores.value) }
 
 // Desglose de aforo por área: cada área = parados (pista) + sillas de las
 // mesas/sillas que le fueron asignadas. Las mesas/sillas sin área caen en "General".
@@ -341,7 +360,7 @@ const desgloseAforo = computed(() => {
     const enMesas = sumaCap(asignados.filter(e => e.tipo_elemento === 'mesa'))
     const enSillas = sumaCap(asignados.filter(e => e.tipo_elemento === 'silla'))
     const parados = Number(a.capacidad_sillas) || 0
-    return { clave: a.clave, nombre: a.numero_nombre || 'Área', parados, enMesas, enSillas, total: parados + enMesas + enSillas, precio: a.precio, color: colorElemento(a) }
+    return { clave: a.clave, nombre: a.numero_nombre || 'Área', parados, enMesas, enSillas, total: parados + enMesas + enSillas, color: colorElemento(a) }
   })
   const generales = elementos.value.filter(e =>
     (e.tipo_elemento === 'mesa' || e.tipo_elemento === 'silla') && !e.area_ref)
@@ -838,7 +857,28 @@ select.campo { cursor: pointer; }
 .vacio-texto { font-size: 0.9rem; max-width: 42ch; text-wrap: pretty; }
 
 /* ── Editor: barra de herramientas · lienzo · propiedades ── */
-.editor-grid { display: grid; grid-template-columns: 132px 1fr 268px; gap: 14px; align-items: start; }
+.editor-grid { display: grid; grid-template-columns: 132px 1fr 268px; gap: 14px; align-items: start; transition: grid-template-columns .25s ease; }
+/* Paneles plegados: el plano se queda con todo el ancho */
+.editor-grid.sin-izq { grid-template-columns: 1fr 268px; }
+.editor-grid.sin-der { grid-template-columns: 132px 1fr; }
+.editor-grid.sin-izq.sin-der { grid-template-columns: 1fr; }
+/* Pantalla completa: el editor ocupa la pantalla entera */
+.editor-grid.pantalla-completa {
+  background: var(--fondo-principal, #0E0821);
+  padding: 14px; height: 100vh; align-content: start;
+}
+.editor-grid.pantalla-completa .lienzo-scroll { max-height: calc(100vh - 130px); }
+
+/* Barra del espacio de trabajo (plegar paneles / pantalla completa) */
+.lienzo-barra { position: absolute; top: 10px; left: 12px; z-index: 6; display: flex; gap: 6px; }
+.lz-btn {
+  display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
+  border-radius: 9px; border: 1px solid var(--borde-sutil);
+  background: rgba(14,8,33,.72); color: var(--texto-secundario);
+  backdrop-filter: blur(6px); transition: var(--trans-rapida);
+}
+.lz-btn:hover { border-color: var(--morado-brillante); color: var(--texto-principal); background: rgba(168,85,247,.22); }
+.lz-btn[aria-pressed="true"] { color: var(--morado-hover); border-color: var(--borde-activo); background: rgba(168,85,247,.16); }
 
 .herramientas { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--radio-lg); align-self: start; }
 .herramientas-titulo { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-secundario); font-weight: 800; margin-bottom: 4px; padding-left: 2px; }
@@ -848,7 +888,7 @@ select.campo { cursor: pointer; }
 .btn-herramienta:hover svg { transform: scale(1.08); background: rgba(168, 85, 247, 0.24); }
 .btn-herramienta:active { transform: translateY(0); }
 
-.lienzo-contenedor { width: 100%; }
+.lienzo-contenedor { width: 100%; position: relative; }
 .lienzo-scroll { width: 100%; overflow: auto; border-radius: 14px; max-height: 82vh; }
 .zoom-barra { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-bottom: 8px; }
 .zoom-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--borde-sutil); border-radius: 8px; background: var(--fondo-tarjeta); color: var(--texto-principal); cursor: pointer; transition: border-color .15s ease; }

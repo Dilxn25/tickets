@@ -246,6 +246,48 @@ router.get('/plantillas/:id', async (req, res) => {
   }
 })
 
+// GET /api/espacios/plantillas/:id/ultimos-precios — qué se cobró la última vez
+// que se usó este plano. Como los precios ya no viven en el plano sino en cada
+// evento, esto evita volver a escribirlos noche tras noche: el asistente los
+// copia y el administrador solo ajusta lo que cambie.
+router.get('/plantillas/:id/ultimos-precios', soloRoles('Administrador'), async (req, res) => {
+  try {
+    const id_plantilla = Number(req.params.id)
+    // Última zona creada a partir de este plano (la más reciente por id).
+    const zona = await prisma.zona.findFirst({
+      where: { id_plantilla },
+      orderBy: { id_zona: 'desc' },
+      include: {
+        evento: { select: { nombre_evento: true, fecha_hora_inicio: true } },
+        mesa_espacio: { select: { area_ref: true, precio: true, tipo_elemento: true, numero_nombre: true } },
+      },
+    })
+    if (!zona) return res.json({ hay: false })
+
+    // Precio por área: se toma del elemento 'area' y, si no, del primero de sus
+    // mesas (todas heredaron el mismo precio al asignarse).
+    const porArea = {}
+    const nombreArea = {}
+    for (const m of zona.mesa_espacio) {
+      const clave = m.tipo_elemento === 'area' ? (m.area_ref || m.numero_nombre) : m.area_ref
+      if (!clave || m.precio == null) continue
+      if (porArea[clave] == null) porArea[clave] = Number(m.precio)
+      if (m.tipo_elemento === 'area') nombreArea[clave] = m.numero_nombre
+    }
+    res.json({
+      hay: Object.keys(porArea).length > 0,
+      evento: zona.evento?.nombre_evento || null,
+      fecha: zona.evento?.fecha_hora_inicio || null,
+      precios_areas: porArea,
+      nombres_areas: nombreArea,
+      precio_general: Number(zona.precio_entrada_base) || 0,
+    })
+  } catch (error) {
+    console.error('Error obteniendo últimos precios del plano:', error)
+    res.status(500).json({ error: 'No se pudieron obtener los últimos precios' })
+  }
+})
+
 // POST /api/espacios/plantillas — crear un plano reutilizable (Admin)
 router.post('/plantillas', soloRoles('Administrador'), async (req, res) => {
   try {

@@ -28,3 +28,19 @@ export function colorPorPrecio(precio, map) {
   if (!Number.isFinite(p) || p <= 0) return null
   return map.get(p) || null
 }
+
+// ---- Color por ÁREA (para el editor de planos) --------------------------
+// En la biblioteca de planos ya no hay precios (se definen al armar el evento),
+// así que cada área toma un color propio por su orden de aparición. El plano se
+// sigue leyendo de un vistazo: cada sección con su color.
+export function mapaColorPorArea(claves) {
+  const distintas = [...new Set((claves || []).filter(Boolean))]
+  const map = new Map()
+  distintas.forEach((c, i) => map.set(c, PALETA_ZONAS[i % PALETA_ZONAS.length]))
+  return map
+}
+
+export function colorPorArea(clave, map) {
+  if (!clave) return null
+  return map.get(clave) || null
+}
