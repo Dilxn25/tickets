@@ -128,6 +128,47 @@ router.get('/estado', verificarToken, soloRoles('Administrador', 'Cajero', 'Mese
   }
 })
 
+// POST /api/recomendaciones/despertar — sacar del sueno al microservicio de IA.
+// En el plan gratuito de Render el servicio se apaga tras 15 min sin trafico y
+// el primer arranque tarda cerca de un minuto: por eso /estado (2,5 s) siempre
+// lo daba por caido y el boton "Reintentar" no lo levantaba nunca. Aca se espera
+// de verdad, reintentando, y se informa cuanto tardo.
+router.post('/despertar', verificarToken, soloRoles('Administrador', 'Cajero', 'Mesero', 'Bartender'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  const inicio = Date.now()
+  const ESPERA_TOTAL = 80000   // tope de la operacion completa
+  const POR_INTENTO = 30000    // cada intento aguanta 30 s
+
+  let ultimoError = ''
+  while (Date.now() - inicio < ESPERA_TOTAL) {
+    try {
+      const r = await fetch(`${urlIA}/salud`, { signal: AbortSignal.timeout(POR_INTENTO) })
+      if (r.ok) {
+        const info = await r.json().catch(() => ({}))
+        return res.json({
+          ok: true,
+          en_linea: true,
+          segundos: Math.round((Date.now() - inicio) / 1000),
+          modelo: info?.modelo || null,
+          modo: info?.modo || null,
+        })
+      }
+      ultimoError = `respondio ${r.status}`
+    } catch (e) {
+      ultimoError = e?.name === 'TimeoutError' ? 'sigue arrancando' : (e?.message || 'sin respuesta')
+    }
+    // Pausa corta entre intentos: el arranque en frio no es instantaneo
+    await new Promise(r2 => setTimeout(r2, 2500))
+  }
+
+  res.status(504).json({
+    ok: false,
+    en_linea: false,
+    segundos: Math.round((Date.now() - inicio) / 1000),
+    error: `El motor no respondio en ${Math.round(ESPERA_TOTAL / 1000)} s (${ultimoError}). Vuelve a intentarlo.`,
+  })
+})
+
 // GET /api/recomendaciones/modelo — estado del modelo activo (real/demo) [admin]
 // Sirve para el interruptor "Usar datos para la demostración" del Panel de IA.
 router.get('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
@@ -154,6 +195,107 @@ router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, re
     res.json(await r.json())
   } catch {
     res.status(502).json({ ok: false, error: 'Servicio de IA no disponible' })
+  }
+})
+
+// ---- Reentrenamiento del modelo -----------------------------------------
+// El entrenamiento NO corre aca: se dispara un flujo de GitHub Actions que lee la
+// base, entrena y deja una version fechada en el repositorio. Se hace asi porque
+// el servicio de IA vive en un plan gratuito con disco efimero: un modelo
+// entrenado dentro del contenedor se perderia al primer reinicio.
+const REPO_IA = process.env.REPO_GITHUB || 'Dilxn25/tickets'
+const FLUJO_ENTRENAMIENTO = process.env.FLUJO_ENTRENAMIENTO || 'entrenar-modelo.yml'
+
+// POST /api/recomendaciones/entrenar — pedir un modelo nuevo [admin]
+router.post('/entrenar', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const token = process.env.TOKEN_GITHUB
+  if (!token) {
+    return res.status(503).json({
+      error: 'Falta configurar el acceso a GitHub (TOKEN_GITHUB) para poder reentrenar.',
+    })
+  }
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${REPO_IA}/actions/workflows/${FLUJO_ENTRENAMIENTO}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref: process.env.RAMA_GITHUB || 'main',
+          inputs: { motivo: `Pedido por ${req.usuario?.nombres || 'el administrador'}` },
+        }),
+        signal: AbortSignal.timeout(12000),
+      })
+
+    if (r.status === 204) {
+      return res.json({
+        ok: true,
+        mensaje: 'Entrenamiento en marcha. Tarda entre 2 y 3 minutos.',
+        seguimiento: `https://github.com/${REPO_IA}/actions/workflows/${FLUJO_ENTRENAMIENTO}`,
+      })
+    }
+    const detalle = await r.text()
+    console.error('GitHub rechazo el disparo:', r.status, detalle)
+    res.status(502).json({ error: `GitHub respondio ${r.status}. Revisa el token y el nombre del flujo.` })
+  } catch (e) {
+    console.error('No se pudo disparar el entrenamiento:', e.message)
+    res.status(502).json({ error: 'No se pudo contactar con GitHub para lanzar el entrenamiento.' })
+  }
+})
+
+// GET /api/recomendaciones/entrenamientos — como va el ultimo entrenamiento [admin]
+router.get('/entrenamientos', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const token = process.env.TOKEN_GITHUB
+  if (!token) return res.json({ disponible: false, corridas: [] })
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${REPO_IA}/actions/workflows/${FLUJO_ENTRENAMIENTO}/runs?per_page=5`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(9000) })
+    if (!r.ok) return res.json({ disponible: false, corridas: [] })
+    const d = await r.json()
+    const corridas = (d.workflow_runs || []).map(c => ({
+      id: c.id,
+      estado: c.status,            // queued | in_progress | completed
+      resultado: c.conclusion,     // success | failure | cancelled
+      inicio: c.run_started_at,
+      url: c.html_url,
+    }))
+    res.json({ disponible: true, corridas })
+  } catch {
+    res.json({ disponible: false, corridas: [] })
+  }
+})
+
+// GET /api/recomendaciones/versiones — historial de modelos entrenados [admin]
+router.get('/versiones', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  try {
+    const r = await fetch(`${urlIA}/modelo/versiones`, { signal: AbortSignal.timeout(8000) })
+    res.json(await r.json())
+  } catch {
+    res.json({ activa: null, versiones: [], sin_conexion: true })
+  }
+})
+
+// POST /api/recomendaciones/versiones/activar {archivo} — volver a un modelo anterior [admin]
+router.post('/versiones/activar', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  const archivo = String(req.body?.archivo || '')
+  if (!archivo) return res.status(400).json({ error: 'Falta indicar el modelo.' })
+  try {
+    const r = await fetch(`${urlIA}/modelo/version`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archivo }), signal: AbortSignal.timeout(15000),
+    })
+    const d = await r.json()
+    if (!d.ok) return res.status(400).json({ error: d.error || 'No se pudo activar ese modelo.' })
+    res.json(d)
+  } catch {
+    res.status(502).json({ error: 'El motor de IA no responde. Despiertalo e intenta de nuevo.' })
   }
 })
 

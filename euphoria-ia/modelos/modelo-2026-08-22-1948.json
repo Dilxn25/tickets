@@ -1,0 +1,9 @@
+{
+  "archivo": "modelo-2026-08-22-1948.pkl",
+  "fecha": "2026-08-22 19:48",
+  "n_canastas": 7166,
+  "n_productos": 75,
+  "auc_test": 0.9749,
+  "version_motor": "1.1",
+  "personalizado": false
+}

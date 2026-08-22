@@ -1,0 +1,91 @@
+name: Reentrenar modelo de IA
+
+# Se dispara desde el Panel de IA del sistema (boton "Reentrenar modelo") o a mano
+# desde la pestana Actions de GitHub. Lee las ventas reales de la base de datos,
+# entrena y deja una version fechada en euphoria-ia/modelos/ sin borrar la anterior.
+on:
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Por que se reentrena (queda en el historial)"
+        required: false
+        default: "Reentrenamiento desde el panel"
+
+permissions:
+  contents: write
+
+jobs:
+  entrenar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy scikit-learn lightgbm joblib sqlalchemy pymysql
+
+      - name: Apuntar el entrenamiento a la base de datos real
+        env:
+          URL_BD_ENTRENAMIENTO: ${{ secrets.URL_BD_ENTRENAMIENTO }}
+        run: |
+          if [ -z "$URL_BD_ENTRENAMIENTO" ]; then
+            echo "Falta el secreto URL_BD_ENTRENAMIENTO en el repositorio."
+            echo "Se configura en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          python - <<'PY'
+          import json, os
+          ruta = "recursos/modelo_entrenado/config.json"
+          with open(ruta, encoding="utf-8") as f:
+              cfg = json.load(f)
+          cfg["fuente"] = "mysql_prisma"
+          cfg["database_url"] = os.environ["URL_BD_ENTRENAMIENTO"]
+          with open(ruta, "w", encoding="utf-8") as f:
+              json.dump(cfg, f, ensure_ascii=False, indent=2)
+          print("config.json apuntando a la base de produccion")
+          PY
+
+      - name: Entrenar y guardar la version fechada
+        id: entrenamiento
+        working-directory: recursos/modelo_entrenado
+        run: |
+          set -o pipefail
+          python entrenar.py --versionar ../../euphoria-ia/modelos --conservar 6 2>&1 | tee salida.txt
+          FICHA=$(grep '^FICHA' salida.txt | sed 's/^FICHA *-> *//')
+          echo "ficha=$FICHA" >> "$GITHUB_OUTPUT"
+          rm -f salida.txt
+
+      - name: Dejar el config.json como estaba
+        run: git checkout -- recursos/modelo_entrenado/config.json
+
+      - name: Publicar el modelo nuevo
+        run: |
+          git config user.name "Entrenamiento automatico"
+          git config user.email "actions@github.com"
+          git add euphoria-ia/modelos recursos/modelo_entrenado/artefacto_modelo.pkl
+          if git diff --staged --quiet; then
+            echo "No hubo cambios que publicar."
+            exit 0
+          fi
+          git commit -m "Modelo reentrenado: ${{ steps.entrenamiento.outputs.ficha }}"
+          git push
+
+      - name: Resumen
+        run: |
+          echo "### Modelo reentrenado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Motivo: ${{ github.event.inputs.motivo }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.entrenamiento.outputs.ficha }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

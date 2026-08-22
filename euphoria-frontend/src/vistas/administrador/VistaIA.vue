@@ -8,9 +8,13 @@
         <p class="ia-subtitulo">Combos, descuentos y sugerencias al mesero</p>
       </div>
       <div class="ia-cabecera-acciones">
-        <button v-if="!estado.en_linea || cargandoEstado" class="btn-secundario" @click="cargarEstado" :disabled="cargandoEstado">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-          {{ cargandoEstado ? 'Verificando...' : 'Reintentar' }}
+        <button v-if="!estado.en_linea || cargandoEstado || despertando" class="btn-secundario btn-despertar"
+                @click="despertarMotor" :disabled="cargandoEstado || despertando">
+          <svg v-if="!despertando" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          <span v-else class="giro" aria-hidden="true"></span>
+          <template v-if="despertando">Despertando… {{ segundosDespertando }}s</template>
+          <template v-else-if="cargandoEstado">Verificando…</template>
+          <template v-else>Despertar motor</template>
         </button>
       </div>
     </div>
@@ -23,7 +27,9 @@
         </div>
         <div class="ia-kpi-info">
           <span class="ia-kpi-label">Motor de IA</span>
-          <span class="ia-kpi-valor">{{ estado.en_linea ? 'En línea' : 'Sin conexión' }}</span>
+          <span class="ia-kpi-valor">{{ estado.en_linea ? 'En línea' : 'Dormido' }}</span>
+          <span v-if="!estado.en_linea && !despertando" class="ia-kpi-pie">Toca "Despertar motor"</span>
+          <span v-else-if="despertando" class="ia-kpi-pie">Arrancando, hasta 1 min</span>
         </div>
       </div>
       <div class="ia-kpi k-morado">
@@ -257,6 +263,39 @@
               {{ vigiaResultado.mensaje }}
             </p>
           </div>
+        </div>
+
+        <!-- Reentrenamiento: el modelo aprende de las ventas reales -->
+        <div class="tarjeta-ia">
+          <div class="tarjeta-ia-head">
+            <div>
+              <h3>Modelo</h3>
+              <span class="sub">Reentrena con las ventas de hoy</span>
+            </div>
+            <button class="btn-entrenar" :disabled="entrenando" @click="reentrenar">
+              <span v-if="entrenando" class="giro" aria-hidden="true"></span>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              {{ entrenando ? 'Entrenando…' : 'Reentrenar' }}
+            </button>
+          </div>
+
+          <p v-if="avisoEntrenamiento" class="entrena-aviso" :class="avisoEntrenamiento.tipo">
+            {{ avisoEntrenamiento.texto }}
+            <a v-if="avisoEntrenamiento.url" :href="avisoEntrenamiento.url" target="_blank" rel="noopener">Ver detalle</a>
+          </p>
+
+          <div v-if="versiones.length" class="ver-lista">
+            <div v-for="v in versiones" :key="v.archivo" class="ver-fila" :class="{ activa: v.archivo === versionActiva }">
+              <span class="ver-punto"></span>
+              <div class="ver-info">
+                <b>{{ v.fecha }}</b>
+                <em>{{ v.n_canastas }} ventas · acierto {{ Math.round((v.auc_test || 0) * 100) }}%</em>
+              </div>
+              <span v-if="v.archivo === versionActiva" class="ver-chip">En uso</span>
+              <button v-else class="ver-volver" :disabled="cambiandoVersion" @click="usarVersion(v)">Usar este</button>
+            </div>
+          </div>
+          <p v-else class="vacio chico">Todavía no hay modelos entrenados desde el panel.</p>
         </div>
 
         <div class="tarjeta-ia">
@@ -531,6 +570,35 @@ async function cargarEstado() {
   finally { cargandoEstado.value = false }
 }
 
+// El servicio de IA vive en un plan gratuito: tras 15 minutos sin uso se apaga y
+// volver a levantarlo tarda cerca de un minuto. Un simple "reintentar" de 2 s no
+// alcanzaba nunca; esto pide el arranque y espera de verdad, contando en pantalla.
+const despertando = ref(false)
+const segundosDespertando = ref(0)
+let relojDespertar = null
+
+async function despertarMotor() {
+  if (despertando.value) return
+  despertando.value = true
+  segundosDespertando.value = 0
+  relojDespertar = setInterval(() => { segundosDespertando.value++ }, 1000)
+  try {
+    const r = await clienteHttp.post('/recomendaciones/despertar', {}, { timeout: 95000 })
+    estado.value = { ...estado.value, en_linea: true }
+    notif.exito(`Motor listo en ${r.segundos}s.`)
+    cargarModelo()
+    cargarVersiones()
+    cargarCombos()
+  } catch (e) {
+    estado.value = { ...estado.value, en_linea: false }
+    notif.error(e?.error || 'El motor no respondió. Vuelve a intentarlo.')
+  } finally {
+    clearInterval(relojDespertar)
+    despertando.value = false
+    cargarEstado()
+  }
+}
+
 async function cargarConfig() {
   try {
     config.value = await clienteHttp.get('/recomendaciones/config')
@@ -615,6 +683,75 @@ function toggleMesa(p) {
   }
 }
 
+// ---- Reentrenamiento y versiones del modelo ----
+// El entrenamiento corre en GitHub Actions (lee la base, entrena y publica una
+// version fechada). Aca solo se pide, se sigue el avance y se elige cual usar.
+const entrenando = ref(false)
+const avisoEntrenamiento = ref(null)
+const versiones = ref([])
+const versionActiva = ref(null)
+const cambiandoVersion = ref(false)
+let vigilaEntrenamiento = null
+
+async function cargarVersiones() {
+  try {
+    const r = await clienteHttp.get('/recomendaciones/versiones')
+    versiones.value = r.versiones || []
+    versionActiva.value = r.activa || null
+  } catch { versiones.value = [] }
+}
+
+async function reentrenar() {
+  if (entrenando.value) return
+  entrenando.value = true
+  avisoEntrenamiento.value = { tipo: 'info', texto: 'Entrenamiento pedido. Tarda entre 2 y 3 minutos.' }
+  try {
+    const r = await clienteHttp.post('/recomendaciones/entrenar', {})
+    avisoEntrenamiento.value = { tipo: 'info', texto: r.mensaje, url: r.seguimiento }
+    seguirEntrenamiento()
+  } catch (e) {
+    entrenando.value = false
+    avisoEntrenamiento.value = { tipo: 'mal', texto: e?.error || 'No se pudo lanzar el entrenamiento.' }
+  }
+}
+
+// Mientras corre, se consulta el avance cada 15 s (sin recargar la pantalla)
+function seguirEntrenamiento() {
+  clearInterval(vigilaEntrenamiento)
+  let intentos = 0
+  vigilaEntrenamiento = setInterval(async () => {
+    intentos++
+    try {
+      const r = await clienteHttp.get('/recomendaciones/entrenamientos')
+      const ultima = (r.corridas || [])[0]
+      if (ultima && ultima.estado === 'completed') {
+        clearInterval(vigilaEntrenamiento)
+        entrenando.value = false
+        if (ultima.resultado === 'success') {
+          avisoEntrenamiento.value = { tipo: 'ok', texto: 'Modelo nuevo listo. Ya quedó publicado.', url: ultima.url }
+          cargarVersiones()
+        } else {
+          avisoEntrenamiento.value = { tipo: 'mal', texto: 'El entrenamiento falló.', url: ultima.url }
+        }
+      }
+    } catch { /* se sigue intentando */ }
+    if (intentos > 40) { clearInterval(vigilaEntrenamiento); entrenando.value = false }
+  }, 15000)
+}
+
+async function usarVersion(v) {
+  if (cambiandoVersion.value) return
+  cambiandoVersion.value = true
+  try {
+    await clienteHttp.post('/recomendaciones/versiones/activar', { archivo: v.archivo })
+    versionActiva.value = v.archivo
+    notif.exito(`Ahora se usa el modelo del ${v.fecha}.`)
+    cargarModelo()
+  } catch (e) {
+    notif.error(e?.error || 'No se pudo cambiar de modelo.')
+  } finally { cambiandoVersion.value = false }
+}
+
 // Cuántas sugerencias se piden y se muestran (una sola fuente de verdad)
 const K_SUGERENCIAS = 3
 
@@ -655,6 +792,7 @@ onActivated(() => {
     cargarPacks()
     cargarEventos()
     cargarModelo()
+    cargarVersiones()
   } else {
     // Refresco silencioso al volver a la vista: lo dinámico se mantiene fresco
     // (los datos previos siguen visibles mientras llegan los nuevos)
@@ -1401,4 +1539,57 @@ onActivated(() => {
 .vigia-msg { font-size: 0.82rem; margin: 10px 0 0; line-height: 1.4; }
 .vigia-msg.ok { color: #34c759; }
 .vigia-msg.mal { color: #ff6b6b; }
+
+.btn-despertar { min-width: 158px; justify-content: center; }
+.giro {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.25); border-top-color: var(--morado-hover);
+  animation: giro-ia .7s linear infinite;
+}
+@keyframes giro-ia { to { transform: rotate(360deg); } }
+.ia-kpi-pie { font-size: .66rem; color: var(--texto-desactivado); margin-top: 1px; }
+
+/* ---- Modelo: entrenar y volver a una version anterior ---- */
+.btn-entrenar {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 8px 14px; border-radius: var(--radio-full);
+  border: 1px solid var(--borde-activo); background: rgba(168,85,247,.14);
+  color: var(--texto-principal); font-size: .8rem; font-weight: 700;
+  transition: var(--trans-rapida);
+}
+.btn-entrenar:hover:not(:disabled) { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+.btn-entrenar:disabled { opacity: .65; cursor: default; }
+
+.entrena-aviso {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 9px 12px; border-radius: var(--radio-md);
+  font-size: .78rem; border: 1px solid var(--borde-sutil); background: rgba(255,255,255,.03);
+  color: var(--texto-secundario);
+}
+.entrena-aviso.ok { border-color: rgba(34,197,94,.4); background: rgba(34,197,94,.08); }
+.entrena-aviso.mal { border-color: rgba(239,68,68,.4); background: rgba(239,68,68,.08); }
+.entrena-aviso a { color: var(--morado-hover); font-weight: 700; }
+
+.ver-lista { display: flex; flex-direction: column; gap: 6px; }
+.ver-fila {
+  display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+  border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+  background: rgba(255,255,255,.02); transition: var(--trans-rapida);
+}
+.ver-fila.activa { border-color: rgba(34,197,94,.4); background: rgba(34,197,94,.06); }
+.ver-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--texto-desactivado); flex: none; }
+.ver-fila.activa .ver-punto { background: var(--color-exito); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+.ver-info { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }
+.ver-info b { font-size: .82rem; color: var(--texto-principal); font-weight: 700; }
+.ver-info em { font-style: normal; font-size: .68rem; color: var(--texto-secundario); }
+.ver-chip {
+  font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--color-exito); background: rgba(34,197,94,.14); padding: 3px 8px; border-radius: var(--radio-full);
+}
+.ver-volver {
+  padding: 5px 11px; border-radius: var(--radio-full); cursor: pointer;
+  border: 1px solid var(--borde-sutil); background: rgba(255,255,255,.03);
+  color: var(--texto-secundario); font-size: .72rem; font-weight: 700; transition: var(--trans-rapida);
+}
+.ver-volver:hover:not(:disabled) { border-color: var(--borde-activo); color: #fff; background: rgba(168,85,247,.16); }
 </style>

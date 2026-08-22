@@ -12,6 +12,7 @@ PROBAR (curl):
       -d "{\"productos_en_mesa\":[6],\"fecha_hora\":\"2025-11-08 23:30:00\",\"k\":3}"
 """
 import os
+import json
 from typing import List, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -28,6 +29,44 @@ rec = Recomendador()   # carga el artefacto una sola vez al arrancar
 ARTEFACTOS = {"real": "artefacto_modelo.pkl", "demo": "artefacto_modelo_demo.pkl"}
 _modo_actual = "real"
 
+# ---- Versiones entrenadas -------------------------------------------------
+# Cada reentrenamiento deja un archivo fechado en modelos/ (modelo-AAAA-MM-DD-hhmm.pkl)
+# junto a su ficha .json. El anterior NO se borra: el administrador puede volver
+# a el si el nuevo no le convence.
+DIR_MODELOS = os.path.join(os.path.dirname(__file__), "modelos")
+_version_actual = None   # nombre de archivo dentro de modelos/, o None si es el de base
+
+
+def _ruta_version(archivo: str) -> str:
+    """Ruta segura dentro de modelos/ (evita salirse de la carpeta)."""
+    limpio = os.path.basename(str(archivo or ""))
+    return os.path.join(DIR_MODELOS, limpio)
+
+
+def _ficha(archivo: str) -> dict:
+    """Datos del entrenamiento que acompanan al .pkl (fecha, canastas, AUC)."""
+    ruta = _ruta_version(archivo)
+    meta = os.path.splitext(ruta)[0] + ".json"
+    datos = {}
+    if os.path.exists(meta):
+        try:
+            with open(meta, encoding="utf-8") as f:
+                datos = json.load(f)
+        except Exception:
+            datos = {}
+    datos["archivo"] = os.path.basename(ruta)
+    datos["tamano_kb"] = round(os.path.getsize(ruta) / 1024) if os.path.exists(ruta) else 0
+    return datos
+
+
+def listar_versiones() -> list:
+    """Modelos entrenados disponibles, del mas nuevo al mas viejo."""
+    if not os.path.isdir(DIR_MODELOS):
+        return []
+    archivos = [a for a in os.listdir(DIR_MODELOS) if a.endswith(".pkl")]
+    archivos.sort(reverse=True)   # el nombre empieza por fecha: ordena solo
+    return [_ficha(a) for a in archivos]
+
 
 def _existe(modo: str) -> bool:
     ruta = ARTEFACTOS.get(modo)
@@ -35,12 +74,36 @@ def _existe(modo: str) -> bool:
 
 
 def _cargar_modelo(modo: str) -> bool:
-    global rec, _modo_actual
+    global rec, _modo_actual, _version_actual
     if not _existe(modo):
         return False
     rec = Recomendador(ruta_artefacto=ARTEFACTOS[modo])
     _modo_actual = modo
+    _version_actual = None
     return True
+
+
+def cargar_version(archivo: str) -> bool:
+    """Activa una version entrenada concreta (cambio en caliente, sin reiniciar)."""
+    global rec, _modo_actual, _version_actual
+    ruta = _ruta_version(archivo)
+    if not os.path.exists(ruta):
+        return False
+    rec = Recomendador(ruta_artefacto=os.path.join("modelos", os.path.basename(ruta)))
+    _modo_actual = "real"
+    _version_actual = os.path.basename(ruta)
+    return True
+
+
+def _autocargar_ultima():
+    """Al arrancar, si hay versiones entrenadas se usa la mas reciente.
+    Asi el modelo nuevo entra solo despues de un reentrenamiento."""
+    vs = listar_versiones()
+    if vs:
+        cargar_version(vs[0]["archivo"])
+
+
+_autocargar_ultima()
 
 
 class Peticion(BaseModel):
@@ -87,7 +150,27 @@ def clientes():
 @app.get("/modelo/estado")
 def modelo_estado():
     return {"modo": _modo_actual, "personalizado": rec.personalizado,
-            "disponibles": [m for m in ARTEFACTOS if _existe(m)]}
+            "disponibles": [m for m in ARTEFACTOS if _existe(m)],
+            "version_activa": _version_actual,
+            "versiones": listar_versiones()}
+
+
+@app.get("/modelo/versiones")
+def modelo_versiones():
+    """Historial de modelos entrenados, del mas nuevo al mas viejo."""
+    return {"activa": _version_actual, "versiones": listar_versiones()}
+
+
+class VersionReq(BaseModel):
+    archivo: str
+
+
+@app.post("/modelo/version")
+def modelo_version(r: VersionReq):
+    """Vuelve a una version anterior (o adelanta a otra) sin reiniciar el servicio."""
+    if cargar_version(r.archivo):
+        return {"ok": True, "activa": _version_actual, "info": rec.info}
+    return {"ok": False, "error": "No existe esa version"}
 
 
 @app.post("/modelo/activar")
