@@ -18,13 +18,17 @@ const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
 
 // ---- Límites de solicitudes (anti fuerza bruta) ----
-// Login: máx. 10 intentos por IP cada 15 minutos.
+// Login: máx. 10 intentos FALLIDOS por IP cada 15 minutos. Los inicios de sesión
+// correctos no gastan el cupo: antes sí lo hacían y bastaba con cambiar de rol
+// unas cuantas veces (administrador, recepción, mesero, barra, caja, cliente)
+// para quedarse afuera del propio sistema sin haberse equivocado nunca.
 const limiteLogin = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Demasiados intentos de inicio de sesión. Espera unos minutos e intenta de nuevo.' },
+  message: { error: 'Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.' },
 })
 
 // Recuperación de contraseña: máx. 8 intentos por IP cada 15 minutos.

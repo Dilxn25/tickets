@@ -506,7 +506,11 @@ async function comprarPieEntrada() {
     if (data?.requiere_pin) {
       pidiendoPin.value = true
       accionPin.value = 'pie'
-      msgError.value = data?.error === 'PIN incorrecto' ? 'PIN incorrecto, intenta de nuevo' : ''
+      // Siempre se dice por qué no pasó: un modal que no responde y no explica
+      // nada deja al cliente (y al cajero) sin saber qué hacer.
+      msgError.value = data?.error === 'PIN incorrecto'
+        ? 'PIN incorrecto, intenta de nuevo'
+        : (data?.error || 'No se pudo autorizar el pago. Revisa tu PIN.')
     } else {
       msgError.value = data?.error || 'No se pudo comprar la entrada de pie'
     }
@@ -541,7 +545,11 @@ async function reservar() {
     if (data?.requiere_pin) {
       pidiendoPin.value = true
       accionPin.value = 'mesa'
-      msgError.value = data?.error === 'PIN incorrecto' ? 'PIN incorrecto, intenta de nuevo' : ''
+      // Siempre se dice por qué no pasó: un modal que no responde y no explica
+      // nada deja al cliente (y al cajero) sin saber qué hacer.
+      msgError.value = data?.error === 'PIN incorrecto'
+        ? 'PIN incorrecto, intenta de nuevo'
+        : (data?.error || 'No se pudo autorizar el pago. Revisa tu PIN.')
     } else {
       msgError.value = data?.error || 'No se pudo completar la reserva'
       // Si la mesa fue tomada por otro, refrescamos el mapa
@@ -577,7 +585,11 @@ async function comprarCampoEntrada() {
     if (data?.requiere_pin) {
       pidiendoPin.value = true
       accionPin.value = 'campo'
-      msgError.value = data?.error === 'PIN incorrecto' ? 'PIN incorrecto, intenta de nuevo' : ''
+      // Siempre se dice por qué no pasó: un modal que no responde y no explica
+      // nada deja al cliente (y al cajero) sin saber qué hacer.
+      msgError.value = data?.error === 'PIN incorrecto'
+        ? 'PIN incorrecto, intenta de nuevo'
+        : (data?.error || 'No se pudo autorizar el pago. Revisa tu PIN.')
     } else {
       msgError.value = data?.error || 'No se pudo comprar la entrada de pie'
     }
