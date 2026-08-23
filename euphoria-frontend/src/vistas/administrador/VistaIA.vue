@@ -270,18 +270,39 @@
           <div class="tarjeta-ia-head">
             <div>
               <h3>Modelo</h3>
-              <span class="sub">Reentrena con las ventas de hoy</span>
+              <span class="sub">Aprende de las ventas acumuladas</span>
             </div>
-            <button class="btn-entrenar" :disabled="entrenando" @click="reentrenar">
+            <button class="btn-entrenar" :disabled="entrenando || (datosEntrenamiento && !datosEntrenamiento.alcanza)"
+                    :title="datosEntrenamiento && !datosEntrenamiento.alcanza ? 'Todavía no hay ventas suficientes' : 'Entrenar con las ventas de hoy'"
+                    @click="reentrenar">
               <span v-if="entrenando" class="giro" aria-hidden="true"></span>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
               {{ entrenando ? 'Entrenando…' : 'Reentrenar' }}
             </button>
           </div>
 
+          <!-- Cuanta venta hay acumulada: se ve antes de tocar nada -->
+          <div v-if="datosEntrenamiento" class="dato-entrena" :class="{ corto: !datosEntrenamiento.alcanza }">
+            <div class="dato-barra">
+              <span class="dato-relleno" :style="{ width: Math.min(100, (datosEntrenamiento.lineas / datosEntrenamiento.minimo) * 100) + '%' }"></span>
+            </div>
+            <p class="dato-txt">
+              <b>{{ datosEntrenamiento.comandas }}</b> pedidos con <b>{{ datosEntrenamiento.lineas }}</b> productos vendidos
+              <template v-if="!datosEntrenamiento.alcanza">
+                · faltan <b>{{ datosEntrenamiento.faltan }}</b> para poder reentrenar
+              </template>
+            </p>
+            <p v-if="!datosEntrenamiento.alcanza" class="dato-por-que">
+              Con tan pocas ventas el modelo nuevo saldría peor que el que está en uso.
+            </p>
+          </div>
+
           <p v-if="avisoEntrenamiento" class="entrena-aviso" :class="avisoEntrenamiento.tipo">
-            {{ avisoEntrenamiento.texto }}
-            <a v-if="avisoEntrenamiento.url" :href="avisoEntrenamiento.url" target="_blank" rel="noopener">Ver detalle</a>
+            <span class="entrena-txt">
+              {{ avisoEntrenamiento.texto }}
+              <em v-if="avisoEntrenamiento.paso">Se detuvo en: {{ avisoEntrenamiento.paso }}</em>
+            </span>
+            <a v-if="avisoEntrenamiento.url" :href="avisoEntrenamiento.url" target="_blank" rel="noopener" class="entrena-link">Registro técnico</a>
           </p>
 
           <div v-if="versiones.length" class="ver-lista">
@@ -588,6 +609,7 @@ async function despertarMotor() {
     notif.exito(`Motor listo en ${r.segundos}s.`)
     cargarModelo()
     cargarVersiones()
+    cargarDatosEntrenamiento()
     cargarCombos()
   } catch (e) {
     estado.value = { ...estado.value, en_linea: false }
@@ -693,6 +715,12 @@ const versionActiva = ref(null)
 const cambiandoVersion = ref(false)
 let vigilaEntrenamiento = null
 
+const datosEntrenamiento = ref(null)
+async function cargarDatosEntrenamiento() {
+  try { datosEntrenamiento.value = await clienteHttp.get('/recomendaciones/datos-entrenamiento') }
+  catch { datosEntrenamiento.value = null }
+}
+
 async function cargarVersiones() {
   try {
     const r = await clienteHttp.get('/recomendaciones/versiones')
@@ -703,6 +731,14 @@ async function cargarVersiones() {
 
 async function reentrenar() {
   if (entrenando.value) return
+  const d = datosEntrenamiento.value
+  if (d && !d.alcanza) {
+    avisoEntrenamiento.value = {
+      tipo: 'mal',
+      texto: `Todavía no hay ventas suficientes: hay ${d.lineas} y hacen falta ${d.minimo}.`,
+    }
+    return
+  }
   entrenando.value = true
   avisoEntrenamiento.value = { tipo: 'info', texto: 'Entrenamiento pedido. Tarda entre 2 y 3 minutos.' }
   try {
@@ -730,8 +766,15 @@ function seguirEntrenamiento() {
         if (ultima.resultado === 'success') {
           avisoEntrenamiento.value = { tipo: 'ok', texto: 'Modelo nuevo listo. Ya quedó publicado.', url: ultima.url }
           cargarVersiones()
+          cargarDatosEntrenamiento()
         } else {
-          avisoEntrenamiento.value = { tipo: 'mal', texto: 'El entrenamiento falló.', url: ultima.url }
+          avisoEntrenamiento.value = {
+            tipo: 'mal',
+            texto: ultima.motivo?.texto || 'El entrenamiento no se completó.',
+            paso: ultima.motivo?.paso || null,
+            url: ultima.url,
+          }
+          cargarDatosEntrenamiento()
         }
       }
     } catch { /* se sigue intentando */ }
@@ -793,6 +836,7 @@ onActivated(() => {
     cargarEventos()
     cargarModelo()
     cargarVersiones()
+    cargarDatosEntrenamiento()
   } else {
     // Refresco silencioso al volver a la vista: lo dinámico se mantiene fresco
     // (los datos previos siguen visibles mientras llegan los nuevos)
@@ -1592,4 +1636,15 @@ onActivated(() => {
   color: var(--texto-secundario); font-size: .72rem; font-weight: 700; transition: var(--trans-rapida);
 }
 .ver-volver:hover:not(:disabled) { border-color: var(--borde-activo); color: #fff; background: rgba(168,85,247,.16); }
+
+.dato-entrena { margin-bottom: 12px; }
+.dato-barra { height: 5px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; margin-bottom: 7px; }
+.dato-relleno { display: block; height: 100%; border-radius: 999px; background: var(--gradiente-marca); transition: width .5s var(--ease-suave, ease); }
+.dato-entrena.corto .dato-relleno { background: var(--color-alerta); }
+.dato-txt { margin: 0; font-size: .76rem; color: var(--texto-secundario); }
+.dato-txt b { color: var(--texto-principal); font-variant-numeric: tabular-nums; }
+.dato-por-que { margin: 4px 0 0; font-size: .7rem; color: var(--texto-desactivado); }
+.entrena-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.entrena-txt em { font-style: normal; font-size: .68rem; color: var(--texto-desactivado); }
+.entrena-link { font-size: .68rem; opacity: .75; white-space: nowrap; }
 </style>

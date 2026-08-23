@@ -206,6 +206,29 @@ router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, re
 const REPO_IA = process.env.REPO_GITHUB || 'Dilxn25/tickets'
 const FLUJO_ENTRENAMIENTO = process.env.FLUJO_ENTRENAMIENTO || 'entrenar-modelo.yml'
 
+// GET /api/recomendaciones/datos-entrenamiento — cuanta venta hay acumulada [admin]
+// Se consulta ANTES de lanzar nada: si no hay material suficiente, el panel lo
+// dice de entrada en vez de mandar al administrador a leer un registro tecnico.
+const MINIMO_LINEAS_ENTRENAR = 300
+router.get('/datos-entrenamiento', verificarToken, soloRoles('Administrador'), async (req, res) => {
+  try {
+    const [fila] = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*) lineas, COUNT(DISTINCT id_comanda) comandas FROM detalle_comanda`)
+    const lineas = Number(fila?.lineas || 0)
+    const comandas = Number(fila?.comandas || 0)
+    res.json({
+      lineas,
+      comandas,
+      minimo: MINIMO_LINEAS_ENTRENAR,
+      alcanza: lineas >= MINIMO_LINEAS_ENTRENAR,
+      faltan: Math.max(0, MINIMO_LINEAS_ENTRENAR - lineas),
+    })
+  } catch (e) {
+    console.error('No se pudo contar la venta acumulada:', e.message)
+    res.json({ lineas: 0, comandas: 0, minimo: MINIMO_LINEAS_ENTRENAR, alcanza: true, faltan: 0, sin_dato: true })
+  }
+})
+
 // POST /api/recomendaciones/entrenar — pedir un modelo nuevo [admin]
 router.post('/entrenar', verificarToken, soloRoles('Administrador'), async (req, res) => {
   const token = process.env.TOKEN_GITHUB
@@ -264,11 +287,48 @@ router.get('/entrenamientos', verificarToken, soloRoles('Administrador'), async 
       inicio: c.run_started_at,
       url: c.html_url,
     }))
+
+    // Si la ultima fallo, se recupera el motivo exacto para mostrarlo en el panel:
+    // el administrador no tiene por que entrar a GitHub a buscarlo.
+    const ultima = corridas[0]
+    if (ultima && ultima.estado === 'completed' && ultima.resultado === 'failure') {
+      ultima.motivo = await motivoDelFallo(ultima.id, token)
+    }
+
     res.json({ disponible: true, corridas })
   } catch {
     res.json({ disponible: false, corridas: [] })
   }
 })
+
+// Lee las anotaciones que dejo el flujo (los mensajes marcados como error) y
+// devuelve el primero en limpio. Si no hay, se responde null y el panel muestra
+// un texto generico.
+async function motivoDelFallo(idCorrida, token) {
+  try {
+    const rj = await fetch(`https://api.github.com/repos/${REPO_IA}/actions/runs/${idCorrida}/jobs`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) })
+    if (!rj.ok) return null
+    const dj = await rj.json()
+    for (const job of dj.jobs || []) {
+      if (!job.check_run_url) continue
+      const ra = await fetch(`${job.check_run_url}/annotations`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) })
+      if (!ra.ok) continue
+      const anotaciones = await ra.json()
+      const error = (anotaciones || []).find(a => a.annotation_level === 'failure')
+      if (error) {
+        const texto = String(error.message || '').split('\n')[0].trim()
+        // El paso fallido tambien orienta: "Probar la conexion a la base", etc.
+        const paso = (job.steps || []).find(p => p.conclusion === 'failure')
+        return { texto, paso: paso?.name || null }
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 // GET /api/recomendaciones/versiones — historial de modelos entrenados [admin]
 router.get('/versiones', verificarToken, soloRoles('Administrador'), async (req, res) => {
