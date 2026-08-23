@@ -10,6 +10,10 @@ on:
         description: "Por que se reentrena (queda en el historial)"
         required: false
         default: "Reentrenamiento desde el panel"
+      forzar:
+        description: "Entrenar aunque haya pocas ventas"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -50,26 +54,46 @@ jobs:
             exit 1
           fi
           python - <<'PY'
-          import json, os
+          import json, os, re
           ruta = "recursos/modelo_entrenado/config.json"
           with open(ruta, encoding="utf-8") as f:
               cfg = json.load(f)
+
+          # Se acepta la URL TAL CUAL la entrega Aiven y se adapta a lo que
+          # entiende Python. Aiven da algo como:
+          #   mysql://usuario:clave@host:puerto/defaultdb?ssl-mode=REQUIRED
+          # y aca hacen falta dos ajustes:
+          #   - el prefijo debe decir con que libreria se conecta (mysql+pymysql)
+          #   - "ssl-mode" es del cliente de consola, no de Python: se descarta
           url = os.environ["URL_BD_ENTRENAMIENTO"].strip()
-          # Aiven solo acepta conexiones cifradas: si la URL no dice nada de TLS,
-          # se activa aca para que no falle al conectar.
-          if "ssl" not in url.lower():
-              url += ("&" if "?" in url else "?") + "ssl_disabled=false"
+
+          if url.startswith("mysql://"):
+              url = "mysql+pymysql://" + url[len("mysql://"):]
+          elif "://" not in url:
+              url = "mysql+pymysql://" + url
+
+          if "?" in url:
+              base, consulta = url.split("?", 1)
+              partes = [t for t in consulta.split("&") if t]
+              # se quitan los parametros que solo entiende el cliente de consola
+              partes = [t for t in partes if not re.match(r"(?i)^(ssl-mode|sslmode)=", t)]
+              url = base + ("?" + "&".join(partes) if partes else "")
+
           cfg["fuente"] = "mysql_prisma"
           cfg["database_url"] = url
           with open(ruta, "w", encoding="utf-8") as f:
               json.dump(cfg, f, ensure_ascii=False, indent=2)
-          print("config.json apuntando a la base de produccion")
+
+          visible = re.sub(r"//[^@]+@", "//****@", url)
+          print("Conexion preparada:", visible)
           PY
 
       - name: Probar la conexion a la base
+        env:
+          FORZAR: ${{ github.event.inputs.forzar }}
         run: |
           python - <<'PY'
-          import json, sys
+          import json, os, sys
           from sqlalchemy import create_engine, text
           cfg = json.load(open("recursos/modelo_entrenado/config.json", encoding="utf-8"))
           try:
@@ -77,8 +101,13 @@ jobs:
               with eng.connect() as con:
                   n = con.execute(text("SELECT COUNT(*) FROM detalle_comanda")).scalar()
               print("Conexion correcta. Lineas de venta disponibles:", n)
-              if not n:
-                  print("::warning::La base no tiene ventas todavia; el modelo saldra pobre.")
+              minimo = 300
+              forzar = os.environ.get("FORZAR", "false").lower() == "true"
+              if n < minimo and not forzar:
+                  print("::error::Hay %d lineas de venta y se piden al menos %d." % (n, minimo))
+                  print("Entrenar con tan pocas ventas daria un modelo PEOR que el actual.")
+                  print("Si aun asi quieres entrenar, lanza el flujo a mano con 'forzar' en true.")
+                  sys.exit(1)
           except Exception as e:
               print("::error::No se pudo conectar a la base:", e)
               print("Revisa el secreto URL_BD_ENTRENAMIENTO (usuario, clave, host, puerto y nombre de la base).")
