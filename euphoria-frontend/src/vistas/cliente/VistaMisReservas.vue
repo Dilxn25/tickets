@@ -200,7 +200,21 @@
             </button>
           </header>
           <p v-if="cargandoOpciones" class="cort-cargando">Cargando combos…</p>
-          <div v-else class="cort-grid">
+          <template v-else>
+          <div class="cort-modo">
+            <span class="cort-modo-lbl">¿Cómo lo quieres?</span>
+            <div class="cort-modo-ops">
+              <button type="button" class="cort-modo-op" :class="{ activo: modoEntrega === 'llevar' }" @click="modoEntrega = 'llevar'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 11h18"></path><path d="M12 11V5"></path><path d="M6 21h12"></path><path d="M12 21v-4"></path><path d="M5 11a7 7 0 0 0 14 0"></path></svg>
+                <b>A mi mesa</b><small>El mesero te lo lleva</small>
+              </button>
+              <button type="button" class="cort-modo-op" :class="{ activo: modoEntrega === 'barra' }" @click="modoEntrega = 'barra'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 3h18l-7 9v7l-4 2v-9L3 3z"></path></svg>
+                <b>Paso a recogerlo</b><small>Lo retiras en la barra</small>
+              </button>
+            </div>
+          </div>
+          <div class="cort-grid">
             <button
               v-for="op in opcionesCortesia" :key="op.id_producto"
               class="cort-op" type="button"
@@ -215,6 +229,7 @@
               <em v-if="!op.disponible">Sin stock ahora</em>
             </button>
           </div>
+          </template>
           <p v-if="errorCortesia" class="cort-error">{{ errorCortesia }}</p>
         </div>
       </div>
@@ -253,9 +268,13 @@ const opcionesCortesia = ref([])
 const cargandoOpciones = ref(false)
 const eligiendo = ref(false)
 const errorCortesia = ref('')
+// El cliente decide si se lo llevan a la mesa o si pasa a recogerlo por la barra.
+// Mientras no elija, la barra no ve nada: recien con esta decision entra a la cola.
+const modoEntrega = ref('llevar')
 async function abrirCortesia(r) {
   cortesiaAbierta.value = r
   errorCortesia.value = ''
+  modoEntrega.value = 'llevar'
   cargandoOpciones.value = true
   try {
     const d = await servicioReservas.misCortesias()
@@ -269,7 +288,7 @@ async function elegirCortesia(op) {
   eligiendo.value = true
   errorCortesia.value = ''
   try {
-    const res = await servicioReservas.elegirCortesia(r.cortesia.id_cortesia, op.id_producto)
+    const res = await servicioReservas.elegirCortesia(r.cortesia.id_cortesia, op.id_producto, modoEntrega.value)
     notif.exito(res.mensaje || 'Combo elegido')
     cortesiaAbierta.value = null
     await cargar()
@@ -278,10 +297,11 @@ async function elegirCortesia(op) {
   } finally { eligiendo.value = false }
 }
 function textoCortesia(c) {
-  if (c.pedido_entrega === 'entregado' || c.pedido_estado === 'Completada') return 'Ya lo recibiste en tu mesa.'
-  if (c.pedido_estado === 'Listo') return 'Listo: va en camino a tu mesa.'
+  const enBarra = c.modo_entrega === 'barra'
+  if (c.pedido_entrega === 'entregado' || c.pedido_estado === 'Completada') return 'Ya lo recibiste.'
+  if (c.pedido_estado === 'Listo') return enBarra ? 'Listo: pasa a recogerlo por la barra.' : 'Listo: va en camino a tu mesa.'
   if (c.pedido_estado === 'Preparando') return 'La barra lo está preparando.'
-  if (c.pedido_estado === 'Programado') return 'Te lo llevan a la mesa cuando ingreses.'
+  if (c.pedido_estado === 'Programado') return enBarra ? 'Lo preparan cuando ingreses.' : 'Te lo llevan a la mesa cuando ingreses.'
   return 'En cola de la barra.'
 }
 // Color por zona (según lo pagado): la reserva más cara = dorado (VIP).
@@ -743,5 +763,13 @@ useTiempoReal(['reservas', 'eventos'], () => cargar())
 .cort-op em { font-size: 0.68rem; color: var(--color-alerta); font-style: normal; font-weight: 700; }
 .cort-cargando, .cort-error { margin: 8px 0 0; font-size: 0.8rem; color: var(--texto-secundario); text-align: center; }
 .cort-error { color: var(--color-error); font-weight: 600; }
-@media (max-width: 420px) { .cort-grid { grid-template-columns: 1fr; } .cortesia { flex-wrap: wrap; } .cortesia-btn { width: 100%; } }
+.cort-modo { margin: 2px 0 14px; }
+.cort-modo-lbl { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--texto-secundario); margin-bottom: 7px; }
+.cort-modo-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cort-modo-op { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; cursor: pointer; padding: 10px 12px; border-radius: 12px; text-align: left; color: var(--texto-secundario); background: rgba(255,255,255,0.03); border: 1px solid var(--borde-sutil); transition: border-color .15s, background .15s, color .15s; }
+.cort-modo-op b { font-size: 0.8rem; color: var(--texto-principal); }
+.cort-modo-op small { font-size: 0.68rem; line-height: 1.25; }
+.cort-modo-op.activo { color: #F9A8D4; border-color: rgba(236,72,153,0.55); background: linear-gradient(135deg, rgba(236,72,153,0.16), rgba(168,85,247,0.06)); }
+.cort-modo-op.activo b { color: #fff; }
+@media (max-width: 420px) { .cort-grid { grid-template-columns: 1fr; } .cortesia { flex-wrap: wrap; } .cortesia-btn { width: 100%; } .cort-modo-ops { grid-template-columns: 1fr; } }
 </style>

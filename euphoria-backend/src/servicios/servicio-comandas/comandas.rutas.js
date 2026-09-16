@@ -19,6 +19,39 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 const Tesseract = require('tesseract.js')
+
+// ── Cache corto para los reportes agregados ──────────────────────────────────
+// El resumen de ventas recorre TODO el historial ocho veces (totales, metodos,
+// categorias, ranking, meseros, tendencia, por dia y por hora). Con un solo
+// administrador mirando el tablero eso tarda un cuarto de segundo, pero cuando
+// varias pantallas lo piden a la vez cada una vuelve a recorrer lo mismo y los
+// tiempos se disparan. Como son cifras historicas que no cambian de un segundo
+// a otro, el resultado se guarda unos segundos y las siguientes peticiones
+// iguales lo reutilizan. Una venta nueva aparece en el siguiente refresco.
+// Se puede apagar con EUPH_CACHE_REPORTES=0 para medir cuanto cuesta el reporte
+// sin ninguna ayuda; asi la mejora se puede comprobar con la misma prueba.
+const VIDA_CACHE_REPORTE = process.env.EUPH_CACHE_REPORTES === '0' ? 0 : 20 * 1000
+const cacheReportes = new Map()        // clave -> { hasta, valor, enCurso }
+
+async function conCache (clave, calcular) {
+  if (VIDA_CACHE_REPORTE === 0) return calcular()
+  const ahora = Date.now()
+  const guardado = cacheReportes.get(clave)
+  if (guardado && guardado.hasta > ahora) return guardado.valor
+  // Si ya hay un calculo en vuelo para la misma clave, las demas peticiones
+  // esperan ese mismo resultado en vez de lanzar otro recorrido identico.
+  if (guardado && guardado.enCurso) return guardado.enCurso
+
+  const enCurso = calcular().then(valor => {
+    cacheReportes.set(clave, { hasta: Date.now() + VIDA_CACHE_REPORTE, valor })
+    return valor
+  }).catch(err => {
+    cacheReportes.delete(clave)
+    throw err
+  })
+  cacheReportes.set(clave, { hasta: 0, enCurso })
+  return enCurso
+}
 const { analizarComprobante, analizarComprobanteRobusto, hoyBolivia, TITULAR_POR_DEFECTO } = require('../../utilidades/ocr-comprobantes')
 const { leerConfigPremio } = require('../../utilidades/premio-perfil')
 const { notificar } = require('../../utilidades/notificaciones')
@@ -968,6 +1001,119 @@ router.get('/', verificarToken, async (req, res) => {
 
 // GET /api/comandas/resumen-ventas — Agregados para el dashboard (rápido, en SQL)
 // Reemplaza el traer TODAS las comandas al cliente. Excluye Canceladas. Filtro opcional desde/hasta.
+// GET /api/comandas/consumo-clientes — qué consumió cada cliente. Sirve para el
+// listado general (quiénes son los que más consumen) y, con ?cliente=, para la
+// ficha de uno solo: sus eventos, sus productos y su categoría preferida.
+// Filtros opcionales: cliente, evento, producto, categoria, desde, hasta.
+router.get('/consumo-clientes', verificarToken, async (req, res) => {
+  try {
+    const cond = ["c.estado_despacho <> 'Cancelada'", 'c.id_cliente IS NOT NULL']
+    const params = []
+    if (req.query.cliente) { cond.push('c.id_cliente = ?'); params.push(Number(req.query.cliente)) }
+    if (req.query.producto) { cond.push('d.id_producto = ?'); params.push(Number(req.query.producto)) }
+    if (req.query.categoria) { cond.push('p.id_categoria = ?'); params.push(Number(req.query.categoria)) }
+    if (req.query.evento) {
+      const ev = await prisma.evento.findUnique({ where: { id_evento: Number(req.query.evento) } })
+      if (ev) {
+        cond.push('c.fecha_registro >= ?'); params.push(ev.fecha_hora_inicio)
+        cond.push('c.fecha_registro <= ?'); params.push(ev.fecha_hora_fin || new Date())
+      }
+    } else {
+      if (req.query.desde) { cond.push('DATE(c.fecha_registro) >= ?'); params.push(req.query.desde) }
+      if (req.query.hasta) { cond.push('DATE(c.fecha_registro) <= ?'); params.push(req.query.hasta) }
+    }
+    // Las tres consultas comparten el mismo FROM y el mismo WHERE, para que los
+    // totales del listado y los de la ficha nunca se contradigan.
+    const FROM = `FROM comanda c
+      JOIN detalle_comanda d ON d.id_comanda = c.id_comanda
+      JOIN producto p ON p.id_producto = d.id_producto
+      JOIN usuario u ON u.id_usuario = c.id_cliente`
+    const W = 'WHERE ' + cond.join(' AND ')
+
+    const [porCliente, porProducto, porCategoria, porEvento] = await Promise.all([
+      // Ranking de clientes: cuánto gastó, cuántos productos y en cuántas noches
+      prisma.$queryRawUnsafe(
+        `SELECT u.id_usuario id_cliente,
+                CONCAT(u.nombres, ' ', COALESCE(u.apellidos,'')) cliente,
+                u.es_vip,
+                COUNT(DISTINCT c.id_comanda) pedidos,
+                COUNT(DISTINCT DATE(c.fecha_registro)) noches,
+                COALESCE(SUM(d.cantidad),0) unidades,
+                COALESCE(SUM(d.subtotal),0) total
+         ${FROM} ${W}
+         GROUP BY u.id_usuario, cliente, u.es_vip
+         ORDER BY total DESC LIMIT 200`, ...params),
+      // Qué productos consumió
+      prisma.$queryRawUnsafe(
+        `SELECT p.id_producto, p.nombre_producto producto,
+                COALESCE(cat.nombre_categoria,'Sin categoría') categoria,
+                COALESCE(SUM(d.cantidad),0) unidades,
+                COALESCE(SUM(d.subtotal),0) total
+         ${FROM} LEFT JOIN categoria cat ON cat.id_categoria = p.id_categoria ${W}
+         GROUP BY p.id_producto, p.nombre_producto, categoria
+         ORDER BY unidades DESC LIMIT 100`, ...params),
+      // Su preferencia: en qué categoría concentra el consumo
+      prisma.$queryRawUnsafe(
+        `SELECT COALESCE(cat.nombre_categoria,'Sin categoría') categoria,
+                COALESCE(SUM(d.cantidad),0) unidades,
+                COALESCE(SUM(d.subtotal),0) total
+         ${FROM} LEFT JOIN categoria cat ON cat.id_categoria = p.id_categoria ${W}
+         GROUP BY categoria ORDER BY unidades DESC`, ...params),
+      // En qué eventos estuvo
+      prisma.$queryRawUnsafe(
+        `SELECT e.id_evento, e.nombre_evento evento, e.fecha_hora_inicio fecha,
+                COUNT(DISTINCT c.id_comanda) pedidos,
+                COALESCE(SUM(d.subtotal),0) total
+         ${FROM}
+         LEFT JOIN entrada en ON en.id_entrada = c.id_entrada
+         LEFT JOIN zona z ON z.id_zona = en.id_zona
+         LEFT JOIN evento e ON e.id_evento = z.id_evento
+         ${W} AND e.id_evento IS NOT NULL
+         GROUP BY e.id_evento, e.nombre_evento, e.fecha_hora_inicio
+         ORDER BY e.fecha_hora_inicio DESC`, ...params),
+    ])
+
+    const num = (v) => Number(v) || 0
+    const clientes = porCliente.map(r => ({
+      id_cliente: num(r.id_cliente), cliente: String(r.cliente || '').trim(),
+      es_vip: !!r.es_vip, pedidos: num(r.pedidos), noches: num(r.noches),
+      unidades: num(r.unidades), total: num(r.total),
+    }))
+    const categorias = porCategoria.map(r => ({
+      categoria: r.categoria, unidades: num(r.unidades), total: num(r.total),
+    }))
+    const totalUnidades = categorias.reduce((a, c) => a + c.unidades, 0)
+    // La preferencia solo se declara si una categoría concentra al menos el 35 %
+    // del consumo: por debajo de eso el cliente no muestra un gusto definido.
+    const top = categorias[0]
+    const preferencia = (top && totalUnidades > 0 && (top.unidades / totalUnidades) >= 0.35)
+      ? { categoria: top.categoria, porcentaje: Math.round((top.unidades / totalUnidades) * 100) }
+      : null
+
+    res.json({
+      clientes,
+      productos: porProducto.map(r => ({
+        id_producto: num(r.id_producto), producto: r.producto, categoria: r.categoria,
+        unidades: num(r.unidades), total: num(r.total),
+      })),
+      categorias,
+      eventos: porEvento.map(r => ({
+        id_evento: num(r.id_evento), evento: r.evento, fecha: r.fecha,
+        pedidos: num(r.pedidos), total: num(r.total),
+      })),
+      preferencia,
+      totales: {
+        clientes: clientes.length,
+        unidades: totalUnidades,
+        ingresos: clientes.reduce((a, c) => a + c.total, 0),
+      },
+    })
+  } catch (error) {
+    console.error('Error en el reporte de consumo por cliente:', error)
+    res.status(500).json({ error: 'Error al generar el reporte de consumo por cliente' })
+  }
+})
+
 router.get('/resumen-ventas', verificarToken, async (req, res) => {
   try {
     const cond = ["c.estado_despacho <> 'Cancelada'"]
@@ -991,6 +1137,10 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
     }
     const W = 'WHERE ' + cond.join(' AND ')
 
+    // La clave junta el filtro aplicado: dos administradores con el mismo periodo
+    // comparten el calculo, y un periodo distinto se calcula aparte.
+    const clave = 'resumen-ventas|' + W + '|' + JSON.stringify(params)
+    const datos = await conCache(clave, async () => {
     const [totales, porMetodo, porCategoria, ranking, porMesero, tendencia, porDia, porHora] = await Promise.all([
       prisma.$queryRawUnsafe(
         `SELECT COUNT(DISTINCT c.id_comanda) num, COALESCE(SUM(d.subtotal),0) ingresos
@@ -1033,7 +1183,7 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
 
     // Los BigInt/Decimal de MySQL se normalizan a Number
     const num = (v) => v == null ? 0 : Number(v)
-    res.json({
+    return {
       totales: { ingresos: num(totales[0]?.ingresos), num_comandas: num(totales[0]?.num) },
       por_metodo:   porMetodo.map(r => ({ metodo: r.metodo, cantidad: num(r.cantidad), total: num(r.total) })),
       por_categoria: porCategoria.map(r => ({ categoria: r.categoria, total: num(r.total) })),
@@ -1042,7 +1192,9 @@ router.get('/resumen-ventas', verificarToken, async (req, res) => {
       tendencia:    tendencia.map(r => ({ id_comanda: num(r.id_comanda), total: num(r.total), fecha: r.fecha_registro })),
       por_dia:      porDia.map(r => ({ dia: r.dia, cantidad: num(r.cantidad), total: num(r.total) })).reverse(),
       por_hora:     porHora.map(r => ({ hora: num(r.hora), cantidad: num(r.cantidad), total: num(r.total) })),
+    }
     })
+    res.json(datos)
   } catch (error) {
     console.error('Error en resumen de ventas:', error)
     res.status(500).json({ error: 'Error al generar el resumen de ventas' })
@@ -1283,6 +1435,52 @@ router.get('/mis-mesas', verificarToken, async (req, res) => {
     })))
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener mis mesas asignadas' })
+  }
+})
+
+// GET /api/comandas/mis-cortesias — cortesías que los clientes de MIS mesas todavía
+// no reclamaron. El mesero las ve para poder preguntarle al cliente si quiere que se
+// la preparen ahora; mientras el cliente no elija, la barra no ve nada.
+router.get('/mis-cortesias', verificarToken, async (req, res) => {
+  try {
+    const idEvento = Number(req.query.evento) || null
+    // Las mesas que este mesero atiende en este momento
+    const mias = await prisma.asignacion_mesa.findMany({
+      where: {
+        id_mesero: req.usuario.id,
+        estado: { in: ['asignada', 'atendiendo'] },
+        ...(idEvento ? { mesa_espacio: { zona: { id_evento: idEvento } } } : {}),
+      },
+      select: { id_mesa: true },
+    })
+    if (mias.length === 0) return res.json([])
+
+    // De esas mesas, las entradas con cortesía todavía sin elegir y con el cliente ya adentro
+    const pendientes = await prisma.entrada.findMany({
+      where: {
+        id_mesa: { in: mias.map(m => m.id_mesa) },
+        cortesia_estado: 'pendiente',
+        cantidad_ingresada: { gt: 0 },
+      },
+      select: {
+        id_entrada: true,
+        id_mesa: true,
+        usuario: { select: { id_usuario: true, nombres: true, apellidos: true, es_vip: true } },
+        mesa_espacio: { select: { numero_nombre: true } },
+      },
+    })
+
+    res.json(pendientes.map(e => ({
+      id_entrada: e.id_entrada,
+      id_mesa: e.id_mesa,
+      mesa: e.mesa_espacio?.numero_nombre || null,
+      id_cliente: e.usuario?.id_usuario || null,
+      cliente: e.usuario ? `${e.usuario.nombres} ${e.usuario.apellidos || ''}`.trim() : 'Cliente',
+      es_vip: e.usuario?.es_vip || false,
+    })))
+  } catch (error) {
+    console.error('Error al obtener las cortesías pendientes:', error)
+    res.status(500).json({ error: 'Error al obtener las cortesías pendientes' })
   }
 })
 

@@ -294,7 +294,35 @@ router.post('/recargar', async (req, res) => {
       include: { usuario: true }
     })
 
-    if (!billetera) return res.status(404).json({ error: 'Usuario o billetera no encontrado' })
+    // El cliente puede existir sin billetera todavia: la cuenta se crea al
+    // registrarse y la billetera recien nacia al hacer su primera recarga por la
+    // app. Quien se registraba y venia directo a caja con efectivo se topaba con
+    // "usuario no encontrado". Si el usuario existe, se le abre la billetera aqui
+    // mismo y la recarga sigue su curso normal.
+    if (!billetera) {
+      const usuario = await prisma.usuario.findFirst({
+        where: {
+          OR: [
+            { correo: identificador },
+            { telefono: identificador },
+            { ci_carnet: identificador },
+          ],
+        },
+      })
+      if (!usuario) return res.status(404).json({ error: 'Usuario o billetera no encontrado' })
+      await prisma.billetera.create({
+        data: {
+          id_usuario: usuario.id_usuario,
+          saldo_actual: 0,
+          qr_publico: `EUPH-${String(usuario.id_usuario).padStart(6, '0')}`,
+          ultima_actualizacion: new Date(),
+        },
+      })
+      billetera = await prisma.billetera.findFirst({
+        where: { id_usuario: usuario.id_usuario },
+        include: { usuario: true },
+      })
+    }
 
     const numTransaccion = `CAJ-${Date.now()}`
     const ahora = new Date()

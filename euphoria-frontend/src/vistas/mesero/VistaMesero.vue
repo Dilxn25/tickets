@@ -445,6 +445,24 @@
           <p v-else class="mm-vacia">Aún no tienes mesas asignadas en este evento.</p>
         </div>
 
+        <!-- CORTESÍAS SIN RECLAMAR: clientes de tus mesas que todavía no eligieron su combo.
+             Sirve para acercarse y preguntarles; hasta que elijan, la barra no ve nada. -->
+        <div v-if="cortesiasPendientes.length" class="cort-pend">
+          <div class="cp-titulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+            <span>Cortesías sin reclamar</span>
+            <span class="cp-n">{{ cortesiasPendientes.length }}</span>
+          </div>
+          <p class="cp-hint">Pregúntales qué combo quieren y si se los llevas o pasan por la barra.</p>
+          <div class="cp-lista">
+            <div v-for="c in cortesiasPendientes" :key="c.id_entrada" class="cp-item">
+              <strong>{{ c.mesa || 'Mesa' }}</strong>
+              <span class="cp-cli">{{ c.cliente }}</span>
+              <span v-if="c.es_vip" class="cp-vip">VIP</span>
+            </div>
+          </div>
+        </div>
+
         <!-- SELECTOR DE MESA -->
         <div class="selector-mesa">
           <div class="mesa-tabs">
@@ -1027,6 +1045,17 @@ async function cargarMisMesas() {
     misMesas.value = await clienteHttp.get(`/comandas/mis-mesas${q}`)
   } catch { misMesas.value = [] }
 }
+// Cortesías que los clientes de este mesero todavía no eligieron. El circuito es:
+// el mesero pregunta -> el cliente elige combo y modo de entrega -> recién ahí la barra
+// lo ve en su cola. Por eso el mesero necesita saber a quién le falta.
+const cortesiasPendientes = ref([])
+async function cargarCortesiasPendientes() {
+  try {
+    const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
+    cortesiasPendientes.value = await clienteHttp.get(`/comandas/mis-cortesias${q}`)
+  } catch { cortesiasPendientes.value = [] }
+}
+
 // Elegir una mesa asignada = seleccionarla en la orden (y su cliente si tiene reserva)
 function elegirMesaAsignada(m) {
   const mesaObj = mesas.value.find(x => x.id_mesa === m.id_mesa)
@@ -1089,7 +1118,7 @@ async function cargarEventosActivos() {
     if (eventosActivos.value.length === 1) elegirEvento(eventosActivos.value[0].id_evento)
     else if (eventosActivos.value.length > 1) modalEvento.value = true
   } else {
-    cargarMisMesas()
+    cargarMisMesas(); cargarCortesiasPendientes()
     cargarReparto()
   }
 }
@@ -1098,7 +1127,7 @@ function elegirEvento(id) {
   eventoActivoId.value = id
   localStorage.setItem('euphoria_mesero_evento', String(id))
   modalEvento.value = false
-  cargarMisMesas()
+  cargarMisMesas(); cargarCortesiasPendientes()
   cargarReparto()
 }
 
@@ -1122,7 +1151,7 @@ async function cerrarAtencionMesa(m) {
   try {
     await clienteHttp.post(`/aforo/mesa/${m.id_mesa}/cerrar-atencion`)
     if (mesaSeleccionada.value?.id_mesa === m.id_mesa) { mesaSeleccionada.value = null; alCambiarMesa() }
-    await cargarMisMesas()
+    await cargarMisMesas(); await cargarCortesiasPendientes()
     await cargarReparto()
     notif.exito(`${m.mesa || 'Mesa'} libre para el siguiente grupo`)
   } catch (e) {
@@ -1144,6 +1173,7 @@ async function salirDelEvento() {
     eventoActivoId.value = null
     localStorage.removeItem('euphoria_mesero_evento')
     misMesas.value = []
+    cortesiasPendientes.value = []
     reparto.value = null
     await cargarEventosActivos()
   } catch (e) {
@@ -1971,7 +2001,7 @@ async function tomarPedidoPool(p) {
 
 onMounted(() => {
   cargarPedidosListos()
-  cargarMisMesas()
+  cargarMisMesas(); cargarCortesiasPendientes()
   cargarPool()
   // Cronómetro en vivo: recalcula la espera cada segundo
   intervaloTick = setInterval(() => { ahoraTick.value = Date.now() }, 1000)
@@ -2015,11 +2045,11 @@ onMounted(() => {
   socket.on('mesa_asignada', (data) => {
     cargarReparto()  // cambió el reparto del evento (afecta a todos)
     if (data?.id_mesero !== tienda.usuario?.id) return
-    cargarMisMesas()
+    cargarMisMesas(); cargarCortesiasPendientes()
     agregarToast('Te asignaron una nueva mesa')
   })
   // Un compañero salió del evento: sus mesas se liberaron (cambia el reparto)
-  socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas() })
+  socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas(); cargarCortesiasPendientes() })
   // Una mesa se liberó (cierre de atención/reserva): recalcular reparto
   socket.on('mesa_actualizada', () => { cargarReparto() })
   // La barra confirmó la entrega de un pedido mío (handoff): refrescar estado
@@ -2545,6 +2575,17 @@ onUnmounted(() => {
 .btn-cobrar:not(:disabled):hover .btn-cobrar-arrow { transform: translateX(3px); }
 
 /* Selector de Mesa */
+/* Cortesías sin reclamar */
+.cort-pend { margin: 0 0 14px; padding: 11px 13px; border-radius: 12px; border: 1px solid rgba(236,72,153,0.32); background: linear-gradient(135deg, rgba(236,72,153,0.10), rgba(168,85,247,0.04)); }
+.cp-titulo { display: flex; align-items: center; gap: 7px; color: #F9A8D4; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+.cp-n { margin-left: auto; min-width: 20px; text-align: center; font-size: 0.7rem; font-weight: 800; color: #fff; background: #EC4899; border-radius: 999px; padding: 1px 7px; }
+.cp-hint { margin: 5px 0 8px; font-size: 0.72rem; line-height: 1.35; color: var(--texto-secundario); }
+.cp-lista { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-item { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid var(--borde-sutil); }
+.cp-item strong { font-size: 0.76rem; color: var(--texto-principal); }
+.cp-cli { font-size: 0.72rem; color: var(--texto-secundario); }
+.cp-vip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.05em; color: #0E0821; background: linear-gradient(135deg, #FDE68A, #F59E0B); border-radius: 999px; padding: 1px 6px; }
+
 /* Mis mesas asignadas */
 .mis-mesas { margin-bottom: 12px; padding: 10px 12px; border-radius: var(--radio-md); background: rgba(168,85,247,0.07); border: 1px solid var(--borde-sutil); }
 .mm-titulo { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--morado-hover); margin-bottom: 8px; }

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Backend servicio por servicio — Euphoria</title>
+<style>
+  :root{--tinta:#1f2430;--gris:#5b6473;--linea:#d8dce4;--azul:#2f6fed;--azulbg:#eaf1ff;
+    --verde:#1f9d55;--naranja:#e07b1a;--morado:#7a4fd1;--amarillo:#c99700;--amarillobg:#fbf3d9;}
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;color:var(--tinta);max-width:1040px;margin:0 auto;
+       padding:28px 22px;line-height:1.5;background:#fff}
+  h1{font-size:26px;margin:0 0 4px}
+  .sub{color:var(--gris);margin:0 0 18px;font-size:15px}
+  h2{font-size:19px;margin:30px 0 4px;border-top:2px solid var(--linea);padding-top:14px}
+  .badge{display:inline-block;font-family:Consolas,monospace;font-size:13px;background:#eef2ff;
+         border:1px solid #c9d6ff;border-radius:6px;padding:1px 8px;margin-left:6px;color:#2f4bd0}
+  .quehace{color:var(--gris);font-size:14px;margin:4px 0 8px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0 10px}
+  th,td{border:1px solid var(--linea);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:#f3f5f8}
+  .m{font-family:Consolas,monospace;font-weight:700;font-size:12px;border-radius:4px;padding:1px 6px;color:#fff;white-space:nowrap}
+  .get{background:var(--verde)} .post{background:var(--azul)} .put{background:var(--naranja)}
+  .patch{background:var(--morado)} .delete{background:#d1495b}
+  code{font-family:Consolas,monospace;font-size:12.5px;background:#f3f5f8;padding:1px 5px;border-radius:4px}
+  .grupo{font-size:15px;font-weight:700;color:var(--gris);margin:26px 0 0;text-transform:uppercase;letter-spacing:.5px}
+  .clave{background:var(--amarillobg);border-left:4px solid var(--amarillo);padding:8px 12px;border-radius:6px;margin:10px 0;font-size:14px}
+  .quien{font-size:11.5px;color:var(--gris);font-style:italic}
+</style>
+</head>
+<body>
+
+<h1>El backend, servicio por servicio</h1>
+<p class="sub">Los 14 servicios del backend con sus funciones importantes. Cada fila es una acción real (endpoint) que el frontend puede pedir.</p>
+
+<div class="clave"><b>Cómo leerlo:</b> el color es el tipo de acción — <span class="m get">GET</span> leer, <span class="m post">POST</span> crear/ejecutar, <span class="m put">PUT</span> reemplazar, <span class="m patch">PATCH</span> cambiar un dato, <span class="m delete">DEL</span> borrar. La dirección completa es <code>/api/&lt;servicio&gt;/&lt;ruta&gt;</code>. Todas piden token (sesión iniciada), salvo el login y lo público.</div>
+
+<!-- ==================== ACCESO Y PERSONAS ==================== -->
+<div class="grupo">Acceso y personas</div>
+
+<h2>1. Autenticación <span class="badge">/api/auth</span></h2>
+<p class="quehace">Entrar al sistema y recuperar la cuenta. Tiene protección contra fuerza bruta (límite de intentos).</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/login</code></td><td>Iniciar sesión: valida correo y contraseña y entrega el <b>token</b> con el rol.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/registro</code></td><td>Crear una cuenta nueva (cliente).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/renovar</code></td><td>Renovar el token cuando está por vencer, sin volver a escribir la clave.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/recuperar/pregunta</code> · <code>/reset</code></td><td>Recuperar la contraseña por <b>pregunta de seguridad</b>.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/recuperar/codigo/enviar</code> · <code>/confirmar</code> · <code>/solicitud</code></td><td>Recuperar por <b>código enviado al correo</b>, o dejar una solicitud para que el admin la atienda.</td></tr>
+</table>
+
+<h2>2. Usuarios <span class="badge">/api/usuarios</span></h2>
+<p class="quehace">Gestionar personas: el propio perfil, la administración de usuarios y la fidelización de clientes.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span> <span class="m put">PUT</span></td><td><code>/perfil</code></td><td>Ver y editar los <b>datos propios</b> (nombre, foto).</td></tr>
+  <tr><td><span class="m put">PUT</span></td><td><code>/perfil/password</code> · <code>/perfil/seguridad</code></td><td>Cambiar la <b>contraseña</b> y la pregunta de seguridad de uno mismo.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/verificar-correo/enviar</code> · <code>/confirmar</code></td><td>Verificar el correo del usuario.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code></td><td>Listar todos los usuarios. <span class="quien">Admin, mesero, bartender.</span></td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m put">PUT</span></td><td><code>/</code> · <code>/:id</code></td><td>Crear y editar usuarios (admin).</td></tr>
+  <tr><td><span class="m patch">PATCH</span></td><td><code>/:id/estado</code> · <code>/:id/reset-password</code></td><td>Activar/desactivar un usuario y resetear su contraseña (admin).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/cliente-rapido</code></td><td>El <b>mesero crea un cliente al vuelo</b> (registro rápido en la mesa).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/recurrentes</code></td><td>Ranking de <b>clientes por consumo</b> (para fidelización).</td></tr>
+  <tr><td><span class="m patch">PATCH</span> <span class="m post">POST</span></td><td><code>/:id/vip</code> · <code>/:id/premio</code></td><td>Marcar un cliente como <b>VIP</b> y darle un <b>premio</b> de fidelización.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m patch">PATCH</span></td><td><code>/solicitudes-recuperacion</code> …</td><td>El admin ve y atiende los pedidos de recuperación de cuenta.</td></tr>
+</table>
+
+<h2>3. Roles <span class="badge">/api/roles</span></h2>
+<p class="quehace">Definir los roles del sistema y sus permisos. Solo administrador.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span> <span class="m put">PUT</span> <span class="m delete">DEL</span></td><td><code>/</code> · <code>/:id</code></td><td>Listar, crear, editar y borrar roles.</td></tr>
+</table>
+
+<!-- ==================== CATÁLOGO ==================== -->
+<div class="grupo">Catálogo</div>
+
+<h2>4. Productos <span class="badge">/api/productos</span></h2>
+<p class="quehace">El catálogo: productos, categorías, precios, promociones e historial de precios.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span> <span class="m put">PUT</span> <span class="m delete">DEL</span></td><td><code>/categorias</code> …</td><td>Gestionar las <b>categorías</b> (crear/editar/borrar; admin).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code> · <code>/:id</code></td><td>Listar los productos y ver uno con su detalle.</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m put">PUT</span> <span class="m delete">DEL</span></td><td><code>/</code> · <code>/:id</code></td><td>Crear (con imagen), editar y borrar productos (admin).</td></tr>
+  <tr><td><span class="m patch">PATCH</span></td><td><code>/:id/promo</code></td><td>Poner o quitar un producto <b>en promoción</b>.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/:id/historial-precios</code> · <code>/historial-precios/recientes</code></td><td>Ver cómo <b>cambió el precio</b> en el tiempo y cuánto se vendió a cada precio.</td></tr>
+</table>
+
+<!-- ==================== EVENTOS Y ESPACIOS ==================== -->
+<div class="grupo">Eventos y espacios</div>
+
+<h2>5. Eventos <span class="badge">/api/eventos</span></h2>
+<p class="quehace">Las "noches": crear, configurar y controlar el estado de cada evento.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/disponibles</code> · <code>/disponibles/:id</code></td><td>Lo que ve el <b>cliente/público</b>: los eventos abiertos y su detalle.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code></td><td>Todos los eventos (admin), cerrando automáticamente los que ya pasaron.</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m put">PUT</span></td><td><code>/</code> · <code>/:id</code></td><td>Crear y editar un evento (con su portada).</td></tr>
+  <tr><td><span class="m patch">PATCH</span> <span class="m delete">DEL</span></td><td><code>/:id/estado</code> · <code>/:id</code></td><td><b>Activar o finalizar</b> un evento, o borrarlo.</td></tr>
+</table>
+
+<h2>6. Mesas <span class="badge">/api/mesas</span></h2>
+<p class="quehace">Las mesas de los eventos activos (para el punto de venta).</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code> · <code>/mapa</code></td><td>Listar las mesas y ver el <b>mapa por zonas</b> de los eventos activos.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/:id/reserva</code></td><td>Ver si una mesa <b>tiene reserva</b> y de qué cliente.</td></tr>
+</table>
+
+<h2>7. Espacios <span class="badge">/api/espacios</span></h2>
+<p class="quehace">Las zonas del local y el editor de mapas (dibujar el plano). Casi todo es de administrador.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span> <span class="m put">PUT</span> <span class="m delete">DEL</span></td><td><code>/zonas</code> · <code>/zonas/:id</code></td><td>Crear, editar y borrar las <b>zonas</b> del local.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m put">PUT</span></td><td><code>/zonas/:id/mapa</code></td><td>Ver y guardar el <b>mapa</b> (las mesas y su posición) de una zona.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span> …</td><td><code>/plantillas</code> · <code>/plantillas/:id/duplicar</code> · <code>/zonas/:id/aplicar-plantilla</code></td><td><b>Plantillas de mapas reutilizables</b>: guardar un plano y aplicarlo a otras zonas o eventos.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/eventos/:idEvento/planos</code> · <code>/asignar-plano</code></td><td>Ver y <b>asignar un plano a un evento</b>.</td></tr>
+</table>
+
+<h2>8. Reservas <span class="badge">/api/reservas</span></h2>
+<p class="quehace">Reservar espacios sobre el mapa, ver mis reservas y el flujo especial de grupos grandes.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/eventos</code> · <code>/eventos/:idEvento/zonas</code></td><td>El <b>catálogo del cliente</b>: eventos y zonas disponibles para reservar.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/mesa</code> · <code>/campo</code> · <code>/pie</code></td><td><b>Reservar</b> una mesa, un lugar de campo o una entrada de pie (descuenta de la billetera y da un código de ingreso).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/mias</code> · <code>/mis-ingresos</code></td><td>Ver <b>mis reservas</b> y mis ingresos.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/:id/cancelar</code></td><td>Cancelar una reserva (devuelve según las reglas de devolución).</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/buscar-cliente</code> · <code>/gestionada</code></td><td>La <b>recepción reserva por el cliente</b> (reserva gestionada en puerta).</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m patch">PATCH</span></td><td><code>/solicitudes-grupo</code> …</td><td>El flujo de <b>grupos grandes</b>: el cliente pide, la recepción propone/confirma/rechaza y el cliente responde.</td></tr>
+</table>
+
+<h2>9. Aforo <span class="badge">/api/aforo</span></h2>
+<p class="quehace">El control de la puerta (ingreso y salida) y el aforo en vivo por zona. Es el corazón de la Fase 4.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/validar</code></td><td><b>Validar el ingreso</b> leyendo el código o QR de la entrada. Suma al aforo. <span class="quien">Recepción, admin.</span></td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/salida</code></td><td>Registrar la <b>salida</b> de un grupo (libera aforo y mesa).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/evento/:idEvento</code></td><td>El <b>panel de aforo</b>: cuánta gente hay en cada zona, en vivo.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/walk-in</code></td><td>Ingreso <b>sin reserva</b>, registrado en la puerta.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/meseros</code> · <code>/asignar-mesero</code></td><td>Ver los meseros y <b>asignar un mesero</b> a una mesa/grupo al ingresar.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/reparto/:idEvento</code> · <code>/mesa/:idMesa/cerrar-atencion</code> · <code>/salir-evento</code></td><td>Ver el reparto de mesas y cerrar la atención de una mesa o el turno.</td></tr>
+</table>
+
+<!-- ==================== DINERO ==================== -->
+<div class="grupo">El dinero</div>
+
+<h2>10. Billetera <span class="badge">/api/billetera</span></h2>
+<p class="quehace">El saldo del cliente: recargas, PIN, QR, retiros y los reportes de dinero del administrador.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/saldo</code></td><td>Ver el <b>saldo</b> actual y el QR de la billetera.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/recargar</code> · <code>/confirmar-recarga</code></td><td><b>Recargar saldo</b> (subiendo el comprobante) y confirmarlo.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/historial</code> · <code>/movimientos</code></td><td>Ver los <b>movimientos</b> (entradas y salidas de dinero).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/pin</code> · <code>/pin/revelar</code></td><td>Poner/cambiar el <b>PIN</b> y revelarlo confirmando la contraseña.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/qrs-pago</code></td><td>Los <b>códigos QR</b> para pagar.</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m get">GET</span> <span class="m delete">DEL</span></td><td><code>/retiro/solicitar</code> · <code>/retiro/mias</code></td><td><b>Solicitar el retiro</b> del saldo (con foto del documento) y ver mis retiros.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/admin/flujo-dinero</code> · <code>/admin/reporte-completo</code></td><td>Los <b>reportes del admin</b>: cuánto entró, se consumió, se devolvió y se retiró. <span class="quien">Solo admin.</span></td></tr>
+</table>
+
+<h2>11. Cajero <span class="badge">/api/cajero</span></h2>
+<p class="quehace">Las acciones del cajero: cargar saldo a los clientes y gestionar los retiros.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/buscar-cliente</code> · <code>/consultar-billetera/:id</code></td><td>Buscar al cliente y ver su billetera antes de operar.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/recargar</code> · <code>/resolver</code> · <code>/resolver-qr</code></td><td><b>Recargar saldo</b> al cliente (por búsqueda o leyendo su QR).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/abrir-billetera</code> · <code>/resetear-pin</code></td><td><b>Crear la billetera</b> de un cliente nuevo y resetear su PIN.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/retiros</code> · <code>/retiros/:id/pagar</code> · <code>/retiros/:id/rechazar</code> · <code>/retiro-directo</code></td><td>Gestionar los <b>retiros</b>: verlos, pagarlos (con comprobante), rechazarlos o hacer un retiro directo.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/pulso</code> · <code>/historial</code></td><td>El pulso de la caja y su historial de movimientos.</td></tr>
+</table>
+
+<h2>12. Comandas <span class="badge">/api/comandas</span></h2>
+<p class="quehace">Los pedidos y el cobro. Es el servicio más grande: crea el pedido, lo cobra y lo hace fluir hasta la entrega.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/crear</code></td><td><b>Crear el pedido y cobrar</b>: de la billetera (con QR + PIN) o en efectivo (con comprobante que se lee por OCR).</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m get">GET</span></td><td><code>/verificar-billetera</code> · <code>/validar-comprobante</code> · <code>/validar-comprobante/:id/estado</code></td><td>Verificar el pago antes de cobrar (saldo suficiente, o leer el comprobante con OCR).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code> · <code>/filtros</code> · <code>/resumen-ventas</code></td><td>Listar y <b>resumir las ventas</b> con filtros.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m patch">PATCH</span></td><td><code>/tablero</code> · <code>/pendientes</code> · <code>/historial-bartender</code> · <code>/:id/estado</code></td><td>La cola de la <b>barra/cocina</b>: ver los pedidos y <b>moverlos de estado</b> (en preparación, listo, entregado).</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/pool</code> · <code>/mis-mesas</code> · <code>/:id/tomar</code> · <code>/:id/entregar-cliente</code> …</td><td>El <b>reparto a los meseros</b>: tomar un pedido, llevarlo y entregarlo al cliente.</td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m put">PUT</span></td><td><code>/:id/solicitar-reembolso</code> · <code>/config-comision</code></td><td><b>Reembolsos</b> y la configuración de la comisión.</td></tr>
+</table>
+
+<!-- ==================== IA Y AVISOS ==================== -->
+<div class="grupo">IA y avisos</div>
+
+<h2>13. Recomendaciones <span class="badge">/api/recomendaciones</span></h2>
+<p class="quehace">El puente hacia el servicio de IA: pide la sugerencia, arma combos/packs y controla la IA.</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/</code></td><td><b>Pedir la recomendación</b> para una mesa: llama a la IA y le suma el "porqué" (datos reales de co-compra).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/combos</code> · <code>/packs</code></td><td>Traer los <b>combos y packs</b> que arma la IA.</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td><code>/estado</code> · <code>/reportar-caida</code></td><td>Saber si la IA está <b>viva</b> y reportar si se cayó (para usar el respaldo local).</td></tr>
+  <tr><td><span class="m get">GET</span> <span class="m put">PUT</span></td><td><code>/config</code></td><td><b>Configurar la IA</b> (pausar sugerencias, ajustar descuentos). <span class="quien">Solo admin.</span></td></tr>
+  <tr><td><span class="m post">POST</span> <span class="m patch">PATCH</span></td><td><code>/crear-combo</code> · <code>/sugerencias/:id/aceptar</code></td><td>Crear un combo manual y registrar cuándo una sugerencia <b>fue aceptada</b>.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/efectividad</code></td><td>Ver qué tan <b>efectivas</b> fueron las sugerencias. <span class="quien">Solo admin.</span></td></tr>
+</table>
+
+<h2>14. Notificaciones <span class="badge">/api/notificaciones</span></h2>
+<p class="quehace">Los avisos que le llegan a cada rol (un pedido nuevo, una zona que se llena).</p>
+<table>
+  <tr><th>Acción</th><th>Ruta</th><th>Qué hace</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/</code></td><td>Ver <b>mis avisos</b>.</td></tr>
+  <tr><td><span class="m patch">PATCH</span></td><td><code>/leer-todas</code> · <code>/:id/leida</code></td><td>Marcar avisos como leídos.</td></tr>
+  <tr><td><span class="m delete">DEL</span></td><td><code>/leidas</code> · <code>/:id</code></td><td>Borrar avisos.</td></tr>
+</table>
+
+<h2 style="border:none">Resumen para dominarlo</h2>
+<p style="font-size:14px">Agrupa los 14 servicios en tu cabeza en 5 bloques: <b>quién entra</b> (auth, usuarios, roles), <b>qué se vende</b> (productos), <b>dónde y cuándo</b> (eventos, mesas, espacios, reservas, aforo), <b>el dinero</b> (billetera, cajero, comandas) y <b>los extras</b> (recomendaciones/IA, notificaciones). Si te preguntan por uno, respondes: "el servicio de X se encarga de… y sus funciones principales son…" y nombras 2 o 3 de la tabla.</p>
+
+</body>
+</html>

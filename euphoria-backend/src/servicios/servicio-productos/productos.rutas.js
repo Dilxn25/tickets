@@ -338,7 +338,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', soloRoles('Administrador'), subirImagenProducto.single('imagen'), async (req, res) => {
   try {
     const { nombre_producto, descripcion, precio_base, precio_promocion,
-            estado_promocion, stock_actual, es_combo, id_categoria } = req.body
+            estado_promocion, stock_actual, es_combo, es_cortesia, id_categoria } = req.body
 
     if (!nombre_producto || precio_base === undefined || stock_actual === undefined || !id_categoria) {
       return res.status(400).json({ error: 'Faltan campos requeridos' })
@@ -363,6 +363,9 @@ router.post('/', soloRoles('Administrador'), subirImagenProducto.single('imagen'
         estado_promocion: estado_promocion === 'true',
         stock_actual:     parseInt(stock_actual),
         es_combo:         es_combo === 'true',
+        // Un combo marcado como cortesía es el que el cliente puede elegir gratis
+        // cuando su reserva supera el monto configurado en el evento.
+        es_cortesia:      es_cortesia === 'true' || es_cortesia === true,
         id_categoria:     parseInt(id_categoria),
         url_imagen:       req.file?.path || null,
       },
@@ -389,7 +392,7 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
   try {
     const id = Number(req.params.id)
     const { nombre_producto, descripcion, precio_base, precio_promocion,
-            estado_promocion, stock_actual, es_combo, id_categoria } = req.body
+            estado_promocion, stock_actual, es_combo, es_cortesia, id_categoria } = req.body
 
     const actual = await prisma.producto.findUnique({ where: { id_producto: id } })
     if (!actual) return res.status(404).json({ error: 'Producto no encontrado' })
@@ -435,6 +438,7 @@ router.put('/:id', soloRoles('Administrador'), subirImagenProducto.single('image
         ...(estado_promocion !== undefined && { estado_promocion: estado_promocion === 'true' }),
         ...(stock_actual    && { stock_actual: parseInt(stock_actual) }),
         ...(es_combo        !== undefined && { es_combo: es_combo === 'true' }),
+        ...(es_cortesia     !== undefined && { es_cortesia: es_cortesia === 'true' || es_cortesia === true }),
         ...(id_categoria    && { id_categoria: parseInt(id_categoria) }),
         ...(req.file        && { url_imagen: req.file.path }),
       },

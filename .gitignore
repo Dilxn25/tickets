@@ -72,3 +72,20 @@ recursos/generados/iniciador-*.sql
 
 # Copia del frontend que genera el build en Render (no versionar)
 euphoria-backend/dist-frontend/
+
+# ---- Respaldos de la base de produccion (datos reales, NO subir) ----
+recursos/backups/
+
+# ---- Temporales de Word y del editor ----
+**/~$*.docx
+**/~$*.xlsx
+**/~WRL*.tmp
+
+# ---- Andamiaje de herramientas y temporales de trabajo ----
+.superpowers/
+generados/unity-temp/
+
+# ---- Borradores de companeros (trabajo ajeno, no va en este repositorio) ----
+recursos/documentos-word/Coaquira*
+recursos/documentos-word/primer borrador BRANKO*
+recursos/documentos-word/Ultimo Borrador Daniel Flores.docx

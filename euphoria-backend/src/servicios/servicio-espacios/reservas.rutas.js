@@ -217,7 +217,7 @@ router.get('/cortesias', soloRoles('Cliente'), async (req, res) => {
       where: { id_usuario: req.usuario.id, cortesia_estado: { not: null } },
       include: {
         producto_cortesia: { select: { nombre_producto: true } },
-        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true } },
+        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true, modo_entrega: true } },
         mesa_espacio: { select: { numero_nombre: true } },
         zona: { select: { evento: { select: { nombre_evento: true, estado: true } } } },
       },
@@ -234,6 +234,7 @@ router.get('/cortesias', soloRoles('Cliente'), async (req, res) => {
         combo: c.producto_cortesia?.nombre_producto || null,
         pedido_estado: c.comanda_cortesia?.estado_despacho || null,
         pedido_entrega: c.comanda_cortesia?.estado_entrega || null,
+        modo_entrega: c.comanda_cortesia?.modo_entrega || null,
         mesa: c.mesa_espacio?.numero_nombre || null,
         evento: c.zona?.evento?.nombre_evento || null,
         evento_terminado: c.zona?.evento?.estado === 'terminado',
@@ -251,6 +252,9 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
   try {
     const id_entrada = Number(req.params.id)
     const id_producto = Number(req.body.id_producto)
+    // El cliente decide cómo lo quiere: que se lo lleven a la mesa ('llevar') o
+    // pasar a recogerlo por la barra ('barra'). Si no manda nada, se lo llevan.
+    const modo_entrega = req.body.modo_entrega === 'barra' ? 'barra' : 'llevar'
     const cort = await prisma.entrada.findUnique({
       where: { id_entrada },
       include: { zona: { select: { evento: { select: { estado: true } } } } },
@@ -297,7 +301,7 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
             fecha_registro: new Date(),
             metodo_pago: 'Cortesía',
             origen: 'cortesia',
-            modo_entrega: 'llevar',
+            modo_entrega,
             detalle_comanda: { create: [{ id_producto: combo.id_producto, cantidad: 1, precio_cobrado: 0, subtotal: 0 }] },
           },
         })
@@ -800,7 +804,7 @@ router.get('/mias', async (req, res) => {
         registro_aforo: { orderBy: { fecha_hora: 'asc' } },
         // Combo de cortesía de la reserva (si le correspondió) y cómo va su pedido
         producto_cortesia: { select: { nombre_producto: true } },
-        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true } },
+        comanda_cortesia: { select: { estado_despacho: true, estado_entrega: true, modo_entrega: true } },
       },
     })
 
@@ -839,6 +843,7 @@ router.get('/mias', async (req, res) => {
           combo: e.producto_cortesia?.nombre_producto || null,
           pedido_estado: e.comanda_cortesia?.estado_despacho || null,
           pedido_entrega: e.comanda_cortesia?.estado_entrega || null,
+          modo_entrega: e.comanda_cortesia?.modo_entrega || null,
         } : null,
       }
     }))

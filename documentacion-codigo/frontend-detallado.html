@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Frontend a detalle — Euphoria</title>
+<style>
+  :root{--tinta:#1f2430;--gris:#5b6473;--linea:#d8dce4;--azul:#2f6fed;--azulbg:#eaf1ff;
+    --verde:#1f9d55;--verdebg:#e7f6ee;--naranja:#e07b1a;--naranjabg:#fdf0e2;--morado:#7a4fd1;
+    --moradobg:#f0eafb;--amarillo:#c99700;--amarillobg:#fbf3d9;}
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;color:var(--tinta);max-width:1020px;margin:0 auto;
+       padding:28px 22px;line-height:1.5;background:#fff}
+  h1{font-size:26px;margin:0 0 4px}
+  .sub{color:var(--gris);margin:0 0 18px;font-size:15px}
+  h2{font-size:19px;margin:30px 0 4px;border-top:2px solid var(--linea);padding-top:14px}
+  .rol{display:inline-block;font-size:12px;font-weight:700;color:#fff;border-radius:20px;padding:2px 12px;margin-left:6px}
+  .r-admin{background:#7a4fd1}.r-caja{background:#2f6fed}.r-mesero{background:#e07b1a}
+  .r-bar{background:#1f9d55}.r-recep{background:#d1495b}.r-cli{background:#0e9aa7}.r-pub{background:#5b6473}
+  .quehace{color:var(--gris);font-size:14px;margin:4px 0 8px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0 10px}
+  th,td{border:1px solid var(--linea);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#f3f5f8}
+  code{font-family:Consolas,monospace;font-size:12.5px;background:#f3f5f8;padding:1px 5px;border-radius:4px}
+  .clave{background:var(--amarillobg);border-left:4px solid var(--amarillo);padding:8px 12px;border-radius:6px;margin:10px 0;font-size:14px}
+  .flujo{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:12px 0}
+  .caja{border:2px solid var(--azul);background:var(--azulbg);border-radius:12px;padding:10px 13px;
+        min-width:110px;text-align:center;font-size:13px;font-weight:600}
+  .caja small{display:block;font-weight:400;color:var(--gris);font-size:12px;margin-top:2px}
+  .fl{font-size:22px;color:var(--gris);font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>El frontend, a detalle</h1>
+<p class="sub">Las pantallas que usan las personas, por rol, y cómo el frontend habla con el backend. Para que puedas explicar cada parte.</p>
+
+<div class="clave"><b>Qué es:</b> una aplicación <b>Vue 3 + Vite</b>. No tiene la lógica del negocio: solo muestra pantallas y le pide todo al backend. Son 56 pantallas organizadas por rol.</div>
+
+<!-- MECÁNICA -->
+<h2>0. Cómo funciona por dentro (la mecánica)</h2>
+<p class="quehace">Cuatro piezas hacen que todo funcione. Esto es lo que conviene tener claro:</p>
+<table>
+  <tr><th>Pieza</th><th>Qué hace</th></tr>
+  <tr><td><code>main.js</code></td><td>Arranca la app de Vue, enchufa el enrutador y las tiendas.</td></tr>
+  <tr><td><code>servicios-api/cliente-http.js</code></td><td>La conexión al backend (axios, base <code>/api</code>). <b>Le pega el token</b> a cada petición automáticamente. Si subes un archivo (imagen), acomoda el envío para que llegue. Y si tu <b>sesión vence</b>, la <b>renueva sola</b>; si no puede, te manda al login.</td></tr>
+  <tr><td><code>composables/useTiempoReal.js</code></td><td>La conexión de <b>tiempo real</b> (Socket.io). Una pantalla se "suscribe" a lo que le importa (por ejemplo <code>eventos</code>, <code>aforo</code>) y cuando el backend avisa que eso cambió, la pantalla <b>se actualiza sola</b>.</td></tr>
+  <tr><td><code>enrutador/index.js</code></td><td>Decide qué pantalla mostrar según la dirección, y <b>controla el acceso por rol</b>: si no iniciaste sesión te manda al login, y si intentas entrar a un área que no es de tu rol, te muestra un aviso y te devuelve a la tuya.</td></tr>
+</table>
+<div class="flujo">
+  <div class="caja">Pantalla (.vue)</div><span class="fl">→</span>
+  <div class="caja">servicio-api<small>+ token</small></div><span class="fl">→</span>
+  <div class="caja">Backend</div><span class="fl">→</span>
+  <div class="caja">respuesta<small>o aviso en vivo</small></div><span class="fl">→</span>
+  <div class="caja">la pantalla se actualiza</div>
+</div>
+<p class="quehace">El <b>estado global</b> (las <code>tiendas/</code>, con Pinia) guarda lo que se comparte entre pantallas: la <b>sesión</b> (<code>tienda-autenticacion</code>: quién eres, tu rol, tu token), el <b>carrito</b> (<code>tienda-carrito</code>) y los <b>avisos</b> (<code>tienda-notificaciones</code>).</p>
+
+<!-- ADMIN -->
+<h2>1. Administrador <span class="rol r-admin">admin</span></h2>
+<p class="quehace">Panel completo con menú lateral. Entra directo a Reportes. Cada opción es una pantalla:</p>
+<table>
+  <tr><th>Pantalla</th><th>Qué hace</th><th>Usa del backend</th></tr>
+  <tr><td><code>VistaReportes</code></td><td>El tablero de inicio: el <b>reporte del dinero</b> (entró, consumido, devuelto, retirado).</td><td>billetera (admin)</td></tr>
+  <tr><td><code>VistaUsuarios</code></td><td>Crear, editar y activar/desactivar <b>usuarios</b> y sus roles.</td><td>usuarios, roles</td></tr>
+  <tr><td><code>VistaProductos</code></td><td>El <b>catálogo</b>: productos, categorías, precios y promociones.</td><td>productos</td></tr>
+  <tr><td><code>VistaEventos</code></td><td>Crear y <b>configurar los eventos</b> (la noche) y su estado.</td><td>eventos</td></tr>
+  <tr><td><code>VistaMapas</code></td><td>El <b>editor de mapas</b>: dibujar las zonas y ubicar las mesas.</td><td>espacios</td></tr>
+  <tr><td><code>VistaAforoAdmin</code></td><td>El <b>panel de aforo en vivo</b>: cuánta gente hay en cada zona.</td><td>aforo</td></tr>
+  <tr><td><code>VistaVentas</code></td><td>El <b>historial de ventas</b> con filtros y resúmenes.</td><td>comandas</td></tr>
+  <tr><td><code>VistaIA</code></td><td>El <b>control de la IA</b>: pausar sugerencias, ver su efectividad, ajustar combos.</td><td>recomendaciones</td></tr>
+  <tr><td><code>VistaFidelizacion</code></td><td>Los <b>clientes recurrentes</b>, marcar VIP y dar premios.</td><td>usuarios</td></tr>
+</table>
+
+<!-- CAJERO -->
+<h2>2. Cajero <span class="rol r-caja">cajero</span></h2>
+<p class="quehace">Una pantalla (<code>VistaCajero</code>) con varios paneles para operar la billetera de los clientes:</p>
+<table>
+  <tr><th>Panel</th><th>Qué hace</th></tr>
+  <tr><td><code>PanelRecarga</code></td><td><b>Recargar saldo</b> a un cliente.</td></tr>
+  <tr><td><code>PanelRetiros</code> · <code>PanelRetiroDirecto</code></td><td>Gestionar los <b>retiros</b> (pagarlos, rechazarlos o hacer un retiro directo).</td></tr>
+  <tr><td><code>FichaCliente</code> · <code>MovimientosCliente</code></td><td>Ver los <b>datos y movimientos</b> del cliente.</td></tr>
+  <tr><td><code>QrsCliente</code> · <code>PinCliente</code></td><td>Ver los <b>QR</b> del cliente y <b>resetear su PIN</b>.</td></tr>
+  <tr><td><code>AsistenteBilletera</code></td><td><b>Abrir la billetera</b> de un cliente nuevo.</td></tr>
+  <tr><td><code>HistorialCaja</code></td><td>El historial de movimientos de la caja.</td></tr>
+</table>
+
+<!-- MESERO -->
+<h2>3. Mesero <span class="rol r-mesero">mesero</span></h2>
+<p class="quehace">Una sola pantalla (<code>VistaMesero</code>) enfocada en atender la mesa:</p>
+<table>
+  <tr><th>Función</th><th>Qué hace</th></tr>
+  <tr><td>Tomar el pedido</td><td>Arma el pedido de la mesa (usa el carrito).</td></tr>
+  <tr><td>Ver la sugerencia de la IA</td><td>Muestra el producto que probablemente pedirá la mesa, con su porcentaje.</td></tr>
+  <tr><td>Cobrar</td><td><b>Cobra de la billetera</b> del cliente (con QR y PIN) o en efectivo.</td></tr>
+  <tr><td>Registro rápido</td><td>Crea un <b>cliente al vuelo</b> si no tiene cuenta.</td></tr>
+</table>
+
+<!-- BARTENDER -->
+<h2>4. Bartender <span class="rol r-bar">bartender</span></h2>
+<p class="quehace">Una pantalla (<code>VistaBartender</code>) con la barra:</p>
+<table>
+  <tr><th>Función</th><th>Qué hace</th></tr>
+  <tr><td>Cola de pedidos</td><td>Ve los pedidos <b>ordenados por tiempo de espera</b> y los va marcando: en preparación, listo, entregado.</td></tr>
+  <tr><td><code>HistorialBarra</code></td><td>El historial de lo que ya preparó.</td></tr>
+</table>
+
+<!-- RECEPCIONISTA -->
+<h2>5. Recepcionista <span class="rol r-recep">recepción</span></h2>
+<p class="quehace">Una pantalla (<code>VistaRecepcion</code>) con paneles para la puerta:</p>
+<table>
+  <tr><th>Panel</th><th>Qué hace</th></tr>
+  <tr><td><code>IngresoEvento</code></td><td><b>Validar el ingreso</b> leyendo el código/QR de la entrada.</td></tr>
+  <tr><td><code>EntradaGeneral</code></td><td>Ingreso general / <b>walk-in</b> (sin reserva).</td></tr>
+  <tr><td><code>GruposGrandes</code></td><td>Atender las <b>solicitudes de grupos grandes</b>.</td></tr>
+  <tr><td><code>TarjetaMesa</code></td><td>Ver y gestionar una mesa (quién está, cerrar atención).</td></tr>
+</table>
+
+<!-- CLIENTE -->
+<h2>6. Cliente <span class="rol r-cli">cliente</span></h2>
+<p class="quehace">La app del cliente, pensada para el celular (mobile-first). Sus pantallas:</p>
+<table>
+  <tr><th>Pantalla</th><th>Qué hace</th></tr>
+  <tr><td><code>VistaInicioCliente</code></td><td>La portada del cliente al entrar.</td></tr>
+  <tr><td><code>VistaEventosCliente</code> · <code>VistaDetalleEventoCliente</code></td><td>Ver los <b>eventos</b> disponibles y su detalle.</td></tr>
+  <tr><td><code>VistaReservaMapa</code></td><td><b>Reservar una mesa sobre el mapa</b> del local.</td></tr>
+  <tr><td><code>VistaSolicitudGrupo</code></td><td>Pedir una reserva de <b>grupo grande</b>.</td></tr>
+  <tr><td><code>VistaMisReservas</code></td><td>Ver <b>mis reservas</b> y su código de ingreso.</td></tr>
+  <tr><td><code>VistaBilletera</code> · <code>VistaMovimientos</code></td><td>El <b>saldo</b>, el QR de pago y los movimientos.</td></tr>
+  <tr><td><code>VistaCatalogo</code> · <code>VistaCarrito</code> · <code>VistaPedidos</code></td><td>Ver el catálogo, armar el <b>carrito</b> y ver sus pedidos.</td></tr>
+  <tr><td><code>VistaPerfil</code></td><td>Sus datos, contraseña y seguridad.</td></tr>
+</table>
+
+<!-- PÚBLICA + COMUNES -->
+<h2>7. Pública y piezas compartidas <span class="rol r-pub">todos</span></h2>
+<table>
+  <tr><th>Pieza</th><th>Qué hace</th></tr>
+  <tr><td><code>VistaLogin</code></td><td>El <b>inicio de sesión</b> (antes de entrar). Es lo único público.</td></tr>
+  <tr><td><code>componentes/comunes/</code></td><td>Piezas reutilizables: <code>BaseFecha</code> (selector de fecha), <code>SelectorMesa</code>, <code>CobroPago</code> (el cobro con QR y PIN), <code>CapturaCamara</code> (foto del comprobante), <code>BuscadorCliente</code>, <code>CampanaNotificaciones</code>, entre otras.</td></tr>
+  <tr><td><code>utilidades/</code></td><td><code>formato</code> (dinero y fechas), <code>colores-zona</code> (colores del aforo según qué tan llena está) y <code>validar-comprobante</code>.</td></tr>
+</table>
+
+<h2 style="border:none">Resumen para dominarlo</h2>
+<p style="font-size:14px">Cada <b>pantalla</b> pide datos con un <b>servicio-api</b> (que ya le pega tu token), guarda lo compartido en una <b>tienda</b> y escucha los cambios en vivo con <b>useTiempoReal</b>. El <b>enrutador</b> decide qué ves según tu <b>rol</b> y no te deja entrar donde no te corresponde. Si te preguntan por el frontend, respondes: "es Vue, no tiene lógica de negocio, cada rol tiene sus pantallas, habla con el backend por HTTP con el token, y se actualiza en vivo con Socket.io."</p>
+
+</body>
+</html>

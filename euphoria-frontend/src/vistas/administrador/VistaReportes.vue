@@ -742,6 +742,124 @@
       </div>
     </div>
 
+    <!-- ============ PESTAÑA: CLIENTES ============ -->
+    <!-- Qué consumió cada cliente y en qué concentra su gusto. La ficha de uno
+         solo alimenta la demostración de la recomendación personalizada. -->
+    <div v-if="pestana === 'clientes'" class="rep-panel fade-in">
+      <div class="rep-dos-col">
+        <div class="rep-col-main rep-col-lista">
+          <div class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Consumo por cliente</h3>
+                <span class="subtexto-grafico">
+                  {{ consumo.totales.clientes }} clientes · {{ consumo.totales.unidades }} productos ·
+                  Bs {{ Number(consumo.totales.ingresos).toFixed(2) }}
+                </span>
+              </div>
+              <div class="cli-filtros">
+                <BaseSelect v-model="cliFiltroCategoria" :options="opcionesCategoriaCli"
+                            placeholder="Todas las categorías" @update:model-value="cargarConsumo" />
+                <BaseSelect v-model="cliFiltroProducto" :options="opcionesProductoCli"
+                            placeholder="Todos los productos" @update:model-value="cargarConsumo" />
+              </div>
+            </div>
+            <div class="tabla-contenedor">
+              <table class="tabla-datos">
+                <thead>
+                  <tr>
+                    <th>Cliente</th><th>Pedidos</th><th>Noches</th>
+                    <th>Productos</th><th>Total</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="consumo.clientes.length === 0">
+                    <td colspan="6" class="texto-centro">Sin consumo registrado en este periodo.</td>
+                  </tr>
+                  <tr v-for="c in consumo.clientes" :key="c.id_cliente"
+                      :class="{ 'fila-activa': cliSeleccionado === c.id_cliente }">
+                    <td>
+                      <b>{{ c.cliente }}</b>
+                      <span v-if="c.es_vip" class="cli-vip">VIP</span>
+                    </td>
+                    <td>{{ c.pedidos }}</td>
+                    <td>{{ c.noches }}</td>
+                    <td>{{ c.unidades }}</td>
+                    <td><b>Bs {{ c.total.toFixed(2) }}</b></td>
+                    <td>
+                      <button class="btn-ficha" @click="verFicha(c.id_cliente)">
+                        {{ cliSeleccionado === c.id_cliente ? 'Ocultar' : 'Ver ficha' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="rep-col-side">
+          <!-- Ficha del cliente elegido -->
+          <div v-if="ficha" class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">{{ fichaNombre }}</h3>
+                <span class="subtexto-grafico">{{ ficha.eventos.length }} evento(s) asistido(s)</span>
+              </div>
+            </div>
+
+            <!-- La preferencia: lo que el mesero necesita saber antes de sugerir -->
+            <div v-if="ficha.preferencia" class="cli-preferencia">
+              <span class="cli-pref-rotulo">Prefiere</span>
+              <span class="cli-pref-cat">{{ ficha.preferencia.categoria }}</span>
+              <span class="cli-pref-pct">{{ ficha.preferencia.porcentaje }} % de su consumo</span>
+            </div>
+            <div v-else class="texto-sutil" style="padding:10px 0">
+              Todavía no muestra una preferencia definida.
+            </div>
+
+            <div class="cli-bloque">
+              <h4 class="cli-sub">En qué concentra su consumo</h4>
+              <div v-for="k in ficha.categorias.slice(0, 5)" :key="k.categoria" class="cli-barra-fila">
+                <span class="cli-barra-nom">{{ k.categoria }}</span>
+                <div class="cli-barra-riel">
+                  <div class="cli-barra-relleno"
+                       :style="{ width: anchoBarra(k.unidades, ficha.categorias) }"></div>
+                </div>
+                <span class="cli-barra-val">{{ k.unidades }}</span>
+              </div>
+            </div>
+
+            <div class="cli-bloque">
+              <h4 class="cli-sub">Lo que más pidió</h4>
+              <div v-for="p in ficha.productos.slice(0, 8)" :key="p.id_producto" class="cli-prod-fila">
+                <span class="cli-prod-nom">{{ p.producto }}</span>
+                <span class="cli-prod-cat">{{ p.categoria }}</span>
+                <span class="cli-prod-val">{{ p.unidades }} u</span>
+              </div>
+            </div>
+
+            <div v-if="ficha.eventos.length" class="cli-bloque">
+              <h4 class="cli-sub">Eventos a los que vino</h4>
+              <div v-for="e in ficha.eventos.slice(0, 6)" :key="e.id_evento" class="cli-prod-fila">
+                <span class="cli-prod-nom">{{ e.evento }}</span>
+                <span class="cli-prod-val">Bs {{ Number(e.total).toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="tarjeta-grafico">
+            <div class="grafico-header">
+              <div class="grafico-header-info">
+                <h3 class="grafico-titulo">Ficha del cliente</h3>
+                <span class="subtexto-grafico">Elegí un cliente de la lista para ver su detalle</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ PESTAÑA: EVENTOS ============ -->
     <div v-if="pestana === 'eventos'" class="rep-panel fade-in">
       <div class="rep-dos-col">
@@ -1428,6 +1546,60 @@ const ventasLimite = ref(20)
 const ventasTotal = ref(0)
 const ventasPaginas = ref(1)
 
+// ── Consumo por cliente ───────────────────────────────────────────────────
+// Responde a la observación de que no se podía saber qué consumió cada cliente
+// ni cuál es su gusto. Todo sale de consultas: no hay tablas nuevas.
+const consumo = ref({ clientes: [], productos: [], categorias: [], eventos: [], preferencia: null,
+                      totales: { clientes: 0, unidades: 0, ingresos: 0 } })
+const ficha = ref(null)
+const cliSeleccionado = ref(null)
+const cliFiltroCategoria = ref('')
+const cliFiltroProducto = ref('')
+
+const fichaNombre = computed(() => {
+  const c = consumo.value.clientes.find(x => x.id_cliente === cliSeleccionado.value)
+  return c ? c.cliente : 'Cliente'
+})
+const opcionesCategoriaCli = computed(() =>
+  consumo.value.categorias.map(k => ({ value: k.categoria, label: k.categoria })))
+const opcionesProductoCli = computed(() =>
+  consumo.value.productos.slice(0, 40).map(p => ({ value: String(p.id_producto), label: p.producto })))
+
+function paramsConsumo(extra = {}) {
+  const p = new URLSearchParams()
+  if (eventoFiltro.value) p.append('evento', eventoFiltro.value)
+  else {
+    if (filtroDesde.value) p.append('desde', filtroDesde.value)
+    if (filtroHasta.value) p.append('hasta', filtroHasta.value)
+  }
+  if (cliFiltroProducto.value) p.append('producto', cliFiltroProducto.value)
+  for (const [k, v] of Object.entries(extra)) if (v) p.append(k, v)
+  return p.toString() ? `?${p.toString()}` : ''
+}
+
+async function cargarConsumo() {
+  try {
+    consumo.value = await clienteHttp.get(`/comandas/consumo-clientes${paramsConsumo()}`)
+    // Si había una ficha abierta, se refresca con los mismos filtros
+    if (cliSeleccionado.value) await verFicha(cliSeleccionado.value, true)
+  } catch (e) { console.warn('consumo por cliente:', e) }
+}
+
+async function verFicha(idCliente, forzar = false) {
+  if (!forzar && cliSeleccionado.value === idCliente) {
+    cliSeleccionado.value = null; ficha.value = null; return
+  }
+  cliSeleccionado.value = idCliente
+  try {
+    ficha.value = await clienteHttp.get(`/comandas/consumo-clientes${paramsConsumo({ cliente: idCliente })}`)
+  } catch (e) { ficha.value = null }
+}
+
+function anchoBarra(valor, lista) {
+  const max = Math.max(...lista.map(x => x.unidades), 1)
+  return Math.round((valor / max) * 100) + '%'
+}
+
 function aplicarFiltros() {
   // Si el rango está invertido, se corrige automáticamente
   if (filtroDesde.value && filtroHasta.value && filtroDesde.value > filtroHasta.value) {
@@ -1436,6 +1608,7 @@ function aplicarFiltros() {
   cargarReportes()
   cargarReporteBilletera()
   if (pestana.value === 'precios') cargarPrecios()
+  if (pestana.value === 'clientes') cargarConsumo()
 }
 
 function presetFecha(tipo) {
@@ -1494,7 +1667,8 @@ const pestanas = [
   { id: 'precios', nombre: 'Precios' },
   { id: 'personal', nombre: 'Personal' },
   { id: 'billetera', nombre: 'Billetera' },
-  { id: 'eventos', nombre: 'Eventos' }
+  { id: 'eventos', nombre: 'Eventos' },
+  { id: 'clientes', nombre: 'Clientes' }
 ]
 
 // ── Historial de precios (Fase 8) ────────────────────────────────────────
@@ -1569,6 +1743,7 @@ function cambioEvento(v) {
   cargarReportes(true)
   cargarReporteBilletera() // la billetera también sigue el filtro por evento
   if (pestana.value === 'precios') cargarPrecios()
+  if (pestana.value === 'clientes') cargarConsumo()
 }
 // Desde una fila de la pestaña Eventos: filtra por ese evento y salta al ranking
 function verVentasDeEvento(ev) {
@@ -1686,6 +1861,7 @@ watch(pestana, () => {
   cargarReportes(true)
   cargarReporteBilletera()
   if (pestana.value === 'precios') cargarPrecios()
+  if (pestana.value === 'clientes') cargarConsumo()
 })
 
 function abrirModal(tipo) {
@@ -2054,9 +2230,14 @@ async function cargarReportes(silencioso = false) {
       resumenReposiciones.value = await clienteHttp.get('/productos/reposiciones/resumen')
     } catch { resumenReposiciones.value = [] }
 
-    // 3. Eventos y Asistencia real
+    // 3. Eventos y Asistencia real. El listado respeta el rango de fechas elegido
+    // arriba: sin esto el periodo cambiaba las ventas pero los eventos seguían iguales.
     try {
-      const resEventos = await clienteHttp.get('/eventos')
+      const paramsEv = new URLSearchParams()
+      if (filtroDesde.value) paramsEv.append('desde', filtroDesde.value)
+      if (filtroHasta.value) paramsEv.append('hasta', filtroHasta.value)
+      const qsEv = paramsEv.toString() ? `?${paramsEv.toString()}` : ''
+      const resEventos = await clienteHttp.get(`/eventos${qsEv}`)
       listadoEventos.value = resEventos.eventos || []
       stats.value.eventos = listadoEventos.value.length
       
@@ -4122,3 +4303,55 @@ function formatearFecha(isoStr) {
 }
 </style>
 
+
+<style scoped>
+/* ── Consumo por cliente ───────────────────────────────────────────── */
+.cli-filtros { display: flex; gap: 8px; flex-wrap: wrap; min-width: 320px; }
+.cli-filtros > * { min-width: 150px; }
+
+.fila-activa { background: rgba(168, 85, 247, .10); }
+
+.cli-vip {
+  margin-left: 6px; font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+  padding: 1px 7px; border-radius: 20px;
+  background: rgba(245, 158, 11, .18); color: #F59E0B;
+}
+
+.btn-ficha {
+  font-size: .78rem; font-weight: 600; padding: 4px 12px; border-radius: 20px;
+  border: 1px solid var(--borde, rgba(255,255,255,.12));
+  background: transparent; color: var(--texto-secundario); cursor: pointer;
+  transition: all .18s ease;
+}
+.btn-ficha:hover { border-color: var(--morado-brillante); color: var(--morado-brillante); }
+
+.cli-preferencia {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 14px 16px; margin: 4px 0 14px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(168,85,247,.16), rgba(236,72,153,.10));
+}
+.cli-pref-rotulo { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--texto-secundario); }
+.cli-pref-cat { font-size: 1.35rem; font-weight: 700; }
+.cli-pref-pct { font-size: .82rem; color: var(--texto-secundario); }
+
+.cli-bloque { margin-top: 18px; }
+.cli-sub {
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--texto-secundario); margin: 0 0 10px; font-weight: 700;
+}
+
+.cli-barra-fila { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.cli-barra-nom { flex: 0 0 34%; font-size: .82rem; }
+.cli-barra-riel { flex: 1; height: 8px; border-radius: 6px; background: rgba(255,255,255,.07); overflow: hidden; }
+.cli-barra-relleno { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #A855F7, #EC4899); }
+.cli-barra-val { flex: 0 0 34px; text-align: right; font-size: .78rem; color: var(--texto-secundario); }
+
+.cli-prod-fila {
+  display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05); font-size: .83rem;
+}
+.cli-prod-fila:last-child { border-bottom: none; }
+.cli-prod-nom { flex: 1; }
+.cli-prod-cat { font-size: .72rem; color: var(--texto-secundario); }
+.cli-prod-val { font-weight: 600; white-space: nowrap; }
+</style>

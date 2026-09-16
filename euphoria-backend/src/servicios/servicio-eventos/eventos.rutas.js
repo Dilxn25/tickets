@@ -191,8 +191,26 @@ router.get('/', async (req, res) => {
       notificacionCierre = `Sistema Automático: Se han finalizado ${cerrados} evento(s) que superaron su fecha límite de cierre.`
     }
 
-    // 2. Obtener lista de eventos con zonas, entradas y comandas en mesas
+    // 2. Rango de fechas opcional. El reporte manda ?desde= y ?hasta= en formato
+    // YYYY-MM-DD y se compara contra el inicio del evento, tomando el dia completo:
+    // desde las 00:00 del primero hasta las 23:59 del ultimo.
+    let filtroFecha = {}
+    if (req.query.desde || req.query.hasta) {
+      const rango = {}
+      if (req.query.desde) {
+        const [y, m, d] = req.query.desde.split('-').map(Number)
+        rango.gte = new Date(y, m - 1, d, 0, 0, 0)
+      }
+      if (req.query.hasta) {
+        const [y, m, d] = req.query.hasta.split('-').map(Number)
+        rango.lte = new Date(y, m - 1, d, 23, 59, 59)
+      }
+      filtroFecha = { fecha_hora_inicio: rango }
+    }
+
+    // 3. Obtener lista de eventos con zonas, entradas y comandas en mesas
     const eventosRaw = await prisma.evento.findMany({
+      where: filtroFecha,
       orderBy: { id_evento: 'desc' },
       include: {
         zona: {

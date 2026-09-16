@@ -51,8 +51,9 @@ export const servicioReservas = {
   },
 
   /** Elegir el combo de regalo de una reserva (crea el pedido a Bs 0 para la barra) */
-  async elegirCortesia(idCortesia, idProducto) {
-    return api.post(`/reservas/cortesias/${idCortesia}/elegir`, { id_producto: idProducto })
+  async elegirCortesia(idCortesia, idProducto, modoEntrega = 'llevar') {
+    // modoEntrega: 'llevar' (el mesero lo lleva a la mesa) o 'barra' (el cliente lo recoge)
+    return api.post(`/reservas/cortesias/${idCortesia}/elegir`, { id_producto: idProducto, modo_entrega: modoEntrega })
   },
 
   /** Cancelar una reserva (devuelve a billetera según la regla de 24 h) */
