@@ -171,31 +171,53 @@ router.post('/despertar', verificarToken, soloRoles('Administrador', 'Cajero', '
 
 // GET /api/recomendaciones/modelo — estado del modelo activo (real/demo) [admin]
 // Sirve para el interruptor "Usar datos para la demostración" del Panel de IA.
+// El respaldo NO afirma que solo exista el modelo real: si el motor está dormido
+// no sabemos qué tiene, y decir disponibles:['real'] dejaba el botón de la
+// demostración deshabilitado como si faltara el archivo. Va en null: "se
+// desconoce", y el panel deja intentar.
 router.get('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
   try {
-    const r = await fetch(`${urlIA}/modelo/estado`, { signal: AbortSignal.timeout(6000) })
+    const r = await fetch(`${urlIA}/modelo/estado`, { signal: AbortSignal.timeout(12000) })
     res.json(await r.json())
   } catch {
-    res.json({ modo: 'real', personalizado: false, disponibles: ['real'], sin_conexion: true })
+    res.json({ modo: 'real', personalizado: false, disponibles: null, sin_conexion: true })
   }
 })
 
 // PUT /api/recomendaciones/modelo {modo:'real'|'demo'} — conmutar el modelo [admin]
-// 'demo' = modelo PERSONALIZADO (aprende el gusto de cada cliente); solo existe en
-// local. En producción no se despliega el pkl demo, así que responde "no disponible".
+// 'demo' = modelo PERSONALIZADO (aprende el gusto de cada cliente). Los dos .pkl
+// se despliegan, así que el motor suele tener ambos.
+// Espera igual que /despertar: si el servicio está dormido el arranque en frío
+// tarda cerca de un minuto, y cortar a los 9 s hacía fallar el botón en la única
+// situación en que se usa (primer uso de la noche, servicio recién despertado).
 router.put('/modelo', verificarToken, soloRoles('Administrador'), async (req, res) => {
   const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
   const modo = req.body?.modo === 'demo' ? 'demo' : 'real'
-  try {
-    const r = await fetch(`${urlIA}/modelo/activar`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modo }), signal: AbortSignal.timeout(9000),
-    })
-    res.json(await r.json())
-  } catch {
-    res.status(502).json({ ok: false, error: 'Servicio de IA no disponible' })
+  const inicio = Date.now()
+  const ESPERA_TOTAL = 80000
+  const POR_INTENTO = 30000
+
+  let ultimoError = 'sin respuesta'
+  while (Date.now() - inicio < ESPERA_TOTAL) {
+    try {
+      const r = await fetch(`${urlIA}/modelo/activar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo }), signal: AbortSignal.timeout(POR_INTENTO),
+      })
+      // Respuesta del motor: incluye el caso "ese modelo no está en este entorno",
+      // que es una respuesta válida y no hay que reintentar.
+      return res.json(await r.json())
+    } catch (e) {
+      ultimoError = e?.name === 'TimeoutError' ? 'sigue arrancando' : (e?.message || 'sin respuesta')
+    }
+    await new Promise(r2 => setTimeout(r2, 2500))
   }
+
+  res.status(504).json({
+    ok: false,
+    error: `El motor no respondió en ${Math.round(ESPERA_TOTAL / 1000)} s (${ultimoError}).`,
+  })
 })
 
 // ---- Reentrenamiento del modelo -----------------------------------------

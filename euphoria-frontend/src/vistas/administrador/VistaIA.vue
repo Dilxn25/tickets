@@ -342,9 +342,9 @@
                 <strong>{{ modeloIA.modo === 'demo' ? 'Demostración (personalizado)' : 'Real (producción)' }}</strong>
               </span>
               <button type="button" class="btn-demo" :class="{ activo: modeloIA.modo === 'demo' }"
-                      :disabled="conmutandoModelo || (modeloIA.modo !== 'demo' && !(modeloIA.disponibles || []).includes('demo'))"
+                      :disabled="conmutandoModelo || sinModeloDemo"
                       @click="conmutarModelo(modeloIA.modo === 'demo' ? 'real' : 'demo')">
-                {{ conmutandoModelo ? 'Cambiando…' : (modeloIA.modo === 'demo' ? 'Volver al modelo real' : 'Usar datos para la demostración') }}
+                {{ textoBotonModelo }}
               </button>
             </div>
             <div v-if="modeloIA.modo === 'demo'" class="demo-fila">
@@ -555,6 +555,22 @@ const opcionesClientes = computed(() => [
   ...clientesDemo.value.map(c => ({ value: c.id, label: `${c.nombre} · ${c.comandas} pedidos` })),
 ])
 
+// Solo se bloquea el botón cuando el motor RESPONDIÓ y dijo que no tiene el
+// modelo demo. Si no contestó, 'disponibles' llega en null y se deja intentar:
+// dormido no significa que falte el archivo.
+const sinModeloDemo = computed(() =>
+  modeloIA.value.modo !== 'demo' &&
+  Array.isArray(modeloIA.value.disponibles) &&
+  !modeloIA.value.disponibles.includes('demo')
+)
+const textoBotonModelo = computed(() => {
+  if (conmutandoModelo.value) {
+    return segundosConmutando.value > 4 ? `Despertando el motor… ${segundosConmutando.value}s` : 'Cambiando…'
+  }
+  if (sinModeloDemo.value) return 'Modelo de demostración no instalado'
+  return modeloIA.value.modo === 'demo' ? 'Volver al modelo real' : 'Usar datos para la demostración'
+})
+
 async function cargarModelo() {
   try {
     modeloIA.value = await clienteHttp.get('/recomendaciones/modelo')
@@ -565,17 +581,28 @@ async function cargarModelo() {
 async function cargarClientesProbador() {
   try { clientesDemo.value = await clienteHttp.get('/recomendaciones/clientes-demo') } catch { clientesDemo.value = [] }
 }
+// Cambiar de modelo puede tardar como el arranque en frío del servicio (cerca de
+// un minuto en el plan gratuito), así que espera lo mismo que el botón de
+// despertar y cuenta los segundos para que no parezca colgado.
+const segundosConmutando = ref(0)
 async function conmutarModelo(modo) {
+  if (conmutandoModelo.value) return
   conmutandoModelo.value = true
+  segundosConmutando.value = 0
+  const reloj = setInterval(() => { segundosConmutando.value++ }, 1000)
   try {
-    const r = await clienteHttp.put('/recomendaciones/modelo', { modo })
-    if (r && r.ok === false) notif.advertencia(r.error || 'El modelo de demostración no está disponible en este entorno.')
+    const r = await clienteHttp.put('/recomendaciones/modelo', { modo }, { timeout: 95000 })
+    if (r && r.ok === false) notif.advertencia(r.error || 'El modelo de demostración no está en este entorno.')
     await cargarModelo()
     if (modeloIA.value.modo === 'demo') await cargarClientesProbador()
     else clienteProbador.value = ''
     resultado.value = null
-  } catch { notif.error('No se pudo cambiar el modelo de IA.') }
-  finally { conmutandoModelo.value = false }
+  } catch (e) {
+    notif.error(e?.error || 'El motor no respondió a tiempo. Tocá "Despertar motor" y volvé a intentar.')
+  } finally {
+    clearInterval(reloj)
+    conmutandoModelo.value = false
+  }
 }
 const opcionesProductos = computed(() =>
   productos.value
