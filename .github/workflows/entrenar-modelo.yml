@@ -55,7 +55,7 @@ jobs:
           fi
           python - <<'PY'
           import json, os, re
-          ruta = "recursos/modelo_entrenado/config.json"
+          ruta = "euphoria-ia/entrenamiento/config.json"
           with open(ruta, encoding="utf-8") as f:
               cfg = json.load(f)
 
@@ -95,7 +95,7 @@ jobs:
           python - <<'PY'
           import json, os, sys
           from sqlalchemy import create_engine, text
-          cfg = json.load(open("recursos/modelo_entrenado/config.json", encoding="utf-8"))
+          cfg = json.load(open("euphoria-ia/entrenamiento/config.json", encoding="utf-8"))
           try:
               eng = create_engine(cfg["database_url"], pool_pre_ping=True)
               with eng.connect() as con:
@@ -116,22 +116,22 @@ jobs:
 
       - name: Entrenar y guardar la version fechada
         id: entrenamiento
-        working-directory: recursos/modelo_entrenado
+        working-directory: euphoria-ia/entrenamiento
         run: |
           set -o pipefail
-          python entrenar.py --versionar ../../euphoria-ia/modelos --conservar 6 2>&1 | tee salida.txt
+          python entrenar.py --versionar ../modelos --conservar 6 2>&1 | tee salida.txt
           FICHA=$(grep '^FICHA' salida.txt | sed 's/^FICHA *-> *//')
           echo "ficha=$FICHA" >> "$GITHUB_OUTPUT"
           rm -f salida.txt
 
       - name: Dejar el config.json como estaba
-        run: git checkout -- recursos/modelo_entrenado/config.json
+        run: git checkout -- euphoria-ia/entrenamiento/config.json
 
       - name: Publicar el modelo nuevo
         run: |
           git config user.name "Entrenamiento automatico"
           git config user.email "actions@github.com"
-          git add euphoria-ia/modelos recursos/modelo_entrenado/artefacto_modelo.pkl
+          git add euphoria-ia/modelos
           if git diff --staged --quiet; then
             echo "No hubo cambios que publicar."
             exit 0

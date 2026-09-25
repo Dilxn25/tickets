@@ -11,7 +11,7 @@ perdería en el primer reinicio y el sistema volvería en silencio al modelo vie
 ## Qué pasa cuando se toca "Reentrenar"
 
 1. El backend le pide a GitHub que ejecute el flujo `entrenar-modelo.yml`.
-2. El runner instala Python, se conecta a la base y ejecuta `entrenar.py`.
+2. El runner instala Python, se conecta a la base y ejecuta `euphoria-ia/entrenamiento/entrenar.py`.
 3. El modelo queda guardado como `euphoria-ia/modelos/modelo-AAAA-MM-DD-hhmm.pkl`,
    junto a un `.json` con la fecha, cuántas ventas se usaron y el acierto obtenido.
    **El modelo anterior no se borra.**

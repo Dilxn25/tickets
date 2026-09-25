@@ -1,3 +1,25 @@
+# ============================================================
+# Solo se versiona lo que el sistema necesita para funcionar:
+#   euphoria-backend, euphoria-frontend, euphoria-ia,
+#   documentacion-codigo, .github, render.yaml e iniciar-euphoria.ps1
+# Todo lo demas vive solo en la computadora local.
+# ============================================================
+
+# ---- Material de trabajo local (tesis, capturas, respaldos, recursos) ----
+/generados/
+/recursos/
+/docs/
+/credenciales.txt
+**/CREDENCIALES*.txt
+
+# ---- Herramientas del editor y asistentes (configuracion local) ----
+/.claude/
+/.agents/
+/.superpowers/
+/.playwright-mcp/
+/skills-lock.json
+/workflows/
+
 # ---- Dependencias ----
 node_modules/
 **/node_modules/
@@ -7,7 +29,7 @@ node_modules/
 .env.*
 **/.env
 **/.env.*
-# ...pero SÍ subimos las plantillas de ejemplo (sin secretos)
+# ...pero SI subimos las plantillas de ejemplo (sin secretos)
 !.env.example
 !**/.env.example
 
@@ -17,6 +39,8 @@ dist/
 build/
 **/build/
 *.tsbuildinfo
+# Copia del frontend que genera el build en Render
+euphoria-backend/dist-frontend/
 
 # ---- Python ----
 __pycache__/
@@ -26,14 +50,12 @@ __pycache__/
 venv/
 env/
 .ipynb_checkpoints/
+# Artefacto que deja un entrenamiento local (las versiones oficiales van en euphoria-ia/modelos)
+euphoria-ia/entrenamiento/artefacto_modelo*.pkl
 
-# ---- Backups de base de datos (datos sensibles, NO subir) ----
-recursos/generados/backups/
-recursos/generados/backups-bd/
-
-# ---- Credenciales de prueba (contrasenas, NO subir) ----
-recursos/generados/CREDENCIALES*.txt
-**/CREDENCIALES*.txt
+# ---- OCR: dato de idioma de Tesseract (binario regenerable) y volcado de depuracion ----
+**/spa.traineddata
+**/comprobante.txt
 
 # ---- Logs y temporales ----
 *.log
@@ -43,6 +65,9 @@ yarn-error.log*
 .cache/
 scratch/
 **/scratch/
+**/~$*.docx
+**/~$*.xlsx
+**/~WRL*.tmp
 
 # ---- Sistema operativo / editores ----
 .DS_Store
@@ -50,42 +75,3 @@ Thumbs.db
 *.swp
 .vscode/*
 !.vscode/extensions.json
-
-# ---- Skills de diseno instaladas (reinstalables con skills-lock.json) ----
-.agents/
-.claude/skills/
-
-# ---- Artefactos de Playwright (capturas/snapshots de pruebas) ----
-.playwright-mcp/
-
-# ---- OCR: dato de idioma de Tesseract (binario regenerable) y volcado de depuracion ----
-**/spa.traineddata
-**/comprobante.txt
-
-# ---- Capturas de verificacion y muestras (temporales / datos personales) ----
-recursos/generados/capturas-*/
-recursos/generados/muestras-ocr/
-
-# Dump para restaurar en Aiven (datos reales, no subir a git)
-recursos/generados/*aiven*.sql
-recursos/generados/iniciador-*.sql
-
-# Copia del frontend que genera el build en Render (no versionar)
-euphoria-backend/dist-frontend/
-
-# ---- Respaldos de la base de produccion (datos reales, NO subir) ----
-recursos/backups/
-
-# ---- Temporales de Word y del editor ----
-**/~$*.docx
-**/~$*.xlsx
-**/~WRL*.tmp
-
-# ---- Andamiaje de herramientas y temporales de trabajo ----
-.superpowers/
-generados/unity-temp/
-
-# ---- Borradores de companeros (trabajo ajeno, no va en este repositorio) ----
-recursos/documentos-word/Coaquira*
-recursos/documentos-word/primer borrador BRANKO*
-recursos/documentos-word/Ultimo Borrador Daniel Flores.docx

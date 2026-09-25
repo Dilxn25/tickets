@@ -8,9 +8,9 @@ Estado: **LISTO PARA ENTRENAR**. El cargador de la BD nueva ya funciona
 - `config.json` → `"fuente": "mysql_prisma"` apunta a la BD nueva (db_euphoria).
 - `fuentes_datos.py` devuelve SIEMPRE el mismo formato canónico
   (`df_canastas` + `meta`), venga del dump viejo de Postgres
-  (`modelo_entrenado/Entrenamiento de modelos/database`) o de MySQL nueva.
-- Los notebooks de entrenamiento están en
-  `modelo_entrenado/Entrenamiento de modelos/notebooks/` (01 a 06).
+  o de MySQL nueva.
+- El script de entrenamiento está en `euphoria-ia/entrenamiento/entrenar.py`. Los notebooks de
+  investigación (01 a 06) se conservan fuera del repositorio.
 - Hiperparámetros ya optimizados: `mejores_hiperparametros.json`.
 
 ## Pasos para reentrenar (cuando haya datos nuevos de producción)

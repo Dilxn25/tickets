@@ -1,0 +1,9 @@
+{
+  "fuente": "mysql_prisma",
+  "ruta_dump": "../database",
+  "database_url": "mysql+pymysql://root:8777138@127.0.0.1:3306/db_euphoria",
+  "salida_artefacto": "artefacto_modelo.pkl",
+  "version": "1.1",
+
+  "_comentario": "Entrena con la BD NUEVA (db_euphoria). Para volver a la BD vieja: 'fuente':'postgres_dump'."
+}

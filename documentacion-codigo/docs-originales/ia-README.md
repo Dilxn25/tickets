@@ -1,8 +1,8 @@
 # Euphoria IA — Servicio de Recomendación (PRODUCCIÓN)
 
 Esta carpeta contiene la **IA del programa en ejecución**: el microservicio que el sistema Euphoria
-consume en vivo para dar recomendaciones. El **entrenamiento y las pruebas** viven aparte, en
-`../modelo_entrenado/`.
+consume en vivo para dar recomendaciones. El **entrenamiento** vive en la subcarpeta
+`entrenamiento/` y lo ejecuta GitHub Actions (ver `reentrenar-modelo.md`).
 
 ## Modelo: HÍBRIDO (contenido + colaborativo)
 
@@ -42,5 +42,5 @@ Prueba: `http://localhost:8000/docs`
 
 ## Actualizar el modelo
 
-El modelo se **entrena** en `../modelo_entrenado/` (`entrenar.py`). Tras reentrenar, copia el nuevo
-`artefacto_modelo.pkl` a esta carpeta para que producción use la versión nueva.
+El modelo se **entrena** con `entrenamiento/entrenar.py`. Cada reentrenamiento deja una versión fechada en
+`modelos/` y el servicio carga la más reciente al arrancar.
