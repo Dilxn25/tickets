@@ -2,7 +2,8 @@
 
 Un **servicio aparte**, hecho en **Python con FastAPI**, que corre en el puerto **8000**. Su único
 trabajo es responder una pregunta: *"para esta mesa, ¿qué producto conviene sugerir?"*. El backend le
-pregunta y la IA devuelve la sugerencia. No toca la base de datos del sistema ni pinta pantallas.
+pregunta y la IA devuelve la sugerencia. Lee ventas de la base para calcular combos y packs, pero no
+escribe en ella ni pinta pantallas.
 
 ## Qué modelo usa (en simple)
 
@@ -35,6 +36,8 @@ hora, promociones). Así el dueño puede ajustar el comportamiento **sin reentre
 | **`mejores_hiperparametros.json`** | Los ajustes ya optimizados del modelo. |
 | **`requirements.txt`** | Las librerías de Python que necesita (pandas, scikit-learn, lightgbm, fastapi, etc.). |
 | **`vigilar-ia.ps1`** | Un script para levantar y vigilar el servicio. |
+| **`modelos/`** | Las versiones fechadas del modelo; al arrancar se carga la más reciente. |
+| **`entrenamiento/`** | El script `entrenar.py` que ejecuta GitHub Actions para reentrenar. |
 
 ## Cómo se ejecuta
 
@@ -49,11 +52,11 @@ uvicorn api:app --port 8000
 
 ## Cómo se actualiza el modelo (reentrenar)
 
-El modelo se **entrena aparte** (con los notebooks del proyecto) y produce un nuevo
-`artefacto_modelo.pkl`. Para que producción use la versión nueva, se copia ese archivo a esta carpeta y
-se reinicia el servicio. Los pasos detallados están en:
+El administrador pulsa **Reentrenar** en el Panel de IA y GitHub Actions ejecuta
+`entrenamiento/entrenar.py`: lee las ventas de la base, entrena y deja una versión fechada en `modelos/`.
+El servicio carga esa versión al volver a desplegarse. El detalle está en:
 
-- `documentacion-codigo/docs-originales/ia-REENTRENAR.md` (la guía de reentrenamiento).
+- `documentacion-codigo/reentrenar-modelo.md` (cómo funciona y cómo se configura).
 - `documentacion-codigo/docs-originales/ia-README.md` (la explicación original del modelo).
 
 ## Resumen mental

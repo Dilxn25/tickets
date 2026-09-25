@@ -14,7 +14,7 @@ permisos). Son unas 10.000 líneas repartidas en servicios.
 
 ## La base de datos
 
-- **`prisma/schema.prisma`** — el **modelo de datos**: las **28 tablas** del sistema (usuario, billetera,
+- **`prisma/schema.prisma`** — el **modelo de datos**: los **29 modelos** (tablas) del sistema (usuario, billetera,
   evento, mesa, zona, comanda, entrada, etc.) y cómo se relacionan. Es el mapa de todo lo que se guarda.
 - **`prisma/semilla.js`** — llena la base con datos iniciales (roles, usuarios de ejemplo, productos).
   Se corre con `npm run db:sembrar`.
@@ -39,7 +39,7 @@ Cada carpeta en `src/servicios/` es un **módulo** con sus rutas. Esto es lo que
 |---|---|---|
 | **autenticacion** | `/api/auth` | Iniciar sesión, entregar el token, recuperar contraseña. |
 | **usuarios** | `/api/usuarios` | Crear, editar y activar/desactivar usuarios. |
-| **roles** | `/api/roles` | Definir los roles y sus permisos (solo administrador). |
+| **roles** | `/api/roles` | Listar, añadir y eliminar roles (solo administrador). |
 | **productos** | `/api/productos` | El catálogo: productos, categorías, precios, imágenes. |
 | **eventos** | `/api/eventos` | Crear y configurar los eventos (la noche), con su fecha y estado. |
 | **mesas** | `/api/mesas` | Las mesas de cada evento y el mapa donde se ubican. |
