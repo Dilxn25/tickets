@@ -1,14 +1,15 @@
 # ============================================================
-# Solo se versiona lo que el sistema necesita para funcionar:
+# Solo se versiona el codigo del programa:
 #   euphoria-backend, euphoria-frontend, euphoria-ia,
-#   documentacion-codigo, .github, render.yaml e iniciar-euphoria.ps1
-# Todo lo demas vive solo en la computadora local.
+#   .github, render.yaml e iniciar-euphoria.ps1
+# Documentacion, recursos y todo lo demas viven solo en la computadora local.
 # ============================================================
 
 # ---- Material de trabajo local (tesis, capturas, respaldos, recursos) ----
 /generados/
 /recursos/
 /docs/
+/documentacion-codigo/
 /credenciales.txt
 **/CREDENCIALES*.txt
 
