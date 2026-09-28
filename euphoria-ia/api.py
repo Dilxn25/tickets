@@ -13,7 +13,7 @@ PROBAR (curl):
 """
 import os
 import json
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -112,7 +112,10 @@ class Peticion(BaseModel):
     k: int = 3
     stock: Optional[dict] = None   # opcional: {"9": 0} para marcar agotados en vivo
     historial_cliente: Optional[List[int]] = None  # ids que ESE cliente ya consumio (personalizacion)
-    cliente: Optional[str] = None  # clave de un CLIENTE DEMO embebido en el pkl (su historial sale del pkl)
+    # Clave de un CLIENTE DEMO embebido en el pkl (su historial sale del pkl). Se acepta
+    # también un número: antes llegaba el id del cliente real como entero, Pydantic lo
+    # rechazaba (422) y el mesero se quedaba sin sugerencias justo al elegir al cliente.
+    cliente: Optional[Union[str, int]] = None
 
 
 class ModeloReq(BaseModel):
@@ -133,8 +136,9 @@ def recomendar(p: Peticion):
     # del pkl (self-contained, sin base). Si no, se usa el historial que mande el
     # backend (clientes reales, tomado de la base en producción).
     historial = p.historial_cliente
-    if p.cliente and p.cliente in rec.clientes_demo:
-        historial = rec.clientes_demo[p.cliente]["historial"]
+    clave = str(p.cliente) if p.cliente is not None else None
+    if clave and clave in rec.clientes_demo:
+        historial = rec.clientes_demo[clave]["historial"]
     return rec.recomendar(p.productos_en_mesa, p.fecha_hora, k=p.k, stock=stock,
                           historial_cliente=historial)
 

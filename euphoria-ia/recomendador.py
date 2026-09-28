@@ -12,6 +12,8 @@ USO COMO LIBRERIA:
 """
 import os
 import json
+from collections import Counter
+
 import joblib
 import pandas as pd
 
@@ -19,7 +21,14 @@ import nucleo
 import reglas as R
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-CATN = {1: "Cerveza", 2: "Coctel", 3: "Botella", 4: "Mezclador", 5: "Vino"}
+# Nombres de las categorías tal como están en la base (id_categoria). El backend
+# igual los reemplaza por el nombre vigente de la tabla categoria.
+CATN = {1: "Bebidas", 2: "Cócteles", 3: "Cervezas", 4: "Snacks", 5: "Combos", 6: "Sin Alcohol",
+        7: "Vodka", 8: "Ron", 9: "Whisky", 11: "Gin", 12: "Singani", 13: "Tequila",
+        14: "Licores", 15: "Espumantes", 16: "Cigarrillos"}
+# Una categoría entra al perfil del cliente si pesa al menos esto en su historial
+# (evita que un pedido suelto cuente como "categoría favorita").
+CUOTA_MIN_CATEGORIA = 0.05
 
 
 class Recomendador:
@@ -48,6 +57,65 @@ class Recomendador:
         Xc = pd.DataFrame(filas, columns=self.FC)
         return dict(zip(cands, self.modelo.predict_proba(Xc)[:, 1]))
 
+    def perfil_cliente(self, historial_cliente):
+        """Del historial de UN cliente saca sus categorías ordenadas por peso (las que
+        pasan la cuota mínima) y cuántas veces pidió cada producto. Las cortesías
+        (precio 0) no cuentan: no las eligió él."""
+        meta = self.meta
+        validos = [int(p) for p in (historial_cliente or [])
+                   if int(p) in meta["cat"] and float(meta["precio"].get(int(p), 0) or 0) > 0]
+        if not validos:
+            return {"categorias": [], "freq": {}, "veces": {}}
+        veces = Counter(validos)
+        tope = max(veces.values())
+        por_cat = Counter(meta["cat"][p] for p in validos)
+        total = sum(por_cat.values())
+        orden = sorted(por_cat.items(), key=lambda kv: -kv[1])
+        categorias = [(cat, n / total) for cat, n in orden if n / total >= CUOTA_MIN_CATEGORIA]
+        return {
+            "categorias": categorias or [(orden[0][0], orden[0][1] / total)],
+            "freq": {p: v / tope for p, v in veces.items()},
+            "veces": dict(veces),
+        }
+
+    def _elegir_por_perfil(self, perfil, filas, k):
+        """Regla del perfil: un producto por cada categoría que más consume el cliente,
+        en orden de peso. Si consume una sola categoría salen sus productos más pedidos
+        de esa categoría. Dentro de cada categoría va primero lo que él más pidió y, a
+        igual cantidad, lo que el modelo ubica más arriba. Si el perfil no alcanza a
+        llenar las k posiciones, completa el ranking del modelo."""
+        meta, veces = self.meta, perfil["veces"]
+        puesto = {f[0]: i for i, f in enumerate(filas)}
+        colas = []
+        for cat, cuota in perfil["categorias"]:
+            de_cat = [f for f in filas if meta["cat"].get(f[0]) == cat]
+            de_cat.sort(key=lambda f: (-veces.get(int(f[0]), 0), puesto[f[0]]))
+            colas.append((cat, cuota, de_cat))
+
+        elegidas, usados, ronda = [], set(), 0
+        while len(elegidas) < k and any(ronda < len(q) for _, _, q in colas):
+            for cat, cuota, q in colas:
+                if len(elegidas) >= k:
+                    break
+                if ronda >= len(q) or q[ronda][0] in usados:
+                    continue
+                f = q[ronda]
+                usados.add(f[0])
+                elegidas.append((f, {
+                    "id_categoria": int(cat),
+                    "categoria": CATN.get(cat, str(cat)),
+                    "cuota_categoria": round(float(cuota), 3),
+                    "veces": int(veces.get(int(f[0]), 0)),
+                }))
+            ronda += 1
+        for f in filas:
+            if len(elegidas) >= k:
+                break
+            if f[0] not in usados:
+                usados.add(f[0])
+                elegidas.append((f, None))
+        return elegidas
+
     def recomendar(self, productos_en_mesa, fecha_hora, k=3, stock=None, incluir_promos=True, historial_cliente=None):
         meta, cfg = self.meta, self.reglas
         # el stock recibido es un OVERRIDE PARCIAL sobre el inventario conocido (no lo reemplaza)
@@ -61,11 +129,13 @@ class Recomendador:
         # vacio -> afinidad vacia -> el modelo cae a las senales globales (arranque en frio).
         afin = nucleo.afinidad_cliente(historial_cliente, meta) if self.personalizado else {}
 
-        # 1) filtro DURO de stock
+        # 1) filtro DURO de stock. Las cortesías (precio 0) no se venden: nunca se sugieren.
         cands = [c for c in self.all_items
-                 if c not in pset and R.disponible(c, stock, meta["minimo"], cfg["stock"]["activa"])]
+                 if c not in pset and R.disponible(c, stock, meta["minimo"], cfg["stock"]["activa"])
+                 and float(meta["precio"].get(c, 0) or 0) > 0]
 
         recomendaciones = []
+        perfil = self.perfil_cliente(historial_cliente)
         if cands:
             crudo = self._score_modelo(productos_en_mesa, cands, fecha_hora, afin)
             filas = []
@@ -76,20 +146,27 @@ class Recomendador:
                 bp = R.boost_promo(c, meta, cfg["promo"])
                 filas.append((c, s, bt, fm, bp, s * bt * fm * bp))
             filas.sort(key=lambda x: -x[-1])
-            for rank, (c, s, bt, fm, bp, sf) in enumerate(filas[:k], start=1):
+            # Con cliente identificado manda su perfil: un producto por cada categoría
+            # que más consume. Sin historial queda el ranking del modelo tal cual.
+            elegidas = self._elegir_por_perfil(perfil, filas, k) if perfil["categorias"] else [(f, None) for f in filas[:k]]
+            for rank, ((c, s, bt, fm, bp, sf), motivo) in enumerate(elegidas, start=1):
                 recomendaciones.append({
                     "ranking": rank,
                     "id_producto": int(c),
                     "nombre": meta["nombre"][c],
+                    "id_categoria": int(meta["cat"][c]),
                     "categoria": CATN.get(meta["cat"][c], str(meta["cat"][c])),
-                    "probabilidad": round(s, 4),
-                    "score_final": round(sf, 4),
+                    # 6 decimales: con la mesa vacía la probabilidad es chica y a 4
+                    # decimales llegaba como 0, y la toma de pedidos la descartaba.
+                    "probabilidad": round(s, 6),
+                    "score_final": round(sf, 6),
                     "margen_pct": round(R.margen(c, meta) * 100, 1),
                     "en_promocion": meta["precio_promo"].get(c) is not None,
-                    # Cuánto coincide con el gusto del cliente (0..1). En arranque en frío
-                    # la probabilidad absoluta es ~0, pero ESTA sí es coherente: mide qué
-                    # tanto ESE cliente suele pedir el producto.
-                    "afinidad_cliente": round(float(afin["freq"].get(int(c), 0.0)), 3) if afin else 0.0,
+                    # Cuánto coincide con el gusto del cliente (0..1): veces que lo pidió
+                    # frente a su producto favorito.
+                    "afinidad_cliente": round(float(perfil["freq"].get(int(c), 0.0)), 3),
+                    # Por qué entró por el perfil (categoría, peso y veces pedidas)
+                    "motivo_cliente": motivo,
                     # Factores del ranking (para explicar el "porqué" en el panel):
                     # >1 empuja al producto, <1 lo castiga
                     "factores": {
@@ -108,6 +185,9 @@ class Recomendador:
                 "productos_en_mesa": [int(p) for p in productos_en_mesa],
             },
             "recomendaciones": recomendaciones,
+            # Categorías que más consume el cliente, con su peso (vacío sin cliente)
+            "perfil_cliente": [{"id_categoria": int(c), "categoria": CATN.get(c, str(c)), "cuota": round(float(q), 3)}
+                               for c, q in perfil["categorias"]],
             "modelo": {"version": self.info.get("version"), "auc_test": self.info.get("auc_test"),
                        "personalizado": self.personalizado},
         }

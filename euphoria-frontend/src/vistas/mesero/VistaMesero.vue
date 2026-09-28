@@ -226,6 +226,71 @@
     <div v-else class="pos-layout">
       <!-- PANEL IZQUIERDO: PRODUCTOS -->
       <section class="panel-productos" :class="{ 'oculto-movil': verCarritoMovil }">
+        <!-- ATENCIÓN (celular): primero a quién se atiende. Al elegir la mesa se
+             identifica solo al cliente que la reservó y sus sugerencias salen al toque. -->
+        <div class="atencion-movil">
+          <button v-if="!mesaSeleccionada && !clienteSeleccionado" type="button" class="atm-elegir" @click="abrirHojaAtencion()">
+            <span class="atm-icono">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="7" width="18" height="4" rx="1"></rect><path d="M6 11v9M18 11v9M9 7V4h6v3"></path></svg>
+            </span>
+            <span class="atm-txt">
+              <strong>Elegir mesa o cliente</strong>
+              <small>Verás lo que suele pedir</small>
+            </span>
+            <svg class="atm-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+          <button v-else type="button" class="atm-actual" @click="abrirHojaAtencion()">
+            <span class="atm-mesa">{{ mesaSeleccionada ? mesaSeleccionada.numero_nombre : 'Barra' }}</span>
+            <span class="atm-cli">
+              <span class="atm-avatar">{{ inicialesCliente }}</span>
+              <span class="atm-nombre">{{ clienteSeleccionado ? `${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos || ''}`.trim() : 'Sin cliente' }}</span>
+            </span>
+            <span class="atm-cambiar">Cambiar</span>
+          </button>
+
+          <!-- Sugerencias a la vista, sin tener que abrir la orden -->
+          <div v-if="cargandoSugerencias || sugerencias.length" class="sug-movil">
+            <div class="sug-movil-tit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21l2.3-7.4-6-4.6h7.6z"></path></svg>
+              <span>{{ tituloSugerencias }}</span>
+            </div>
+            <!-- Perfil del cliente: cuánto pesa cada categoría en lo que pide -->
+            <div v-if="perfilCliente.length" class="perfil">
+              <div class="perfil-barra">
+                <span v-for="(c, i) in perfilCliente" :key="c.id_categoria" class="pb-seg" :style="{ flexGrow: c.cuota, '--pb': colorPerfil(i) }"></span>
+              </div>
+              <div class="perfil-leyenda">
+                <span v-for="(c, i) in perfilCliente.slice(0, 3)" :key="c.id_categoria" class="pl-item" :style="{ '--pb': colorPerfil(i) }">
+                  {{ c.categoria }} <b>{{ Math.round(c.cuota * 100) }}%</b>
+                </span>
+              </div>
+            </div>
+            <div class="sug-movil-lista">
+              <template v-if="cargandoSugerencias && !sugerencias.length">
+                <span v-for="n in 3" :key="n" class="sug-card esqueleto"></span>
+              </template>
+              <button v-for="s in sugerencias" :key="s.id_producto" type="button" class="sug-card" @click="agregarSugerencia(s)">
+                <span class="sug-media">
+                  <img v-if="imagenProducto(s.id_producto)" :src="imagenProducto(s.id_producto)" alt="" />
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path d="M5 3h14l-1.5 8.5a5.5 5.5 0 0 1-11 0z"></path><path d="M12 15v6"></path><path d="M8 21h8"></path></svg>
+                </span>
+                <span class="sug-info">
+                  <span class="sug-cat">{{ s.categoria }}</span>
+                  <span class="sug-nombre">{{ s.nombre }}</span>
+                  <span class="sug-pie">
+                    <span v-if="s.motivo_cliente && s.motivo_cliente.veces" class="sug-veces">{{ s.motivo_cliente.veces }} veces</span>
+                    <span v-else-if="s.probabilidad != null" class="sug-veces">{{ formatoProbabilidad(s.probabilidad) }}</span>
+                    <span class="sug-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
+                  </span>
+                </span>
+                <span class="sug-mas" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="barra-buscar">
           <div class="buscador">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -575,7 +640,7 @@
         <div v-if="sugerencias.length > 0" class="seccion-sugerencias">
           <div class="sugerencias-titulo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21l2.3-7.4-6-4.6h7.6z"></path></svg>
-            <span>{{ carrito.length ? 'La mesa también suele pedir' : (clienteSeleccionado ? `Lo que suele pedir ${clienteSeleccionado.nombres}` : 'Para empezar, lo más pedido') }}</span>
+            <span>{{ tituloSugerencias }}</span>
           </div>
           <div class="sugerencias-lista">
             <button
@@ -584,13 +649,13 @@
               class="chip-sugerencia"
               @click="agregarSugerencia(s)"
               type="button"
-              :title="`${(s.probabilidad * 100).toFixed(0)}% de probabilidad de que la acepten a este precio`"
+              :title="(s.razones || []).join(' · ')"
             >
               <span class="chip-nombre">{{ s.nombre }}</span>
               <span class="chip-meta">
-                <!-- Siempre se muestra la probabilidad REAL del modelo (nunca una sugerencia sin número) -->
-                <span class="chip-prob">{{ formatoProbabilidad(s.probabilidad) }}</span>
-                <span v-if="s.afinidad_cliente >= 0.15" class="chip-prob" title="Coincide con lo que suele pedir el cliente">{{ (s.afinidad_cliente * 100).toFixed(0) }}% gusto</span>
+                <!-- Siempre va un número real: las veces que ESE cliente lo pidió o la probabilidad del modelo -->
+                <span v-if="s.motivo_cliente && s.motivo_cliente.veces" class="chip-prob" title="Veces que este cliente lo pidió">{{ s.motivo_cliente.veces }} veces</span>
+                <span v-else-if="s.probabilidad != null" class="chip-prob">{{ formatoProbabilidad(s.probabilidad) }}</span>
                 <span class="chip-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
               </span>
               <span class="chip-mas">+</span>
@@ -620,6 +685,84 @@
         </div>
       </section>
     </div>
+
+    <!-- HOJA DE ATENCIÓN (celular): elegir la mesa o buscar al cliente -->
+    <Teleport to="body">
+      <transition name="hoja-anim">
+        <div v-if="hojaAtencion" class="hoja-overlay" @click.self="hojaAtencion = false">
+          <div class="hoja" role="dialog" aria-label="Elegir mesa o cliente">
+            <span class="hoja-asa" aria-hidden="true"></span>
+            <div class="hoja-cab">
+              <h3>¿A quién atiendes?</h3>
+              <button type="button" class="hoja-cerrar" @click="hojaAtencion = false" aria-label="Cerrar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div class="hoja-tabs" role="tablist">
+              <button type="button" role="tab" :aria-selected="pasoAtencion === 'mesa'" :class="{ activo: pasoAtencion === 'mesa' }" @click="pasoAtencion = 'mesa'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="7" width="18" height="4" rx="1"></rect><path d="M6 11v9M18 11v9"></path></svg>
+                Mesa
+              </button>
+              <button type="button" role="tab" :aria-selected="pasoAtencion === 'cliente'" :class="{ activo: pasoAtencion === 'cliente' }" @click="pasoAtencion = 'cliente'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                Cliente
+              </button>
+            </div>
+
+            <!-- MESA: las reservadas muestran quién la reservó -->
+            <div v-if="pasoAtencion === 'mesa'" class="hoja-cuerpo">
+              <div class="hoja-buscar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input v-model="busquedaMesaHoja" type="text" placeholder="Mesa o nombre del cliente" />
+              </div>
+              <div class="hoja-grid">
+                <button v-if="!busquedaMesaHoja.trim()" type="button" class="hm hm-barra" :class="{ sel: !mesaSeleccionada }" @click="elegirDesdeHoja(null)">
+                  <strong>Barra</strong>
+                  <small>Sin mesa</small>
+                </button>
+                <button
+                  v-for="m in mesasHoja" :key="m.id_mesa" type="button" class="hm"
+                  :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa, reservada: m.reserva_cliente, mia: idsMisMesas.has(m.id_mesa) }"
+                  @click="elegirDesdeHoja(m)"
+                >
+                  <strong>{{ m.numero_nombre }}</strong>
+                  <small>{{ m.reserva_cliente || 'Libre' }}</small>
+                </button>
+              </div>
+              <p v-if="!mesasHoja.length && busquedaMesaHoja.trim()" class="hoja-vacio">Ninguna mesa coincide.</p>
+              <button type="button" class="hoja-mapa" @click="hojaAtencion = false; abrirMapaMesa()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+                Elegir en el mapa
+              </button>
+            </div>
+
+            <!-- CLIENTE: búsqueda por nombre, carnet o celular -->
+            <div v-else class="hoja-cuerpo">
+              <div class="hoja-fila">
+                <div class="hoja-buscar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input ref="inputClienteHoja" v-model="busquedaCliente" @input="buscarClientes" type="text" placeholder="Nombre, carnet o celular" />
+                </div>
+                <button type="button" class="btn-nuevo-cliente" @click="hojaAtencion = false; modalNuevoCliente = true" title="Registrar nuevo cliente" aria-label="Registrar nuevo cliente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+              </div>
+              <div class="hoja-clientes">
+                <button v-for="cli in clientesBuscados" :key="cli.id_usuario" type="button" class="hc" @click="elegirClienteHoja(cli)">
+                  <span class="hc-avatar">{{ ((cli.nombres || '')[0] || '') + ((cli.apellidos || '')[0] || '') }}</span>
+                  <span class="hc-txt">
+                    <strong>{{ cli.nombres }} {{ cli.apellidos }}</strong>
+                    <small>{{ cli.ci_carnet || cli.telefono || cli.correo }}</small>
+                  </span>
+                </button>
+                <p v-if="busquedaCliente.trim().length >= 2 && !clientesBuscados.length" class="hoja-vacio">Sin coincidencias. Regístralo con +.</p>
+                <p v-else-if="!clientesBuscados.length" class="hoja-vacio">Escribe al menos 2 letras.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- MODAL DE COBRO -->
     <Teleport to="body">
@@ -1036,6 +1179,65 @@ const opcionesMesa = computed(() => [
   ...mesas.value.map(m => ({ value: m, label: `Mesa ${m.numero_nombre} — ${m.estado_ocupacion === 'reservada' ? 'Reservada' : 'Libre'}` })),
 ])
 const clienteAutoAsignado = ref('')
+// true cuando el cliente vino de la reserva de la mesa: al cambiar a una mesa sin
+// reserva se quita, para no seguir sugiriendo según el cliente de la mesa anterior
+const clienteEsDeMesa = ref(false)
+
+// Mesas del evento que atiende el mesero, con el nombre de quien reservó cada una
+async function cargarMesas() {
+  try {
+    const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
+    mesas.value = (await clienteHttp.get(`/mesas${q}`)) || []
+  } catch (e) {
+    console.warn('No se pudieron cargar las mesas:', e)
+  }
+}
+
+// ==== HOJA DE ATENCIÓN (celular) ====
+// En el celular el panel de la orden queda oculto hasta agregar algo, así que la
+// mesa y el cliente se eligen desde esta hoja, antes de tomar el pedido.
+const hojaAtencion = ref(false)
+const pasoAtencion = ref('mesa')
+const busquedaMesaHoja = ref('')
+const inputClienteHoja = ref(null)
+const idsMisMesas = computed(() => new Set(misMesas.value.map(m => m.id_mesa)))
+const mesasHoja = computed(() => {
+  const q = busquedaMesaHoja.value.trim().toLowerCase()
+  return mesas.value
+    .filter(m => m.tipo_elemento === 'mesa' || m.tipo_elemento === 'silla')
+    .filter(m => !q || String(m.numero_nombre || '').toLowerCase().includes(q) ||
+                 String(m.reserva_cliente || '').toLowerCase().includes(q))
+    .sort((a, b) => {
+      const pa = idsMisMesas.value.has(a.id_mesa) ? 0 : a.reserva_cliente ? 1 : 2
+      const pb = idsMisMesas.value.has(b.id_mesa) ? 0 : b.reserva_cliente ? 1 : 2
+      // orden natural: M2 antes que M10, y las mesas (M) antes que las sillas (S)
+      return pa - pb || String(a.numero_nombre).localeCompare(String(b.numero_nombre), 'es', { numeric: true })
+    })
+})
+const inicialesCliente = computed(() => {
+  const c = clienteSeleccionado.value
+  if (!c) return '?'
+  return (((c.nombres || '')[0] || '') + ((c.apellidos || '')[0] || '')).toUpperCase() || '?'
+})
+function abrirHojaAtencion(paso) {
+  pasoAtencion.value = paso || (mesaSeleccionada.value || !clienteSeleccionado.value ? 'mesa' : 'cliente')
+  busquedaMesaHoja.value = ''
+  hojaAtencion.value = true
+  cargarMesas() // las reservas pueden haber cambiado desde que se abrió la vista
+}
+function elegirDesdeHoja(m) {
+  mesaSeleccionada.value = m
+  modoMesa.value = 'lista'
+  alCambiarMesa()
+  hojaAtencion.value = false
+}
+function elegirClienteHoja(cli) {
+  seleccionarCliente(cli)
+  hojaAtencion.value = false
+}
+watch(pasoAtencion, async (p) => {
+  if (p === 'cliente') { await nextTick(); inputClienteHoja.value?.focus() }
+})
 
 // Mesas asignadas a este mesero (recepción se las asigna al check-in)
 const misMesas = ref([])
@@ -1129,6 +1331,7 @@ function elegirEvento(id) {
   modalEvento.value = false
   cargarMisMesas(); cargarCortesiasPendientes()
   cargarReparto()
+  cargarMesas()
 }
 
 // Reparto justo: cuántas mesas debería llevar cada mesero del evento
@@ -1328,14 +1531,7 @@ onMounted(async () => {
   try {
     await recargarCatalogo()
     await cargarEventosActivos()   // define el evento que atiende (o lo pregunta)
-    // Cargar mesas disponibles
-    try {
-      const resMesas = await clienteHttp.get('/mesas')
-      // Agregar opcion de barra al inicio
-      mesas.value = resMesas || []
-    } catch (e) {
-      console.warn('No se pudieron cargar las mesas:', e)
-    }
+    await cargarMesas()   // mesas del evento, con quién reservó cada una
     cargarSugerencias() // arranque en frío: muestra lo más pedido apenas se abre
   } catch (err) {
     console.error('Error al cargar productos:', err)
@@ -1485,6 +1681,8 @@ function precioSugerido(s) {
   const prod = productos.value.find(p => p.id_producto === s.id_producto)
   if (!prod) return 0
   const base = Number(prod.precio_base)
+  // Lo que el cliente pide siempre va a su precio normal: no hace falta rebajarlo
+  if (s.motivo_cliente) return base
   const min = base * 0.85, max = base * 1.20
   return precioAtractivo(min + (max - min) * (s.probabilidad || 0))
 }
@@ -1531,25 +1729,46 @@ function formatoProbabilidad(p) {
 }
 
 // Pide al backend las sugerencias y las muestra. Funciona también con la MESA VACÍA
-// (arranque en frío → lo más pedido) y pasa el cliente si hay uno seleccionado
-// (personalización: le sugiere lo que ESE cliente suele pedir).
+// (arranque en frío → lo más pedido) y pasa el cliente si hay uno seleccionado:
+// entonces sale un producto por cada categoría que más consume ese cliente.
+const cargandoSugerencias = ref(false)
+const perfilCliente = ref([])   // [{ categoria, cuota }] del cliente atendido
+let pedidoSugerencias = 0
 async function cargarSugerencias() {
+  const turno = ++pedidoSugerencias
+  cargandoSugerencias.value = true
   try {
     const ids = carrito.value.map(c => c.producto.id_producto)
     const idCliente = clienteSeleccionado.value?.id_usuario || null
     const res = await clienteHttp.post('/recomendaciones', { productos_en_mesa: ids, k: 3, id_cliente: idCliente })
+    if (turno !== pedidoSugerencias) return // llegó tarde: ya hay un pedido más nuevo
     const enOrden = new Set(ids)
+    perfilCliente.value = idCliente ? (res.perfil_cliente || []) : []
     sugerencias.value = (res.recomendaciones || [])
       .filter(r => !enOrden.has(r.id_producto))
-      // Sin probabilidad real del modelo no se muestra: una sugerencia sin número
-      // parece inventada y eso ya pasó una vez en una demostración.
-      .filter(r => Number.isFinite(Number(r?.probabilidad)) && Number(r.probabilidad) > 0)
-      // No sugerir productos agotados
-      .filter(r => { const p = productos.value.find(x => x.id_producto === r.id_producto); return !p || stockDisponible(p) > 0 })
+      // Una sugerencia sin número parece inventada (ya pasó en una demostración):
+      // lleva la probabilidad del modelo o las veces que ese cliente la pidió.
+      .filter(r => (r.probabilidad != null && Number.isFinite(Number(r.probabilidad))) || Number(r.motivo_cliente?.veces) > 0)
+      // Solo lo que está en la carta y con stock
+      .filter(r => { const p = productos.value.find(x => x.id_producto === r.id_producto); return p && stockDisponible(p) > 0 })
       .slice(0, 3)
   } catch (e) {
+    if (turno !== pedidoSugerencias) return
     sugerencias.value = [] // degradación elegante: si la IA no está, no se muestran
+    perfilCliente.value = []
+  } finally {
+    if (turno === pedidoSugerencias) cargandoSugerencias.value = false
   }
+}
+const tituloSugerencias = computed(() => {
+  const c = clienteSeleccionado.value
+  if (c) return `Lo que suele pedir ${c.nombres}`
+  return carrito.value.length ? 'La mesa también suele pedir' : 'Para empezar, lo más pedido'
+})
+const COLORES_PERFIL = ['#a855f7', '#ec4899', '#38bdf8', '#f59e0b']
+const colorPerfil = (i) => COLORES_PERFIL[i % COLORES_PERFIL.length]
+function imagenProducto(id) {
+  return productos.value.find(p => p.id_producto === id)?.url_imagen || null
 }
 
 function agregarSugerencia(s) {
@@ -1837,19 +2056,25 @@ function soloDigitosPin() {
 // Al cambiar de mesa buscar si hay reserva activa
 async function alCambiarMesa() {
   clienteAutoAsignado.value = ''
-  if (!mesaSeleccionada.value) {
-    // Pedido en barra: limpiar cliente autollenado si lo habia
-    return
-  }
-  try {
-    const res = await clienteHttp.get(`/mesas/${mesaSeleccionada.value.id_mesa}/reserva`)
-    if (res && res.cliente) {
-      clienteSeleccionado.value = res.cliente
-      clienteAutoAsignado.value = `${res.cliente.nombres} ${res.cliente.apellidos}`.trim()
+  const veniaDeMesa = clienteEsDeMesa.value
+  clienteEsDeMesa.value = false
+  const mesa = mesaSeleccionada.value
+  if (mesa) {
+    try {
+      const res = await clienteHttp.get(`/mesas/${mesa.id_mesa}/reserva`)
+      if (mesaSeleccionada.value !== mesa) return // el mesero ya eligió otra mesa
+      if (res && res.cliente) {
+        clienteSeleccionado.value = res.cliente
+        clienteAutoAsignado.value = `${res.cliente.nombres} ${res.cliente.apellidos}`.trim()
+        clienteEsDeMesa.value = true
+        return
+      }
+    } catch {
+      // Sin reserva asociada — normal
     }
-  } catch {
-    // Sin reserva asociada — normal
   }
+  // Barra o mesa sin reserva: el cliente de la mesa anterior ya no aplica
+  if (veniaDeMesa) clienteSeleccionado.value = null
 }
 
 function buscarClientes() {
@@ -1871,12 +2096,14 @@ function buscarClientes() {
 
 function seleccionarCliente(cli) {
   clienteSeleccionado.value = cli
+  clienteEsDeMesa.value = false
   busquedaCliente.value = ''
   clientesBuscados.value = []
 }
 
 function quitarCliente() {
   clienteSeleccionado.value = null
+  clienteEsDeMesa.value = false
 }
 
 async function crearClienteRapido() {
@@ -2521,6 +2748,7 @@ onUnmounted(() => {
   gap: 6px;
 }
 .chip-prob {
+  white-space: nowrap;
   background: rgba(34, 197, 94, 0.18);
   color: var(--color-exito);
   font-size: 0.72rem;
@@ -2529,6 +2757,7 @@ onUnmounted(() => {
   border-radius: 999px;
 }
 .chip-precio {
+  white-space: nowrap;
   color: var(--texto-secundario);
   font-size: 0.78rem;
   font-weight: 700;
@@ -3126,7 +3355,202 @@ onUnmounted(() => {
 }
 
 /* Responsive Mobile */
+/* ============================
+   ATENCIÓN EN EL CELULAR: mesa/cliente primero + sugerencias a la vista
+   (en escritorio todo esto vive en el panel de la orden)
+   ============================ */
+.atencion-movil { display: none; }
+.atm-elegir, .atm-actual {
+  width: 100%; display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+  border-radius: var(--radio-lg); padding: 12px 14px; color: var(--texto-principal);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.atm-elegir {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.16));
+  border: 1px solid rgba(236, 72, 153, 0.45);
+  box-shadow: 0 6px 22px rgba(168, 85, 247, 0.18);
+  animation: atmLatido 2.6s ease-in-out infinite;
+}
+@keyframes atmLatido {
+  0%, 100% { box-shadow: 0 6px 22px rgba(168, 85, 247, 0.18); }
+  50% { box-shadow: 0 6px 30px rgba(236, 72, 153, 0.35); }
+}
+.atm-elegir:active, .atm-actual:active { transform: scale(0.98); }
+.atm-icono {
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center;
+  background: var(--gradiente-marca); color: #fff; box-shadow: 0 4px 14px rgba(236, 72, 153, 0.35);
+}
+.atm-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.atm-txt strong { font-size: 0.98rem; font-weight: 800; }
+.atm-txt small { font-size: 0.78rem; color: var(--texto-secundario); }
+.atm-flecha { color: var(--rosa-acento); flex-shrink: 0; }
+.atm-actual { background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); }
+.atm-mesa {
+  min-width: 48px; height: 40px; padding: 0 10px; border-radius: 12px; flex-shrink: 0;
+  display: grid; place-items: center; font-weight: 800; font-size: 0.95rem; color: #fff;
+  background: var(--gradiente-marca); font-variant-numeric: tabular-nums;
+}
+.atm-cli { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.atm-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  font-size: 0.72rem; font-weight: 800; background: rgba(34, 197, 94, 0.16); color: var(--color-exito);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+.atm-nombre { font-weight: 700; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atm-cambiar {
+  font-size: 0.75rem; font-weight: 700; color: var(--rosa-acento); flex-shrink: 0;
+  padding: 5px 10px; border-radius: 999px; border: 1px solid rgba(236, 72, 153, 0.35);
+}
+
+.sug-movil { margin-top: 10px; }
+.sug-movil-tit {
+  display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700;
+  color: var(--rosa-acento); margin-bottom: 8px;
+}
+.perfil { margin-bottom: 8px; }
+.perfil-barra { display: flex; gap: 2px; height: 6px; border-radius: 999px; overflow: hidden; }
+.pb-seg {
+  flex-basis: 0; min-width: 4px; background: var(--pb); opacity: 0.9;
+  transform-origin: left; animation: pbCrece 0.6s ease both;
+}
+@keyframes pbCrece { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.perfil-leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.pl-item {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--texto-secundario);
+  white-space: nowrap;
+}
+.pl-item::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--pb); }
+.pl-item b { color: var(--texto-principal); font-weight: 800; }
+.sug-movil-lista { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sug-card {
+  position: relative; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px; cursor: pointer; text-align: left;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); border-radius: var(--radio-md);
+  color: var(--texto-principal); transition: transform 0.15s ease, border-color 0.2s ease;
+  animation: sugEntra 0.35s ease both;
+}
+.sug-card:nth-child(2) { animation-delay: 0.06s; }
+.sug-card:nth-child(3) { animation-delay: 0.12s; }
+@keyframes sugEntra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sug-card:active { transform: scale(0.96); border-color: var(--rosa-acento); }
+.sug-media {
+  height: 54px; border-radius: 8px; display: grid; place-items: center; overflow: hidden;
+  background: rgba(168, 85, 247, 0.1); color: var(--texto-secundario);
+}
+.sug-media img { width: 100%; height: 100%; object-fit: contain; }
+.sug-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sug-cat { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--morado-brillante); }
+.sug-nombre {
+  font-size: 0.8rem; font-weight: 700; line-height: 1.2; min-height: 2.4em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sug-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 4px; }
+.sug-veces {
+  font-size: 0.66rem; font-weight: 800; padding: 2px 6px; border-radius: 999px; white-space: nowrap;
+  background: rgba(34, 197, 94, 0.16); color: var(--color-exito);
+}
+.sug-precio { font-size: 0.7rem; font-weight: 700; color: var(--texto-secundario); white-space: nowrap; }
+.sug-mas {
+  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: var(--gradiente-marca);
+  box-shadow: 0 3px 10px rgba(236, 72, 153, 0.4);
+}
+.sug-card.esqueleto {
+  height: 134px; cursor: default; animation: none;
+  background: linear-gradient(90deg, var(--fondo-tarjeta) 0%, rgba(168, 85, 247, 0.12) 50%, var(--fondo-tarjeta) 100%);
+  background-size: 200% 100%; animation: sugBrillo 1.2s linear infinite;
+}
+@keyframes sugBrillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Hoja inferior para elegir mesa o cliente */
+.hoja-overlay {
+  position: fixed; inset: 0; z-index: 4000; background: rgba(6, 3, 18, 0.78);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.hoja {
+  width: 100%; max-width: 560px; max-height: 86vh; display: flex; flex-direction: column;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-xl) var(--radio-xl) 0 0; box-shadow: var(--sombra-modal);
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.hoja-asa { width: 42px; height: 4px; border-radius: 999px; background: var(--borde-activo); margin: 2px auto 10px; }
+.hoja-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.hoja-cab h3 { margin: 0; font-family: var(--fuente-titulo); font-size: 1.15rem; font-weight: 800; }
+.hoja-cerrar {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; cursor: pointer;
+  background: rgba(168, 85, 247, 0.1); border: 1px solid var(--borde-sutil); color: var(--texto-secundario);
+}
+.hoja-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px;
+  background: rgba(168, 85, 247, 0.08); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+}
+.hoja-tabs button {
+  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; cursor: pointer;
+  border: none; border-radius: 10px; background: transparent; color: var(--texto-secundario);
+  font-weight: 700; font-size: 0.88rem; transition: background 0.2s ease, color 0.2s ease;
+}
+.hoja-tabs button.activo { background: var(--gradiente-marca); color: #fff; box-shadow: 0 3px 12px rgba(236, 72, 153, 0.3); }
+.hoja-cuerpo { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.hoja-fila { display: flex; gap: 8px; align-items: center; }
+.hoja-buscar {
+  flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  background: var(--fondo-input); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+  color: var(--texto-secundario);
+}
+.hoja-buscar:focus-within { border-color: var(--morado-brillante); box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15); }
+.hoja-buscar input, .hoja-buscar input:focus {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none; box-shadow: none; padding: 12px 0;
+  color: var(--texto-principal); font-size: 16px;
+}
+.hoja-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hm {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 0; min-height: 66px; padding: 8px 6px; cursor: pointer; border-radius: var(--radio-md);
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
+  transition: transform 0.15s ease, border-color 0.2s ease;
+}
+.hm:active { transform: scale(0.95); }
+.hm strong { font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hm small {
+  font-size: 0.68rem; color: var(--texto-desactivado); max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hm.reservada { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.07); }
+.hm.reservada small { color: var(--color-exito); font-weight: 700; }
+.hm.mia { border-color: rgba(236, 72, 153, 0.6); box-shadow: inset 0 0 0 1px rgba(236, 72, 153, 0.25); }
+.hm.sel { background: var(--gradiente-marca); border-color: transparent; color: #fff; }
+.hm.sel small { color: rgba(255, 255, 255, 0.9); }
+.hm-barra strong { font-size: 0.92rem; }
+.hoja-mapa {
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; cursor: pointer;
+  border-radius: var(--radio-md); background: transparent; border: 1px dashed var(--borde-activo);
+  color: var(--texto-secundario); font-weight: 700; font-size: 0.85rem;
+}
+.hoja-clientes { display: flex; flex-direction: column; gap: 6px; }
+.hc {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; text-align: left;
+  background: var(--fondo-tarjeta-alt); border: 1px solid var(--borde-sutil); border-radius: var(--radio-md);
+  color: var(--texto-principal);
+}
+.hc:active { border-color: var(--rosa-acento); }
+.hc-avatar {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #fff; background: var(--gradiente-marca);
+}
+.hc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hc-txt strong { font-size: 0.9rem; }
+.hc-txt small { font-size: 0.76rem; color: var(--texto-secundario); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hoja-vacio { margin: 6px 0; text-align: center; font-size: 0.82rem; color: var(--texto-desactivado); }
+.hoja-anim-enter-active, .hoja-anim-leave-active { transition: opacity 0.22s ease; }
+.hoja-anim-enter-active .hoja, .hoja-anim-leave-active .hoja { transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.hoja-anim-enter-from, .hoja-anim-leave-to { opacity: 0; }
+.hoja-anim-enter-from .hoja, .hoja-anim-leave-to .hoja { transform: translateY(100%); }
+@media (prefers-reduced-motion: reduce) {
+  .atm-elegir, .pb-seg, .sug-card, .sug-card.esqueleto { animation: none; }
+}
+
 @media (max-width: 768px) {
+  .atencion-movil { display: block; flex-shrink: 0; margin-bottom: 12px; }
   .pos-layout {
     position: relative;
     height: calc(100vh - 60px);

@@ -11,22 +11,43 @@ const { verificarToken } = require('../../middlewares/autenticacion')
 router.use(verificarToken)
 
 // ---- GET /api/mesas (Para el POS - listar mesas de eventos activos) ----
+// Con ?evento=id solo trae las mesas del evento que atiende el mesero. Cada mesa lleva
+// quién la reservó (reserva_cliente), para que el mesero la reconozca por el nombre
+// del cliente y al elegirla el sistema lo identifique solo.
 router.get('/', async (req, res) => {
   try {
+    const idEvento = Number(req.query.evento) || null
     const mesas = await prisma.mesa_espacio.findMany({
       where: {
-        zona: {
-          evento: {
-            // Eventos públicos / en curso (Promoción, En transcurso, Lleno)
-            estado: { in: ['promocion', 'en_transcurso', 'lleno'] }
-          }
-        }
+        zona: idEvento
+          ? { id_evento: idEvento }
+          : {
+              evento: {
+                // Eventos públicos / en curso (Promoción, En transcurso, Lleno)
+                estado: { in: ['promocion', 'en_transcurso', 'lleno'] }
+              }
+            }
       },
       orderBy: {
         numero_nombre: 'asc'
       }
     })
-    res.json(mesas)
+    const ids = mesas.map(m => m.id_mesa)
+    const reservas = ids.length
+      ? await prisma.entrada.findMany({
+          where: { id_mesa: { in: ids } },
+          orderBy: [{ estado_validacion: 'desc' }, { fecha_reserva: 'desc' }],
+          select: { id_mesa: true, estado_validacion: true, usuario: { select: { id_usuario: true, nombres: true, apellidos: true } } },
+        })
+      : []
+    const titular = new Map()
+    for (const r of reservas) if (!titular.has(r.id_mesa)) titular.set(r.id_mesa, r)
+    res.json(mesas.map(m => {
+      const r = titular.get(m.id_mesa)
+      return r
+        ? { ...m, reserva_cliente: `${r.usuario.nombres} ${r.usuario.apellidos}`.trim(), reserva_id_cliente: r.usuario.id_usuario, reserva_ingreso: !!r.estado_validacion }
+        : m
+    }))
   } catch (error) {
     console.error('Error al obtener mesas:', error)
     res.status(500).json({ error: 'Error al obtener mesas' })

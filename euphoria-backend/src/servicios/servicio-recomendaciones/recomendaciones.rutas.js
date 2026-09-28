@@ -8,6 +8,7 @@ const prisma = require('../../config/base-de-datos')
 const { verificarToken, soloRoles } = require('../../middlewares/autenticacion')
 const { registrarPrecio } = require('../../utilidades/historial-precios')
 const { emitirConfigActualizada } = require('../../utilidades/config-runtime')
+const { hoyBolivia } = require('../../utilidades/tiempo')
 
 // Caché en memoria (60s) para combos/packs: las consultas de co-ocurrencia
 // escanean todo el historial y no cambian minuto a minuto
@@ -526,72 +527,182 @@ router.get('/combos', verificarToken, async (req, res) => {
   }
 })
 
+// Regla del perfil del cliente, la misma que aplica el motor de IA: un producto por
+// cada categoría que más consume y, si consume una sola, sus productos más pedidos de
+// esa categoría. Aquí se usa de RESPALDO cuando el motor no responde (en Render
+// gratuito se duerme): el mesero igual ve lo que ese cliente suele pedir.
+const CUOTA_MIN_CATEGORIA = 0.05
+
+function perfilDelCliente(conteos, porId, nombresCategoria) {
+  const porCat = new Map()
+  let total = 0
+  for (const [pid, n] of conteos) {
+    const p = porId.get(pid)
+    if (!p || p.es_cortesia || Number(p.precio_base) <= 0) continue
+    porCat.set(p.id_categoria, (porCat.get(p.id_categoria) || 0) + n)
+    total += n
+  }
+  if (!total) return []
+  const orden = [...porCat.entries()].sort((a, b) => b[1] - a[1])
+  const cats = orden.filter(([, n]) => n / total >= CUOTA_MIN_CATEGORIA)
+  return (cats.length ? cats : orden.slice(0, 1)).map(([id, n]) => ({
+    id_categoria: id,
+    categoria: nombresCategoria.get(id) || '',
+    cuota: Math.round((n / total) * 1000) / 1000,
+  }))
+}
+
+function sugerirPorPerfil(conteos, porId, perfil, enMesa, k) {
+  const tope = Math.max(1, ...conteos.values())
+  const colas = perfil.map(c => ({
+    ...c,
+    productos: [...conteos.entries()]
+      .map(([pid, n]) => ({ p: porId.get(pid), n }))
+      .filter(x => x.p && x.p.id_categoria === c.id_categoria && !x.p.es_cortesia &&
+                   Number(x.p.precio_base) > 0 && Number(x.p.stock_actual) > 0 && !enMesa.has(x.p.id_producto))
+      .sort((a, b) => b.n - a.n),
+  }))
+  const salida = []
+  for (let ronda = 0; salida.length < k && colas.some(c => ronda < c.productos.length); ronda++) {
+    for (const c of colas) {
+      if (salida.length >= k) break
+      const x = c.productos[ronda]
+      if (!x) continue
+      salida.push({
+        ranking: salida.length + 1,
+        id_producto: x.p.id_producto,
+        nombre: x.p.nombre_producto,
+        id_categoria: c.id_categoria,
+        categoria: c.categoria,
+        probabilidad: null,
+        afinidad_cliente: Math.round((x.n / tope) * 1000) / 1000,
+        motivo_cliente: { id_categoria: c.id_categoria, categoria: c.categoria, cuota_categoria: c.cuota, veces: x.n },
+        factores: {},
+        en_promocion: false,
+      })
+    }
+  }
+  return salida
+}
+
 // POST /api/recomendaciones
-// Body: { productos_en_mesa: number[], k?: number }
+// Body: { productos_en_mesa: number[], k?: number, id_cliente?: number|string }
 router.post('/', verificarToken, async (req, res) => {
+  // Interruptor del Panel de IA: si el admin desactivó las sugerencias,
+  // la toma de pedidos sigue normal pero sin recomendaciones
   try {
-    // Interruptor del Panel de IA: si el admin desactivó las sugerencias,
-    // la toma de pedidos sigue normal pero sin recomendaciones
     const { sugerencias_activas } = await leerConfigIA()
     if (!sugerencias_activas) {
       return res.json({ recomendaciones: [], promociones: [], desactivado: true })
     }
+  } catch (e) { console.warn('No se pudo leer la config de IA:', e.message) }
 
-    // probador=true → consulta desde el Panel de IA: NO se registra en efectividad
-    // (solo cuentan las sugerencias mostradas a meseros en pedidos reales)
-    // id_cliente → PERSONALIZACION: se le pasa al modelo el historial de ESE cliente
-    // (el modelo demo lo usa para recomendar a su gusto; el real lo ignora sin efecto).
-    const { productos_en_mesa = [], k = 3, probador = false, id_cliente = null } = req.body
-    const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  // probador=true → consulta desde el Panel de IA: NO se registra en efectividad
+  // (solo cuentan las sugerencias mostradas a meseros en pedidos reales)
+  // id_cliente → PERSONALIZACION. Un número es un cliente REAL (su historial sale de la
+  // base). Un texto tipo "carla" es un cliente DEMO: su historial viaja dentro del pkl y
+  // lo resuelve el servicio de IA.
+  const { productos_en_mesa = [], k = 3, probador = false, id_cliente = null } = req.body
+  const urlIA = process.env.URL_SERVICIO_IA || 'http://localhost:8000'
+  const idReal = id_cliente != null && /^\d+$/.test(String(id_cliente)) ? Number(id_cliente) : null
+  const claveDemo = id_cliente != null && idReal == null ? String(id_cliente) : null
+  const idsMesa = productos_en_mesa.map(Number).filter(n => Number.isInteger(n) && n > 0)
 
-    // Historial del cliente (lista con repetición por frecuencia; el modelo pesa el gusto).
-    // Cap de 30 por producto para no mandar payloads enormes de clientes muy activos.
-    // Clientes DEMO (clave tipo "carla") NO están en la base: su historial lo resuelve
-    // el servicio de IA desde el pkl. Solo se consulta la base para clientes REALES (id numérico).
-    let historial_cliente = null
-    if (id_cliente && Number.isFinite(Number(id_cliente))) {
-      try {
-        const filas = await prisma.$queryRawUnsafe(
-          `SELECT d.id_producto pid, COUNT(*) n
-           FROM detalle_comanda d
-           JOIN comanda c ON c.id_comanda = d.id_comanda
-           WHERE c.id_cliente = ${Number(id_cliente)} AND c.estado_despacho <> 'Cancelada'
-           GROUP BY d.id_producto`)
+  // Catálogo vivo: nombre de la categoría, stock actual y cortesías (que no se venden)
+  let catalogo = []
+  try {
+    catalogo = await prisma.producto.findMany({
+      select: {
+        id_producto: true, nombre_producto: true, precio_base: true, stock_actual: true,
+        es_cortesia: true, id_categoria: true, categoria: { select: { nombre_categoria: true } },
+      },
+    })
+  } catch (e) { console.warn('No se pudo leer el catálogo:', e.message) }
+  const porId = new Map(catalogo.map(p => [p.id_producto, p]))
+  const nombresCategoria = new Map(catalogo.map(p => [p.id_categoria, p.categoria?.nombre_categoria || '']))
+
+  // Historial del cliente: cuántas veces pidió cada producto. Al motor se le manda como
+  // lista con repetición; si es un cliente muy activo se escala a 100 como máximo por
+  // producto, conservando la proporción (antes se cortaba en 30 y los favoritos
+  // quedaban empatados).
+  const conteos = new Map()
+  let historial_cliente = null
+  if (idReal) {
+    try {
+      const filas = await prisma.$queryRawUnsafe(
+        `SELECT d.id_producto pid, COUNT(*) n
+         FROM detalle_comanda d
+         JOIN comanda c ON c.id_comanda = d.id_comanda
+         WHERE c.id_cliente = ${idReal} AND c.estado_despacho <> 'Cancelada'
+         GROUP BY d.id_producto`)
+      for (const f of filas) conteos.set(Number(f.pid), Number(f.n))
+      if (conteos.size) {
+        const tope = Math.max(...conteos.values())
+        const escala = tope > 100 ? 100 / tope : 1
         historial_cliente = []
-        for (const f of filas) {
-          const veces = Math.min(Number(f.n), 30)
-          for (let i = 0; i < veces; i++) historial_cliente.push(Number(f.pid))
+        for (const [pid, n] of conteos) {
+          const veces = Math.max(1, Math.round(n * escala))
+          for (let i = 0; i < veces; i++) historial_cliente.push(pid)
         }
-        if (!historial_cliente.length) historial_cliente = null // cliente nuevo: arranque en frío
-      } catch (e) { console.warn('No se pudo leer historial del cliente:', e.message) }
-    }
+      }
+    } catch (e) { console.warn('No se pudo leer historial del cliente:', e.message) }
+  }
 
-    // Fecha/hora actual en formato "YYYY-MM-DD HH:mm:ss" (contexto del modelo)
-    const ahora = new Date()
-    const p = (n) => String(n).padStart(2, '0')
-    const fecha_hora = `${ahora.getFullYear()}-${p(ahora.getMonth() + 1)}-${p(ahora.getDate())} ` +
-                       `${p(ahora.getHours())}:${p(ahora.getMinutes())}:${p(ahora.getSeconds())}`
+  // Stock vivo para el motor (su inventario es el del último entrenamiento). Las
+  // cortesías van en 0 para que nunca salgan como sugerencia.
+  const stock = {}
+  for (const p of catalogo) stock[p.id_producto] = p.es_cortesia ? 0 : Math.max(0, Number(p.stock_actual) || 0)
 
+  // Hora de Bolivia: el servidor de Render corre en UTC y la hora es una variable del modelo
+  const ahora = hoyBolivia()
+  const p2 = (n) => String(n).padStart(2, '0')
+  const fecha_hora = `${ahora.getFullYear()}-${p2(ahora.getMonth() + 1)}-${p2(ahora.getDate())} ` +
+                     `${p2(ahora.getHours())}:${p2(ahora.getMinutes())}:${p2(ahora.getSeconds())}`
+
+  let datos
+  try {
     const respuesta = await fetch(`${urlIA}/recomendar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productos_en_mesa, fecha_hora, k, historial_cliente, cliente: id_cliente || null }),
+      body: JSON.stringify({ productos_en_mesa: idsMesa, fecha_hora, k, stock, historial_cliente, cliente: claveDemo }),
       signal: AbortSignal.timeout(8000), // tolera un arranque lento de la IA sin bloquear demasiado
     })
-
     if (!respuesta.ok) throw new Error(`IA respondió ${respuesta.status}`)
-    const datos = await respuesta.json()
+    datos = await respuesta.json()
+  } catch (error) {
+    console.error('Recomendaciones IA no disponibles:', error.message)
+    // Respaldo: con un cliente identificado se aplica la regla de su perfil desde la
+    // base. Sin cliente no hay de dónde sacar nada honesto y se devuelve vacío.
+    const perfil = conteos.size ? perfilDelCliente(conteos, porId, nombresCategoria) : []
+    const recs = perfil.length ? sugerirPorPerfil(conteos, porId, perfil, new Set(idsMesa), k) : []
+    if (!recs.length) {
+      return res.json({ recomendaciones: [], promociones: [], error: 'Servicio de recomendación no disponible' })
+    }
+    datos = { recomendaciones: recs, promociones: [], perfil_cliente: perfil, respaldo: true }
+  }
 
+  try {
     // ---- Enriquecer con el "PORQUÉ" (datos reales de co-compra) y registrar
     //      cada sugerencia para medir su efectividad real (aceptada o no) ----
-    const recs = datos.recomendaciones || []
-    const idsMesa = productos_en_mesa.map(Number).filter(n => Number.isInteger(n) && n > 0)
-    const idsRec = recs.map(r => Number(r.id_producto)).filter(n => Number.isInteger(n) && n > 0)
+    const recs = (datos.recomendaciones || []).filter(r => !porId.get(Number(r.id_producto))?.es_cortesia)
+    datos.recomendaciones = recs
+    // Nombre vigente de la categoría (el del motor puede estar desactualizado)
+    for (const r of recs) {
+      const prod = porId.get(Number(r.id_producto))
+      if (prod) { r.id_categoria = prod.id_categoria; r.categoria = nombresCategoria.get(prod.id_categoria) || r.categoria }
+      if (r.motivo_cliente) {
+        r.motivo_cliente.categoria = nombresCategoria.get(r.motivo_cliente.id_categoria) || r.motivo_cliente.categoria
+        // El motor recibe el historial escalado: las veces reales salen de la base
+        if (conteos.size) r.motivo_cliente.veces = conteos.get(Number(r.id_producto)) || 0
+      }
+    }
+    for (const c of datos.perfil_cliente || []) c.categoria = nombresCategoria.get(c.id_categoria) || c.categoria
 
-    let pares = [], totalesMesa = [], nombresMesa = []
+    const idsRec = recs.map(r => Number(r.id_producto)).filter(n => Number.isInteger(n) && n > 0)
+    let pares = [], totalesMesa = []
     if (idsMesa.length && idsRec.length) {
       try {
-        [pares, totalesMesa, nombresMesa] = await Promise.all([
+        [pares, totalesMesa] = await Promise.all([
           prisma.$queryRawUnsafe(`
             SELECT d1.id_producto pm, d2.id_producto pr, COUNT(DISTINCT d1.id_comanda) juntos
             FROM detalle_comanda d1
@@ -601,31 +712,35 @@ router.post('/', verificarToken, async (req, res) => {
           prisma.$queryRawUnsafe(`
             SELECT id_producto pm, COUNT(DISTINCT id_comanda) total
             FROM detalle_comanda WHERE id_producto IN (${idsMesa.join(',')}) GROUP BY pm`),
-          prisma.producto.findMany({ where: { id_producto: { in: idsMesa } }, select: { id_producto: true, nombre_producto: true } })
         ])
       } catch (e) { console.warn('No se pudo calcular co-compra:', e.message) }
     }
     const totalPorMesa = Object.fromEntries(totalesMesa.map(t => [Number(t.pm), Number(t.total)]))
-    const nombrePorMesa = Object.fromEntries(nombresMesa.map(p => [p.id_producto, p.nombre_producto]))
 
     for (const r of recs) {
       const razones = []
-      // 1) Evidencia histórica: con qué producto de la mesa se lleva mejor
+      // 1) PERFIL DEL CLIENTE: entró por ser de las categorías que más consume
+      const m = r.motivo_cliente
+      if (m) {
+        const pct = Math.round(Number(m.cuota_categoria || 0) * 100)
+        razones.push(m.veces > 0
+          ? `Lo pidió ${m.veces} ${m.veces === 1 ? 'vez' : 'veces'}. ${m.categoria} es el ${pct}% de su consumo`
+          : `${m.categoria} es el ${pct}% de su consumo`)
+      } else if (Number(r.afinidad_cliente || 0) >= 0.15) {
+        razones.push(`Es de lo que este cliente más pide (coincide ${Math.round(Number(r.afinidad_cliente) * 100)}% con su gusto)`)
+      }
+      // 2) Evidencia histórica: con qué producto de la mesa se lleva mejor
       const susParejas = pares.filter(p => Number(p.pr) === Number(r.id_producto))
       if (susParejas.length) {
         const mejor = susParejas.reduce((a, b) => Number(b.juntos) > Number(a.juntos) ? b : a)
         const juntos = Number(mejor.juntos)
         const total = totalPorMesa[Number(mejor.pm)] || 0
-        const nombreMesa = nombrePorMesa[Number(mejor.pm)] || 'lo pedido'
+        const nombreMesa = porId.get(Number(mejor.pm))?.nombre_producto || 'lo pedido'
         if (juntos > 0 && total > 0) {
           razones.push(`Acompañó a ${nombreMesa} en ${juntos} pedidos reales (${Math.round(juntos / total * 100)}% de sus mesas)`)
         }
       }
-      // 1.5) PERSONALIZACIÓN: si es un producto que ESE cliente suele pedir, ese es el
-      // motivo más relevante (y da un número coherente aunque la mesa esté vacía).
-      const afc = Number(r.afinidad_cliente || 0)
-      if (afc >= 0.15) razones.unshift(`Es de lo que este cliente más pide (coincide ${Math.round(afc * 100)}% con su gusto)`)
-      // 2) Factores del modelo (hora, margen, promoción)
+      // 3) Factores del modelo (hora, margen, promoción)
       const f = r.factores || {}
       if (f.temporal >= 1.05) razones.push('Se vende fuerte a esta hora del día')
       else if (f.temporal && f.temporal <= 0.95) razones.push('Fuera de su horario más fuerte')
@@ -634,14 +749,14 @@ router.post('/', verificarToken, async (req, res) => {
       // La probabilidad ABSOLUTA es diminuta con la mesa vacía (arranque en frío): el
       // modelo no tiene con qué "engancharlo" todavía. Solo se muestra cuando es
       // significativa (>=0.5%); en frío, una razón honesta en su lugar.
-      if (r.probabilidad >= 0.005) {
+      if (r.probabilidad != null && r.probabilidad >= 0.005) {
         razones.push(`El modelo estima ${(r.probabilidad * 100).toFixed(0)}% de probabilidad de que lo acepten`)
       } else if (!razones.length) {
         razones.push('Sugerido para empezar la mesa, por el momento y su popularidad')
       }
       r.razones = razones
 
-      // 3) Registrar la sugerencia mostrada (para el reporte de efectividad)
+      // 4) Registrar la sugerencia mostrada (para el reporte de efectividad)
       if (probador) continue
       try {
         const reg = await prisma.sugerencia_ia.create({
@@ -658,8 +773,7 @@ router.post('/', verificarToken, async (req, res) => {
 
     res.json(datos)
   } catch (error) {
-    // Degradación elegante: si la IA no está disponible, se devuelve vacío
-    // (la toma de pedidos sigue funcionando, solo sin sugerencias).
+    // Degradación elegante: la toma de pedidos sigue funcionando, solo sin sugerencias
     console.error('Recomendaciones IA no disponibles:', error.message)
     res.json({ recomendaciones: [], promociones: [], error: 'Servicio de recomendación no disponible' })
   }
