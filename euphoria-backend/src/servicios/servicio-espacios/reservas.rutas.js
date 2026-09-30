@@ -322,9 +322,13 @@ router.post('/cortesias/:id/elegir', soloRoles('Cliente'), async (req, res) => {
     // La notificación de "elige tu combo" ya cumplió su función
     await prisma.notificacion.updateMany({ where: { id_usuario: req.usuario.id, tipo: 'cortesia', leida: false }, data: { leida: true } })
     if (global.io && yaAdentro) global.io.emit('nueva_comanda', { id_comanda: comanda.id_comanda })
+    // El mesero de la mesa deja de ver "cortesía sin elegir"
+    if (global.io) global.io.emit('pedido_confirmado', { id_comanda: comanda.id_comanda, id_mesa: cort.id_mesa })
     emitirRecurso('reservas', { id_cliente: req.usuario.id })
     res.json({
-      mensaje: yaAdentro ? 'Combo elegido: la barra ya lo está preparando.' : 'Combo elegido: te lo llevamos a la mesa cuando ingreses.',
+      mensaje: yaAdentro
+        ? 'Combo elegido: la barra ya lo está preparando.'
+        : (modo_entrega === 'barra' ? 'Combo elegido: lo retiras en la barra cuando ingreses.' : 'Combo elegido: te lo llevamos a la mesa cuando ingreses.'),
       id_comanda: comanda.id_comanda,
       programado: !yaAdentro,
       combo: combo.nombre_producto,

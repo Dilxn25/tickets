@@ -103,7 +103,7 @@
               <svg v-if="c.modo_entrega === 'barra'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="8" width="18" height="4" rx="1"></rect><line x1="6" y1="12" x2="6" y2="19"></line><line x1="18" y1="12" x2="18" y2="19"></line></svg>
               <b v-if="c.modo_entrega === 'barra'">{{ c.cliente }}</b>
-              <b v-else>Mesa {{ c.mesa }}<template v-if="c.mesero"> · {{ primerNombre(c.mesero) }}</template></b>
+              <b v-else>{{ c.mesa ? 'Mesa ' + c.mesa : 'Barra' }}<template v-if="c.mesero"> · {{ primerNombre(c.mesero) }}</template></b>
             </span>
             <span class="b2-listo-id">#{{ c.id_comanda }}<span v-if="c.es_cortesia" class="b2-cortesia mini">Cortesía</span></span>
           </header>

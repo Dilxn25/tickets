@@ -231,15 +231,30 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
     // El cliente ve su ticket actualizarse en vivo ("2 de 4 ya ingresaron")
     emitirRecurso('reservas', { id_cliente: entrada.id_usuario })
 
-    // R5.3: al ingresar, sus pedidos PROGRAMADOS de esta entrada despiertan y
-    // recién entran al tablero de la barra.
+    // R5.3: al ingresar, sus pedidos PROGRAMADOS de esta entrada despiertan. Los que
+    // ya dicen cómo recibirlos (la cortesía se elige con "a la mesa" o "en barra")
+    // pasan a la barra. Los pagados sin esa elección esperan: el cliente la hace en
+    // "Mis pedidos" o el mesero se acerca, le pregunta y la confirma por él.
     try {
       const activados = await prisma.comanda.updateMany({
-        where: { id_entrada: entrada.id_entrada, estado_despacho: 'Programado' },
+        where: { id_entrada: entrada.id_entrada, estado_despacho: 'Programado', modo_entrega: { not: null } },
         data: { estado_despacho: 'Pendiente' },
       })
       if (activados.count > 0 && global.io) global.io.emit('nueva_comanda', { id_cliente: entrada.id_usuario })
+      const porConfirmar = await prisma.comanda.count({
+        where: { id_entrada: entrada.id_entrada, estado_despacho: 'Programado', modo_entrega: null },
+      })
+      if (porConfirmar > 0) {
+        await notificar(entrada.id_usuario, {
+          tipo: 'pedido',
+          titulo: 'Tus pedidos te esperan',
+          mensaje: `Ya estás adentro. Tienes ${porConfirmar} ${porConfirmar === 1 ? 'pedido pagado' : 'pedidos pagados'}: dinos si te los llevamos o pasas por la barra.`,
+          url: '/cliente/pedidos',
+        })
+      }
     } catch (e) { console.warn('No se pudieron activar pedidos programados:', e.message) }
+    // El mesero de la mesa se entera de que su cliente llegó (con lo que tenga pendiente)
+    if (global.io && entrada.id_mesa) global.io.emit('cliente_ingreso', { id_mesa: entrada.id_mesa, id_cliente: entrada.id_usuario })
 
     // Combo de cortesía sin elegir: ahora que ya está adentro, se le recuerda.
     try {
@@ -377,24 +392,89 @@ router.get('/flujo/:idEvento', soloRoles('Recepcionista', 'Administrador'), asyn
     let totalIn = 0, totalOut = 0
     for (const m of movimientos) {
       const h = claveHora(m.fecha_hora)
-      if (!porHora.has(h)) porHora.set(h, { hora: h, ingresos: 0, salidas: 0 })
+      // los movimientos llegan en orden: la primera vez que aparece una hora fija su lugar
+      if (!porHora.has(h)) porHora.set(h, { hora: h, ingresos: 0, salidas: 0, _orden: porHora.size })
       const fila = porHora.get(h)
       const n = Number(m.cantidad || 1)
       if (m.tipo_movimiento === 'salida') { fila.salidas += n; totalOut += n }
       else { fila.ingresos += n; totalIn += n }
     }
 
-    // Orden cronológico de una noche: 18, 19… 23, 00, 01… (no 00,01,…,23).
-    const orden = (h) => (Number(h) < 12 ? Number(h) + 24 : Number(h))
-    const horas = [...porHora.values()].sort((a, b) => orden(a.hora) - orden(b.hora))
+    // Orden cronológico REAL (por la hora del primer movimiento): sirve igual para una
+    // noche (22, 23, 00, 01…) que para un evento de día. Suponer "noche" ponía las 12
+    // antes que las 11 y el pico salía en 0.
+    const horas = [...porHora.values()].sort((a, b) => a._orden - b._orden)
     let dentro = 0
-    for (const f of horas) { dentro += f.ingresos - f.salidas; f.dentro = Math.max(0, dentro) }
+    for (const f of horas) { dentro += f.ingresos - f.salidas; f.dentro = Math.max(0, dentro); delete f._orden }
     const pico = horas.reduce((a, b) => (b.dentro > (a?.dentro ?? -1) ? b : a), null)
 
     res.json({ horas, pico, total_ingresos: totalIn, total_salidas: totalOut })
   } catch (error) {
     console.error('Error en flujo horario de aforo:', error)
     res.status(500).json({ error: 'No se pudo calcular el flujo por hora' })
+  }
+})
+
+// GET /api/aforo/estadias/:idEvento — cuánto se quedó cada grupo: a qué hora llegó
+// (su primer ingreso en recepción), a qué hora se fue (cuando el mesero o recepción
+// marcó que se retiraron), qué mesero lo atendió y cuánto consumió. Es el dato que
+// le dice al local cuánto dura una mesa y cuándo rota.
+router.get('/estadias/:idEvento', soloRoles('Recepcionista', 'Administrador'), async (req, res) => {
+  try {
+    const id_evento = Number(req.params.idEvento)
+    const entradas = await prisma.entrada.findMany({
+      where: { zona: { id_evento }, registro_aforo: { some: {} } },
+      select: {
+        id_entrada: true, id_usuario: true, id_mesa: true, cantidad_personas: true,
+        usuario: { select: { nombres: true, apellidos: true } },
+        mesa_espacio: { select: { numero_nombre: true } },
+        zona: { select: { nombre_zona: true } },
+        registro_aforo: { select: { tipo_movimiento: true, fecha_hora: true }, orderBy: { fecha_hora: 'asc' } },
+        asignacion_mesa: { select: { usuario: { select: { nombres: true, apellidos: true } } }, orderBy: { fecha_asignacion: 'desc' }, take: 1 },
+      },
+    })
+    const filas = []
+    for (const e of entradas) {
+      const ingresos = e.registro_aforo.filter(r => r.tipo_movimiento !== 'salida')
+      const salidas = e.registro_aforo.filter(r => r.tipo_movimiento === 'salida')
+      const llegada = ingresos[0]?.fecha_hora || null
+      const salida = salidas.length ? salidas[salidas.length - 1].fecha_hora : null
+      const consumo = await prisma.detalle_comanda.aggregate({
+        _sum: { subtotal: true },
+        where: {
+          comanda: {
+            id_cliente: e.id_usuario,
+            estado_despacho: { notIn: ['Cancelada', 'Reembolsada'] },
+            OR: [{ id_entrada: e.id_entrada }, ...(e.id_mesa ? [{ id_mesa: e.id_mesa }] : [])],
+            ...(llegada ? { fecha_registro: { gte: new Date(new Date(llegada).getTime() - 12 * 3600 * 1000) } } : {}),
+          },
+        },
+      })
+      const mesero = e.asignacion_mesa[0]?.usuario
+      filas.push({
+        id_entrada: e.id_entrada,
+        cliente: `${e.usuario.nombres} ${e.usuario.apellidos || ''}`.trim(),
+        mesa: e.mesa_espacio?.numero_nombre || null,
+        zona: e.zona?.nombre_zona || null,
+        personas: e.cantidad_personas,
+        llegada,
+        salida,
+        minutos: llegada && salida ? Math.max(0, Math.round((new Date(salida) - new Date(llegada)) / 60000)) : null,
+        mesero: mesero ? `${mesero.nombres} ${mesero.apellidos || ''}`.trim() : null,
+        consumo: Number(consumo._sum.subtotal || 0),
+      })
+    }
+    filas.sort((a, b) => new Date(a.llegada || 0) - new Date(b.llegada || 0))
+    const cerradas = filas.filter(f => f.minutos != null)
+    res.json({
+      estadias: filas,
+      promedio_minutos: cerradas.length ? Math.round(cerradas.reduce((a, f) => a + f.minutos, 0) / cerradas.length) : null,
+      adentro: filas.filter(f => !f.salida).length,
+      se_fueron: cerradas.length,
+    })
+  } catch (error) {
+    console.error('Error en estadías:', error)
+    res.status(500).json({ error: 'No se pudo calcular las estadías' })
   }
 })
 
@@ -671,11 +751,21 @@ router.post('/mesa/:idMesa/cerrar-atencion', soloRoles('Mesero', 'Bartender', 'R
     const idMesa = Number(req.params.idMesa)
     if (!idMesa) return res.status(400).json({ error: 'Mesa inválida' })
 
-    // Asignaciones activas de la mesa (con su entrada: quién estaba sentado ahí)
-    const activas = await prisma.asignacion_mesa.findMany({
+    // Quién estaba sentado ahí: las entradas de las asignaciones activas y, además,
+    // cualquier entrada de esa mesa con gente adentro. Sin lo segundo, una mesa
+    // ocupada sin mesero asignado (ingreso en vivo en recepción) se liberaba sin
+    // registrar la salida: el aforo seguía contándolos y el reporte no tenía hora.
+    const asignadas = await prisma.asignacion_mesa.findMany({
       where: { id_mesa: idMesa, estado: { in: ['asignada', 'atendiendo'] } },
       include: { entrada: { select: { id_entrada: true, id_zona: true, cantidad_ingresada: true } } },
     })
+    const adentro = await prisma.entrada.findMany({
+      where: { id_mesa: idMesa, cantidad_ingresada: { gt: 0 } },
+      select: { id_entrada: true, id_zona: true, cantidad_ingresada: true },
+    })
+    const porEntrada = new Map()
+    for (const e of [...asignadas.map(a => a.entrada).filter(Boolean), ...adentro]) porEntrada.set(e.id_entrada, e)
+    const activas = [...porEntrada.values()].map(entrada => ({ entrada }))
 
     const ahora = new Date()
     const zonasTocadas = new Set()

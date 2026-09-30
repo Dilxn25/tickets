@@ -833,6 +833,7 @@ router.post('/crear', verificarToken, upload.single('comprobante'), async (req, 
       return res.status(201).json({
         mensaje: 'Cobro de billetera exitoso',
         id_comanda: idComandaBilletera, // el front necesita el id del pedido creado
+        estado: estadoInicial,           // 'Programado' = pagado, espera a que el cliente ingrese
         saldo_restante: saldo_nuevo,
         nombres_cliente: billetera.usuario.nombres,
         ...(premioDescuento > 0 && {
@@ -1629,6 +1630,38 @@ router.get('/mis-pedidos', verificarToken, async (req, res) => {
   }
 })
 
+// Define cómo se recibe un pedido pagado y, si estaba esperando (Programado) con el
+// cliente ya adentro, lo manda a la barra. "A la mesa" lo deja a nombre del mesero
+// de esa mesa, para que a él le llegue el aviso de "listo" y sepa a dónde llevarlo.
+async function confirmarEntrega(c, modo, idMeseroQueConfirma = null) {
+  let ent = null
+  if (c.id_entrada) {
+    ent = await prisma.entrada.findUnique({ where: { id_entrada: c.id_entrada }, select: { cantidad_ingresada: true, id_mesa: true } })
+    if ((ent?.cantidad_ingresada || 0) <= 0) {
+      const e = new Error('Podrás elegir la entrega cuando ingreses al evento.'); e.status = 403; throw e
+    }
+  }
+  const data = { modo_entrega: modo }
+  if (c.estado_despacho === 'Programado') { data.estado_despacho = 'Pendiente'; data.fecha_registro = new Date() }
+  if (modo === 'llevar' && ent?.id_mesa) {
+    data.id_mesa = ent.id_mesa
+    const asig = await prisma.asignacion_mesa.findFirst({
+      where: { id_mesa: ent.id_mesa, estado: { in: ['asignada', 'atendiendo'] } },
+      orderBy: { fecha_asignacion: 'desc' },
+      select: { id_mesero: true },
+    })
+    const idMesero = idMeseroQueConfirma || asig?.id_mesero
+    if (idMesero) data.id_mesero = idMesero
+  }
+  await prisma.comanda.update({ where: { id_comanda: c.id_comanda }, data })
+  if (global.io) {
+    if (data.estado_despacho === 'Pendiente') global.io.emit('nueva_comanda', { id_comanda: c.id_comanda, id_cliente: c.id_cliente })
+    global.io.emit('pedido_confirmado', { id_comanda: c.id_comanda, id_mesa: data.id_mesa || ent?.id_mesa || null })
+  }
+  emitirRecurso('comandas', { id_cliente: c.id_cliente })
+  return { ok: true, modo, a_barra: data.estado_despacho === 'Pendiente' }
+}
+
 // POST /api/comandas/:id/modo-entrega — el cliente define cómo recibir un pedido
 // que pagó antes de ingresar. Solo si ya ingresó al evento del pedido.
 router.post('/:id/modo-entrega', verificarToken, async (req, res) => {
@@ -1636,19 +1669,93 @@ router.post('/:id/modo-entrega', verificarToken, async (req, res) => {
     const id = parseInt(req.params.id)
     const modo = ['barra', 'llevar'].includes(req.body.modo) ? req.body.modo : null
     if (!modo) return res.status(400).json({ error: 'Elige recoger en barra o que te lo lleven.' })
-    const c = await prisma.comanda.findUnique({ where: { id_comanda: id }, select: { id_cliente: true, id_entrada: true, estado_despacho: true } })
+    const c = await prisma.comanda.findUnique({ where: { id_comanda: id }, select: { id_comanda: true, id_cliente: true, id_entrada: true, estado_despacho: true } })
     if (!c || c.id_cliente !== req.usuario.id) return res.status(404).json({ error: 'Pedido no encontrado' })
     if (['Cancelada', 'Reembolsada', 'Completada'].includes(c.estado_despacho)) return res.status(409).json({ error: 'Este pedido ya se cerró.' })
-    // Debe haber ingresado (su entrada vinculada tiene gente dentro)
-    if (c.id_entrada) {
-      const ent = await prisma.entrada.findUnique({ where: { id_entrada: c.id_entrada }, select: { cantidad_ingresada: true } })
-      if ((ent?.cantidad_ingresada || 0) <= 0) return res.status(403).json({ error: 'Podrás elegir la entrega cuando ingreses al evento.' })
-    }
-    await prisma.comanda.update({ where: { id_comanda: id }, data: { modo_entrega: modo } })
-    res.json({ ok: true, modo })
+    res.json(await confirmarEntrega(c, modo))
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message })
     console.error('Error modo-entrega:', e)
     res.status(500).json({ error: 'No se pudo definir la entrega' })
+  }
+})
+
+// GET /api/comandas/mis-por-confirmar?evento= — clientes de MIS mesas que ya entraron
+// y tienen algo pagado esperando: pedidos anticipados sin decir cómo recibirlos y el
+// combo de cortesía sin elegir. El mesero se acerca, pregunta y confirma por ellos.
+router.get('/mis-por-confirmar', verificarToken, async (req, res) => {
+  try {
+    const idEvento = Number(req.query.evento) || null
+    const mias = await prisma.asignacion_mesa.findMany({
+      where: {
+        id_mesero: req.usuario.id,
+        estado: { in: ['asignada', 'atendiendo'] },
+        ...(idEvento ? { mesa_espacio: { zona: { id_evento: idEvento } } } : {}),
+      },
+      select: { id_mesa: true },
+    })
+    if (!mias.length) return res.json([])
+    const entradas = await prisma.entrada.findMany({
+      where: { id_mesa: { in: mias.map(m => m.id_mesa) }, cantidad_ingresada: { gt: 0 } },
+      select: {
+        id_entrada: true, id_mesa: true, cortesia_estado: true,
+        usuario: { select: { id_usuario: true, nombres: true, apellidos: true, es_vip: true } },
+        mesa_espacio: { select: { numero_nombre: true } },
+        comanda: {
+          where: { estado_despacho: 'Programado', modo_entrega: null },
+          select: {
+            id_comanda: true, origen: true,
+            detalle_comanda: { select: { cantidad: true, subtotal: true, producto: { select: { nombre_producto: true } } } },
+          },
+        },
+      },
+    })
+    res.json(entradas
+      .filter(e => e.cortesia_estado === 'pendiente' || e.comanda.length)
+      .map(e => ({
+        id_entrada: e.id_entrada,
+        id_mesa: e.id_mesa,
+        mesa: e.mesa_espacio?.numero_nombre || null,
+        id_cliente: e.usuario?.id_usuario || null,
+        cliente: e.usuario ? `${e.usuario.nombres} ${e.usuario.apellidos || ''}`.trim() : 'Cliente',
+        es_vip: e.usuario?.es_vip || false,
+        cortesia_pendiente: e.cortesia_estado === 'pendiente',
+        pedidos: e.comanda.map(c => ({
+          id_comanda: c.id_comanda,
+          es_cortesia: c.origen === 'cortesia',
+          total: c.detalle_comanda.reduce((a, d) => a + Number(d.subtotal || 0), 0),
+          items: c.detalle_comanda.map(d => ({ nombre: d.producto?.nombre_producto || '', cantidad: d.cantidad })),
+        })),
+      })))
+  } catch (error) {
+    console.error('Error mis-por-confirmar:', error)
+    res.status(500).json({ error: 'Error al obtener los pedidos por confirmar' })
+  }
+})
+
+// POST /api/comandas/:id/confirmar-mesero { modo } — el mesero de la mesa confirma,
+// después de preguntarle al cliente, que le preparen su pedido pagado.
+router.post('/:id/confirmar-mesero', verificarToken, soloRoles('Mesero', 'Administrador'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id)
+    const modo = ['barra', 'llevar'].includes(req.body.modo) ? req.body.modo : null
+    if (!modo) return res.status(400).json({ error: 'Indica si lo llevas a la mesa o lo recoge en barra.' })
+    const c = await prisma.comanda.findUnique({
+      where: { id_comanda: id },
+      select: { id_comanda: true, id_cliente: true, id_entrada: true, estado_despacho: true, entrada: { select: { id_mesa: true } } },
+    })
+    if (!c || !c.entrada?.id_mesa) return res.status(404).json({ error: 'Pedido no encontrado' })
+    if (c.estado_despacho !== 'Programado') return res.status(409).json({ error: 'Este pedido ya está en marcha.' })
+    const esMia = await prisma.asignacion_mesa.findFirst({
+      where: { id_mesa: c.entrada.id_mesa, id_mesero: req.usuario.id, estado: { in: ['asignada', 'atendiendo'] } },
+      select: { id_asignacion: true },
+    })
+    if (!esMia && req.usuario.rol !== 'Administrador') return res.status(403).json({ error: 'Esa mesa no está a tu cargo.' })
+    res.json(await confirmarEntrega(c, modo, req.usuario.id))
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message })
+    console.error('Error confirmar-mesero:', e)
+    res.status(500).json({ error: 'No se pudo confirmar el pedido' })
   }
 })
 

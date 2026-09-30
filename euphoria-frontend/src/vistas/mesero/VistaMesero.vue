@@ -229,6 +229,7 @@
         <!-- ATENCIÓN (celular): primero a quién se atiende. Al elegir la mesa se
              identifica solo al cliente que la reservó y sus sugerencias salen al toque. -->
         <div class="atencion-movil">
+          <PorConfirmar :lista="porConfirmar" :procesando="confirmandoPedido" :nuevos="porConfirmarNuevos" @confirmar="confirmarPorCliente" />
           <!-- Mesas que recepción le asignó: a la vista, con el nombre del cliente -->
           <div v-if="misMesas.length" class="mis-mesas-movil">
             <span class="mmm-tit">Tus mesas</span>
@@ -260,6 +261,11 @@
               <span class="atm-nombre">{{ clienteSeleccionado ? `${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos || ''}`.trim() : 'Sin cliente' }}</span>
             </span>
             <span class="atm-cambiar">Cambiar</span>
+          </button>
+          <!-- El grupo se fue: el mesero libera su mesa (queda libre y se registra la salida) -->
+          <button v-if="asignacionActual" type="button" class="atm-salida" @click="cerrarAtencionMesa(asignacionActual)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Se retiraron · liberar {{ asignacionActual.mesa }}
           </button>
 
           <!-- Sugerencias a la vista, sin tener que abrir la orden -->
@@ -531,23 +537,8 @@
           <p v-else class="mm-vacia">Aún no tienes mesas asignadas en este evento.</p>
         </div>
 
-        <!-- CORTESÍAS SIN RECLAMAR: clientes de tus mesas que todavía no eligieron su combo.
-             Sirve para acercarse y preguntarles; hasta que elijan, la barra no ve nada. -->
-        <div v-if="cortesiasPendientes.length" class="cort-pend">
-          <div class="cp-titulo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-            <span>Cortesías sin reclamar</span>
-            <span class="cp-n">{{ cortesiasPendientes.length }}</span>
-          </div>
-          <p class="cp-hint">Pregúntales qué combo quieren y si se los llevas o pasan por la barra.</p>
-          <div class="cp-lista">
-            <div v-for="c in cortesiasPendientes" :key="c.id_entrada" class="cp-item">
-              <strong>{{ c.mesa || 'Mesa' }}</strong>
-              <span class="cp-cli">{{ c.cliente }}</span>
-              <span v-if="c.es_vip" class="cp-vip">VIP</span>
-            </div>
-          </div>
-        </div>
+        <!-- Clientes que llegaron con algo pagado esperando (pedidos y cortesía) -->
+        <PorConfirmar class="solo-escritorio" :lista="porConfirmar" :procesando="confirmandoPedido" :nuevos="porConfirmarNuevos" @confirmar="confirmarPorCliente" />
 
         <!-- SELECTOR DE MESA -->
         <div class="selector-mesa">
@@ -1165,6 +1156,7 @@ import BaseTelefono from '@/componentes/comunes/BaseTelefono.vue'
 import CapturaCamara from '@/componentes/comunes/CapturaCamara.vue'
 import { useNotificaciones } from '@/tiendas/tienda-notificaciones.js'
 import PuntoEstado from '@/componentes/comunes/PuntoEstado.vue'
+import PorConfirmar from './PorConfirmar.vue'
 import LeyendaEstados from '@/componentes/comunes/LeyendaEstados.vue'
 import { semaforoDe } from '@/utilidades/estado-pedido.js'
 const notif = useNotificaciones()
@@ -1231,6 +1223,8 @@ const pasoAtencion = ref('mesa')
 const busquedaMesaHoja = ref('')
 const inputClienteHoja = ref(null)
 const idsMisMesas = computed(() => new Set(misMesas.value.map(m => m.id_mesa)))
+// La mesa elegida, si es una de las mías (para poder liberarla cuando se retiran)
+const asignacionActual = computed(() => misMesas.value.find(m => m.id_mesa === mesaSeleccionada.value?.id_mesa) || null)
 const mesasHoja = computed(() => {
   const q = busquedaMesaHoja.value.trim().toLowerCase()
   return mesas.value
@@ -1292,12 +1286,28 @@ async function cargarMisMesas() {
 // Cortesías que los clientes de este mesero todavía no eligieron. El circuito es:
 // el mesero pregunta -> el cliente elige combo y modo de entrega -> recién ahí la barra
 // lo ve en su cola. Por eso el mesero necesita saber a quién le falta.
-const cortesiasPendientes = ref([])
+// Clientes de mis mesas que ya entraron con algo pagado esperando: pedidos
+// anticipados sin decir cómo recibirlos y la cortesía sin elegir.
+const porConfirmar = ref([])
+const porConfirmarNuevos = ref(new Set())
+const confirmandoPedido = ref(null)
 async function cargarCortesiasPendientes() {
   try {
     const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
-    cortesiasPendientes.value = await clienteHttp.get(`/comandas/mis-cortesias${q}`)
-  } catch { cortesiasPendientes.value = [] }
+    porConfirmar.value = await clienteHttp.get(`/comandas/mis-por-confirmar${q}`)
+  } catch { porConfirmar.value = [] }
+}
+// El mesero preguntó y confirma por el cliente: el pedido pasa a la barra
+async function confirmarPorCliente(p, modo) {
+  if (confirmandoPedido.value) return
+  confirmandoPedido.value = p.id_comanda
+  try {
+    await clienteHttp.post(`/comandas/${p.id_comanda}/confirmar-mesero`, { modo })
+    notif.exito(modo === 'llevar' ? 'Enviado a la barra. Te avisamos cuando esté listo para llevar.' : 'Enviado a la barra. El cliente lo recoge ahí.')
+    await cargarCortesiasPendientes()
+  } catch (e) {
+    notif.error(e?.error || 'No se pudo confirmar el pedido.')
+  } finally { confirmandoPedido.value = null }
 }
 
 // Elegir una mesa asignada = seleccionarla en la orden (y su cliente si tiene reserva)
@@ -1388,9 +1398,9 @@ async function cargarReparto() {
 // para el siguiente (rotación de grupos). Pide confirmación por ser irreversible.
 async function cerrarAtencionMesa(m) {
   const ok = await notif.confirmar({
-    titulo: `¿Cerrar la ${m.mesa || 'mesa'}?`,
-    mensaje: 'El grupo se fue y la mesa queda libre para el siguiente. Esta acción no se deshace.',
-    textoConfirmar: 'Sí, cerrar mesa',
+    titulo: `¿Se retiraron de la ${m.mesa || 'mesa'}?`,
+    mensaje: `${m.cliente ? m.cliente + ' y su grupo dejan' : 'El grupo deja'} la mesa: queda libre para el siguiente y se registra su hora de salida.`,
+    textoConfirmar: 'Sí, se retiraron',
   })
   if (!ok) return
   try {
@@ -1400,7 +1410,7 @@ async function cerrarAtencionMesa(m) {
     await cargarReparto()
     notif.exito(`${m.mesa || 'Mesa'} libre para el siguiente grupo`)
   } catch (e) {
-    notif.error(e?.response?.data?.error || 'No se pudo cerrar la mesa')
+    notif.error(e?.error || e?.response?.data?.error || 'No se pudo liberar la mesa')
   }
 }
 
@@ -1418,7 +1428,7 @@ async function salirDelEvento() {
     eventoActivoId.value = null
     localStorage.removeItem('euphoria_mesero_evento')
     misMesas.value = []
-    cortesiasPendientes.value = []
+    porConfirmar.value = []
     reparto.value = null
     await cargarEventosActivos()
   } catch (e) {
@@ -2338,13 +2348,31 @@ onMounted(() => {
       cargarMisMesas() // si me la quitaron para dársela a otro, desaparece de mis mesas
       return
     }
-    await cargarMisMesas(); cargarCortesiasPendientes(); cargarMesas()
+    await cargarMisMesas(); await cargarCortesiasPendientes(); cargarMesas()
     const m = misMesas.value.find(x => x.id_mesa === data.id_mesa)
-    agregarToast(m ? `Te asignaron la mesa ${m.mesa}${m.cliente ? ' · ' + m.cliente : ''}` : 'Te asignaron una nueva mesa',
+    // Si el cliente de esa mesa ya entró con algo pagado, el aviso lo dice
+    const pend = porConfirmar.value.find(c => c.id_mesa === data.id_mesa)
+    const extra = pend ? (pend.pedidos.length ? ` · trae ${pend.pedidos.length} ${pend.pedidos.length === 1 ? 'pedido pagado' : 'pedidos pagados'}: acércate a preguntar` : ' · tiene su cortesía sin elegir') : ''
+    agregarToast(m ? `Te asignaron la mesa ${m.mesa}${m.cliente ? ' · ' + m.cliente : ''}${extra}` : 'Te asignaron una nueva mesa',
       m ? () => { mostrarExito.value = false; mostrarModalListos.value = false; elegirMesaAsignada(m) } : null)
   })
   // Un compañero salió del evento: sus mesas se liberaron (cambia el reparto)
   socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas(); cargarCortesiasPendientes() })
+  // Entró el cliente de una de mis mesas: si trae algo pagado, a preguntarle
+  socket.on('cliente_ingreso', async (data) => {
+    if (!misMesas.value.some(m => m.id_mesa === data?.id_mesa)) return
+    const antes = new Set(porConfirmar.value.map(c => c.id_entrada))
+    await cargarCortesiasPendientes()
+    const nuevo = porConfirmar.value.find(c => c.id_mesa === data.id_mesa && !antes.has(c.id_entrada))
+    if (!nuevo) return
+    porConfirmarNuevos.value = new Set([...porConfirmarNuevos.value, nuevo.id_entrada])
+    setTimeout(() => { porConfirmarNuevos.value = new Set([...porConfirmarNuevos.value].filter(id => id !== nuevo.id_entrada)) }, 8000)
+    const cuantos = nuevo.pedidos.length
+    agregarToast(`${nuevo.cliente.split(' ')[0]} (${nuevo.mesa}) ya entró${cuantos ? ` con ${cuantos} ${cuantos === 1 ? 'pedido pagado' : 'pedidos pagados'}` : ' con su cortesía sin elegir'}. Acércate a preguntar`,
+      () => { mostrarExito.value = false; mostrarModalListos.value = false; verCarritoMovil.value = false; window.scrollTo({ top: 0, behavior: 'smooth' }) })
+  })
+  // El cliente eligió desde su app cómo recibirlo: sale de "por confirmar"
+  socket.on('pedido_confirmado', () => { cargarCortesiasPendientes() })
   // Una mesa se liberó (cierre de atención/reserva): recalcular reparto
   socket.on('mesa_actualizada', () => { cargarReparto() })
   // La barra confirmó la entrega de un pedido mío (handoff): refrescar estado
@@ -3479,6 +3507,11 @@ onUnmounted(() => {
   border: 1px solid rgba(34, 197, 94, 0.35);
 }
 .atm-nombre { font-weight: 700; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atm-salida {
+  width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; cursor: pointer;
+  border-radius: var(--radio-md); background: transparent; border: 1px dashed rgba(239, 68, 68, 0.45); color: #fca5a5; font-weight: 700; font-size: 0.82rem;
+}
+.atm-salida:active { background: rgba(239, 68, 68, 0.08); }
 .atm-cambiar {
   font-size: 0.75rem; font-weight: 700; color: var(--rosa-acento); flex-shrink: 0;
   padding: 5px 10px; border-radius: 999px; border: 1px solid rgba(236, 72, 153, 0.35);
@@ -3634,6 +3667,7 @@ onUnmounted(() => {
 }
 
 .orden-para-movil { display: none; }
+@media (max-width: 768px) { .solo-escritorio { display: none; } }
 @media (max-width: 768px) {
   .atencion-movil { display: block; flex-shrink: 0; margin-bottom: 12px; }
   /* Orden en el celular: la lista de productos manda; mesa y cliente en una línea */

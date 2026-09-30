@@ -600,7 +600,11 @@ async function irAPagar() {
     pidiendoPin.value = false
     pin.value = ''
     tiendaCarrito.vaciarCarrito()
-    mensajeExito.value = 'Tu pedido pasó a preparación. Te avisamos apenas esté listo.'
+    // Pagado antes de ingresar: queda guardado y se prepara cuando el cliente elige
+    // (ya adentro) si se lo llevan o lo recoge. No "pasó a preparación" todavía.
+    mensajeExito.value = resPago?.estado === 'Programado'
+      ? 'Queda guardado. Cuando ingreses al evento eliges si te lo llevan a tu mesa o lo recoges en la barra.'
+      : 'Tu pedido pasó a preparación. Te avisamos apenas esté listo.'
 
   } catch (error) {
     console.error('Error al pagar:', error)

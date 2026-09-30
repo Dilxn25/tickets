@@ -41,6 +41,16 @@
               <p v-if="!meseros.length" class="tm-meseros-lbl">Sin meseros en turno.</p>
               <button class="tm-cta chica" :disabled="!meseroElegido || trabajando" @click="asignarMesero">Asignar</button>
             </div>
+            <!-- El grupo se fue: la mesa queda libre y se registra la hora de salida -->
+            <template v-if="estado === 'ocupada'">
+              <button v-if="!confirmandoSalida" type="button" class="tm-salida" @click="confirmandoSalida = true">Se retiraron · liberar mesa</button>
+              <div v-else class="tm-salida-confirma">
+                <span>¿{{ mesa.cliente && !/^Ingreso/i.test(mesa.cliente) ? mesa.cliente.split(' ')[0] + ' y su grupo se fueron' : 'El grupo se fue' }}?</span>
+                <button type="button" class="tm-cta chica" :disabled="trabajando" @click="liberarMesa">Sí, liberar</button>
+                <button type="button" class="tm-cambiar" @click="confirmandoSalida = false">No</button>
+              </div>
+            </template>
+            <p v-if="error" class="tm-error">{{ error }}</p>
           </div>
         </template>
 
@@ -98,7 +108,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import clienteHttp from '@/servicios-api/cliente-http.js'
 import BuscadorCliente from '@/componentes/comunes/BuscadorCliente.vue'
 import CobroPago from '@/componentes/comunes/CobroPago.vue'
@@ -115,6 +125,8 @@ const estado = computed(() => props.mesa.estado_ocupacion === 'libre' ? 'libre' 
 // ---- Reservar en vivo ----
 const grupo = ref(Math.max(1, props.mesa.capacidad_sillas || 1))
 const ahora = ref(Math.max(1, props.mesa.capacidad_sillas || 1))
+// Nunca entran más de los que son en el grupo
+watch(grupo, (g) => { if (ahora.value > g) ahora.value = g })
 const cliente = ref(null)
 // La mesa se cobra completa (regla del walk-in del backend); el cobro es el
 // componente estándar CobroPago (R8.1).
@@ -150,6 +162,18 @@ function cerrarExito() {
 const meseros = ref([])
 const meseroElegido = ref(null)
 const cambiandoMesero = ref(false)
+// Salida del grupo (misma acción que el mesero: libera la mesa y registra la salida)
+const confirmandoSalida = ref(false)
+async function liberarMesa() {
+  if (trabajando.value) return
+  trabajando.value = true
+  error.value = ''
+  try {
+    await clienteHttp.post(`/aforo/mesa/${props.mesa.id_mesa}/cerrar-atencion`)
+    emit('hecho')
+  } catch (e) { error.value = e?.error || 'No se pudo liberar la mesa.' }
+  finally { trabajando.value = false }
+}
 // Carga contada solo en el evento de esta mesa (los más libres arriba)
 async function cargarMeseros() {
   try { meseros.value = await clienteHttp.get(`/aforo/meseros?mesa=${props.mesa.id_mesa}`) } catch { meseros.value = [] }
@@ -192,6 +216,9 @@ onMounted(async () => {
 .tm-fila-txt b { color: var(--texto-principal); font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
 .tm-fila-txt small { color: var(--texto-desactivado); font-size: 0.76rem; }
 .tm-vip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; color: #FACC15; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.4); padding: 1px 7px; border-radius: 999px; }
+.tm-salida { width: 100%; padding: 11px; border-radius: 12px; cursor: pointer; background: transparent; border: 1px dashed rgba(239,68,68,0.5); color: #fca5a5; font-weight: 700; font-size: 0.85rem; }
+.tm-salida-confirma { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.86rem; color: var(--texto-principal); }
+.tm-salida-confirma span { flex: 1 1 100%; }
 .tm-cambiar { margin-left: auto; flex: none; padding: 6px 12px; border-radius: 999px; cursor: pointer; background: none; border: 1px solid var(--borde-activo); color: var(--texto-secundario); font-weight: 700; font-size: 0.76rem; }
 .tm-meseros { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .tm-meseros-lbl { margin: 0; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; color: var(--texto-secundario); }

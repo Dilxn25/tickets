@@ -145,7 +145,8 @@ const definiendo = ref(null)
 const avisoRecoger = ref(null)
 let socket = null
 
-const ESTADOS_ACTIVOS = ['Pendiente', 'Preparando', 'Listo']
+// 'Programado' = pagado por adelantado: espera a que el cliente ingrese y diga cómo recibirlo
+const ESTADOS_ACTIVOS = ['Programado', 'Pendiente', 'Preparando', 'Listo']
 function esActivo(p) { return ESTADOS_ACTIVOS.includes(p.estado) && !p.entregado }
 
 async function definirEntrega(p, modo) {
@@ -194,7 +195,7 @@ function pagoDistinto(p) {
 function etiquetaOrigen(o) { return o === 'app' ? 'Desde tu app' : (o === 'caja' ? 'En caja' : 'Con el mesero') }
 function etiquetaEstado(p) {
   if (esListoBarra(p)) return 'Listo para recoger'
-  const map = { Pendiente: 'En cola', Preparando: 'Preparando', Listo: 'Listo', Completada: 'Consumido', Cancelada: 'Cancelado', Reembolsada: 'Devuelto' }
+  const map = { Programado: 'Pagado · te espera', Pendiente: 'En cola', Preparando: 'Preparando', Listo: 'Listo', Completada: 'Consumido', Cancelada: 'Cancelado', Reembolsada: 'Devuelto' }
   return map[p.estado] || p.estado
 }
 function claseEstado(p) {

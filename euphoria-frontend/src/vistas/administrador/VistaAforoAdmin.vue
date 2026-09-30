@@ -132,6 +132,35 @@
         </div>
       </section>
 
+      <!-- Estadía por mesa: a qué hora llegó cada grupo, a qué hora se fue y cuánto consumió -->
+      <section class="estadias superficie aparecer-subir">
+        <div class="flujo-cab">
+          <h2 class="seccion-h2">Estadía por mesa</h2>
+          <div class="est-kpis">
+            <span class="est-kpi"><b>{{ estadias.adentro }}</b> adentro</span>
+            <span class="est-kpi"><b>{{ estadias.se_fueron }}</b> se fueron</span>
+            <span v-if="estadias.promedio_minutos != null" class="est-kpi dest"><b>{{ duracion(estadias.promedio_minutos) }}</b> promedio</span>
+          </div>
+        </div>
+        <div v-if="!estadias.estadias.length" class="flujo-vacio">Nadie ingresó todavía</div>
+        <div v-else class="est-lista">
+          <div v-for="e in estadias.estadias" :key="e.id_entrada" class="est-fila" :class="{ adentro: !e.salida }">
+            <span class="est-mesa">{{ e.mesa || e.zona || 'General' }}</span>
+            <span class="est-cli">
+              <b>{{ e.cliente }}</b>
+              <small>{{ e.personas }} {{ e.personas === 1 ? 'persona' : 'personas' }}<template v-if="e.mesero"> · {{ e.mesero }}</template></small>
+            </span>
+            <span class="est-tiempo">
+              <span class="est-hora">{{ horaCorta(e.llegada) }}<template v-if="e.salida"> → {{ horaCorta(e.salida) }}</template></span>
+              <!-- Barra de permanencia: el largo es la estadía (tope 5 h) -->
+              <span class="est-barra"><span :style="{ width: Math.min(100, ((e.minutos ?? minutosDesde(e.llegada)) / 300) * 100) + '%' }"></span></span>
+              <small>{{ e.salida ? duracion(e.minutos) : 'sigue adentro' }}</small>
+            </span>
+            <span class="est-consumo">Bs {{ e.consumo.toFixed(2) }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Zonas -->
       <div class="zonas-encabezado aparecer-subir">
         <h2 class="seccion-h2">Ocupación por plano</h2>
@@ -335,6 +364,22 @@ async function cargarFlujo() {
   if (!idEventoSel.value) return
   try { flujo.value = await clienteHttp.get(`/aforo/flujo/${idEventoSel.value}`) }
   catch { flujo.value = { horas: [], pico: null, total_ingresos: 0, total_salidas: 0 } }
+  cargarEstadias()
+}
+
+// Estadía por mesa (llegada, salida, permanencia y consumo de cada grupo)
+const estadias = ref({ estadias: [], promedio_minutos: null, adentro: 0, se_fueron: 0 })
+async function cargarEstadias() {
+  if (!idEventoSel.value) return
+  try { estadias.value = await clienteHttp.get(`/aforo/estadias/${idEventoSel.value}`) }
+  catch { estadias.value = { estadias: [], promedio_minutos: null, adentro: 0, se_fueron: 0 } }
+}
+const horaCorta = (f) => f ? new Date(f).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/La_Paz' }) : '—'
+const minutosDesde = (f) => f ? Math.max(0, Math.round((Date.now() - new Date(f).getTime()) / 60000)) : 0
+function duracion(min) {
+  if (min == null) return '—'
+  const h = Math.floor(min / 60), m = min % 60
+  return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`
 }
 
 const errorCarga = ref('')
@@ -490,6 +535,31 @@ onDeactivated(() => {
 
 /* Encabezado de sección de zonas */
 /* ---- Flujo de la noche: barras de ingresos/salidas + línea de "dentro" ---- */
+.estadias { padding: var(--esp-4); border-radius: var(--radio-xl); margin-top: var(--esp-4); }
+.est-kpis { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--texto-secundario); }
+.est-kpi b { color: var(--texto-principal); font-size: 1rem; margin-right: 3px; }
+.est-kpi.dest b { color: var(--rosa-acento); }
+.est-lista { display: flex; flex-direction: column; gap: 8px; }
+.est-fila {
+  display: grid; grid-template-columns: 56px minmax(0, 1.4fr) minmax(0, 1.2fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--borde-sutil);
+}
+.est-fila.adentro { border-color: rgba(34,197,94,0.4); }
+.est-mesa { height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--gradiente-marca); font-size: 0.85rem; }
+.est-cli { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.est-cli b { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.est-cli small, .est-tiempo small { font-size: 0.74rem; color: var(--texto-desactivado); }
+.est-tiempo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.est-hora { font-weight: 700; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+.est-barra { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.est-barra span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--morado-brillante), var(--rosa-acento)); }
+.est-fila.adentro .est-barra span { background: var(--color-exito); }
+.est-fila.adentro .est-tiempo small { color: var(--color-exito); font-weight: 700; }
+.est-consumo { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--texto-principal); white-space: nowrap; }
+@media (max-width: 640px) {
+  .est-fila { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .est-tiempo { grid-column: 2 / 4; }
+}
 .flujo { padding: var(--esp-4); border-radius: var(--radio-xl); margin-top: var(--esp-4); }
 .flujo-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .flujo-leyenda { display: flex; gap: 14px; list-style: none; }
