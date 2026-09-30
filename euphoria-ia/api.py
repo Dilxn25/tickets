@@ -143,6 +143,15 @@ def recomendar(p: Peticion):
                           historial_cliente=historial)
 
 
+@app.get("/catalogo")
+def catalogo():
+    """Productos que conoce el modelo activo (id -> nombre). La base de produccion puede
+    tener otros id que la base con la que se entreno el modelo, asi que el backend
+    traduce por nombre en los dos sentidos."""
+    return {"clave": f"{_modo_actual}:{_version_actual}",
+            "productos": {str(int(c)): rec.meta["nombre"][c] for c in rec.all_items}}
+
+
 @app.get("/clientes")
 def clientes():
     """Clientes DEMO embebidos en el pkl activo (self-contained). Vacío si el modelo

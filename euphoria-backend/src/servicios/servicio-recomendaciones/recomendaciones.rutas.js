@@ -585,6 +585,22 @@ function sugerirPorPerfil(conteos, porId, perfil, enMesa, k) {
   return salida
 }
 
+// Traducción entre el catálogo de esta base y el del modelo. El modelo se entrenó con
+// otra base y el mismo producto puede tener otro id (en producción Coca Cola es el 57 y
+// para el modelo es el 55): se traduce por nombre en los dos sentidos. El catálogo del
+// modelo se guarda 5 minutos.
+const normalNombre = (t) => String(t || '').trim().toLowerCase()
+let catalogoModelo = { hasta: 0, porNombre: new Map() }
+async function leerCatalogoModelo(urlIA) {
+  if (Date.now() < catalogoModelo.hasta) return catalogoModelo.porNombre
+  const r = await fetch(`${urlIA}/catalogo`, { signal: AbortSignal.timeout(8000) })
+  if (!r.ok) throw new Error(`IA respondió ${r.status} al pedir su catálogo`)
+  const d = await r.json()
+  const porNombre = new Map(Object.entries(d.productos || {}).map(([id, n]) => [normalNombre(n), Number(id)]))
+  catalogoModelo = { hasta: Date.now() + 5 * 60000, porNombre }
+  return porNombre
+}
+
 // POST /api/recomendaciones
 // Body: { productos_en_mesa: number[], k?: number, id_cliente?: number|string }
 router.post('/', verificarToken, async (req, res) => {
@@ -661,14 +677,42 @@ router.post('/', verificarToken, async (req, res) => {
 
   let datos
   try {
+    // Ids de esta base -> ids del modelo (por nombre)
+    const porNombreModelo = await leerCatalogoModelo(urlIA)
+    const aModelo = new Map(), aBase = new Map()
+    for (const p of catalogo) {
+      const mid = porNombreModelo.get(normalNombre(p.nombre_producto))
+      if (mid != null) { aModelo.set(p.id_producto, mid); aBase.set(mid, p.id_producto) }
+    }
+    const traducir = (ids) => ids.map(id => aModelo.get(Number(id))).filter(id => id != null)
+    // Lo que el modelo conoce pero esta base no vende va con stock 0
+    const stockModelo = {}
+    for (const mid of porNombreModelo.values()) if (!aBase.has(mid)) stockModelo[mid] = 0
+    for (const [id, n] of Object.entries(stock)) {
+      const mid = aModelo.get(Number(id))
+      if (mid != null) stockModelo[mid] = n
+    }
+    const historialModelo = historial_cliente ? traducir(historial_cliente) : null
+
     const respuesta = await fetch(`${urlIA}/recomendar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productos_en_mesa: idsMesa, fecha_hora, k, stock, historial_cliente, cliente: claveDemo }),
+      body: JSON.stringify({
+        productos_en_mesa: traducir(idsMesa), fecha_hora, k, stock: stockModelo,
+        historial_cliente: historialModelo && historialModelo.length ? historialModelo : null,
+        cliente: claveDemo,
+      }),
       signal: AbortSignal.timeout(8000), // tolera un arranque lento de la IA sin bloquear demasiado
     })
     if (!respuesta.ok) throw new Error(`IA respondió ${respuesta.status}`)
     datos = await respuesta.json()
+    // Ids del modelo -> ids de esta base, con el nombre vigente del producto
+    datos.recomendaciones = (datos.recomendaciones || []).map(r => {
+      const pid = aBase.get(Number(r.id_producto))
+      if (pid == null) return null
+      return { ...r, id_producto: pid, nombre: porId.get(pid)?.nombre_producto || r.nombre }
+    }).filter(Boolean)
+    datos.promociones = [] // vienen con ids del modelo y la toma de pedidos no las usa
   } catch (error) {
     console.error('Recomendaciones IA no disponibles:', error.message)
     // Respaldo: con un cliente identificado se aplica la regla de su perfil desde la
@@ -686,17 +730,23 @@ router.post('/', verificarToken, async (req, res) => {
     //      cada sugerencia para medir su efectividad real (aceptada o no) ----
     const recs = (datos.recomendaciones || []).filter(r => !porId.get(Number(r.id_producto))?.es_cortesia)
     datos.recomendaciones = recs
-    // Nombre vigente de la categoría (el del motor puede estar desactualizado)
+    // Categorías, perfil y veces con los datos de ESTA base (las del modelo son las de
+    // la base con que se entrenó y pueden no coincidir)
+    const perfilBase = conteos.size ? perfilDelCliente(conteos, porId, nombresCategoria) : null
+    if (perfilBase) datos.perfil_cliente = perfilBase
+    else for (const c of datos.perfil_cliente || []) c.categoria = nombresCategoria.get(c.id_categoria) || c.categoria
     for (const r of recs) {
       const prod = porId.get(Number(r.id_producto))
       if (prod) { r.id_categoria = prod.id_categoria; r.categoria = nombresCategoria.get(prod.id_categoria) || r.categoria }
-      if (r.motivo_cliente) {
-        r.motivo_cliente.categoria = nombresCategoria.get(r.motivo_cliente.id_categoria) || r.motivo_cliente.categoria
+      if (r.motivo_cliente && prod) {
+        r.motivo_cliente.id_categoria = prod.id_categoria
+        r.motivo_cliente.categoria = nombresCategoria.get(prod.id_categoria) || r.motivo_cliente.categoria
+        const cat = (perfilBase || []).find(c => c.id_categoria === prod.id_categoria)
+        if (cat) r.motivo_cliente.cuota_categoria = cat.cuota
         // El motor recibe el historial escalado: las veces reales salen de la base
-        if (conteos.size) r.motivo_cliente.veces = conteos.get(Number(r.id_producto)) || 0
+        if (conteos.size) r.motivo_cliente.veces = conteos.get(prod.id_producto) || 0
       }
     }
-    for (const c of datos.perfil_cliente || []) c.categoria = nombresCategoria.get(c.id_categoria) || c.categoria
 
     const idsRec = recs.map(r => Number(r.id_producto)).filter(n => Number.isInteger(n) && n > 0)
     let pares = [], totalesMesa = []
