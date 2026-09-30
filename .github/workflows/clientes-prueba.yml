@@ -1,0 +1,116 @@
+name: Clientes de prueba (IA)
+
+# Carga, revisa o quita los 10 clientes de prueba (200 pedidos cada uno) que sirven
+# para demostrar las sugerencias por perfil del cliente. Se lanza a mano desde la
+# pestana Actions. Usa la misma conexion que el reentrenamiento (secreto
+# URL_BD_ENTRENAMIENTO) y, antes de escribir, respalda la base completa: el respaldo
+# queda adjunto a la ejecucion durante 7 dias.
+on:
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: "Que hacer con los clientes de prueba"
+        type: choice
+        options: [cargar, resumen, borrar]
+        default: cargar
+
+permissions:
+  contents: read
+
+jobs:
+  clientes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Preparar la conexion a la base
+        env:
+          URL_BD: ${{ secrets.URL_BD_ENTRENAMIENTO }}
+        run: |
+          if [ -z "$URL_BD" ]; then
+            echo "::error::Falta el secreto URL_BD_ENTRENAMIENTO."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os, re, urllib.parse
+          url = os.environ["URL_BD"].strip()
+          url = re.sub(r"^mysql\+\w+://", "mysql://", url)
+          if "://" not in url:
+              url = "mysql://" + url
+          m = re.match(r"^mysql://([^:]+):([^@]+)@([^:/]+):(\d+)/([^?]+)", url)
+          if not m:
+              raise SystemExit("::error::El secreto no tiene el formato mysql://usuario:clave@host:puerto/base")
+          usuario, clave, host, puerto, base = m.groups()
+          clave_plana = urllib.parse.unquote(clave)
+          # Prisma no entiende ssl-mode (es del cliente de consola); Aiven exige TLS
+          # con su propio certificado, igual que en Render.
+          prisma = f"mysql://{usuario}:{clave}@{host}:{puerto}/{base}?sslaccept=accept_invalid_certs"
+          print(f"::add-mask::{clave}")
+          print(f"::add-mask::{clave_plana}")
+          print(f"::add-mask::{prisma}")
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"URL_BASE_DATOS={prisma}\n")
+              f.write(f"BD_HOST={host}\nBD_PUERTO={puerto}\nBD_USUARIO={urllib.parse.unquote(usuario)}\nBD_NOMBRE={base}\n")
+              f.write(f"MYSQL_PWD={clave_plana}\n")
+          print(f"Base: {base} en {host}")
+          PY
+
+      - name: Respaldar la base antes de escribir
+        if: inputs.accion != 'resumen'
+        run: |
+          mysqldump -h "$BD_HOST" -P "$BD_PUERTO" -u "$BD_USUARIO" --ssl-mode=REQUIRED \
+            --single-transaction --no-tablespaces --set-gtid-purged=OFF --default-character-set=utf8mb4 \
+            "$BD_NOMBRE" | gzip > respaldo.sql.gz
+          tam=$(stat -c%s respaldo.sql.gz)
+          if [ "$tam" -lt 10000 ]; then
+            echo "::error::El respaldo salio vacio ($tam bytes). No se escribe nada."
+            exit 1
+          fi
+          echo "Respaldo OK: $tam bytes comprimidos"
+
+      - name: Guardar el respaldo
+        if: inputs.accion != 'resumen'
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ inputs.accion }}-${{ github.run_number }}
+          path: respaldo.sql.gz
+          retention-days: 7
+
+      - name: Instalar el backend
+        working-directory: euphoria-backend
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate
+
+      - name: Revisar catalogo y meseros
+        working-directory: euphoria-backend
+        run: node prisma/clientes-prueba.js --probar
+
+      - name: Ejecutar
+        working-directory: euphoria-backend
+        env:
+          ACCION: ${{ inputs.accion }}
+        run: |
+          case "$ACCION" in
+            cargar)  node prisma/clientes-prueba.js | tee salida.txt ;;
+            resumen) node prisma/clientes-prueba.js --resumen | tee salida.txt ;;
+            borrar)  node prisma/clientes-prueba.js --borrar | tee salida.txt ;;
+          esac
+          {
+            echo "### Clientes de prueba: $ACCION"
+            echo ""
+            echo '```'
+            cat salida.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
