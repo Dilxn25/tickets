@@ -45,7 +45,8 @@ const mezclar = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math
 
 // ---- Gustos (id_producto: peso). Los id son los del catálogo del sistema ----
 const G = {
-  cerveza:    { 76: 30, 4: 22, 1: 16, 77: 10, 6: 8, 5: 6, 3: 5, 13: 3 },
+  // Solo productos que existen en local y en producción (Stella Artois y Elixir no están en prod)
+  cerveza:    { 76: 30, 4: 22, 1: 16, 6: 10, 5: 8, 3: 6, 13: 3 },
   coctel:     { 9: 28, 70: 20, 71: 16, 69: 10, 66: 8, 67: 6, 72: 5 },
   ron:        { 11: 34, 12: 20, 39: 8 },
   ronMezcla:  { 55: 14, 82: 8 },
@@ -59,7 +60,7 @@ const G = {
   tonica:     { 59: 14 },
   tequila:    { 51: 18, 52: 10, 69: 10 },
   shots:      { 47: 9, 48: 8, 49: 6, 50: 5 },
-  sinAlcohol: { 55: 22, 73: 18, 2: 14, 74: 10, 83: 8, 61: 8, 57: 8 },
+  sinAlcohol: { 55: 22, 73: 18, 2: 14, 74: 10, 83: 8, 57: 8 },
   snack:      { 14: 12 },
   pucho:      { 79: 6, 80: 4 },
   amigaCoctel:{ 9: 10, 71: 8 },
