@@ -229,6 +229,20 @@
         <!-- ATENCIÓN (celular): primero a quién se atiende. Al elegir la mesa se
              identifica solo al cliente que la reservó y sus sugerencias salen al toque. -->
         <div class="atencion-movil">
+          <!-- Mesas que recepción le asignó: a la vista, con el nombre del cliente -->
+          <div v-if="misMesas.length" class="mis-mesas-movil">
+            <span class="mmm-tit">Tus mesas</span>
+            <div class="mmm-lista">
+              <button
+                v-for="m in misMesas" :key="m.id_asignacion" type="button" class="mmm-chip"
+                :class="{ sel: mesaSeleccionada && mesaSeleccionada.id_mesa === m.id_mesa, nueva: mesasNuevas.has(m.id_asignacion) }"
+                @click="elegirMesaAsignada(m)"
+              >
+                <strong>{{ m.mesa || 'Mesa' }}</strong>
+                <span>{{ m.cliente ? m.cliente.split(' ')[0] : 'Sin reserva' }}</span>
+              </button>
+            </div>
+          </div>
           <button v-if="!mesaSeleccionada && !clienteSeleccionado" type="button" class="atm-elegir" @click="abrirHojaAtencion()">
             <span class="atm-icono">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="7" width="18" height="4" rx="1"></rect><path d="M6 11v9M18 11v9M9 7V4h6v3"></path></svg>
@@ -278,8 +292,7 @@
                   <span class="sug-cat">{{ s.categoria }}</span>
                   <span class="sug-nombre">{{ s.nombre }}</span>
                   <span class="sug-pie">
-                    <span v-if="s.motivo_cliente && s.motivo_cliente.veces" class="sug-veces">{{ s.motivo_cliente.veces }} veces</span>
-                    <span v-else-if="s.probabilidad != null" class="sug-veces">{{ formatoProbabilidad(s.probabilidad) }}</span>
+                    <span v-if="datoSugerencia(s)" class="sug-veces">{{ datoSugerencia(s) }}</span>
                     <span class="sug-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
                   </span>
                 </span>
@@ -479,6 +492,14 @@
           <h3 class="titulo-carrito" style="margin: 0;">Orden Actual</h3>
         </div>
 
+        <!-- Celular: para quién es la orden (se eligió arriba). Una sola línea en lugar
+             de mesas + selector + buscador, que aplastaban la lista de productos. -->
+        <button type="button" class="orden-para-movil" @click="abrirHojaAtencion()">
+          <span class="opm-mesa">{{ mesaSeleccionada ? mesaSeleccionada.numero_nombre : 'Barra' }}</span>
+          <span class="opm-cli">{{ clienteSeleccionado ? `${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos || ''}`.trim() : 'Sin cliente' }}</span>
+          <span class="opm-cambiar">Cambiar</span>
+        </button>
+
         <!-- MIS MESAS ASIGNADAS (recepción se las asigna al llegar el cliente) -->
         <div v-if="misMesas.length || eventoActivo" class="mis-mesas">
           <div class="mm-titulo">
@@ -653,9 +674,9 @@
             >
               <span class="chip-nombre">{{ s.nombre }}</span>
               <span class="chip-meta">
-                <!-- Siempre va un número real: las veces que ESE cliente lo pidió o la probabilidad del modelo -->
-                <span v-if="s.motivo_cliente && s.motivo_cliente.veces" class="chip-prob" title="Veces que este cliente lo pidió">{{ s.motivo_cliente.veces }} veces</span>
-                <span v-else-if="s.probabilidad != null" class="chip-prob">{{ formatoProbabilidad(s.probabilidad) }}</span>
+                <!-- Siempre un número real y entendible: veces que ESE cliente lo pidió,
+                     probabilidad del modelo cuando es significativa, o cuánto se vende -->
+                <span v-if="datoSugerencia(s)" class="chip-prob">{{ datoSugerencia(s) }}</span>
                 <span class="chip-precio">Bs {{ precioSugerido(s).toFixed(2) }}</span>
               </span>
               <span class="chip-mas">+</span>
@@ -748,6 +769,13 @@
                 </button>
               </div>
               <div class="hoja-clientes">
+                <button v-if="clienteSeleccionado && !busquedaCliente.trim()" type="button" class="hc hc-actual" @click="quitarCliente(); hojaAtencion = false">
+                  <span class="hc-avatar">{{ inicialesCliente }}</span>
+                  <span class="hc-txt">
+                    <strong>{{ clienteSeleccionado.nombres }} {{ clienteSeleccionado.apellidos }}</strong>
+                    <small>Atendiendo ahora · tocar para quitarlo</small>
+                  </span>
+                </button>
                 <button v-for="cli in clientesBuscados" :key="cli.id_usuario" type="button" class="hc" @click="elegirClienteHoja(cli)">
                   <span class="hc-avatar">{{ ((cli.nombres || '')[0] || '') + ((cli.apellidos || '')[0] || '') }}</span>
                   <span class="hc-txt">
@@ -1109,15 +1137,17 @@
     </Teleport>
     <!-- SE ELIMINÓ EL PANEL FLOTANTE A FAVOR DEL BANNER INLINE -->
 
-    <!-- TOAST NOTIFICATIONS -->
-    <div class="toast-container">
-      <transition-group name="toast">
-        <div v-for="t in toasts" :key="t.id" class="toast-item">
-          <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2" width="24" height="24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          {{ t.mensaje }}
-        </div>
-      </transition-group>
-    </div>
+    <!-- TOAST NOTIFICATIONS (al body: siempre por encima de cualquier modal) -->
+    <Teleport to="body">
+      <div class="toast-container">
+        <transition-group name="toast">
+          <div v-for="t in toasts" :key="t.id" class="toast-item" :class="{ accionable: t.accion }" @click="tocarToast(t)">
+            <svg viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2" width="24" height="24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            {{ t.mensaje }}
+          </div>
+        </transition-group>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1241,10 +1271,22 @@ watch(pasoAtencion, async (p) => {
 
 // Mesas asignadas a este mesero (recepción se las asigna al check-in)
 const misMesas = ref([])
+// Asignaciones recién llegadas (resaltadas unos segundos para que se note el aviso)
+const mesasNuevas = ref(new Set())
+let misMesasCargadas = false
 async function cargarMisMesas() {
   try {
     const q = eventoActivoId.value ? `?evento=${eventoActivoId.value}` : ''
+    const antes = new Set(misMesas.value.map(m => m.id_asignacion))
     misMesas.value = await clienteHttp.get(`/comandas/mis-mesas${q}`)
+    if (misMesasCargadas) {
+      const nuevas = misMesas.value.filter(m => !antes.has(m.id_asignacion)).map(m => m.id_asignacion)
+      if (nuevas.length) {
+        mesasNuevas.value = new Set([...mesasNuevas.value, ...nuevas])
+        setTimeout(() => { mesasNuevas.value = new Set([...mesasNuevas.value].filter(id => !nuevas.includes(id))) }, 8000)
+      }
+    }
+    misMesasCargadas = true
   } catch { misMesas.value = [] }
 }
 // Cortesías que los clientes de este mesero todavía no eligieron. El circuito es:
@@ -1499,12 +1541,18 @@ async function avisarCajaIA() {
 
 // Variables para toasts (notificaciones en tiempo real)
 const toasts = ref([])
-function agregarToast(mensaje) {
-  const id = Date.now()
-  toasts.value.push({ id, mensaje })
+// accion (opcional): tocar el aviso lleva directo a lo que avisa
+function agregarToast(mensaje, accion = null) {
+  const id = Date.now() + Math.random()
+  toasts.value.push({ id, mensaje, accion })
   setTimeout(() => {
     toasts.value = toasts.value.filter(t => t.id !== id)
-  }, 5000)
+  }, 6000)
+}
+function tocarToast(t) {
+  if (!t.accion) return
+  t.accion()
+  toasts.value = toasts.value.filter(x => x.id !== t.id)
 }
 
 let socket = null
@@ -1681,8 +1729,9 @@ function precioSugerido(s) {
   const prod = productos.value.find(p => p.id_producto === s.id_producto)
   if (!prod) return 0
   const base = Number(prod.precio_base)
-  // Lo que el cliente pide siempre va a su precio normal: no hace falta rebajarlo
-  if (s.motivo_cliente) return base
+  // Lo que el cliente pide siempre va a su precio normal, y sin una probabilidad
+  // significativa (mesa vacía) tampoco hay razón para rebajarlo
+  if (s.motivo_cliente || !(Number(s.probabilidad) >= PROB_SIGNIFICATIVA)) return base
   const min = base * 0.85, max = base * 1.20
   return precioAtractivo(min + (max - min) * (s.probabilidad || 0))
 }
@@ -1721,6 +1770,18 @@ function agregarAlCarrito(prod) {
 // Probabilidad del modelo SIEMPRE visible y honesta: con 1 decimal cuando es chica
 // (0,4 %), "< 0,1 %" cuando es ínfima. Antes se ocultaba bajo 0,5 % y la sugerencia
 // parecía inventada.
+// Con la mesa vacía la probabilidad del modelo es ínfima (< 0,1 %) y no dice nada:
+// se muestra solo desde el 5 %, cuando ya hay algo en la mesa con qué relacionarla.
+const PROB_SIGNIFICATIVA = 0.05
+function datoSugerencia(s) {
+  const veces = Number(s?.motivo_cliente?.veces || 0)
+  if (veces > 0) return `${veces} ${veces === 1 ? 'vez' : 'veces'}`
+  const p = Number(s?.probabilidad)
+  if (Number.isFinite(p) && p >= PROB_SIGNIFICATIVA) return formatoProbabilidad(p)
+  const v = Number(s?.ventas || 0)
+  if (v > 0) return `${v.toLocaleString('es-BO')} ${v === 1 ? 'venta' : 'ventas'}`
+  return ''
+}
 function formatoProbabilidad(p) {
   const v = Number(p || 0) * 100
   if (v >= 1) return `${v.toFixed(0)}%`
@@ -1965,7 +2026,9 @@ async function procesarCobro() {
     })
 
     carrito.value = []
-    clienteSeleccionado.value = null
+    // En una mesa la siguiente ronda es del mismo cliente: se conserva (y con él sus
+    // sugerencias). En barra cada pedido es de alguien distinto: se limpia.
+    if (!mesaSeleccionada.value) clienteSeleccionado.value = null
     verCarritoMovil.value = false
     mostrarExito.value = true
     cerrarModalCobro()
@@ -2241,7 +2304,7 @@ onMounted(() => {
   socket.on('pedido_listo', (data) => {
     if (data.id_mesero === tienda.usuario?.id) {
       cargarPedidosListos()
-      agregarToast(`¡El pedido #${data.id_comanda} está listo en la barra!`)
+      agregarToast(`¡El pedido #${data.id_comanda} está listo en la barra! Toca para recogerlo`, () => { mostrarExito.value = false; mostrarModalListos.value = true })
       // Intentar reproducir sonido de notificación
       try {
         const audio = new Audio('/notificacion.mp3')
@@ -2269,11 +2332,16 @@ onMounted(() => {
   // El catálogo cambió (producto/precio/stock/promo): refrescar la lista en vivo.
   socket.on('catalogo_actualizado', () => { recargarCatalogo() })
   // Recepción me asignó una mesa
-  socket.on('mesa_asignada', (data) => {
+  socket.on('mesa_asignada', async (data) => {
     cargarReparto()  // cambió el reparto del evento (afecta a todos)
-    if (data?.id_mesero !== tienda.usuario?.id) return
-    cargarMisMesas(); cargarCortesiasPendientes()
-    agregarToast('Te asignaron una nueva mesa')
+    if (data?.id_mesero !== tienda.usuario?.id) {
+      cargarMisMesas() // si me la quitaron para dársela a otro, desaparece de mis mesas
+      return
+    }
+    await cargarMisMesas(); cargarCortesiasPendientes(); cargarMesas()
+    const m = misMesas.value.find(x => x.id_mesa === data.id_mesa)
+    agregarToast(m ? `Te asignaron la mesa ${m.mesa}${m.cliente ? ' · ' + m.cliente : ''}` : 'Te asignaron una nueva mesa',
+      m ? () => { mostrarExito.value = false; mostrarModalListos.value = false; elegirMesaAsignada(m) } : null)
   })
   // Un compañero salió del evento: sus mesas se liberaron (cambia el reparto)
   socket.on('mesas_liberadas', () => { cargarReparto(); cargarMisMesas(); cargarCortesiasPendientes() })
@@ -3360,6 +3428,20 @@ onUnmounted(() => {
    (en escritorio todo esto vive en el panel de la orden)
    ============================ */
 .atencion-movil { display: none; }
+.mis-mesas-movil { margin-bottom: 10px; }
+.mmm-tit { display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-secundario); margin-bottom: 6px; }
+.mmm-lista { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.mmm-lista::-webkit-scrollbar { display: none; }
+.mmm-chip {
+  flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 12px; cursor: pointer;
+  border-radius: var(--radio-md); background: var(--fondo-tarjeta); border: 1px solid rgba(34, 197, 94, 0.45); color: var(--texto-principal);
+}
+.mmm-chip strong { font-size: 0.95rem; font-weight: 800; }
+.mmm-chip span { font-size: 0.72rem; color: var(--color-exito); font-weight: 700; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mmm-chip.sel { background: var(--gradiente-marca); border-color: transparent; }
+.mmm-chip.sel span { color: rgba(255, 255, 255, 0.92); }
+.mmm-chip.nueva { animation: mmmNueva 1.1s ease-in-out 4; }
+@keyframes mmmNueva { 0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } 50% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.35); } }
 .atm-elegir, .atm-actual {
   width: 100%; display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
   border-radius: var(--radio-lg); padding: 12px 14px; color: var(--texto-principal);
@@ -3533,6 +3615,8 @@ onUnmounted(() => {
   color: var(--texto-principal);
 }
 .hc:active { border-color: var(--rosa-acento); }
+.hc-actual { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.07); }
+.hc-actual small { color: var(--color-exito); }
 .hc-avatar {
   width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
   font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #fff; background: var(--gradiente-marca);
@@ -3549,8 +3633,24 @@ onUnmounted(() => {
   .atm-elegir, .pb-seg, .sug-card, .sug-card.esqueleto { animation: none; }
 }
 
+.orden-para-movil { display: none; }
 @media (max-width: 768px) {
   .atencion-movil { display: block; flex-shrink: 0; margin-bottom: 12px; }
+  /* Orden en el celular: la lista de productos manda; mesa y cliente en una línea */
+  .panel-carrito.mostrar-movil { overflow-y: auto; }
+  .panel-carrito .mis-mesas, .panel-carrito .selector-mesa, .panel-carrito .buscador-cliente { display: none; }
+  .panel-carrito .lista-carrito { flex: none; overflow: visible; }
+  .panel-carrito .vacio-carrito { height: auto; padding: 24px 0; }
+  .orden-para-movil {
+    display: flex; align-items: center; gap: 10px; width: 100%; margin: 4px 0 14px; padding: 10px 12px; cursor: pointer; text-align: left;
+    border-radius: var(--radio-md); background: var(--fondo-tarjeta); border: 1px solid var(--borde-activo); color: var(--texto-principal);
+  }
+  .opm-mesa {
+    min-width: 44px; height: 34px; padding: 0 8px; border-radius: 10px; flex: none; display: grid; place-items: center;
+    font-weight: 800; color: #fff; background: var(--gradiente-marca);
+  }
+  .opm-cli { flex: 1; min-width: 0; font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .opm-cambiar { flex: none; font-size: 0.74rem; font-weight: 700; color: var(--rosa-acento); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(236, 72, 153, 0.35); }
   .pos-layout {
     position: relative;
     height: calc(100vh - 60px);
@@ -4000,10 +4100,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 9999;
+  z-index: 10000;
   pointer-events: none;
 }
+@media (max-width: 768px) {
+  .toast-container { top: 70px; left: 12px; right: 12px; }
+}
 
+.toast-item.accionable { cursor: pointer; }
 .toast-item {
   background: var(--fondo-tarjeta);
   border: 1px solid var(--borde-sutil);

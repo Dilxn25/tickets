@@ -29,9 +29,11 @@ function estadoAforo(porcentaje) {
 // Ventana en la que una entrada es válida: SOLO el día del evento (con un
 // margen antes para la llegada temprana / apertura de puertas). Evita que
 // alguien use su entrada en otra fecha u otro evento.
-// Hora y fecha en formato boliviano para los mensajes al recepcionista.
-const horaBolivia = (d) => new Date(d).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/La_Paz' })
-const fechaCortaBolivia = (d) => new Date(d).toLocaleDateString('es-BO', { day: 'numeric', month: 'long', timeZone: 'America/La_Paz' })
+// Hora y fecha del evento para los mensajes al recepcionista. Las fechas del evento
+// se guardan tal como las escribe el admin (hora de Bolivia sin zona), así que se
+// muestran en UTC: convertirlas a La Paz las corría 4 horas (20:00 salía 16:00).
+const horaBolivia = (d) => new Date(d).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
+const fechaCortaBolivia = (d) => new Date(d).toLocaleDateString('es-BO', { day: 'numeric', month: 'long', timeZone: 'UTC' })
 const HORAS_ANTES = 4   // margen de apertura antes del inicio
 const HORAS_DESPUES = 12 // duración por defecto si el evento no tiene fin
 function ventanaEvento(evento, ahora = hoyBolivia()) {
@@ -267,7 +269,7 @@ router.post('/validar', soloRoles('Recepcionista', 'Administrador'), async (req,
       if (existente) {
         mesa_ya_asignada = { id_mesero: existente.id_mesero, nombre: `${existente.usuario.nombres} ${existente.usuario.apellidos || ''}`.trim() }
       } else {
-        const sug = await meseroConMenosCarga()
+        const sug = await meseroConMenosCarga(entrada.zona?.id_evento || await eventoDeMesa(entrada.id_mesa))
         if (sug) mesero_sugerido = { id_usuario: sug.id_usuario, nombre: `${sug.nombres} ${sug.apellidos || ''}`.trim(), carga: sug.carga }
       }
     }
@@ -485,8 +487,25 @@ router.get('/eventos', soloRoles('Recepcionista', 'Administrador', 'Bartender', 
 // el bartender prepara en barra, no atiende mesas.)
 const ROLES_MESERO = ['Mesero']
 
-// Mesero activo con menos mesas asignadas (para sugerir al hacer check-in)
-async function meseroConMenosCarga() {
+// Carga de un mesero = mesas que atiende en ESTE evento. Sin el filtro contaban
+// asignaciones abiertas de noches pasadas y la sugerencia caía siempre en el mismo.
+function filtroCarga(idMesero, idEvento) {
+  return {
+    id_mesero: idMesero,
+    estado: { in: ['asignada', 'atendiendo'] },
+    ...(idEvento ? { mesa_espacio: { zona: { id_evento: idEvento } } } : {}),
+  }
+}
+
+// Evento al que pertenece una mesa (mesa -> zona -> evento)
+async function eventoDeMesa(idMesa) {
+  if (!idMesa) return null
+  const m = await prisma.mesa_espacio.findUnique({ where: { id_mesa: Number(idMesa) }, select: { zona: { select: { id_evento: true } } } })
+  return m?.zona?.id_evento || null
+}
+
+// Mesero activo con menos mesas asignadas en el evento (para sugerir al hacer check-in)
+async function meseroConMenosCarga(idEvento = null) {
   const meseros = await prisma.usuario.findMany({
     where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
     select: { id_usuario: true, nombres: true, apellidos: true },
@@ -494,9 +513,7 @@ async function meseroConMenosCarga() {
   if (!meseros.length) return null
   const cargas = await Promise.all(meseros.map(async (m) => ({
     ...m,
-    carga: await prisma.asignacion_mesa.count({
-      where: { id_mesero: m.id_usuario, estado: { in: ['asignada', 'atendiendo'] } },
-    }),
+    carga: await prisma.asignacion_mesa.count({ where: filtroCarga(m.id_usuario, idEvento) }),
   })))
   cargas.sort((a, b) => a.carga - b.carga)
   return cargas[0]
@@ -507,6 +524,8 @@ async function meseroConMenosCarga() {
 // directo en barra. Orden: los MÁS LIBRES arriba (menos mesas primero).
 router.get('/meseros', soloRoles('Recepcionista', 'Administrador', 'Bartender'), async (req, res) => {
   try {
+    // ?evento=id o ?mesa=id: la carga se cuenta solo en ese evento
+    const idEvento = Number(req.query.evento) || await eventoDeMesa(Number(req.query.mesa) || null)
     const meseros = await prisma.usuario.findMany({
       where: { estado_cuenta: 'activo', rol: { nombre_rol: { in: ROLES_MESERO } } },
       select: { id_usuario: true, nombres: true, apellidos: true },
@@ -515,9 +534,7 @@ router.get('/meseros', soloRoles('Recepcionista', 'Administrador', 'Bartender'),
     const conCarga = await Promise.all(meseros.map(async (m) => ({
       id_usuario: m.id_usuario,
       nombre: `${m.nombres} ${m.apellidos || ''}`.trim(),
-      carga: await prisma.asignacion_mesa.count({
-        where: { id_mesero: m.id_usuario, estado: { in: ['asignada', 'atendiendo'] } },
-      }),
+      carga: await prisma.asignacion_mesa.count({ where: filtroCarga(m.id_usuario, idEvento) }),
     })))
     // Los más libres arriba; a igual carga, alfabético
     conCarga.sort((a, b) => a.carga - b.carga || a.nombre.localeCompare(b.nombre))
@@ -548,10 +565,21 @@ router.post('/asignar-mesero', soloRoles('Recepcionista', 'Administrador', 'Bart
       where: { id_mesa: Number(id_mesa), estado: { in: ['asignada', 'atendiendo'] } },
       data: { estado: 'cerrada', fecha_cierre: new Date(), cerrada_por: req.usuario.id },
     })
+    // Sin id_entrada, la asignación se liga a la reserva de esa mesa: así el mesero
+    // ve el nombre del cliente en "Tus mesas" (antes le llegaba la mesa sin nombre).
+    let idEntrada = id_entrada ? Number(id_entrada) : null
+    if (!idEntrada) {
+      const reserva = await prisma.entrada.findFirst({
+        where: { id_mesa: Number(id_mesa) },
+        orderBy: [{ estado_validacion: 'desc' }, { fecha_reserva: 'desc' }],
+        select: { id_entrada: true },
+      })
+      idEntrada = reserva?.id_entrada || null
+    }
     const asignacion = await prisma.asignacion_mesa.create({
       data: {
         id_mesa: Number(id_mesa),
-        id_entrada: id_entrada ? Number(id_entrada) : null,
+        id_entrada: idEntrada,
         id_mesero: Number(id_mesero),
         estado: 'asignada',
         fecha_asignacion: new Date(),
@@ -1018,7 +1046,7 @@ router.post('/walk-in', soloRoles('Recepcionista', 'Administrador'), async (req,
     // Si ingresó a una mesa, sugerir mesero (recepción confirma) igual que en el check-in.
     let mesero_sugerido = null
     if (idMesa) {
-      const sug = await meseroConMenosCarga()
+      const sug = await meseroConMenosCarga(await eventoDeMesa(idMesa))
       if (sug) mesero_sugerido = { id_usuario: sug.id_usuario, nombre: `${sug.nombres} ${sug.apellidos || ''}`.trim(), carga: sug.carga }
     }
 

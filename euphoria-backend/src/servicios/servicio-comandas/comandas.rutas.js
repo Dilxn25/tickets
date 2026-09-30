@@ -1294,6 +1294,11 @@ function comandaBartender(c, ahora) {
   }
 }
 
+// Pedidos "de esta noche": los que quedaron abiertos de noches pasadas (nunca se
+// cerraron) no deben aparecer en la barra ni en los avisos del mesero.
+const VENTANA_NOCHE_MS = 16 * 3600 * 1000
+const desdeEstaNoche = () => new Date(Date.now() - VENTANA_NOCHE_MS)
+
 const INCLUDE_BARTENDER = {
   detalle_comanda: { include: { producto: { select: {
     nombre_producto: true, url_imagen: true, es_combo: true,
@@ -1312,7 +1317,7 @@ const INCLUDE_BARTENDER = {
 router.get('/tablero', verificarToken, async (req, res) => {
   try {
     const comandas = await prisma.comanda.findMany({
-      where: { estado_despacho: { in: ['Pendiente', 'Preparando', 'Listo'] } },
+      where: { estado_despacho: { in: ['Pendiente', 'Preparando', 'Listo'] }, fecha_registro: { gte: desdeEstaNoche() } },
       include: INCLUDE_BARTENDER,
     })
     const ahora = Date.now()
@@ -1324,10 +1329,10 @@ router.get('/tablero', verificarToken, async (req, res) => {
       // texto completo Y solo los dígitos, para que tocar la silla del mapa
       // siempre encuentre sus pedidos.
       const q = String(req.query.mesa).toLowerCase()
-      const qDig = q.replace(/D/g, '')
+      const qDig = q.replace(/\D/g, '')
       lista = lista.filter(c => {
         const m = (c.mesa || '').toLowerCase()
-        return m.includes(q) || (qDig && m.replace(/D/g, '') === qDig)
+        return m.includes(q) || (qDig && m.replace(/\D/g, '') === qDig)
       })
     }
     if (req.query.cliente) {
@@ -1340,11 +1345,15 @@ router.get('/tablero', verificarToken, async (req, res) => {
     const eventos = []
     const vistos = new Set()
     for (const c of lista) if (c.id_evento && !vistos.has(c.id_evento)) { vistos.add(c.id_evento); eventos.push({ id_evento: c.id_evento, nombre: c.evento }) }
+    // Lo que el mesero ya recogió (o se entregó / reembolsó) salió de la barra: el
+    // despacho sigue 'Listo' mientras viaja a la mesa, pero la barra ya no tiene nada
+    // que hacer con eso (antes se quedaba en "Entregar" como si faltara recogerlo).
+    const FUERA_DE_BARRA = ['recogido', 'entregado', 'reembolsado']
     res.json({
       columnas: {
         Pendiente: lista.filter(c => c.estado === 'Pendiente'),
         Preparando: lista.filter(c => c.estado === 'Preparando'),
-        Listo: lista.filter(c => c.estado === 'Listo'),
+        Listo: lista.filter(c => c.estado === 'Listo' && !FUERA_DE_BARRA.includes(c.estado_entrega)),
       },
       eventos,
     })
@@ -1389,7 +1398,8 @@ router.get('/mis-listos', verificarToken, async (req, res) => {
     const comandas = await prisma.comanda.findMany({
       where: {
         id_mesero: req.usuario.id,
-        estado_despacho: 'Listo'
+        estado_despacho: 'Listo',
+        fecha_registro: { gte: desdeEstaNoche() },
       },
       include: {
         detalle_comanda: { include: { producto: true } },
@@ -1831,7 +1841,7 @@ router.patch('/:id/estado', verificarToken, async (req, res) => {
 router.get('/pool', verificarToken, async (req, res) => {
   try {
     const comandas = await prisma.comanda.findMany({
-      where: { estado_despacho: 'Listo', estado_entrega: 'en_pool' },
+      where: { estado_despacho: 'Listo', estado_entrega: 'en_pool', fecha_registro: { gte: desdeEstaNoche() } },
       orderBy: { fecha_listo: 'asc' },
       include: {
         detalle_comanda: { include: { producto: { select: { nombre_producto: true } } } },

@@ -749,6 +749,16 @@ router.post('/', verificarToken, async (req, res) => {
     }
 
     const idsRec = recs.map(r => Number(r.id_producto)).filter(n => Number.isInteger(n) && n > 0)
+    // Veces que se vendió cada sugerido: con la mesa vacía la probabilidad del modelo es
+    // ínfima (< 0,1 %) y no dice nada; lo que sí se entiende es cuánto se pide.
+    if (idsRec.length) {
+      try {
+        const vendidos = await prisma.$queryRawUnsafe(
+          `SELECT id_producto pid, COUNT(*) n FROM detalle_comanda WHERE id_producto IN (${idsRec.join(',')}) GROUP BY id_producto`)
+        const porPid = new Map(vendidos.map(v => [Number(v.pid), Number(v.n)]))
+        for (const r of recs) r.ventas = porPid.get(Number(r.id_producto)) || 0
+      } catch (e) { console.warn('No se pudieron contar las ventas:', e.message) }
+    }
     let pares = [], totalesMesa = []
     if (idsMesa.length && idsRec.length) {
       try {

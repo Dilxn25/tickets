@@ -38,15 +38,36 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
             Ingreso completo
           </p>
-          <!-- Mesero sugerido tras el ingreso -->
-          <div v-if="meseroSugerido" class="ing-mesero fade-in">
-            <span>Atiende <b>{{ meseroSugerido.nombre }}</b> ({{ meseroSugerido.carga }} mesas)</span>
-            <button class="ing-cta chica" :disabled="asignando" @click="confirmarMesero">{{ asignando ? '…' : 'Asignar' }}</button>
+          <!-- Mesero de la mesa: ya asignado (con opción de cambiar) o elegir uno -->
+          <div v-if="idMesaSugerida && meseroAsignado && !eligiendoMesero" class="ing-asignado fade-in">
+            <span class="ing-asig-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" width="15" height="15"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span class="ing-asig-txt">Atiende <b>{{ meseroAsignado }}</b></span>
+            <button type="button" class="ing-cambiar" @click="abrirMeseros">Cambiar</button>
           </div>
-          <p v-if="meseroAsignado" class="ing-completo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            Mesa de {{ meseroAsignado }}
-          </p>
+          <div v-else-if="idMesaSugerida && meseros.length" class="ing-meseros fade-in">
+            <span class="ing-mes-tit">¿Quién atiende la mesa {{ entrada.mesa }}?</span>
+            <div class="ing-mes-lista">
+              <button
+                v-for="m in meseros" :key="m.id_usuario" type="button" class="ing-mes"
+                :class="{ sugerido: meseroSugerido && m.id_usuario === meseroSugerido.id_usuario }"
+                :disabled="asignando" @click="asignarMesero(m)"
+              >
+                <span class="ing-mes-av">{{ iniciales(m.nombre) }}</span>
+                <span class="ing-mes-txt">
+                  <b>{{ m.nombre }}</b>
+                  <small>{{ m.carga }} {{ m.carga === 1 ? 'mesa' : 'mesas' }}<template v-if="meseroSugerido && m.id_usuario === meseroSugerido.id_usuario"> · sugerido</template></small>
+                </span>
+              </button>
+            </div>
+          </div>
+          <!-- El error de la admisión también se ve aquí (antes solo en la búsqueda:
+               el botón "Registrar" fallaba sin decir nada) -->
+          <div v-if="error" class="ing-error" role="alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>{{ error }}</span>
+          </div>
           <button class="ing-otro" @click="reiniciar">Registrar otro ingreso</button>
         </div>
 
@@ -103,7 +124,11 @@ const error = ref('')
 const meseroSugerido = ref(null)
 const meseroAsignado = ref(null)
 const asignando = ref(false)
-let idMesaSugerida = null
+const meseros = ref([])            // meseros con su carga en este evento (los más libres arriba)
+const eligiendoMesero = ref(false)
+const idMesaSugerida = ref(null)
+const idEntradaActual = ref(null)
+const iniciales = (n) => String(n || '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
 let debounce = null
 
 function buscarIncremental() {
@@ -145,22 +170,40 @@ async function validar(cod) {
     cantidad.value = Math.max(1, Math.min(cantidad.value, r.restantes || 1))
     meseroAsignado.value = r.mesa_ya_asignada?.nombre || null
     meseroSugerido.value = r.mesero_sugerido || null
-    idMesaSugerida = r.id_mesa || null
+    idMesaSugerida.value = r.id_mesa || null
+    idEntradaActual.value = r.id_entrada || null
+    eligiendoMesero.value = false
+    if (idMesaSugerida.value && !meseroAsignado.value) await cargarMeseros()
     emit('ingreso')
   } catch (e) {
     error.value = e?.error || 'No se pudo validar la entrada.'
   } finally { validando.value = false }
 }
 
-async function confirmarMesero() {
-  if (!meseroSugerido.value || !idMesaSugerida || asignando.value) return
-  asignando.value = true
+// Meseros con su carga en el evento de esa mesa. El sugerido (el más libre) va primero.
+async function cargarMeseros() {
   try {
-    await clienteHttp.post('/aforo/asignar-mesero', { id_mesa: idMesaSugerida, id_mesero: meseroSugerido.value.id_usuario })
-    meseroAsignado.value = meseroSugerido.value.nombre
+    const lista = await clienteHttp.get(`/aforo/meseros?mesa=${idMesaSugerida.value}`)
+    const sug = meseroSugerido.value?.id_usuario
+    meseros.value = [...(lista || [])].sort((a, b) => (b.id_usuario === sug) - (a.id_usuario === sug))
+  } catch { meseros.value = [] }
+}
+async function abrirMeseros() {
+  eligiendoMesero.value = true
+  await cargarMeseros()
+}
+async function asignarMesero(m) {
+  if (!idMesaSugerida.value || asignando.value) return
+  asignando.value = true
+  error.value = ''
+  try {
+    await clienteHttp.post('/aforo/asignar-mesero', { id_mesa: idMesaSugerida.value, id_entrada: idEntradaActual.value, id_mesero: m.id_usuario })
+    meseroAsignado.value = m.nombre
     meseroSugerido.value = null
-  } catch { /* la mesa quedará sin asignar; el pool la recoge */ }
-  finally { asignando.value = false }
+    eligiendoMesero.value = false
+  } catch (e) {
+    error.value = e?.error || 'No se pudo asignar el mesero. Intenta de nuevo.'
+  } finally { asignando.value = false }
 }
 
 function reiniciar() {
@@ -169,6 +212,10 @@ function reiniciar() {
   sugerencias.value = []
   meseroSugerido.value = null
   meseroAsignado.value = null
+  meseros.value = []
+  eligiendoMesero.value = false
+  idMesaSugerida.value = null
+  idEntradaActual.value = null
   error.value = ''
 }
 </script>
@@ -220,6 +267,33 @@ function reiniciar() {
 .ing-cta:disabled { opacity: 0.5; }
 .ing-cta.chica { flex: 0 0 auto; padding: 9px 16px; }
 .ing-completo { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 800; color: var(--color-exito); }
+.ing-meseros { display: flex; flex-direction: column; gap: 8px; }
+.ing-mes-tit { font-size: 0.82rem; font-weight: 700; color: var(--texto-secundario); }
+.ing-mes-lista { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.ing-mes {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 13px; cursor: pointer; text-align: left;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--borde-sutil); color: var(--texto-principal);
+  transition: border-color 0.2s ease, transform 0.12s ease;
+}
+.ing-mes:active { transform: scale(0.98); }
+.ing-mes:disabled { opacity: 0.6; cursor: wait; }
+.ing-mes.sugerido { border-color: var(--rosa-acento); background: rgba(236,72,153,0.08); }
+.ing-mes-av {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-size: 0.78rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--morado-brillante), var(--rosa-acento));
+}
+.ing-mes-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ing-mes-txt b { font-size: 0.9rem; }
+.ing-mes-txt small { font-size: 0.74rem; color: var(--texto-desactivado); }
+.ing-mes.sugerido .ing-mes-txt small { color: var(--rosa-acento); font-weight: 700; }
+.ing-asignado {
+  display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 13px;
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.35);
+}
+.ing-asig-ico { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--color-exito); color: #fff; }
+.ing-asig-txt { flex: 1; font-size: 0.88rem; color: var(--texto-secundario); }
+.ing-asig-txt b { color: var(--texto-principal); }
+.ing-cambiar { flex: none; padding: 6px 12px; border-radius: 999px; cursor: pointer; background: none; border: 1px solid var(--borde-activo); color: var(--texto-secundario); font-weight: 700; font-size: 0.78rem; }
 .ing-mesero { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 13px; border-radius: 13px; background: rgba(168,85,247,0.08); border: 1px solid var(--borde-activo); font-size: 0.84rem; color: var(--texto-secundario); }
 .ing-mesero b { color: var(--texto-principal); }
 .ing-otro { padding: 11px; border-radius: 12px; border: 1px solid var(--borde-sutil); background: none; color: var(--texto-secundario); font-weight: 700; cursor: pointer; }

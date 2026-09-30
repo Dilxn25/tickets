@@ -21,9 +21,10 @@
                 <small v-if="mesa.reservados != null">{{ mesa.ingresados || 0 }} de {{ mesa.reservados }} adentro</small>
               </div>
             </div>
-            <div class="tm-fila" v-if="mesa.mesero">
+            <div class="tm-fila" v-if="mesa.mesero && !cambiandoMesero">
               <span class="tm-avatar mesero">{{ mesa.mesero[0] }}</span>
               <div class="tm-fila-txt"><b>{{ mesa.mesero }}</b><small>mesero asignado</small></div>
+              <button type="button" class="tm-cambiar" @click="cambiarMesero">Cambiar</button>
             </div>
             <!-- Asignar mesero: tarjetas con carga (I-16, fuera el select nativo) -->
             <div class="tm-meseros" v-else>
@@ -148,6 +149,15 @@ function cerrarExito() {
 // ---- Asignar mesero (mesa no libre sin mesero) ----
 const meseros = ref([])
 const meseroElegido = ref(null)
+const cambiandoMesero = ref(false)
+// Carga contada solo en el evento de esta mesa (los más libres arriba)
+async function cargarMeseros() {
+  try { meseros.value = await clienteHttp.get(`/aforo/meseros?mesa=${props.mesa.id_mesa}`) } catch { meseros.value = [] }
+}
+async function cambiarMesero() {
+  cambiandoMesero.value = true
+  await cargarMeseros()
+}
 async function asignarMesero() {
   if (!meseroElegido.value || trabajando.value) return
   trabajando.value = true
@@ -158,9 +168,7 @@ async function asignarMesero() {
   finally { trabajando.value = false }
 }
 onMounted(async () => {
-  if (estado.value !== 'libre' && !props.mesa.mesero) {
-    try { meseros.value = await clienteHttp.get('/aforo/meseros') } catch { meseros.value = [] }
-  }
+  if (estado.value !== 'libre' && !props.mesa.mesero) await cargarMeseros()
 })
 </script>
 
@@ -184,6 +192,7 @@ onMounted(async () => {
 .tm-fila-txt b { color: var(--texto-principal); font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
 .tm-fila-txt small { color: var(--texto-desactivado); font-size: 0.76rem; }
 .tm-vip { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; color: #FACC15; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.4); padding: 1px 7px; border-radius: 999px; }
+.tm-cambiar { margin-left: auto; flex: none; padding: 6px 12px; border-radius: 999px; cursor: pointer; background: none; border: 1px solid var(--borde-activo); color: var(--texto-secundario); font-weight: 700; font-size: 0.76rem; }
 .tm-meseros { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .tm-meseros-lbl { margin: 0; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; color: var(--texto-secundario); }
 .tm-mesero-card {
