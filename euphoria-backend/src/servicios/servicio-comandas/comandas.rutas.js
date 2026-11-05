@@ -118,13 +118,9 @@ function encolarOCR(tarea) {
   return turno
 }
 
-// Análisis en curso/terminados (en memoria): el frontend hace polling por id.
-// Se limpian a los 20 minutos.
-const analisisEnCurso = new Map()
-setInterval(() => {
-  const limite = Date.now() - 20 * 60e3
-  for (const [id, a] of analisisEnCurso) if (a.creado < limite) analisisEnCurso.delete(id)
-}, 5 * 60e3).unref()
+// Análisis en curso/terminados (en memoria, compartidos con la billetera: la
+// recarga se acredita a partir del análisis, no de un monto que mande el cliente).
+const { analisisEnCurso, distanciaEdicion } = require('../../utilidades/recargas-seguras')
 
 // SEGUNDA VALIDACIÓN (R2.2, decisión D-2 del dueño): el N° DE TRANSACCIÓN
 // que el OCR leyó del comprobante debe COINCIDIR con la orden ACH de un
@@ -200,24 +196,6 @@ async function validarPorCorreoComposite(monto, horaLeida) {
   }
 }
 
-// Distancia de edición (Levenshtein) para tolerar 1-2 errores del OCR al comparar
-// números de transacción (ej. 0/O, 8/B, 1/I) y no dejar reusar el MISMO comprobante.
-function distanciaEdicion(a, b) {
-  a = String(a || ''); b = String(b || '')
-  const m = a.length, n = b.length
-  if (!m) return n
-  if (!n) return m
-  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
-  for (let j = 0; j <= n; j++) dp[0][j] = j
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const c = a[i - 1] === b[j - 1] ? 0 : 1
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + c)
-    }
-  }
-  return dp[m][n]
-}
-
 // POST /api/comandas/validar-comprobante (IA OCR Real para comprobantes)
 router.post('/validar-comprobante', verificarToken, upload.single('comprobante'), async (req, res) => {
   try {
@@ -238,7 +216,10 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
     // Remitente = el usuario logueado que está pagando. Forma parte de la clave
     // única (día+hora+monto+usuario) para los comprobantes SIN N° de transacción.
     const idRemitente = req.usuario?.id || 0
-    analisisEnCurso.set(idAnalisis, { estado: 'procesando', etapa: 'Identificando banco…', creado: Date.now() })
+    // Cada estado del análisis queda atado al usuario y al monto que declaró:
+    // la billetera solo acredita un análisis válido DE ESE usuario, una vez.
+    const guardar = (v) => analisisEnCurso.set(idAnalisis, { ...v, id_usuario: idRemitente, monto: montoEsperado })
+    guardar({ estado: 'procesando', etapa: 'Identificando banco…', creado: Date.now() })
     res.status(202).json({ id_analisis: idAnalisis, pendiente: true })
 
     // ---- Trabajo en segundo plano (fuera de la petición HTTP) ----
@@ -287,10 +268,10 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
             : (analisis.sinTransaccion ? await validarPorCorreoComposite(montoEsperado, analisis.horaLeida) : null)
           if (porCorreo) {
             pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
-            analisisEnCurso.set(idAnalisis, {
+            guardar({
               estado: 'terminado', creado: Date.now(),
               resultado: {
-                valido: true, banco: 'CORREO', monto: montoEsperado,
+                valido: true, banco: 'CORREO', monto: montoEsperado, confirmado_banco: true,
                 mensaje: 'Depósito confirmado por la notificación del banco',
                 url_comprobante: `${urlArchivo}|TX:${porCorreo.orden_ach}|M:${montoEsperado}|B:CORREO`,
                 transaccionId: porCorreo.orden_ach, pasos,
@@ -309,7 +290,7 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
             destino: 'El comprobante no muestra el pago a Euphoria. Revisa que sea el correcto.',
           }
           const error = (fallo && MENSAJES[fallo.clave]) || analisis.error
-          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error, pasos } })
+          guardar({ estado: 'terminado', creado: Date.now(), resultado: { valido: false, error, pasos } })
           return
         }
 
@@ -342,26 +323,28 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
         })
         pasos.push({ clave: 'no_repetido', etiqueta: 'Comprobante no repetido', ok: !duplicado })
         if (duplicado) {
-          analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos } })
+          guardar({ estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.', pasos } })
           return
         }
 
         // REFUERZO por correo (no bloquea): si el comprobante no traía N° y ya llegó
         // la notificación del banco que coincide (monto+día+hora), se marca ese
         // depósito como usado y se muestra el sello "confirmado por el banco".
+        // Con N° de transacción también se intenta: si el vigía ya registró ese
+        // depósito, la recarga no necesita esperar al banco.
         let banco = analisis.banco
-        if (claveCompuesta) {
-          const dep = await validarPorCorreoComposite(montoEsperado, analisis.horaLeida)
-          if (dep) {
-            pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
-            banco = analisis.banco || 'UNION'
-          }
+        const dep = claveCompuesta
+          ? await validarPorCorreoComposite(montoEsperado, analisis.horaLeida)
+          : await validarPorCorreo(montoEsperado, transaccionId)
+        if (dep) {
+          pasos.push({ clave: 'correo', etiqueta: 'Depósito confirmado por el banco (correo)', ok: true })
+          if (claveCompuesta) banco = analisis.banco || 'UNION'
         }
 
-        analisisEnCurso.set(idAnalisis, {
+        guardar({
           estado: 'terminado', creado: Date.now(),
           resultado: {
-            valido: true, banco, monto: analisis.monto,
+            valido: true, banco, monto: analisis.monto, confirmado_banco: !!dep,
             mensaje: 'Comprobante verificado correctamente',
             url_comprobante: `${urlArchivo}|TX:${transaccionId}|M:${montoEsperado}|B:${banco || 'OTRO'}`,
             transaccionId, pasos,
@@ -369,7 +352,7 @@ router.post('/validar-comprobante', verificarToken, upload.single('comprobante')
         })
       } catch (error) {
         console.error('Error en el motor de validación OCR:', error)
-        analisisEnCurso.set(idAnalisis, { estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Error al analizar el comprobante. Vuelve a intentar.', pasos: [] } })
+        guardar({ estado: 'terminado', creado: Date.now(), resultado: { valido: false, error: 'Error al analizar el comprobante. Vuelve a intentar.', pasos: [] } })
       }
     })
 

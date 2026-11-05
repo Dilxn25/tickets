@@ -638,7 +638,12 @@
     <div v-if="modalExito" class="modal-overlay" @click.self="modalExito = false">
       <div class="modal-detalles modal-exito">
         <div class="icono-exito">
-          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
+          <!-- En revisión: reloj; el saldo llega cuando el banco confirma -->
+          <svg v-if="exitoEnRevision" width="60" height="60" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-advertencia, #f59e0b)" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <svg v-else width="60" height="60" viewBox="0 0 24 24" fill="none" style="stroke: var(--color-exito)" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
@@ -766,6 +771,10 @@ const generandoQR = ref(false)
 const modalExito = ref(false)
 const tituloExito = ref('Operación exitosa')
 const mensajeExito = ref('')
+const exitoEnRevision = ref(false)
+// id del análisis del comprobante: la recarga se pide con él (el servidor
+// toma el monto del análisis, no del formulario)
+const idAnalisisRecarga = ref('')
 let socketBilletera = null
 
 // Modal cambiar PIN
@@ -1144,6 +1153,7 @@ async function guardarPin() {
     abrirModalCambiarPin()
 
     // Mostrar modal de éxito
+    exitoEnRevision.value = false
     tituloExito.value = 'PIN actualizado'
     mensajeExito.value = 'Tu PIN transaccional ha sido actualizado con éxito.'
     modalExito.value = true
@@ -1280,6 +1290,7 @@ async function procesarOCR(file) {
       ocrExitoso.value = true
       comprobanteProcesado.value = true
       urlComprobanteGenerado.value = res.url_comprobante
+      idAnalisisRecarga.value = res.id_analisis || ''
       procesandoOCR.value = false // Liberar flag antes de llamar a completar
       pararRelojOCR()
       await completarRecarga()
@@ -1317,18 +1328,24 @@ async function completarRecarga() {
   if (!puedeRecargar.value) return
 
   try {
-    const res = await servicioBilletera.iniciarRecarga(parseFloat(montoIngresado.value), urlComprobanteGenerado.value)
+    const res = await servicioBilletera.iniciarRecarga(idAnalisisRecarga.value)
+    idAnalisisRecarga.value = ''
     saldo.value = res.saldo_nuevo
     sinBilletera.value = false
     await cargarMovimientos()
     modalRecarga.value = false
 
     // Mostrar modal en vez de alert
-    tituloExito.value = 'Recarga completada'
-    mensajeExito.value = `Tu nuevo saldo es Bs. ${res.saldo_nuevo.toFixed(2)}`
+    exitoEnRevision.value = !!res.pendiente
+    tituloExito.value = res.pendiente ? 'Recarga en revisión' : 'Recarga completada'
+    mensajeExito.value = res.pendiente
+      ? `Bs. ${Number(res.monto).toFixed(2)} se acreditarán apenas el banco confirme tu depósito. Te avisaremos.`
+      : `Tu nuevo saldo es Bs. ${res.saldo_nuevo.toFixed(2)}`
     modalExito.value = true
   } catch (error) {
-    errorMonto.value = 'Error al completar la recarga.'
+    const data = error?.response?.data || error || {}
+    errorOCR.value = data.error || 'No se pudo completar la recarga. Vuelve a subir el comprobante.'
+    archivoComprobante.value = null
     console.error(error)
   }
 }

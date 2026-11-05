@@ -13,6 +13,7 @@ const jwt = require('jsonwebtoken')
 const { cifrarPin, descifrarPin, verificarPin } = require('../../utilidades/pin-billetera')
 const { subirImagenDocumento } = require('../../config/cloudinary')
 const { notificar } = require('../../utilidades/notificaciones')
+const { consumirAnalisis, datosDeUrl, leerTopeInstantaneo, conciliarRecargasPendientes } = require('../../utilidades/recargas-seguras')
 
 // ============ GET /api/billetera/saldo ============
 // Obtener saldo actual del cliente
@@ -53,16 +54,38 @@ router.get('/config-premio', verificarToken, async (req, res) => {
 })
 
 // ============ POST /api/billetera/recargar ============
-// Iniciar recarga de billetera
-// Body: { monto: 1000 }
+// Recarga con comprobante. Body: { id_analisis } — el id que devolvió
+// /comandas/validar-comprobante. El monto y el comprobante salen de ESE
+// análisis (hecho por el servidor), nunca de lo que mande el cliente.
+// Hasta el tope se acredita al instante; por encima, o si el banco ya lo
+// confirmó, ver acreditación abajo.
 router.post('/recargar', verificarToken, async (req, res) => {
   try {
-    const { monto, comprobante_url } = req.body
     const id_usuario = req.usuario.id
+    const { analisis, error: errAnalisis } = consumirAnalisis(String(req.body.id_analisis || ''), id_usuario)
+    if (errAnalisis) return res.status(400).json({ error: errAnalisis })
 
+    const monto = Number(analisis.monto)
+    const comprobante_url = analisis.resultado.url_comprobante
     if (!monto || monto < 10 || monto > 100000) {
       return res.status(400).json({ error: 'Monto debe estar entre 10 y 100,000 Bs' })
     }
+
+    // Segundo cerrojo anti-reuso: dos análisis simultáneos del MISMO comprobante
+    // pasan ambos la revisión; aquí, antes de acreditar, se exige que nadie lo
+    // haya usado ya.
+    const { tx } = datosDeUrl(comprobante_url)
+    if (tx) {
+      const marca = `|TX:${tx}|`
+      const [usadoRec, usadoCom] = await Promise.all([
+        prisma.recarga_billetera.findFirst({ where: { comprobante_url: { contains: marca }, estado: { not: 'rechazada' } }, select: { id_recarga: true } }),
+        prisma.comanda.findFirst({ where: { comprobante_url: { contains: marca } }, select: { id_comanda: true } }),
+      ])
+      if (usadoRec || usadoCom) return res.status(409).json({ error: 'Este comprobante ya fue utilizado. No se puede usar dos veces.' })
+    }
+
+    const tope = await leerTopeInstantaneo()
+    const instantanea = analisis.resultado.confirmado_banco === true || monto <= tope
 
     // Obtener o crear billetera del usuario
     let billetera = await prisma.billetera.findUnique({
@@ -80,40 +103,63 @@ router.post('/recargar', verificarToken, async (req, res) => {
       })
     }
 
-    // Crear registro de recarga y completarla inmediatamente (ya validada por OCR)
-    const recarga = await prisma.recarga_billetera.create({
-      data: {
-        id_usuario,
-        id_billetera: billetera.id_billetera,
-        monto_recarga: monto,
-        estado: 'completada', // Instántaneamente completada
-        numero_transaccion: `RECARGA-${generarIDUnico()}-${Date.now()}`,
-        comprobante_url: comprobante_url || null,
-        fecha_solicitud: new Date(),
-        fecha_confirmacion: new Date()
-      }
-    })
+    // Por encima del tope y sin confirmación del banco: la recarga queda
+    // PENDIENTE (no suma saldo). Se acredita sola cuando el vigía encuentra el
+    // depósito, o la confirma el cajero/administrador.
+    if (!instantanea) {
+      const recarga = await prisma.recarga_billetera.create({
+        data: {
+          id_usuario,
+          id_billetera: billetera.id_billetera,
+          monto_recarga: monto,
+          estado: 'pendiente',
+          numero_transaccion: `RECARGA-${generarIDUnico()}-${Date.now()}`,
+          comprobante_url,
+          fecha_solicitud: new Date(),
+        }
+      })
+      if (global.io) global.io.emit('recarga_registrada')
+      // Si el correo del banco ya llegó, se acredita en este mismo momento.
+      conciliarRecargasPendientes().catch(() => {})
+      return res.json({
+        pendiente: true,
+        mensaje: 'Recibimos tu comprobante. El saldo se acreditará apenas el banco confirme el depósito.',
+        id_recarga: recarga.id_recarga,
+        monto,
+        tope,
+        saldo_nuevo: parseFloat(billetera.saldo_actual),
+      })
+    }
 
-    // Actualizar saldo de billetera
-    const billeteraActualizada = await prisma.billetera.update({
-      where: { id_billetera: billetera.id_billetera },
-      data: {
-        saldo_actual: {
-          increment: monto
-        },
-        ultima_actualizacion: new Date()
-      }
-    })
-
-    // Registrar transacción
-    await prisma.transaccion.create({
-      data: {
-        id_billetera: billetera.id_billetera,
-        id_responsable: id_usuario,
-        tipo_operacion: 'RECARGA',
-        monto: monto,
-        fecha_hora: new Date()
-      }
+    // Crear la recarga, sumar el saldo y registrar la transacción: todo o nada.
+    const ahora = new Date()
+    const { recarga, billeteraActualizada } = await prisma.$transaction(async (txp) => {
+      const recarga = await txp.recarga_billetera.create({
+        data: {
+          id_usuario,
+          id_billetera: billetera.id_billetera,
+          monto_recarga: monto,
+          estado: 'completada',
+          numero_transaccion: `RECARGA-${generarIDUnico()}-${Date.now()}`,
+          comprobante_url,
+          fecha_solicitud: ahora,
+          fecha_confirmacion: ahora
+        }
+      })
+      const billeteraActualizada = await txp.billetera.update({
+        where: { id_billetera: billetera.id_billetera },
+        data: { saldo_actual: { increment: monto }, ultima_actualizacion: ahora }
+      })
+      await txp.transaccion.create({
+        data: {
+          id_billetera: billetera.id_billetera,
+          id_responsable: id_usuario,
+          tipo_operacion: 'RECARGA',
+          monto,
+          fecha_hora: ahora
+        }
+      })
+      return { recarga, billeteraActualizada }
     })
 
     // Emitir evento por WebSockets para actualizar en tiempo real
@@ -132,68 +178,6 @@ router.post('/recargar', verificarToken, async (req, res) => {
   } catch (error) {
     console.error('Error creando recarga:', error)
     res.status(500).json({ error: 'Error al procesar la recarga instantánea' })
-  }
-})
-
-// ============ POST /api/billetera/confirmar-recarga ============
-// Confirmar recarga con comprobante OCR
-// Body: { id_recarga, comprobante_archivo, id_unico_qr }
-router.post('/confirmar-recarga', verificarToken, async (req, res) => {
-  try {
-    const { id_recarga, numero_transaccion, id_unico_qr } = req.body
-    const id_usuario = req.usuario.id
-
-    // Validar recarga existe y pertenece al usuario
-    const recarga = await prisma.recarga_billetera.findUnique({
-      where: { id_recarga },
-      include: { billetera: true, qr_recarga: true }
-    })
-
-    if (!recarga || recarga.id_usuario !== id_usuario) {
-      return res.status(404).json({ error: 'Recarga no encontrada' })
-    }
-
-    if (recarga.estado !== 'pendiente') {
-      return res.status(400).json({ error: 'Esta recarga ya fue procesada' })
-    }
-
-    // Validar que el QR pertenece a esta recarga
-    const qrValido = recarga.qr_recarga.some(qr => qr.id_unico_numerico === id_unico_qr)
-    if (!qrValido) {
-      return res.status(400).json({ error: 'QR inválido para esta recarga' })
-    }
-
-    // Actualizar saldo de billetera
-    const billeteraActualizada = await prisma.billetera.update({
-      where: { id_billetera: recarga.id_billetera },
-      data: {
-        saldo_actual: {
-          increment: recarga.monto_recarga
-        },
-        ultima_actualizacion: new Date()
-      }
-    })
-
-    // Registrar transacción
-    await prisma.transaccion.create({
-      data: {
-        id_billetera: recarga.id_billetera,
-        id_responsable: id_usuario,
-        tipo_operacion: 'RECARGA',
-        monto: recarga.monto_recarga,
-        fecha_hora: new Date()
-      }
-    })
-
-    res.json({
-      mensaje: 'Recarga confirmada exitosamente',
-      saldo_anterior: parseFloat(recarga.billetera.saldo_actual),
-      monto_recargado: parseFloat(recarga.monto_recarga),
-      saldo_nuevo: parseFloat(billeteraActualizada.saldo_actual)
-    })
-  } catch (error) {
-    console.error('Error confirmando recarga:', error)
-    res.status(500).json({ error: 'Error al confirmar recarga' })
   }
 })
 

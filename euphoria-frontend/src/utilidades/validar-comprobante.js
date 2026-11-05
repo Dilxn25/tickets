@@ -36,7 +36,8 @@ export async function validarComprobanteAsync(formData, onEtapa) {
       continue
     }
     if (est?.valido === false) throw est
-    return est
+    // El id viaja con el resultado: la recarga se pide con él, no con un monto.
+    return { ...est, id_analisis: id }
   }
   throw { error: 'El análisis está tardando demasiado. Vuelve a intentar en un momento.' }
 }

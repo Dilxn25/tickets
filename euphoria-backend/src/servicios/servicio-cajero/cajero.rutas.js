@@ -8,6 +8,7 @@ const { generarIDUnico } = require('../servicio-billetera/qr-utilidades')
 const { notificar } = require('../../utilidades/notificaciones')
 const { subirImagenDocumento } = require('../../config/cloudinary')
 const { hoyBolivia } = require('../../utilidades/tiempo')
+const { acreditarPendiente } = require('../../utilidades/recargas-seguras')
 
 // Todas las rutas de caja requieren sesion valida Y rol de Cajero o Administrador.
 router.use(verificarToken)
@@ -210,6 +211,106 @@ router.post('/resetear-pin', async (req, res) => {
   }
 })
 
+// GET /api/cajero/por-confirmar — lo que espera una decisión de caja:
+// recargas PENDIENTES (por encima del tope, sin correo del banco todavía) y
+// depósitos que llegaron al banco sin asignarse a ninguna recarga (el cliente
+// declaró otro monto, o pagó y no terminó la recarga).
+router.get('/por-confirmar', async (req, res) => {
+  try {
+    const desde = new Date(Date.now() - 30 * 24 * 3600 * 1000)
+    const [pendientes, depositos] = await Promise.all([
+      prisma.recarga_billetera.findMany({
+        where: { estado: 'pendiente', fecha_solicitud: { gte: desde } },
+        include: { usuario: { select: { nombres: true, apellidos: true, telefono: true } } },
+        orderBy: { fecha_solicitud: 'desc' },
+        take: 50,
+      }),
+      prisma.deposito_correo.findMany({
+        where: { usado: false, fecha_registro: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
+        orderBy: { fecha_transaccion: 'desc' },
+        take: 50,
+      }),
+    ])
+    res.json({
+      recargas: pendientes.map(r => ({
+        id_recarga: r.id_recarga,
+        monto: Number(r.monto_recarga),
+        fecha: r.fecha_solicitud,
+        cliente: `${r.usuario?.nombres || ''} ${r.usuario?.apellidos || ''}`.trim(),
+        telefono: r.usuario?.telefono || null,
+        imagen: String(r.comprobante_url || '').split('|')[0] || null,
+      })),
+      depositos: depositos.map(d => ({
+        id_deposito: d.id_deposito,
+        monto: Number(d.monto),
+        fecha: d.fecha_transaccion,
+        originante: d.originante,
+        banco_origen: d.banco_origen,
+        glosa: d.glosa,
+        orden_ach: d.orden_ach,
+      })),
+    })
+  } catch (error) {
+    console.error('Error listando por confirmar:', error)
+    res.status(500).json({ error: 'No se pudo cargar lo pendiente.' })
+  }
+})
+
+// POST /api/cajero/depositos/:id/asignar — Body: { id_usuario }
+// Acredita a un cliente un depósito del banco que quedó sin asignar. El
+// depósito se marca usado en la misma transacción: no se puede asignar dos veces.
+router.post('/depositos/:id/asignar', async (req, res) => {
+  try {
+    const idDeposito = Number(req.params.id)
+    const idUsuario = Number(req.body.id_usuario)
+    if (!idDeposito || !idUsuario) return res.status(400).json({ error: 'Elige el cliente al que pertenece el depósito.' })
+    const billetera = await prisma.billetera.findUnique({ where: { id_usuario: idUsuario } })
+    if (!billetera) return res.status(404).json({ error: 'El cliente no tiene billetera.' })
+
+    const ahora = new Date()
+    const dep = await prisma.$transaction(async (tx) => {
+      const dep = await tx.deposito_correo.findUnique({ where: { id_deposito: idDeposito } })
+      if (!dep) return null
+      const marcado = await tx.deposito_correo.updateMany({ where: { id_deposito: idDeposito, usado: false }, data: { usado: true } })
+      if (marcado.count === 0) return null
+      await tx.recarga_billetera.create({
+        data: {
+          id_usuario: idUsuario,
+          id_billetera: billetera.id_billetera,
+          monto_recarga: dep.monto,
+          estado: 'completada',
+          numero_transaccion: `DEP-${dep.orden_ach}`,
+          comprobante_url: `|TX:${dep.orden_ach}|M:${Number(dep.monto)}|B:CORREO|CAJA-${req.usuario.id}`,
+          fecha_solicitud: ahora,
+          fecha_confirmacion: ahora,
+        },
+      })
+      await tx.billetera.update({
+        where: { id_billetera: billetera.id_billetera },
+        data: { saldo_actual: { increment: dep.monto }, ultima_actualizacion: ahora },
+      })
+      await tx.transaccion.create({
+        data: { id_billetera: billetera.id_billetera, id_responsable: req.usuario.id, tipo_operacion: 'RECARGA', monto: dep.monto, fecha_hora: ahora },
+      })
+      return dep
+    })
+    if (!dep) return res.status(409).json({ error: 'Ese depósito ya fue asignado.' })
+
+    if (global.io) {
+      global.io.emit('billetera_actualizada', { id_usuario: idUsuario })
+      global.io.emit('recarga_registrada')
+    }
+    await notificar(idUsuario, {
+      tipo: 'billetera', titulo: 'Recarga acreditada',
+      mensaje: `Caja acreditó Bs ${Number(dep.monto)} de tu depósito del banco.`, url: '/cliente/billetera',
+    }).catch(() => {})
+    res.json({ mensaje: 'Depósito acreditado', monto: Number(dep.monto) })
+  } catch (error) {
+    console.error('Error asignando depósito:', error)
+    res.status(500).json({ error: 'No se pudo asignar el depósito.' })
+  }
+})
+
 // POST /api/cajero/resolver - Aprobar o rechazar recarga
 router.post('/resolver', async (req, res) => {
   try {
@@ -226,37 +327,25 @@ router.post('/resolver', async (req, res) => {
     if (!recarga) return res.status(404).json({ error: 'Recarga no encontrada' })
     if (recarga.estado !== 'pendiente') return res.status(400).json({ error: 'La recarga ya fue procesada' })
 
-    // Se procesa de forma ATOMICA: solo se acredita si la recarga SIGUE pendiente.
-    // updateMany con filtro de estado garantiza que dos aprobaciones simultaneas no dupliquen el saldo.
-    const resultado = await prisma.$transaction(async (tx) => {
-      const marcada = await tx.recarga_billetera.updateMany({
+    // Se procesa de forma ATOMICA: solo cambia si la recarga SIGUE pendiente, así
+    // dos aprobaciones simultaneas no duplican el saldo.
+    if (estado === 'completada') {
+      const ok = await acreditarPendiente(id_recarga, { idResponsable: req.usuario.id, sello: `CAJA-${req.usuario.id}` })
+      if (!ok) return res.status(400).json({ error: 'La recarga ya fue procesada' })
+    } else {
+      const marcada = await prisma.recarga_billetera.updateMany({
         where: { id_recarga, estado: 'pendiente' },
         data: { estado, fecha_confirmacion: new Date() }
       })
-      if (marcada.count === 0) return { yaProcesada: true, billetera: null }
-
-      let billetera = null
-      if (estado === 'completada') {
-        billetera = await tx.billetera.update({
-          where: { id_usuario: recarga.id_usuario },
-          data: {
-            saldo_actual: { increment: recarga.monto_recarga },
-            ultima_actualizacion: new Date()
-          }
-        })
-      }
-      return { yaProcesada: false, billetera }
-    })
-
-    if (resultado.yaProcesada) {
-      return res.status(400).json({ error: 'La recarga ya fue procesada' })
+      if (marcada.count === 0) return res.status(400).json({ error: 'La recarga ya fue procesada' })
+      await notificar(recarga.id_usuario, {
+        tipo: 'billetera', titulo: 'Recarga rechazada',
+        mensaje: `Tu recarga de Bs ${Number(recarga.monto_recarga)} no se confirmó en el banco. Acércate a caja con tu comprobante.`,
+        url: '/cliente/billetera',
+      }).catch(() => {})
     }
 
-    // Sincronización en tiempo real (fuera de la transacción)
-    if (estado === 'completada' && resultado.billetera && global.io) {
-      global.io.emit('billetera_actualizada', { id_usuario: recarga.id_usuario })
-    }
-
+    if (global.io) global.io.emit('recarga_registrada')
     res.json({ mensaje: `Recarga ${estado} exitosamente` })
   } catch (error) {
     console.error('Error resolviendo recarga:', error)

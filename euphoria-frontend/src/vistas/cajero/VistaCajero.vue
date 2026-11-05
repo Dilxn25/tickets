@@ -84,9 +84,14 @@
             Retiros
             <span v-if="retirosPendientes" class="c2-badge">{{ retirosPendientes }}</span>
           </button>
+          <button :class="['c2-lado-tab', { activo: panelInicio === 'confirmar' }]" @click="panelInicio = 'confirmar'">
+            Por confirmar
+            <span v-if="porConfirmar" class="c2-badge">{{ porConfirmar }}</span>
+          </button>
           <button :class="['c2-lado-tab', { activo: panelInicio === 'historial' }]" @click="panelInicio = 'historial'">Historial</button>
         </div>
         <PanelRetiros v-if="panelInicio === 'retiros'" @pendientes="retirosPendientes = $event" @pagado="cargarPulso" />
+        <PanelPorConfirmar v-else-if="panelInicio === 'confirmar'" @pendientes="porConfirmar = $event" />
         <HistorialCaja v-else />
       </aside>
     </div>
@@ -116,6 +121,7 @@ import FichaCliente from './paneles/FichaCliente.vue'
 import AsistenteBilletera from './paneles/AsistenteBilletera.vue'
 import PanelRetiros from './paneles/PanelRetiros.vue'
 import HistorialCaja from './paneles/HistorialCaja.vue'
+import PanelPorConfirmar from './paneles/PanelPorConfirmar.vue'
 
 // ---- Búsqueda ----
 const busqueda = ref('')
@@ -196,17 +202,27 @@ async function alEscanear(codigo) {
 // ---- Panel lateral: retiros + historial + pulso ----
 const panelInicio = ref('retiros')
 const retirosPendientes = ref(0)
+const porConfirmar = ref(0)
 const pulso = ref(null)
 async function cargarPulso() {
   try { pulso.value = await clienteHttp.get('/cajero/pulso') } catch { /* sin pulso no pasa nada */ }
+}
+// El contador de "Por confirmar" se mantiene aunque la pestaña esté cerrada
+async function contarPorConfirmar() {
+  try {
+    const d = await clienteHttp.get('/cajero/por-confirmar')
+    porConfirmar.value = (d?.recargas?.length || 0) + (d?.depositos?.length || 0)
+  } catch { /* sin contador no pasa nada */ }
 }
 
 let socket = null
 onMounted(() => {
   cargarPulso()
+  contarPorConfirmar()
   inputBusqueda.value?.focus()
   socket = io({ path: '/socket.io' })
   socket.on('retiro_solicitado', () => { retirosPendientes.value++ })
+  socket.on('recarga_registrada', contarPorConfirmar)
 })
 onUnmounted(() => { if (socket) socket.disconnect() })
 </script>

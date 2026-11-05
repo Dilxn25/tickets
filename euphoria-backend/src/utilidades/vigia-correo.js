@@ -117,7 +117,13 @@ async function cicloVigia() {
   // TUMBA todo el backend. Con el listener, el fallo solo se registra y el ciclo termina.
   cliente.on('error', (e) => console.warn('[correo] conexión IMAP con problema:', e && e.message))
   await cliente.connect()
-  try { await revisarBandeja(cliente) } finally { await cliente.logout().catch(() => {}) }
+  let nuevos = 0
+  try { nuevos = await revisarBandeja(cliente) } finally { await cliente.logout().catch(() => {}) }
+  // Depósitos nuevos: acreditar las recargas que esperaban la confirmación del banco.
+  if (nuevos > 0) {
+    const { conciliarRecargasPendientes } = require('./recargas-seguras')
+    await conciliarRecargasPendientes().catch(e => console.warn('[recargas] conciliación falló:', e.message))
+  }
 }
 
 function iniciarVigiaCorreo() {
